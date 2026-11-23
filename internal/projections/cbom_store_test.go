@@ -43,7 +43,7 @@ func TestCBOMScanPopulatesInventoryAndGraph(t *testing.T) {
 	defer scanner.Close()
 	rep := scanner.Scan(ctx, []cbom.Source{
 		tlssource.New([]string{addr}),
-		hostsource.New(conf),
+		hostsource.New(conf).WithAllowedRoots(dir),
 	})
 
 	if rep.Findings < 3 {

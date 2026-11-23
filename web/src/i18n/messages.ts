@@ -35261,7 +35261,8 @@ export const messages = {
   },
   "posture.cbom.workflow.hostLabel": { defaultMessage: "Host configuration files", description: "CBOM host config field label." },
   "posture.cbom.workflow.hostHelp": {
-    defaultMessage: "One absolute file path or absolute glob per line. trstctl reads only protocol and cipher declarations. Maximum 64 selectors.",
+    defaultMessage:
+      "One absolute file path or absolute glob per line, inside directories approved by your control-plane operator. Only regular files are read. Maximum 64 selectors.",
     description: "ELI5 CBOM host config help.",
   },
   "posture.cbom.workflow.hostPlaceholder": { defaultMessage: "/etc/nginx/conf.d/*.conf\n/etc/ssh/sshd_config", description: "CBOM host config example." },

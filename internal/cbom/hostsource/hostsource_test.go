@@ -24,7 +24,7 @@ func TestScanFlagsWeakProtocolAndCipher(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	findings, err := hostsource.New(path).Scan(context.Background())
+	findings, err := hostsource.New(path).WithAllowedRoots(filepath.Dir(path)).Scan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestScanApacheSSLProtocolOrderAndModifiers(t *testing.T) {
 	if err := os.WriteFile(path, []byte(conf), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	findings, err := hostsource.New(path).Scan(context.Background())
+	findings, err := hostsource.New(path).WithAllowedRoots(filepath.Dir(path)).Scan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestScanApacheSSLProtocolAllMinusDeprecated(t *testing.T) {
 	if err := os.WriteFile(path, []byte("SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	findings, err := hostsource.New(path).Scan(context.Background())
+	findings, err := hostsource.New(path).WithAllowedRoots(filepath.Dir(path)).Scan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,8 @@ func TestScanApacheSSLProtocolAllMinusDeprecated(t *testing.T) {
 }
 
 func TestScanReportsMissingFilesWithoutFindings(t *testing.T) {
-	findings, err := hostsource.New("/nonexistent/*.conf").Scan(context.Background())
+	dir := t.TempDir()
+	findings, err := hostsource.New(filepath.Join(dir, "*.conf")).WithAllowedRoots(dir).Scan(context.Background())
 	var partial *cbom.PartialScanError
 	if !errors.As(err, &partial) || partial.Failures != 1 {
 		t.Fatalf("missing selector error = %v, want one visible partial failure", err)
@@ -113,9 +114,21 @@ func TestScanRejectsOversizedFileWithinBoundedRead(t *testing.T) {
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	findings, err := hostsource.New(path).Scan(context.Background())
+	findings, err := hostsource.New(path).WithAllowedRoots(filepath.Dir(path)).Scan(context.Background())
 	var partial *cbom.PartialScanError
 	if !errors.As(err, &partial) || partial.Failures != 1 || len(findings) != 0 {
 		t.Fatalf("oversized scan findings=%d err=%v, want one visible bounded-read failure", len(findings), err)
+	}
+}
+
+func TestCR418ConfinedGlobDeduplicatesAnExplicitFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tls.conf")
+	if err := os.WriteFile(path, []byte("ssl_protocols TLSv1.2;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	findings, err := hostsource.New(path, filepath.Join(dir, "*.conf")).WithAllowedRoots(dir).Scan(context.Background())
+	if err != nil || len(findings) != 1 || findings[0].Location != path {
+		t.Fatalf("deduplicated host findings=%v err=%v", findings, err)
 	}
 }

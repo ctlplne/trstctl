@@ -80,9 +80,10 @@ func TestRetryCBOMWriteStopsOnCanceledContext(t *testing.T) {
 }
 
 func TestServedCBOMRescanRetiresReplacedHostFacts(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{})
+	dir := t.TempDir()
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.CBOMHostRoots = []string{dir} })
 	token := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
-	path := filepath.Join(t.TempDir(), "tls.conf")
+	path := filepath.Join(dir, "tls.conf")
 	scan := func(key string, wantFailed int, paths ...string) {
 		t.Helper()
 		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans", token, map[string]any{
@@ -111,7 +112,7 @@ func TestServedCBOMRescanRetiresReplacedHostFacts(t *testing.T) {
 	write("ssl_protocols TLSv1.3;\nssl_ciphers TLS_AES_256_GCM_SHA384;\n")
 	// One unreadable selector makes the request incomplete. Its new strong facts
 	// are useful, but prior weak facts remain active until a complete rescan.
-	scan("partial", 1, path, filepath.Join(t.TempDir(), "missing.conf"))
+	scan("partial", 1, path, filepath.Join(dir, "missing.conf"))
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/cbom/assets", token, nil)
 	if status != http.StatusOK {
 		t.Fatalf("partial inventory: status %d body %s", status, body)
@@ -188,7 +189,8 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 		t.Fatalf("write host crypto fixture: %v", err)
 	}
 
-	h := newOperatingServedHarness(t, config.Protocols{}, withCBOMLoopbackEgress)
+	h := newOperatingServedHarness(t, config.Protocols{}, withCBOMLoopbackEgress,
+		func(d *Deps) { d.CBOMHostRoots = []string{dir} })
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read", "egress:private")
 	beforePreview, err := h.log.LastSequence(t.Context())
 	if err != nil {

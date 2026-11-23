@@ -34,7 +34,7 @@ func TestHostDefaultsAgreeWithTheEndpointScanX2L7Lab(t *testing.T) {
 		t.Skip("lab test: scripts/labs/product-defaults.sh starts the listeners and sets TRSTCTL_X2L7_LAB_DIR and the two addresses")
 	}
 	findings, err := hostsource.New(filepath.Join(dir, "haproxy.cfg"), filepath.Join(dir, "openssl.cnf")).
-		WithPackageDatabases(filepath.Join(dir, "installed")).Scan(context.Background())
+		WithAllowedRoots(dir).WithPackageDatabases(filepath.Join(dir, "installed")).Scan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

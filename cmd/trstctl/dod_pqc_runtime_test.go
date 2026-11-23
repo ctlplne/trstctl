@@ -250,6 +250,7 @@ func dodRunAutomatedTLSRolloutProof(t *testing.T) {
 	var hostConfig string
 	runtime, control, external := dodStartPQCRuntime(t, "pqc_end_to_end.automated_rollout_tls_findings", func(cfg *config.Config, root string, external *proof.ExternalSubstrate) {
 		hostConfig = filepath.Join(root, "envoy-tls.conf")
+		cfg.CBOM.HostRoots = []string{root}
 		if err := os.WriteFile(hostConfig, []byte("ssl_protocols TLSv1 TLSv1.3;\nssl_ciphers TLS_RSA_WITH_3DES_EDE_CBC_SHA:TLS_AES_256_GCM_SHA384;\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}

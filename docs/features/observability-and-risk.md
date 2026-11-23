@@ -398,7 +398,7 @@ targets and 64 absolute file/glob selectors. TLS discovery performs a default ha
 and, when it negotiates TLS 1.3, a second handshake capped at TLS 1.2. Both share
 a ten-second endpoint deadline and send no application data. A successful capped
 handshake records the lower protocol separately; a refusal does not invent a finding. Host discovery reads
-at most 256 matching files and 1 MiB per file, returns no file contents, and the scan
+at most 256 matching regular files and 1 MiB per file, returns no file contents, and the scan
 can append/project no more than 1,024 findings per source. Every successful observation
 is first recorded as an immutable `cbom.asset.observed` event. After a complete
 scan, a `cbom.source.reconciled` event for each observed file and TLS endpoint
@@ -409,6 +409,18 @@ prior facts so a failed probe cannot falsely clear a risk. `GET /api/v1/cbom/ass
 (`risk:read`) returns the current tenant-scoped inventory and migration progress.
 The four-worker, 64-slot CBOM bulkhead prevents a wide sweep from starving API or
 enrollment work.
+
+Host file scans are disabled until the control-plane operator sets
+`cbom.host_roots` (or `TRSTCTL_CBOM_HOST_ROOTS`, a comma-separated list) to
+specific directories that contain TLS configuration files. A tenant selector
+must be inside one of those roots, including any symlink target. Preview refuses
+out-of-root selectors before a scan runs. The scanner expands globs through
+open root directories, limits directory entries to 4,096 per scan, and refuses
+symlinks that leave the root, FIFOs, devices, oversized files and nonregular
+files. An unreadable or unsafe match increments `report.failed`; it cannot
+silently retire earlier inventory facts. Keep secrets and unrelated control-plane
+files outside the approved roots. The bounded file inspection runs under a
+15-second deadline before the scan's tenant idempotency transaction is opened.
 
 CBOM TLS probes check each resolved address immediately before connect. Private,
 loopback, link-local and metadata addresses are refused by default, including

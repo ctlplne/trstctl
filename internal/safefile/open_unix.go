@@ -11,3 +11,4 @@ import (
 )
 
 const readOnlyNonblocking = os.O_RDONLY | unix.O_NONBLOCK
+const readOnlyNonblockingNoFollow = readOnlyNonblocking | unix.O_NOFOLLOW

@@ -3,9 +3,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,7 +17,9 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -24,8 +28,18 @@ import (
 // records observations through the event log before the read model is updated.
 type CBOMService interface {
 	Preview(ctx context.Context, tenantID string, req CBOMScanRequest) (CBOMScanPreview, error)
-	Scan(ctx context.Context, tenantID string, req CBOMScanRequest) (CBOMScanResponse, error)
+	PrepareHost(ctx context.Context, req CBOMScanRequest) (CBOMPreparedHost, error)
+	ScanPrepared(ctx context.Context, tenantID string, req CBOMScanRequest, host CBOMPreparedHost) (CBOMScanResponse, error)
 	Inventory(ctx context.Context, tenantID string) (CBOMInventoryResponse, error)
+}
+
+// CBOMPreparedHost is a bounded, read-only snapshot obtained before the
+// idempotency transaction. Only the scanner's selected findings and source
+// paths cross into that transaction; the raw file bytes do not.
+type CBOMPreparedHost struct {
+	Findings      []cbom.Finding
+	ResolvedPaths []string
+	Failures      int
 }
 
 // WithCBOM wires the served CBOM scan + migration-inventory surface. When unset the
@@ -293,30 +307,75 @@ func (a *API) previewCBOMScan(w http.ResponseWriter, r *http.Request) {
 //trstctl:mutation
 func (a *API) startCBOMScan(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		if a.cbom == nil {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, "CBOM scanning is not configured")
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problem.New(http.StatusUnauthorized, "missing or invalid tenant"))
+		return
+	}
+	if idempotencyKey == "" {
+		a.writeProblem(w, problem.New(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	if a.cbom == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "CBOM scanning is not configured"))
+		return
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, rawBody, err := mutationRequestBinding(r, principal)
+	defer secret.Wipe(rawBody)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if cached, found, lookupErr := a.idem.LookupBound(r.Context(), tenantID, idempotencyKey, binding); lookupErr != nil {
+		a.writeError(w, lookupErr)
+		return
+	} else if found {
+		a.writeBoundMutationResponse(w, r.Context(), tenantID, binding, cached, nil)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(rawBody))
+	var req CBOMScanRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if req.AllowPrivateEndpoint {
+		if err := a.requirePrivateEgressPermission(r.Context(), tenantID); err != nil {
+			a.writeError(w, err)
+			return
 		}
-		var req CBOMScanRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
+	}
+	preview, err := a.cbom.Preview(r.Context(), tenantID, req)
+	if err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if !preview.Ready {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, strings.Join(preview.Blockers, " ")))
+		return
+	}
+	prepareCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	host, err := a.cbom.PrepareHost(prepareCtx, preview.NormalizedRequest)
+	cancel()
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		if req.AllowPrivateEndpoint {
 			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
 				return 0, nil, err
 			}
 		}
-		preview, err := a.cbom.Preview(ctx, tenantID, req)
-		if err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		if !preview.Ready {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(preview.Blockers, " "))
-		}
 		start := time.Now()
 		var opErr error
 		defer func() { a.observeFeature("cbom", "scan", start, opErr) }()
-		resp, err := a.cbom.Scan(ctx, tenantID, preview.NormalizedRequest)
+		resp, err := a.cbom.ScanPrepared(ctx, tenantID, preview.NormalizedRequest, host)
 		if err != nil {
 			opErr = err
 			return 0, nil, err

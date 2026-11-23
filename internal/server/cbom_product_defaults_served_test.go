@@ -37,7 +37,10 @@ func TestServedCBOMHostScanReportsProductDefaultsX2L7(t *testing.T) {
 	write(haproxy, "frontend web\n  bind :443 ssl crt /etc/haproxy/site.pem\n  default_backend app\n")
 	write(openssl, "openssl_conf = openssl_init\n[openssl_init]\nproviders = provider_sect\n")
 
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.CBOMPackageDatabases = []string{db} })
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.CBOMPackageDatabases = []string{db}
+		d.CBOMHostRoots = []string{dir}
+	})
 	// Its own tenant: its CBOM rows stay out of the shared served tenant's
 	// other tests.
 	const tenant = "a2070007-27a7-4a27-8a27-0000a2070007"

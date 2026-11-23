@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -24,12 +25,15 @@ import (
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/safefile"
 	"trstctl.com/trstctl/internal/store"
 )
 
 type cbomService struct {
 	nativeTLSExecutable  string
 	privateEgressCeiling []string
+	hostRoots            []string
+	hostRootInfo         map[string]os.FileInfo
 	store                *store.Store
 	log                  *events.Log
 	// orch records CBOM imports as discovery runs (X6).
@@ -41,7 +45,8 @@ type cbomService struct {
 
 func (s *Server) buildCBOMService(d Deps) api.CBOMService {
 	return &cbomService{store: d.Store, log: d.Log, nativeTLSExecutable: d.CBOMTLSProbeOpenSSL, orch: s.orch,
-		privateEgressCeiling: d.CBOMPrivateEgressCIDRs, packageDatabases: d.CBOMPackageDatabases}
+		privateEgressCeiling: d.CBOMPrivateEgressCIDRs, hostRoots: d.CBOMHostRoots, hostRootInfo: d.cbomHostRootInfo,
+		packageDatabases: d.CBOMPackageDatabases}
 }
 
 const (
@@ -90,6 +95,25 @@ func (s *cbomService) tlsDialControl(req api.CBOMScanRequest) (func(string, stri
 	return netsec.SafeDialControlWithOptions(netsec.SafeClientOptions{AllowPrivateCIDRs: allowed}), nil
 }
 
+// The cheap preview check never expands a glob or reads a file. The worker
+// reopens every match relative to an os.Root, so a symlink swapped after this
+// check still cannot escape the approved tree.
+func (s *cbomService) approvedHostSelector(selector string) bool {
+	if len(s.hostRoots) == 0 {
+		return false
+	}
+	canonical, _, resolved, err := hostsource.CanonicalSelector(selector)
+	if err != nil {
+		return false
+	}
+	for _, root := range s.hostRoots {
+		if safefile.ContainsPath(root, canonical) && safefile.ContainsPath(root, resolved) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error) {
 	normalized, err := api.NormalizeCBOMScanRequest(req)
 	if err != nil {
@@ -97,6 +121,11 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 	}
 	if _, err := s.tlsDialControl(normalized); err != nil {
 		return api.CBOMScanPreview{}, err
+	}
+	for _, selector := range normalized.HostConfigs {
+		if !s.approvedHostSelector(selector) {
+			return api.CBOMScanPreview{}, errors.New("CBOM host config selector is outside operator-approved roots")
+		}
 	}
 	// One ordinary handshake, one TLS-1.2-capped compatibility handshake,
 	// and optionally one native fallback after the ordinary Go probe fails.
@@ -151,7 +180,7 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 			"Preview performs no network connection, file read, event append, projection write, signer call, or outbox delivery.",
 			"TLS discovery completes a handshake only and sends no HTTP or other application-layer request.",
 			"TLS dials check each resolved address; private ranges need egress:private, an explicit requested CIDR, and an operator-configured CIDR ceiling. Metadata and link-local addresses stay blocked.",
-			"Host discovery reads only explicitly declared absolute paths or globs and parses public protocol and cipher declarations; it never returns file contents.",
+			"Host discovery reads only regular files inside operator-approved roots; it parses protocol and cipher declarations and never returns file contents.",
 		},
 	}, nil
 }
@@ -164,12 +193,46 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 	if !plan.Ready {
 		return api.CBOMScanResponse{}, errors.New("server: CBOM scan dependencies are not ready")
 	}
+	host, err := s.PrepareHost(ctx, plan.NormalizedRequest)
+	if err != nil {
+		return api.CBOMScanResponse{}, err
+	}
+	return s.ScanPrepared(ctx, tenantID, plan.NormalizedRequest, host)
+}
+
+func (s *cbomService) PrepareHost(ctx context.Context, req api.CBOMScanRequest) (api.CBOMPreparedHost, error) {
+	if len(req.HostConfigs) == 0 {
+		return api.CBOMPreparedHost{}, nil
+	}
+	host := hostsource.New(req.HostConfigs...).WithAllowedRoots(s.hostRoots...).WithPinnedRoots(s.hostRootInfo)
+	if s.packageDatabases != nil {
+		host.WithPackageDatabases(s.packageDatabases...)
+	}
+	findings, err := host.Scan(ctx)
+	if ctx.Err() != nil {
+		return api.CBOMPreparedHost{}, ctx.Err()
+	}
+	prepared := api.CBOMPreparedHost{Findings: findings, ResolvedPaths: host.ResolvedPaths()}
+	if err != nil {
+		var partial *cbom.PartialScanError
+		if !errors.As(err, &partial) {
+			return api.CBOMPreparedHost{}, err
+		}
+		prepared.Failures = partial.Failures
+	}
+	return prepared, nil
+}
+
+// ScanPrepared records the already-inspected host snapshot. The API obtains it
+// before opening the tenant idempotency transaction; this function never opens
+// a tenant-supplied host file.
+func (s *cbomService) ScanPrepared(ctx context.Context, tenantID string, req api.CBOMScanRequest, prepared api.CBOMPreparedHost) (api.CBOMScanResponse, error) {
+	plan := api.CBOMScanPreview{NormalizedRequest: req}
 	control, err := s.tlsDialControl(plan.NormalizedRequest)
 	if err != nil {
 		return api.CBOMScanResponse{}, err
 	}
 	sources := make([]cbom.Source, 0, 2)
-	var host *hostsource.Source
 	if len(plan.NormalizedRequest.TLSEndpoints) > 0 {
 		options := []tlssource.Option{tlssource.WithProber(func(ctx context.Context, addr string) (tlsprobe.Result, error) {
 			if s.nativeTLSExecutable == "" {
@@ -193,11 +256,7 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 		sources = append(sources, tlssource.New(plan.NormalizedRequest.TLSEndpoints, options...))
 	}
 	if len(plan.NormalizedRequest.HostConfigs) > 0 {
-		host = hostsource.New(plan.NormalizedRequest.HostConfigs...)
-		if s.packageDatabases != nil {
-			host.WithPackageDatabases(s.packageDatabases...)
-		}
-		sources = append(sources, host)
+		sources = append(sources, preparedHostSource{prepared})
 	}
 	sink := &eventedCBOMSink{store: s.store, log: s.log, tenantID: tenantID}
 	scanner := cbom.NewScanner(sink,
@@ -213,8 +272,8 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 				rep.Failed++
 			}
 		}
-		if host != nil {
-			for _, location := range host.ResolvedPaths() {
+		if len(plan.NormalizedRequest.HostConfigs) > 0 {
+			for _, location := range prepared.ResolvedPaths {
 				if err := sink.Reconcile(ctx, "host-config", location); err != nil {
 					rep.Failed++
 				}
@@ -242,6 +301,21 @@ func (s *cbomService) Inventory(ctx context.Context, tenantID string) (api.CBOMI
 		return api.CBOMInventoryResponse{}, err
 	}
 	return api.CBOMInventoryFromAssets(assets), nil
+}
+
+type preparedHostSource struct{ snapshot api.CBOMPreparedHost }
+
+func (preparedHostSource) Name() string { return "host-config" }
+
+func (s preparedHostSource) Scan(ctx context.Context) ([]cbom.Finding, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.snapshot.Failures > 0 {
+		return s.snapshot.Findings, &cbom.PartialScanError{Failures: s.snapshot.Failures,
+			Err: errors.New("one or more CBOM host config selectors could not be read within safety limits")}
+	}
+	return s.snapshot.Findings, nil
 }
 
 type eventedCBOMSink struct {

@@ -54,7 +54,7 @@ func scanDefaults(t *testing.T, dir, config string, dbs ...string) []string {
 	if err := os.WriteFile(path, []byte(x2l7Configs[config]), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	findings, err := hostsource.New(path).WithPackageDatabases(dbs...).Scan(context.Background())
+	findings, err := hostsource.New(path).WithAllowedRoots(dir).WithPackageDatabases(dbs...).Scan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

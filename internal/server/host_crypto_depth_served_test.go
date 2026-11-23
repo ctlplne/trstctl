@@ -35,7 +35,9 @@ type x2Finding struct {
 // of a HAProxy file that allows TLS 1.0 raises one weak finding, still one
 // after a rescan.
 func TestServedHostCryptoDiscoveryDepthX2(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	root := t.TempDir()
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel,
+		func(d *Deps) { d.CBOMHostRoots = []string{root} })
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +78,6 @@ func TestServedHostCryptoDiscoveryDepthX2(t *testing.T) {
 	}
 
 	// Two keystores holding the same ECDSA P-256 key and its two-certificate chain.
-	root := t.TempDir()
 	hostKey, err := crypto.GenerateHostSubjectKey("app.example.test", []string{"app.example.test"})
 	if err != nil {
 		t.Fatal(err)

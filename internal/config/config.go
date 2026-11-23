@@ -164,6 +164,7 @@ type Config struct {
 type CBOM struct {
 	TLSProbeOpenSSL    string   `json:"tls_probe_openssl,omitempty"`
 	PrivateEgressCIDRs []string `json:"private_egress_cidrs,omitempty"`
+	HostRoots          []string `json:"host_roots,omitempty"`
 }
 
 // License configures the offline license file. Empty means Community.
@@ -4203,6 +4204,7 @@ func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setString(getenv, "TRSTCTL_CBOM_TLS_PROBE_OPENSSL", &c.CBOM.TLSProbeOpenSSL)
 	setCSV(getenv, "TRSTCTL_CBOM_PRIVATE_EGRESS_CIDRS", &c.CBOM.PrivateEgressCIDRs)
+	setCSV(getenv, "TRSTCTL_CBOM_HOST_ROOTS", &c.CBOM.HostRoots)
 	setString(getenv, "TRSTCTL_SERVER_ADDR", &c.Server.Addr)
 	setString(getenv, "TRSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
 	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
@@ -4948,6 +4950,9 @@ func validateCBOMConfig(c *Config) []error {
 		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 			errs = append(errs, fmt.Errorf("cbom.private_egress_cidrs: %w", err))
 		}
+	}
+	if _, err := safefile.HostRoots(c.CBOM.HostRoots); err != nil {
+		errs = append(errs, fmt.Errorf("cbom.host_roots: %w", err))
 	}
 	return errs
 }

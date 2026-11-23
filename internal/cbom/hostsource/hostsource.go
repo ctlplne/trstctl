@@ -11,19 +11,24 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
 	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/safefile"
 )
 
 // Source scans a set of config files or globs.
 type Source struct {
 	paths []string
+	// roots are canonical operator-approved directories. Without them this
+	// source cannot read any tenant-selected host path.
+	roots []string
+	// expected is the operator-pinned directory identity from server startup.
+	// A replaced root path must not silently widen a tenant's scan authority.
+	expected map[string]os.FileInfo
 	// packageDBs are where a scan reads product versions from (X2-L7); nil
 	// means dpkg's status file and apk's installed database.
 	packageDBs []string
@@ -41,6 +46,25 @@ const (
 
 // New returns a host-config source over the given file paths or globs.
 func New(paths ...string) *Source { return &Source{paths: paths} }
+
+// WithAllowedRoots confines every selector, glob expansion and file open to
+// operator-approved host directories. The caller validates roots at startup.
+func (s *Source) WithAllowedRoots(roots ...string) *Source {
+	approved, err := safefile.HostRoots(roots)
+	if err != nil {
+		s.roots = nil // invalid direct callers fail closed on every selector
+	} else {
+		s.roots = approved
+	}
+	return s
+}
+
+// WithPinnedRoots binds the allowed paths to directory identities captured at
+// control-plane startup. OpenRoot descriptors are compared before any walk.
+func (s *Source) WithPinnedRoots(expected map[string]os.FileInfo) *Source {
+	s.expected = expected
+	return s
+}
 
 // WithPackageDatabases sets the package databases a scan reads the product
 // versions that decide a default from (X2-L7); none means no default is
@@ -67,9 +91,20 @@ var cipherDirectives = map[string]bool{"ssl_ciphers": true, "sslciphersuite": tr
 
 // Scan reads each config file and reports the protocols and ciphers it declares.
 // Missing or unreadable files are skipped.
-func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
+func (s *Source) Scan(ctx context.Context) ([]cbom.Finding, error) {
 	var out []cbom.Finding
-	paths, failures := expandGlobs(s.paths, DefaultMaxFiles)
+	files, failures, closeRoots := expandConfined(ctx, s.roots, s.expected, s.paths, DefaultMaxFiles)
+	defer closeRoots()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(files))
+	for _, file := range files {
+		paths = append(paths, file.path)
+	}
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
 	s.mu.Lock()
 	s.resolved = append([]string(nil), paths...)
 	s.mu.Unlock()
@@ -86,15 +121,22 @@ func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
 		}
 		return pkgs
 	}
-	for _, path := range paths {
-		data, err := readBounded(path, DefaultMaxFileBytes)
+	for _, file := range files {
+		if err := ctx.Err(); err != nil {
+			return out, err
+		}
+		data, err := safefile.ReadRegularFileNoFollow(ctx, file.root, file.rel, DefaultMaxFileBytes)
 		if err != nil {
 			failures++
 			continue
 		}
-		out = append(out, parseConfig(path, data)...)
-		out = append(out, parseExtended(path, data)...)
-		out = append(out, parseDefaults(path, data, versions)...)
+		out = append(out, parseConfig(file.path, data)...)
+		out = append(out, parseExtended(file.path, data)...)
+		out = append(out, parseDefaults(file.path, data, versions)...)
+		secret.Wipe(data)
+	}
+	if err := ctx.Err(); err != nil {
+		return out, err
 	}
 	if failures > 0 {
 		return out, &cbom.PartialScanError{Failures: failures, Err: errors.New("one or more CBOM host config selectors could not be read within safety limits")}
@@ -102,26 +144,10 @@ func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
 	return out, nil
 }
 
-func readBounded(path string, maxBytes int64) ([]byte, error) {
-	file, err := os.Open(path) // #nosec G304 -- an authorized, previewed discovery selector; the read is size-bounded below (CWE-22)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = file.Close() }()
-	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(data)) > maxBytes {
-		return nil, errors.New("host config exceeds CBOM read limit")
-	}
-	return data, nil
-}
-
 func parseConfig(path string, data []byte) []cbom.Finding {
 	var out []cbom.Finding
 	sc := bufio.NewScanner(bytes.NewReader(data))
-	// readBounded already limits the entire file to 1 MiB. Let Scanner accept a
+	// ReadRegularFile already limits the entire file to 1 MiB. Let Scanner accept a
 	// line up to that same ceiling so a long but valid cipher declaration cannot
 	// stop parsing early at bufio.Scanner's much smaller default token limit.
 	sc.Buffer(make([]byte, 64*1024), int(DefaultMaxFileBytes))
@@ -224,34 +250,4 @@ func normalizeProtocol(p string) string {
 	default:
 		return ""
 	}
-}
-
-func expandGlobs(paths []string, maxFiles int) ([]string, int) {
-	seen := make(map[string]struct{})
-	out := make([]string, 0, len(paths))
-	failures := 0
-	for _, p := range paths {
-		matches, err := filepath.Glob(p)
-		if err != nil {
-			failures++
-			continue
-		}
-		if len(matches) == 0 {
-			failures++
-			continue
-		}
-		sort.Strings(matches)
-		for _, match := range matches {
-			if _, ok := seen[match]; ok {
-				continue
-			}
-			if len(out) == maxFiles {
-				failures++
-				return out, failures
-			}
-			seen[match] = struct{}{}
-			out = append(out, match)
-		}
-	}
-	return out, failures
 }

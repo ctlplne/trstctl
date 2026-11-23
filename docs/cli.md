@@ -1295,6 +1295,7 @@ trstctl-cli --idempotency-key pause-weekly-soc2 compliance report-schedules paus
 trstctl-cli --idempotency-key resume-weekly-soc2 compliance report-schedules resume SCHEDULE_ID
 
 # Review the exact normalized targets and read/write ceilings without touching them.
+# The operator must first configure cbom.host_roots to include /etc/nginx/sites-enabled.
 cat > cbom-scan.json <<'JSON'
 {"tls_endpoints":["https://payments.internal.example"],"host_configs":["/etc/nginx/sites-enabled/payments.conf"]}
 JSON

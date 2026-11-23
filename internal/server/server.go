@@ -75,6 +75,7 @@ import (
 	sshca "trstctl.com/trstctl/internal/protocols/ssh"
 	"trstctl.com/trstctl/internal/reportarchive"
 	"trstctl.com/trstctl/internal/rotation"
+	"trstctl.com/trstctl/internal/safefile"
 	"trstctl.com/trstctl/internal/secretscan/validity"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/signing"
@@ -141,6 +142,10 @@ type Deps struct {
 	// CBOMPrivateEgressCIDRs is the operator's ceiling for private TLS scans.
 	// A tenant still needs an explicit CIDR request and egress:private.
 	CBOMPrivateEgressCIDRs []string
+	// CBOMHostRoots are the operator-approved directories for served host-config scans.
+	// An empty set refuses all tenant-selected control-plane file reads.
+	CBOMHostRoots    []string
+	cbomHostRootInfo map[string]os.FileInfo
 	// CBOMPackageDatabases are the package databases a served host-config
 	// scan reads the product versions that decide a default from (X2-L7);
 	// nil means this host's own (dpkg's status file and apk's installed
@@ -1196,6 +1201,19 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 			return nil, fmt.Errorf("server: CBOM private egress ceiling: %w", err)
 		}
+	}
+	approvedCBOMRoots, err := safefile.HostRoots(d.CBOMHostRoots)
+	if err != nil {
+		return nil, fmt.Errorf("server: CBOM host roots: %w", err)
+	}
+	d.CBOMHostRoots = approvedCBOMRoots
+	d.cbomHostRootInfo = make(map[string]os.FileInfo, len(approvedCBOMRoots))
+	for _, root := range approvedCBOMRoots {
+		info, statErr := os.Stat(root)
+		if statErr != nil {
+			return nil, fmt.Errorf("server: CBOM host root changed during startup: %w", statErr)
+		}
+		d.cbomHostRootInfo[root] = info
 	}
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")

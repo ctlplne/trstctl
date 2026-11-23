@@ -36,7 +36,7 @@ func TestScanExtendedHostConfigProtocols(t *testing.T) {
 	}
 	protocols := func(name string) map[string]int {
 		t.Helper()
-		findings, err := hostsource.New(filepath.Join(dir, name)).WithPackageDatabases().Scan(context.Background())
+		findings, err := hostsource.New(filepath.Join(dir, name)).WithAllowedRoots(dir).WithPackageDatabases().Scan(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -50,7 +50,7 @@ func TestScanExtendedHostConfigProtocols(t *testing.T) {
 	}
 	weak := func(name string) int {
 		t.Helper()
-		findings, err := hostsource.New(filepath.Join(dir, name)).WithPackageDatabases().Scan(context.Background())
+		findings, err := hostsource.New(filepath.Join(dir, name)).WithAllowedRoots(dir).WithPackageDatabases().Scan(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}

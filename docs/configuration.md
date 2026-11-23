@@ -5489,6 +5489,18 @@ environment variables override file values, which override defaults.
 
 ## Native TLS discovery for cryptographic inventory
 
+To permit served CBOM scans of local TLS configuration, set
+`cbom.host_roots` to the exact directories the control plane may inspect, for
+example `{"cbom":{"host_roots":["/etc/nginx/conf.d"]}}`. The environment
+equivalent is `TRSTCTL_CBOM_HOST_ROOTS` with comma-separated directories.
+The default empty list denies every tenant-supplied host file selector. Startup
+rejects missing or unsafe roots; preview rejects selectors outside them. File
+reads are confined to opened roots and limited to regular files of at most 1 MiB.
+In a container deployment, mount each approved directory read-only into the
+control-plane container and configure its in-container path.
+Place only approved configuration files under these directories, and avoid
+approving broad directories that also hold credentials or other private data.
+
 A control plane that inventories endpoints with certificate algorithms unsupported
 by its Go TLS runtime can use an operator-installed OpenSSL build for discovery.
 This setting identifies public certificates; it does not establish application

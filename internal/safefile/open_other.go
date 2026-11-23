@@ -7,3 +7,4 @@ package safefile
 import "os"
 
 const readOnlyNonblocking = os.O_RDONLY
+const readOnlyNonblockingNoFollow = readOnlyNonblocking

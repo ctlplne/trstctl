@@ -76,6 +76,33 @@ func TestCR056CBOMOperatorPrivateEgressCeilingConfiguration(t *testing.T) {
 	}
 }
 
+func TestCR418CBOMOperatorHostRootsConfiguration(t *testing.T) {
+	if roots := Default().CBOM.HostRoots; len(roots) != 0 {
+		t.Fatalf("tenant-selected host reads enabled by default: %v", roots)
+	}
+	root := t.TempDir()
+	cfg, err := Load(func(key string) string {
+		if key == "TRSTCTL_CBOM_HOST_ROOTS" {
+			return root
+		}
+		return ""
+	})
+	if err != nil || len(cfg.CBOM.HostRoots) != 1 || cfg.CBOM.HostRoots[0] != root {
+		t.Fatalf("operator roots=%v err=%v", cfg.CBOM.HostRoots, err)
+	}
+	for _, bad := range []string{string(filepath.Separator), filepath.Join(root, "missing")} {
+		_, err := Load(func(key string) string {
+			if key == "TRSTCTL_CBOM_HOST_ROOTS" {
+				return bad
+			}
+			return ""
+		})
+		if err == nil || !strings.Contains(err.Error(), "cbom.host_roots") {
+			t.Fatalf("unsafe operator root %q accepted: %v", bad, err)
+		}
+	}
+}
+
 // Inspect the operator-facing serialized configuration so this regression can
 // run against the preceding product, where the new field is silently ignored.
 // A compile failure caused by referencing the proposed Go field is not RED proof.

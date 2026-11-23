@@ -59,6 +59,33 @@ func ScanRoots(configured []string) ([]string, error) {
 	return roots, nil
 }
 
+// HostRoots is the ceiling for tenant-selected paths read by the control
+// plane. It rejects kernel/device filesystems even if an operator accidentally
+// lists them, and canonicalizes each retained directory once at startup.
+func HostRoots(configured []string) ([]string, error) {
+	if len(configured) > 16 {
+		return nil, fmt.Errorf("host file scans accept at most 16 operator roots")
+	}
+	roots, err := ScanRoots(configured)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool, len(roots))
+	out := make([]string, 0, len(roots))
+	for _, root := range roots {
+		for _, system := range []string{"/proc", "/dev", "/sys"} {
+			if ContainsPath(system, root) {
+				return nil, fmt.Errorf("operator host root may not be a kernel or device filesystem")
+			}
+		}
+		if !seen[root] {
+			seen[root] = true
+			out = append(out, root)
+		}
+	}
+	return out, nil
+}
+
 func directoryLineage(directory string) ([]os.FileInfo, error) {
 	var lineage []os.FileInfo
 	for {

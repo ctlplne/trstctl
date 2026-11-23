@@ -17,6 +17,35 @@ var (
 	ErrFileLimit  = errors.New("regular file exceeds the read limit")
 )
 
+// OpenDirectory refuses special files before and after a nonblocking open.
+// This is needed when expanding a tenant-supplied glob: a path that used to be
+// a directory could be swapped for a FIFO between the check and open.
+func OpenDirectory(ctx context.Context, root *os.Root, name string) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	info, err := root.Stat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, ErrNotRegular
+	}
+	dir, err := root.OpenFile(name, readOnlyNonblockingNoFollow, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err = dir.Stat()
+	if err != nil || !info.IsDir() {
+		_ = dir.Close()
+		if err != nil {
+			return nil, err
+		}
+		return nil, ErrNotRegular
+	}
+	return dir, nil
+}
+
 // ReadRegularFile opens a filesystem-relative name within root and reads at
 // most maxBytes. It checks the open descriptor, so replacement between the
 // preliminary mode check and the open cannot turn this into a device read.
@@ -33,6 +62,25 @@ func ReadRegularFile(ctx context.Context, root *os.Root, name string, maxBytes i
 	}
 	return readRegularOpened(ctx, info, func() (*os.File, error) {
 		return root.OpenFile(name, readOnlyNonblocking, 0)
+	}, maxBytes)
+}
+
+// ReadRegularFileNoFollow adds a final-component no-follow check. os.Root
+// already confines every intermediate path component to root; this refuses a
+// selected file replaced by a symlink between enumeration and opening.
+func ReadRegularFileNoFollow(ctx context.Context, root *os.Root, name string, maxBytes int64) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if maxBytes <= 0 || maxBytes == math.MaxInt64 {
+		return nil, ErrFileLimit
+	}
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	return readRegularOpened(ctx, info, func() (*os.File, error) {
+		return root.OpenFile(name, readOnlyNonblockingNoFollow, 0)
 	}, maxBytes)
 }
 
