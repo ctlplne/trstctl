@@ -63,6 +63,14 @@ func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing
 			afterExpansion: `UPDATE secret_static_rotation_commands SET dependent_change_id=id WHERE tenant_id=$1 AND id=$2`,
 		},
 		{
+			version: 504, index: "issuance_requests_ticket_source_idx",
+			seed: `INSERT INTO issuance_requests
+			 (id,tenant_id,subject,requester,expires_at)
+			 VALUES ($1,$2,'online-ticket.example.test','requester',now()+interval '1 day')`,
+			write:          `UPDATE issuance_requests SET requester=requester || ' updated' WHERE tenant_id=$1 AND id=$2`,
+			afterExpansion: `UPDATE issuance_requests SET ticket_source='servicenow' WHERE tenant_id=$1 AND id=$2`,
+		},
+		{
 			version: 229, index: "certificate_receipt_issuance_origin",
 			seed: `INSERT INTO certificate_metadata_receipts
 			 (event_id,tenant_id,event_sequence,event_digest,issuance_status,issuance_fingerprint,issuance_time)
@@ -116,7 +124,7 @@ func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing
 				if !target.noTx {
 					t.Fatal("index must be a no-transaction migration")
 				}
-			case 416, 417:
+			case 416, 417, 504:
 				execution, err := store.OnlineMigrationExecutionSQLForTest(target.name, []byte(target.body))
 				if err != nil {
 					t.Fatal(err)

@@ -120,6 +120,12 @@ preserved. The five-second lock-wait limit still applies: column expansion
 can briefly require an exclusive table lock, and long-running writers can make
 a concurrent build wait. This is not a promise of a lock-free upgrade.
 
+Migration 0504 retains its shipped checksum while an unapplied installation
+adds `ticket_source` and builds `issuance_requests_ticket_source_idx`
+concurrently. A database that already applied 0504 keeps its ledger row; it
+does not rebuild the index. Historical rows start with an empty source rather
+than an invented ticket origin.
+
 An interruption before the ledger insert is safe to retry. The runner checks
 column types, defaults and constraints before using a completed expansion, and
 checks the index’s table, columns, predicate, method and validity. It reuses an

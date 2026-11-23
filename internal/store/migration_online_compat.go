@@ -107,6 +107,16 @@ func historicalOnlinePlan(name string, body []byte) (*onlineCompatibilityPlan, e
 			createSQL: `CREATE UNIQUE INDEX CONCURRENTLY secret_static_rotation_dependent_parent_idx
 			 ON public.secret_static_rotation_commands(tenant_id,dependent_change_id) WHERE dependent_change_id IS NOT NULL`,
 		}
+	case "0504_ticket_intake_source.sql":
+		p = onlineCompatibilityPlan{
+			name: name, digest: "sha256:f29b0d898c2cb273f44f0eef43891b8a809cd90ddcb38c443a4d4d4164fc1ea8",
+			table: "public.issuance_requests", index: "issuance_requests_ticket_source_idx",
+			columns:      []onlineCompatibilityColumn{{name: "ticket_source", dataType: "text", defaultExpression: "''::text", notNull: true}},
+			indexColumns: []string{"tenant_id", "ticket_source", "ticket_ref"},
+			predicate:    "ticket_source <> ''::text",
+			createSQL: `CREATE INDEX CONCURRENTLY issuance_requests_ticket_source_idx
+			 ON public.issuance_requests(tenant_id,ticket_source,ticket_ref) WHERE ticket_source <> ''`,
+		}
 	default:
 		return nil, nil
 	}
@@ -115,8 +125,11 @@ func historicalOnlinePlan(name string, body []byte) (*onlineCompatibilityPlan, e
 	}
 	// The old migration remains the ledger identity. Only its index statement is
 	// moved out of the expansion transaction; all other shipped DDL runs together.
-	if name == "0416_pam_discovery_outbox.sql" || name == "0417_service_account_rotation.sql" {
-		old := "CREATE UNIQUE INDEX " + p.index
+	if name == "0416_pam_discovery_outbox.sql" || name == "0417_service_account_rotation.sql" || name == "0504_ticket_intake_source.sql" {
+		old := "CREATE INDEX " + p.index
+		if p.unique {
+			old = "CREATE UNIQUE INDEX " + p.index
+		}
 		start := strings.Index(string(body), old)
 		if start < 0 {
 			return nil, fmt.Errorf("store: online migration %s has no expected shipped index", name)

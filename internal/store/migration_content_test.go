@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	504: true, // TestMigrationDataContentBackfills/0504_ticket_intake_source_starts_unattributed
 	500: true, // TestMigrationDataContentBackfills/0500_api_token_minter_starts_unattributed
 	502: true, // TestMigration0502KeepsV1ReceiptsUnverifiedUntilAuthenticatedBackfill (new gate writes no legacy rows)
 	472: true, // TestMigration0472KeepsScopedSyncsOnTheDefaultInterval
@@ -2382,6 +2383,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0504_ticket_intake_source_starts_unattributed", testMigration0504TicketIntakeSourceStartsUnattributed)
 	t.Run("0500_api_token_minter_starts_unattributed", testMigration0500APITokenMinterStartsUnattributed)
 	t.Run("0286_ca_release_schema_preserves_v2", testMigration0286RetainsCACeremonyEffectSchema)
 	t.Run("0283_ca_signer_claims_existing_authorities", testMigration0283ClaimsExistingCASignerHandles)
@@ -3420,6 +3422,34 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
 	t.Run("0136_fleet_reissuance_cursor_defaults", testMigration0136FleetReissuanceCursorDefaults)
 	t.Run("0137_relay_external_pollers", testMigration0137RelayExternalPollers)
+}
+
+func testMigration0504TicketIntakeSourceStartsUnattributed(t *testing.T) {
+	const stable = `SELECT id::text, tenant_id::text, subject, requester, status,
+		ticket_ref, expires_at::text FROM issuance_requests ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 504, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for i, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `INSERT INTO issuance_requests
+					(id, tenant_id, subject, requester, ticket_ref, expires_at)
+					VALUES ($1,$2,$3,'legacy-requester',$4,'2026-12-01T00:00:00Z')`,
+					fmt.Sprintf("50400000-0000-4000-8000-%012d", i+1), tenantID,
+					fmt.Sprintf("legacy-request-%d.example.test", i), fmt.Sprintf("INC-%d", i)); err != nil {
+					t.Fatalf("seed pre-0504 request for %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var unknown bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(ticket_source = '')
+				FROM issuance_requests WHERE tenant_id IN ($1,$2)`, tenantA, tenantB).Scan(&rows, &unknown); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !unknown {
+				t.Fatalf("0504 invented historical ticket sources: rows=%d want=%d unknown=%t", rows, want, unknown)
+			}
+		})
 }
 
 // Historical API tokens have no authenticated minter evidence. The upgrade
