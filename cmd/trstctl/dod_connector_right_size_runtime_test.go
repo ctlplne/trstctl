@@ -21,8 +21,10 @@ import (
 	"testing"
 	"time"
 
+	agidorch "trstctl.com/trstctl/internal/agentid/orchestrator"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
@@ -94,6 +96,7 @@ func TestDODConnectorRightSizeProductionAssembly(t *testing.T) {
 	configFile := dodRightSizeWriteConfig(t, root, cfg)
 	env := dodRightSizeProcessEnv(configFile)
 	token := dodRightSizeBootstrapToken(t, control, root, env)
+	dodProvisionSignerVerdictTrust(t, control, root, env, cfg)
 
 	control.Start(root, env)
 	baseURL := "http://127.0.0.1:" + strconv.Itoa(serverPort)
@@ -159,6 +162,35 @@ func TestDODConnectorRightSizeProductionAssembly(t *testing.T) {
 		Destination: []byte(external.Endpoint() + "/v1/entitlements/service-1"),
 		Written:     []byte(`{"scopes":["read"]}`), ReadBack: readback, ExecutionReceipt: executionReceipt,
 	}))
+}
+
+// dodProvisionSignerVerdictTrust keeps the two custody domains separate: the
+// control-plane verdict private key is sealed under the credential KEK, while
+// the operator installs only its public half into the signer's local floor.
+func dodProvisionSignerVerdictTrust(t *testing.T, control *proof.ShippedProcess, root string, env []string, cfg *config.Config) {
+	t.Helper()
+	wrapper, err := kek.LoadOrCreate(cfg.Secrets.KEKFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, public, err := agidorch.PrepareReachabilityVerdictKey(cfg.Signer.KeyStoreDir, wrapper)
+	wrapper.Destroy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := json.Marshal(map[string]string{
+		"kind": "reachability_key", "key_id": key.ID,
+		"public_key_pem": string(crypto.MarshalPublicKeyPEM(public.DER)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingPath := filepath.Join(root, "agid-verdict-trust.json")
+	if err := os.WriteFile(bindingPath, binding, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(bindingPath) }()
+	control.ProvisionSignerVerdictTrust(root, env, cfg.Signer.KeyStoreDir, bindingPath)
 }
 
 func dodRightSizeLicense(t *testing.T, root string) (string, []byte) {

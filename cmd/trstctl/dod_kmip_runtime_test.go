@@ -141,6 +141,7 @@ func TestDODKMIPProductionAssembly(t *testing.T) {
 	configFile := dodRightSizeWriteConfig(t, root, cfg)
 	env := dodRightSizeProcessEnv(configFile)
 	_ = dodRightSizeBootstrapToken(t, first, root, env)
+	dodProvisionSignerVerdictTrust(t, first, root, env, cfg)
 	baseURL := "http://127.0.0.1:" + strconv.Itoa(httpPort)
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 

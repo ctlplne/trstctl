@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest/githuboidc"
@@ -24,7 +23,9 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/tenantseal"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
@@ -78,17 +79,28 @@ func TestDODCodeSigningProductionAssembly(t *testing.T) {
 	}
 
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
-	if err != nil {
-		t.Fatalf("open embedded event log: %v", err)
-	}
-	dodRegisterActiveTenant(t, ctx, log, st, servedTestTenant, "DoD code-signing tenant")
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
-		_ = log.Close()
 		t.Fatalf("load run secrets: %v", err)
 	}
 	defer runSecrets.Close()
+	registry, err := tenantseal.NewLocalWrapperRegistry(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := tenantseal.NewAccess(st, runSecrets.kek, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+		t.Fatal(err)
+	}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")},
+		events.WithRequiredAppendAdmission(), CustodyValidatedEventIngressOption(st, access))
+	if err != nil {
+		t.Fatalf("open custody-validated event log: %v", err)
+	}
+	dodRegisterActiveTenant(t, ctx, log, st, servedTestTenant, "DoD code-signing tenant")
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		_ = log.Close()

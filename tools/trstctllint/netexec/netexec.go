@@ -179,7 +179,11 @@ var reviewedExecUses = map[string]map[string]bool{
 		"buildShippedProcess":        true,
 		"companionProductionClosure": true,
 		"CreateToken":                true,
-		"Start":                      true,
+		// CR-297's one-shot signer ceremony executes only the gate-built,
+		// identity-checked companion with fixed flag names and operator-owned
+		// fixture paths. It serves no socket and accepts only a public binding.
+		"ProvisionSignerVerdictTrust": true,
+		"Start":                       true,
 	},
 	"tools/dodcensus/runtime_runner.go": {
 		"runHostCommand": true,

@@ -129,6 +129,7 @@ func dodStartPQCRuntime(t *testing.T, id string, configure func(*config.Config, 
 	configFile := dodRightSizeWriteConfig(t, root, cfg)
 	env := dodRightSizeProcessEnv(configFile)
 	token := dodPQCBootstrapToken(t, control, root, env)
+	dodProvisionSignerVerdictTrust(t, control, root, env, cfg)
 	control.Start(root, env)
 	t.Cleanup(control.Stop)
 	baseURL := "http://127.0.0.1:" + strconv.Itoa(serverPort)

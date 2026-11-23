@@ -39,10 +39,11 @@ func TestReviewedExecAllowlistPinsDODCensusProcessBoundaries(t *testing.T) {
 			"StartContainer": true,
 		},
 		"tools/dodcensus/proof/launched.go": {
-			"buildShippedProcess":        true,
-			"companionProductionClosure": true,
-			"CreateToken":                true,
-			"Start":                      true,
+			"buildShippedProcess":         true,
+			"companionProductionClosure":  true,
+			"CreateToken":                 true,
+			"ProvisionSignerVerdictTrust": true,
+			"Start":                       true,
 		},
 		"tools/dodcensus/runtime_runner.go": {
 			"runHostCommand": true,

@@ -1520,6 +1520,39 @@ func (p *ShippedProcess) CreateToken(directory string, environment []string, arg
 	return strings.TrimSpace(stdout.String())
 }
 
+// ProvisionSignerVerdictTrust runs the shipped signer in its isolated, one-shot
+// operator mode. The control-plane process cannot write the signer's trust
+// floor over RPC; the input file contains only the reviewed public binding.
+func (p *ShippedProcess) ProvisionSignerVerdictTrust(directory string, environment []string, keystore, binding string) {
+	p.t.Helper()
+	const signerPackage = "./cmd/trstctl-signer"
+	if _, ok := p.build.companions[signerPackage]; !ok {
+		p.t.Fatal("DOD-CENSUS: shipped signer companion is required for verdict trust")
+	}
+	if err := p.revalidateBuiltArtifacts(); err != nil {
+		p.t.Fatalf("DOD-CENSUS: shipped artifacts before signer trust ceremony: %v", err)
+	}
+	dir, env, err := p.processInputs(directory, environment)
+	if err != nil {
+		p.t.Fatal(err)
+	}
+	commandName, commandArgs := shippedProcessCommand(filepath.Join(p.build.binDir, "trstctl-signer"),
+		"--keystore", keystore, "--agid-provision-trust", binding)
+	command := exec.Command(commandName, commandArgs...) // #nosec G204 -- exact gate-built signer and one reviewed operator mode (CWE-78)
+	command.Dir, command.Env = dir, env
+	var output bytes.Buffer
+	command.Stdout, command.Stderr = &output, &output
+	if err := sealInheritedDescriptorsForShippedExec(); err != nil {
+		p.t.Fatalf("DOD-CENSUS: seal descriptors before signer trust ceremony: %v", err)
+	}
+	if err := command.Run(); err != nil {
+		p.t.Fatalf("DOD-CENSUS: signer-local verdict trust ceremony: %v: %s", err, output.String())
+	}
+	if err := p.revalidateBuiltArtifacts(); err != nil {
+		p.t.Fatalf("DOD-CENSUS: shipped artifacts after signer trust ceremony: %v", err)
+	}
+}
+
 // Start launches the exact built control binary with a clean, closed
 // environment. The PATH begins with the gate-built companion directory.
 func (p *ShippedProcess) Start(directory string, environment []string) {
