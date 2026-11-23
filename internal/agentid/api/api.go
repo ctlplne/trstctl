@@ -581,6 +581,12 @@ func issueHandler(a *api.API, svc Service) http.HandlerFunc {
 			resp, err := svc.IssueChainBound(ctx, tenantID, req)
 			if err != nil {
 				opErr = err
+				if errors.Is(err, ErrChainTenantMismatch) {
+					return 0, nil, api.ErrStatus(http.StatusBadRequest, "delegation chain contains a record signed for another tenant")
+				}
+				if errors.Is(err, ErrInvalidIssuanceChain) {
+					return 0, nil, api.ErrStatus(http.StatusBadRequest, "delegation chain encoding is invalid")
+				}
 				return 0, nil, err
 			}
 			return http.StatusAccepted, resp, nil

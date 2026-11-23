@@ -257,7 +257,13 @@ pinned and two reads:
    TLS), read the credential's chain once
    (`GET /api/v1/agent-delegation/chain`), verify it hop by hop from a pinned
    root to the chain head the credential binds, and require its final delegate
-   to be the authenticated agent.
+   to be the authenticated agent. Require **every signed hop's `tenant_id`** to
+   equal the tenant of the pinned issuing CA; the same root public key can be
+   deliberately installed in more than one tenant. The signer enforces this
+   tenant match before minting, and `/issuances` refuses a visible mismatch
+   before it queues work. `internal/agentid/verify` checks the credential and
+   local policy; the caller's separate chain walk must perform this record
+   check when it consumes the chain endpoint.
 4. **Check status.** `GET /api/v1/agent-delegation/credential-status` reports
    `active`, `revoked` (a revocation's cascade recorded a job against the
    credential; `revocation_evidenced` turns true once the job's effect is

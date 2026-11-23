@@ -154,8 +154,10 @@ func (t *TrustStore) Anchor(keyID string) (RootAnchor, bool) {
 	return a, ok
 }
 
-// AnchorForTenant returns a tenant-scoped root anchor, falling back to global
-// static anchors for existing single-tenant tests and fixtures.
+// AnchorForTenant returns a tenant-scoped root anchor. A global static anchor
+// is consulted only in legacy single-tenant fixtures with no tenant-scoped
+// anchors and no dynamic source; a served signer must never let it authorize
+// another tenant implicitly.
 func (t *TrustStore) AnchorForTenant(tenantID, keyID string) (RootAnchor, bool) {
 	if t == nil {
 		return RootAnchor{}, false
@@ -170,7 +172,10 @@ func (t *TrustStore) AnchorForTenant(tenantID, keyID string) (RootAnchor, bool) 
 			return a, true
 		}
 	}
-	return t.Anchor(keyID)
+	if len(t.tenantAnchors) == 0 && t.source == nil {
+		return t.Anchor(keyID)
+	}
+	return RootAnchor{}, false
 }
 
 // Config constructs the gate with its dependencies so it is testable with software
@@ -531,6 +536,12 @@ func (g *Gate) verifyChain(tenantID string, chain []RecordEnvelope, now time.Tim
 		}
 		if err := rec.Verify(crypto.PublicKey{DER: env.DelegatorPublicDER}, reg); err != nil {
 			return refusal(CheckHopSignature, i, "delegator signature invalid")
+		}
+		// TenantID is inside the record's signature. An anchor can be reviewed
+		// for two tenants under one key ID; its presence in B cannot turn a
+		// delegation signed for A into authority in B. Check EVERY hop.
+		if rec.TenantID != tenantID {
+			return refusal(CheckTenantBinding, i, "signed delegation tenant differs from issuance tenant")
 		}
 
 		// Root-anchor: the ROOT hop's delegator key must be a held anchor whose stored

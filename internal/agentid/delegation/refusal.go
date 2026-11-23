@@ -30,6 +30,7 @@ const refusalDomain = "agid/agentid/refusal/v1"
 const (
 	CheckDecode        = "precondition_decode"   // opaque body failed to decode
 	CheckChainLinkage  = "chain_linkage"         // parent-hash / root-anchor linkage broken
+	CheckTenantBinding = "tenant_binding"        // signed hop tenant differs from the issuance tenant
 	CheckHopSignature  = "hop_signature"         // a hop's delegator signature did not verify
 	CheckRootAnchor    = "root_anchor"           // chain did not chain to a held root anchor
 	CheckExpiry        = "validity_expiry"       // a hop (or the request window) is expired/out of range

@@ -51,6 +51,8 @@ var ErrRootAnchorSignerUnavailable = errors.New("agentid api: signer root-anchor
 var ErrRootAnchorSignerReadback = errors.New("agentid api: signer root-anchor readback differs from registered authority")
 var ErrInvalidRootAnchorRequest = errors.New("agentid api: invalid root-anchor request")
 var ErrRootAnchorLogUnavailable = errors.New("agentid api: root-anchor event log is unavailable")
+var ErrInvalidIssuanceChain = errors.New("agentid api: invalid delegation chain encoding")
+var ErrChainTenantMismatch = errors.New("agentid api: delegation chain tenant differs from request tenant")
 
 // service is the store/log/outbox-backed AGID API Service. IssueChainBound and Revoke
 // enqueue an idempotent outbox job through the core outbox (the AGID mechanisms run
@@ -232,6 +234,17 @@ type issuanceJob struct {
 // asynchronously in the worker, exactly as PCAS RequestSuccession enqueues and the PCAS
 // worker mints.
 func (s *service) IssueChainBound(ctx context.Context, tenantID string, req IssueChainBoundRequest) (IssueChainBoundResponse, error) {
+	if len(req.Chain) != 0 {
+		var body delegation.PreconditionsBody
+		if err := json.Unmarshal(req.Chain, &body); err != nil {
+			return IssueChainBoundResponse{}, fmt.Errorf("decode delegation chain: %w", ErrInvalidIssuanceChain)
+		}
+		for _, env := range body.Chain {
+			if env.Record.TenantID != tenantID {
+				return IssueChainBoundResponse{}, ErrChainTenantMismatch
+			}
+		}
+	}
 	issuanceID := events.NewID()
 	payload, err := json.Marshal(issuanceJob{IssuanceID: issuanceID, IssueChainBoundRequest: req})
 	if err != nil {
@@ -366,9 +379,11 @@ func (s *service) Revoke(ctx context.Context, tenantID string, req RevokeRequest
 }
 
 // FetchChain returns the ordered opaque delegation records for an issued credential,
-// RLS-scoped to tenantID. The response verifies offline with the AGID-09 relying-party
-// verifier. It reads the AGID-02 store's chain read (FetchChain), rendering each record's
-// canonical bytes.
+// RLS-scoped to tenantID. It reads the AGID-02 store's chain read (FetchChain),
+// rendering each record's canonical bytes for a caller's offline chain walk.
+// A relying party walking this chain must compare every signed
+// record tenant to the tenant of its pinned issuing CA; the credential-only
+// verifier does not consume these records.
 func (s *service) FetchChain(ctx context.Context, tenantID, credentialID string) (ChainResponse, error) {
 	resp := ChainResponse{CredentialID: credentialID, Records: [][]byte{}}
 	if s.repo == nil {
