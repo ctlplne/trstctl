@@ -281,11 +281,14 @@ func (h *caHierarchyService) issueLeafForExactAuthority(
 	evidence := managedCALeafEvent(authority.ID, issued.DER, info)
 	evidence.MigrationExactAuthority = opts.migration
 	evidence.KeyOrigin = string(keyOrigin)
-	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAEndEntityInventorySchemaVersion, evidence)
+	payload, err := json.Marshal(evidence)
 	if err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err
 	}
-	if err := projections.New(h.store).Apply(ctx, ev); err != nil {
+	if _, err := appendAndProjectOrderedCertificateMetadata(ctx, h.store, h.log, events.Event{
+		Type: projections.EventCAEndEntityIssued, TenantID: tenantID,
+		SchemaVersion: projections.CAEndEntityInventorySchemaVersion, Data: payload,
+	}); err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err
 	}
 	return issued, []byte(authority.CertificatePEM), authority.ID, nil
@@ -1014,11 +1017,14 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 		event.RequestedCAID = requestedCA.ID
 		event.RotationRouted = true
 	}
-	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAEndEntityInventorySchemaVersion, event)
+	payload, err := json.Marshal(event)
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
 	}
-	if err := projections.New(h.store).Apply(ctx, ev); err != nil {
+	if _, err := appendAndProjectOrderedCertificateMetadata(ctx, h.store, h.log, events.Event{
+		Type: projections.EventCAEndEntityIssued, TenantID: tenantID,
+		SchemaVersion: projections.CAEndEntityInventorySchemaVersion, Data: payload,
+	}); err != nil {
 		return api.CAIssuedLeaf{}, err
 	}
 	return api.CAIssuedLeaf{CertificatePEM: string(out), Serial: info.SerialNumber, NotAfter: info.NotAfter}, nil

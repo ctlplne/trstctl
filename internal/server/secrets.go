@@ -256,6 +256,14 @@ func (s *secretRevocationSink) Revoke(ctx context.Context, tenantID, caID, seria
 }
 
 func (s *secretRevocationSink) appendAndProject(ctx context.Context, ev events.Event) error {
+	metadata, err := projections.CertificateMetadataEvent(ev)
+	if err != nil {
+		return err
+	}
+	if metadata {
+		_, err := appendAndProjectOrderedCertificateMetadata(ctx, s.store, s.log, ev)
+		return err
+	}
 	stored, err := s.log.Append(ctx, ev)
 	if err != nil {
 		return err
