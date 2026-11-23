@@ -222,7 +222,7 @@ func TestAssembledFailsClosedWhenSignerStops(t *testing.T) {
 		t.Skip("uses a real signer child; skipped in -short")
 	}
 	st := newStore(t)
-	log := openLog(t)
+	log := openRegisteredTenantLog(t)
 	prov, stop := startSignerChild(t)
 
 	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov})
@@ -241,6 +241,34 @@ func TestAssembledFailsClosedWhenSignerStops(t *testing.T) {
 	stop()
 	if _, err := asm.IssueLeaf(context.Background(), csrDER, time.Hour); err == nil {
 		t.Fatal("issuance after the signer stopped must fail closed")
+	}
+}
+
+// CR-042: an empty fixture must not regain signing authority just to make
+// another assembly test pass. A real tenant event is required before issuance.
+func TestAssembledPlatformCARefusesAnUnregisteredTenantCR042(t *testing.T) {
+	if testing.Short() {
+		t.Skip("assembles the control plane with a real signer child; skipped in -short")
+	}
+	st := newStore(t)
+	log := openLog(t)
+	prov, stop := startSignerChild(t)
+	defer stop()
+	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "unregistered.svc.test"}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := asm.IssueLeaf(context.Background(), csr, time.Hour); err == nil || !strings.Contains(err.Error(), "registered tenant") {
+		t.Fatalf("unregistered tenant was allowed to sign or failed for another reason: %v", err)
 	}
 }
 
