@@ -36,8 +36,10 @@ func WithCBOM(svc CBOMService) Option {
 
 // CBOMScanRequest names the read-only estate slices to inspect.
 type CBOMScanRequest struct {
-	TLSEndpoints []string `json:"tls_endpoints"`
-	HostConfigs  []string `json:"host_configs"`
+	TLSEndpoints         []string `json:"tls_endpoints"`
+	HostConfigs          []string `json:"host_configs"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
 
 const (
@@ -79,6 +81,17 @@ type CBOMScanPreview struct {
 // execution. It accepts friendly HTTPS URLs or bare hosts, converts them to the
 // host:port form the probe uses, and returns a stable deduplicated plan.
 func NormalizeCBOMScanRequest(req CBOMScanRequest) (CBOMScanRequest, error) {
+	if !req.AllowPrivateEndpoint && len(req.PrivateEgressCIDRs) != 0 {
+		return CBOMScanRequest{}, errors.New("CBOM private_egress_cidrs requires allow_private_endpoint")
+	}
+	if req.AllowPrivateEndpoint {
+		if len(req.PrivateEgressCIDRs) > 64 {
+			return CBOMScanRequest{}, errors.New("CBOM accepts at most 64 private egress CIDRs")
+		}
+		if err := validatePrivateEgressCIDRs(req.PrivateEgressCIDRs); err != nil {
+			return CBOMScanRequest{}, err
+		}
+	}
 	if len(req.TLSEndpoints) > CBOMMaxTLSEndpoints {
 		return CBOMScanRequest{}, fmt.Errorf("CBOM scan accepts at most %d TLS endpoints per run", CBOMMaxTLSEndpoints)
 	}
@@ -112,10 +125,16 @@ func NormalizeCBOMScanRequest(req CBOMScanRequest) (CBOMScanRequest, error) {
 	}
 	tlsEndpoints = uniqueSortedStrings(tlsEndpoints)
 	hostConfigs = uniqueSortedStrings(hostConfigs)
+	privateCIDRs := make([]string, 0, len(req.PrivateEgressCIDRs))
+	for _, cidr := range req.PrivateEgressCIDRs {
+		privateCIDRs = append(privateCIDRs, strings.TrimSpace(cidr))
+	}
+	privateCIDRs = uniqueSortedStrings(privateCIDRs)
 	if len(tlsEndpoints) == 0 && len(hostConfigs) == 0 {
 		return CBOMScanRequest{}, errors.New("CBOM scan requires at least one TLS endpoint or host config")
 	}
-	return CBOMScanRequest{TLSEndpoints: tlsEndpoints, HostConfigs: hostConfigs}, nil
+	return CBOMScanRequest{TLSEndpoints: tlsEndpoints, HostConfigs: hostConfigs,
+		AllowPrivateEndpoint: req.AllowPrivateEndpoint, PrivateEgressCIDRs: privateCIDRs}, nil
 }
 
 func normalizeCBOMTLSEndpoint(raw string) (string, error) {
@@ -257,6 +276,12 @@ func (a *API) previewCBOMScan(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
+	if req.AllowPrivateEndpoint {
+		if err := a.requirePrivateEgressPermission(r.Context(), tenantID); err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 	preview, err := a.cbom.Preview(r.Context(), tenantID, req)
 	if err != nil {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
@@ -275,6 +300,11 @@ func (a *API) startCBOMScan(w http.ResponseWriter, r *http.Request) {
 		var req CBOMScanRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if req.AllowPrivateEndpoint {
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return 0, nil, err
+			}
 		}
 		preview, err := a.cbom.Preview(ctx, tenantID, req)
 		if err != nil {

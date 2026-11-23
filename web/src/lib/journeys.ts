@@ -345,7 +345,7 @@ export const journeys: Journey[] = [
         bodyKey: "journeys.pqc.scan.body",
         to: "/posture",
         command:
-          'curl -sS -H "Idempotency-Key: cbom-pqc-001" \\\n  -X POST https://trstctl.example.com/api/v1/cbom/scans \\\n  -d \'{"tls_endpoints": ["payments.internal.example:443"],\n       "host_configs": ["/etc/nginx/sites-enabled/payments.conf"]}\'',
+          'curl -sS -H "Idempotency-Key: cbom-pqc-001" \\\n  -X POST https://trstctl.example.com/api/v1/cbom/scans \\\n  -d \'{"tls_endpoints": ["payments.example.com:443"],\n       "host_configs": ["/etc/nginx/sites-enabled/payments.conf"]}\'',
       },
       { id: "inventory", titleKey: "journeys.pqc.inventory.title", bodyKey: "journeys.pqc.inventory.body", to: "/posture" },
       { id: "graph", titleKey: "journeys.pqc.graph.title", bodyKey: "journeys.pqc.graph.body", to: "/graph", command: "trstctl-cli graph nodes" },

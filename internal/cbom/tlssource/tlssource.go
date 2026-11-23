@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/keyposture"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // Prober performs the non-invasive TLS handshake. The default is tlsprobe.Probe;
@@ -22,11 +23,12 @@ import (
 type Prober func(ctx context.Context, addr string) (tlsprobe.Result, error)
 
 func defaultProber(ctx context.Context, addr string) (tlsprobe.Result, error) {
-	return tlsprobe.Probe(ctx, addr)
+	return tlsprobe.Probe(ctx, addr, tlsprobe.WithDialControl(netsec.SafeDialControl))
 }
 
 func compatibilityProber(ctx context.Context, addr string) (tlsprobe.Result, error) {
-	return tlsprobe.Probe(ctx, addr, tlsprobe.WithMaxVersion(tlsprobe.TLSVersion12))
+	return tlsprobe.Probe(ctx, addr, tlsprobe.WithMaxVersion(tlsprobe.TLSVersion12),
+		tlsprobe.WithDialControl(netsec.SafeDialControl))
 }
 
 // Source observes a set of TLS endpoints.

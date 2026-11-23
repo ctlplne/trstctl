@@ -799,8 +799,9 @@ func buildRunDepsWithCustody(ctx context.Context, cfg *config.Config, st *store.
 		FIPSRequired: cfg.RuntimeFIPSRequired,
 		// J2: empty when the operator configured no backup directory, which the
 		// DR surface reports as "not configured" rather than as a failure.
-		BackupDirectory:     cfg.Backup.Directory,
-		CBOMTLSProbeOpenSSL: cfg.CBOM.TLSProbeOpenSSL,
+		BackupDirectory:        cfg.Backup.Directory,
+		CBOMTLSProbeOpenSSL:    cfg.CBOM.TLSProbeOpenSSL,
+		CBOMPrivateEgressCIDRs: append([]string(nil), cfg.CBOM.PrivateEgressCIDRs...),
 		// J2: keep the DSN inside the drill closure. Nil means no operator-chosen
 		// backup directory exists, so a nightly drill would be meaningless.
 		RestoreDrill:         drill,

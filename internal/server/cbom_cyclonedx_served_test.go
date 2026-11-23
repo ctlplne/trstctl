@@ -44,10 +44,11 @@ func TestServedCBOMCycloneDXExportMatchesTheInventoryAndVerifiesOffline(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.AuditSigningKey = signingKey })
-	tok := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read", "audit:read")
+	h := newOperatingServedHarness(t, config.Protocols{}, withCBOMLoopbackEgress, func(d *Deps) { d.AuditSigningKey = signingKey })
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read", "audit:read", "egress:private")
 	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", tok, "q3-cbom-scan", map[string]any{
 		"tls_endpoints": []string{u.Host}, "host_configs": []string{conf},
+		"allow_private_endpoint": true, "private_egress_cidrs": []string{"127.0.0.1/32"},
 	}); status != http.StatusCreated {
 		t.Fatalf("scan = %d %s", status, body)
 	}

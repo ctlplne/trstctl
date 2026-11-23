@@ -30,6 +30,9 @@ func TestNormalizeCBOMScanRequestRejectsAmbiguousOrOverbroadInputs(t *testing.T)
 		{TLSEndpoints: []string{"example.com:70000"}},
 		{HostConfigs: []string{"relative/nginx.conf"}},
 		{TLSEndpoints: make([]string, CBOMMaxTLSEndpoints+1)},
+		{TLSEndpoints: []string{"127.0.0.1:443"}, AllowPrivateEndpoint: true},
+		{TLSEndpoints: []string{"127.0.0.1:443"}, PrivateEgressCIDRs: []string{"127.0.0.1/32"}},
+		{TLSEndpoints: []string{"127.0.0.1:443"}, AllowPrivateEndpoint: true, PrivateEgressCIDRs: []string{"0.0.0.0/0"}},
 	}
 	for i, req := range tests {
 		if _, err := NormalizeCBOMScanRequest(req); err == nil {

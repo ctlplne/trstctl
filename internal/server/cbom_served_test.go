@@ -16,6 +16,42 @@ import (
 	"trstctl.com/trstctl/internal/config"
 )
 
+func TestCR056ServedCBOMPrivateTLSNeedsPermissionAndOperatorCeiling(t *testing.T) {
+	endpoint := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(endpoint.Close)
+	u, err := url.Parse(endpoint.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newOperatingServedHarness(t, config.Protocols{})
+	ordinary := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
+	private := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read", "egress:private")
+	base := map[string]any{"tls_endpoints": []string{u.Host}}
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", ordinary, "cr056-default", base)
+	var scan struct {
+		Report struct {
+			Failed int `json:"failed"`
+		} `json:"report"`
+		ObservedAssetIDs []string `json:"observed_asset_ids"`
+	}
+	if status != http.StatusCreated || json.Unmarshal(body, &scan) != nil || scan.Report.Failed != 1 || len(scan.ObservedAssetIDs) != 0 {
+		t.Fatalf("private default scan status=%d body=%s; want one refused probe and no assets", status, body)
+	}
+	requested := map[string]any{"tls_endpoints": []string{u.Host}, "allow_private_endpoint": true,
+		"private_egress_cidrs": []string{"127.0.0.1/32"}}
+	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans/preview", ordinary, requested); status != http.StatusForbidden {
+		t.Fatalf("private preview without egress:private status=%d body=%s", status, body)
+	}
+	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", ordinary, "cr056-unprivileged", requested); status != http.StatusForbidden {
+		t.Fatalf("private scan without egress:private status=%d body=%s", status, body)
+	}
+	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans/preview", private, requested); status != http.StatusBadRequest {
+		t.Fatalf("private preview outside operator ceiling status=%d body=%s", status, body)
+	}
+}
+
 func TestRetryCBOMWriteRetriesTransientFailure(t *testing.T) {
 	attempts := 0
 	err := retryCBOMWrite(context.Background(), func() error {
@@ -152,16 +188,18 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 		t.Fatalf("write host crypto fixture: %v", err)
 	}
 
-	h := newOperatingServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
+	h := newOperatingServedHarness(t, config.Protocols{}, withCBOMLoopbackEgress)
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read", "egress:private")
 	beforePreview, err := h.log.LastSequence(t.Context())
 	if err != nil {
 		t.Fatalf("read event head before preview: %v", err)
 	}
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans/preview", tok, map[string]any{
-		"tls_endpoints": []string{tlsSrv.URL, u.Host},
-		"host_configs":  []string{conf, conf},
+		"tls_endpoints":          []string{tlsSrv.URL, u.Host},
+		"host_configs":           []string{conf, conf},
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{"127.0.0.1/32"},
 	})
 	if status != http.StatusOK {
 		t.Fatalf("preview CBOM scan: status %d body %s", status, body)
@@ -214,8 +252,10 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 	}
 
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", tok, "licensed-crypto-cbom-scan", map[string]any{
-		"tls_endpoints": []string{u.Host},
-		"host_configs":  []string{conf},
+		"tls_endpoints":          []string{u.Host},
+		"host_configs":           []string{conf},
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{"127.0.0.1/32"},
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("start CBOM scan: status %d body %s", status, body)
@@ -330,4 +370,7 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 	if !h.hasEvent(t, "cbom.asset.observed") {
 		t.Fatal("missing cbom.asset.observed event; served CBOM scan is not event-sourced")
 	}
+}
+func withCBOMLoopbackEgress(d *Deps) {
+	d.CBOMPrivateEgressCIDRs = []string{"127.0.0.1/32"}
 }

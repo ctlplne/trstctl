@@ -53,6 +53,29 @@ func TestCBOMNativeProbeConfiguration(t *testing.T) {
 	}
 }
 
+func TestCR056CBOMOperatorPrivateEgressCeilingConfiguration(t *testing.T) {
+	cfg, err := Load(func(key string) string {
+		if key == "TRSTCTL_CBOM_PRIVATE_EGRESS_CIDRS" {
+			return "10.20.0.0/16,127.0.0.1/32"
+		}
+		return ""
+	})
+	if err != nil || strings.Join(cfg.CBOM.PrivateEgressCIDRs, ",") != "10.20.0.0/16,127.0.0.1/32" {
+		t.Fatalf("operator ceiling=%v err=%v", cfg.CBOM.PrivateEgressCIDRs, err)
+	}
+	for _, bad := range []string{"0.0.0.0/0", "10.20.1.4/16", "not-a-cidr"} {
+		_, err := Load(func(key string) string {
+			if key == "TRSTCTL_CBOM_PRIVATE_EGRESS_CIDRS" {
+				return bad
+			}
+			return ""
+		})
+		if err == nil || !strings.Contains(err.Error(), "cbom.private_egress_cidrs") {
+			t.Fatalf("invalid operator ceiling %q accepted: %v", bad, err)
+		}
+	}
+}
+
 // Inspect the operator-facing serialized configuration so this regression can
 // run against the preceding product, where the new field is silently ignored.
 // A compile failure caused by referencing the proposed Go field is not RED proof.

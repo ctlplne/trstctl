@@ -138,6 +138,9 @@ type Deps struct {
 	AuditComplianceFactory editionseam.AuditComplianceFactory
 	// CBOMTLSProbeOpenSSL is a trusted local startup path, never tenant-authored.
 	CBOMTLSProbeOpenSSL string
+	// CBOMPrivateEgressCIDRs is the operator's ceiling for private TLS scans.
+	// A tenant still needs an explicit CIDR request and egress:private.
+	CBOMPrivateEgressCIDRs []string
 	// CBOMPackageDatabases are the package databases a served host-config
 	// scan reads the product versions that decide a default from (X2-L7);
 	// nil means this host's own (dpkg's status file and apk's installed
@@ -1184,6 +1187,16 @@ func resolveSignTokenProvider(d Deps) signing.SignTokenProvider {
 }
 
 func Build(ctx context.Context, d Deps) (*Server, error) {
+	if d.CBOMTLSProbeOpenSSL != "" {
+		if err := tlsprobe.ValidateOpenSSLExecutable(d.CBOMTLSProbeOpenSSL); err != nil {
+			return nil, fmt.Errorf("server: CBOM native TLS probe: %w", err)
+		}
+	}
+	for _, raw := range d.CBOMPrivateEgressCIDRs {
+		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
+			return nil, fmt.Errorf("server: CBOM private egress ceiling: %w", err)
+		}
+	}
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")
 	}
@@ -1246,11 +1259,6 @@ func buildAdmitted(ctx context.Context, d Deps) (_ *Server, err error) {
 		}
 		notificationOwner.closeUntransferred()
 	}()
-	if d.CBOMTLSProbeOpenSSL != "" {
-		if err := tlsprobe.ValidateOpenSSLExecutable(d.CBOMTLSProbeOpenSSL); err != nil {
-			return nil, fmt.Errorf("server: CBOM native TLS probe: %w", err)
-		}
-	}
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")
 	}

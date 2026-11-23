@@ -7,9 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
@@ -18,15 +21,17 @@ import (
 	"trstctl.com/trstctl/internal/cbom/tlssource"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
 type cbomService struct {
-	nativeTLSExecutable string
-	store               *store.Store
-	log                 *events.Log
+	nativeTLSExecutable  string
+	privateEgressCeiling []string
+	store                *store.Store
+	log                  *events.Log
 	// orch records CBOM imports as discovery runs (X6).
 	orch *orchestrator.Orchestrator
 	// packageDatabases decide a host-config scan's product defaults (X2-L7);
@@ -36,7 +41,7 @@ type cbomService struct {
 
 func (s *Server) buildCBOMService(d Deps) api.CBOMService {
 	return &cbomService{store: d.Store, log: d.Log, nativeTLSExecutable: d.CBOMTLSProbeOpenSSL, orch: s.orch,
-		packageDatabases: d.CBOMPackageDatabases}
+		privateEgressCeiling: d.CBOMPrivateEgressCIDRs, packageDatabases: d.CBOMPackageDatabases}
 }
 
 const (
@@ -48,9 +53,49 @@ func (s *cbomService) Preview(_ context.Context, _ string, req api.CBOMScanReque
 	return s.plan(req)
 }
 
+func (s *cbomService) tlsDialControl(req api.CBOMScanRequest) (func(string, string, syscall.RawConn) error, error) {
+	if !req.AllowPrivateEndpoint {
+		return netsec.SafeDialControl, nil
+	}
+	if len(s.privateEgressCeiling) == 0 {
+		return nil, errors.New("CBOM private TLS egress is not enabled by the operator")
+	}
+	ceiling := make([]netip.Prefix, 0, len(s.privateEgressCeiling))
+	for _, raw := range s.privateEgressCeiling {
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
+		if err != nil {
+			return nil, fmt.Errorf("CBOM operator private egress ceiling: %w", err)
+		}
+		ceiling = append(ceiling, prefix)
+	}
+	allowed := make([]netip.Prefix, 0, len(req.PrivateEgressCIDRs))
+	for _, raw := range req.PrivateEgressCIDRs {
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
+		if err != nil {
+			return nil, err
+		}
+		contained := false
+		for _, limit := range ceiling {
+			if limit.Addr().Is4() == prefix.Addr().Is4() &&
+				limit.Bits() <= prefix.Bits() && limit.Contains(prefix.Addr()) {
+				contained = true
+				break
+			}
+		}
+		if !contained {
+			return nil, errors.New("CBOM private_egress_cidrs exceeds the operator ceiling")
+		}
+		allowed = append(allowed, prefix)
+	}
+	return netsec.SafeDialControlWithOptions(netsec.SafeClientOptions{AllowPrivateCIDRs: allowed}), nil
+}
+
 func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error) {
 	normalized, err := api.NormalizeCBOMScanRequest(req)
 	if err != nil {
+		return api.CBOMScanPreview{}, err
+	}
+	if _, err := s.tlsDialControl(normalized); err != nil {
 		return api.CBOMScanPreview{}, err
 	}
 	// One ordinary handshake, one TLS-1.2-capped compatibility handshake,
@@ -105,6 +150,7 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 		SafetyNotes: []string{
 			"Preview performs no network connection, file read, event append, projection write, signer call, or outbox delivery.",
 			"TLS discovery completes a handshake only and sends no HTTP or other application-layer request.",
+			"TLS dials check each resolved address; private ranges need egress:private, an explicit requested CIDR, and an operator-configured CIDR ceiling. Metadata and link-local addresses stay blocked.",
 			"Host discovery reads only explicitly declared absolute paths or globs and parses public protocol and cipher declarations; it never returns file contents.",
 		},
 	}, nil
@@ -118,21 +164,32 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 	if !plan.Ready {
 		return api.CBOMScanResponse{}, errors.New("server: CBOM scan dependencies are not ready")
 	}
+	control, err := s.tlsDialControl(plan.NormalizedRequest)
+	if err != nil {
+		return api.CBOMScanResponse{}, err
+	}
 	sources := make([]cbom.Source, 0, 2)
 	var host *hostsource.Source
 	if len(plan.NormalizedRequest.TLSEndpoints) > 0 {
-		var options []tlssource.Option
-		if s.nativeTLSExecutable != "" {
-			options = append(options, tlssource.WithProber(func(ctx context.Context, addr string) (tlsprobe.Result, error) {
+		options := []tlssource.Option{tlssource.WithProber(func(ctx context.Context, addr string) (tlsprobe.Result, error) {
+			if s.nativeTLSExecutable == "" {
+				return tlsprobe.Probe(ctx, addr, tlsprobe.WithDialControl(control))
+			}
+			// A native executable has no dial hook. It may only receive an
+			// already-authorized literal IP; DNS names stay in the guarded Go probe.
+			host, _, splitErr := net.SplitHostPort(addr)
+			if splitErr == nil && net.ParseIP(host) != nil && control("tcp", addr, nil) == nil {
 				return tlsprobe.ProbeWithNativeFallback(ctx, s.nativeTLSExecutable, addr)
-			}))
-			// The native fallback deliberately offers TLS 1.3. Keep the
-			// compatibility probe on Go's capped ClientHello so a TLS 1.3
-			// native success can never masquerade as TLS 1.2 acceptance.
-			options = append(options, tlssource.WithCompatibilityProber(func(ctx context.Context, addr string) (tlsprobe.Result, error) {
-				return tlsprobe.Probe(ctx, addr, tlsprobe.WithMaxVersion(tlsprobe.TLSVersion12))
-			}))
-		}
+			}
+			return tlsprobe.ProbeWithNativeFallback(ctx, s.nativeTLSExecutable, addr,
+				tlsprobe.WithDialControl(control))
+		})}
+		// Keep the compatibility probe on Go's capped ClientHello so a TLS
+		// 1.3 native success cannot masquerade as TLS 1.2 acceptance.
+		options = append(options, tlssource.WithCompatibilityProber(func(ctx context.Context, addr string) (tlsprobe.Result, error) {
+			return tlsprobe.Probe(ctx, addr, tlsprobe.WithMaxVersion(tlsprobe.TLSVersion12),
+				tlsprobe.WithDialControl(control))
+		}))
 		sources = append(sources, tlssource.New(plan.NormalizedRequest.TLSEndpoints, options...))
 	}
 	if len(plan.NormalizedRequest.HostConfigs) > 0 {

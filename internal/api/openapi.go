@@ -7267,8 +7267,10 @@ func componentSchemas() map[string]*Schema {
 		"priorities":     {Type: "array", Items: ref("ContextualRiskPriority")},
 	}, "capability", "generated_at", "coverage", "summary", "urgent_summary", "priorities")
 	cbomScanReq := object(map[string]*Schema{
-		"tls_endpoints": {Type: "array", Items: str()},
-		"host_configs":  {Type: "array", Items: str()},
+		"tls_endpoints":          {Type: "array", Items: str()},
+		"host_configs":           {Type: "array", Items: str()},
+		"allow_private_endpoint": {Type: "boolean", Description: "Request a private TLS probe; requires egress:private and an operator CBOM private egress ceiling."},
+		"private_egress_cidrs":   {Type: "array", Items: str(), Description: "Exact CIDRs for this scan, each contained by the operator cbom.private_egress_cidrs ceiling."},
 	})
 	// X6: a CycloneDX CBOM taken into the inventory.
 	cbomImportDocument := &Schema{Type: "object", Description: "a CycloneDX 1.4-1.6 BOM (bomFormat CycloneDX) with cryptographic-asset components or crypto library components",

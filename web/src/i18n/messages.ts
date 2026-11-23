@@ -35246,6 +35246,19 @@ export const messages = {
     defaultMessage: "https://api.example.com:443\ninternal-service.example.com",
     description: "CBOM TLS target example.",
   },
+  "posture.cbom.workflow.privateCIDRsLabel": {
+    defaultMessage: "Approved private CIDRs",
+    description: "CBOM private TLS egress field label.",
+  },
+  "posture.cbom.workflow.privateCIDRsHelp": {
+    defaultMessage:
+      "Optional. One approved private range per line. Requires your egress:private permission and must stay inside the operator's CBOM ceiling. Metadata and link-local addresses are always blocked.",
+    description: "CBOM private egress authorization help.",
+  },
+  "posture.cbom.workflow.privateCIDRsPlaceholder": {
+    defaultMessage: "10.20.0.0/16",
+    description: "CBOM private egress CIDR example.",
+  },
   "posture.cbom.workflow.hostLabel": { defaultMessage: "Host configuration files", description: "CBOM host config field label." },
   "posture.cbom.workflow.hostHelp": {
     defaultMessage: "One absolute file path or absolute glob per line. trstctl reads only protocol and cipher declarations. Maximum 64 selectors.",

@@ -2840,7 +2840,9 @@ export interface CBOMScanPreview {
 }
 
 export interface CBOMScanRequest {
+  allow_private_endpoint?: boolean;
   host_configs?: string[];
+  private_egress_cidrs?: string[];
   tls_endpoints?: string[];
 }
 

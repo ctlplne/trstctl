@@ -20,6 +20,7 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
   const [step, setStep] = useState(0);
   const [tlsText, setTLSText] = useState("");
   const [hostText, setHostText] = useState("");
+  const [privateText, setPrivateText] = useState("");
   const [reviewed, setReviewed] = useState<ReviewedPlan | null>(null);
   const [result, setResult] = useState<CBOMScan | null>(null);
   const [verifiedInventory, setVerifiedInventory] = useState<VerifiedInventory | null>(null);
@@ -31,11 +32,13 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
   const request = useMemo<CBOMScanRequest>(() => {
     const tlsEndpoints = linesFromText(tlsText);
     const hostConfigs = linesFromText(hostText);
+    const privateCIDRs = linesFromText(privateText);
     return {
       ...(tlsEndpoints.length > 0 ? { tls_endpoints: tlsEndpoints } : {}),
       ...(hostConfigs.length > 0 ? { host_configs: hostConfigs } : {}),
+      ...(privateCIDRs.length > 0 ? { allow_private_endpoint: true, private_egress_cidrs: privateCIDRs } : {}),
     };
-  }, [hostText, tlsText]);
+  }, [hostText, privateText, tlsText]);
   const requestKey = JSON.stringify(request);
   const exactPlan = reviewed?.key === requestKey ? reviewed.value : null;
   const steps = useMemo<CarouselStep[]>(
@@ -54,6 +57,11 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
 
   function updateHosts(value: string) {
     setHostText(value);
+    invalidatePlan();
+  }
+
+  function updatePrivateCIDRs(value: string) {
+    setPrivateText(value);
     invalidatePlan();
   }
 
@@ -106,6 +114,7 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
     setStep(0);
     setTLSText("");
     setHostText("");
+    setPrivateText("");
     setReviewed(null);
     setResult(null);
     setVerifiedInventory(null);
@@ -145,6 +154,18 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
                 onChange={(event) => updateHosts(event.target.value)}
                 className="min-h-28 font-mono text-xs"
                 placeholder={t("posture.cbom.workflow.hostPlaceholder")}
+                spellCheck={false}
+              />
+            )}
+          </Field>
+          <Field label={t("posture.cbom.workflow.privateCIDRsLabel")} description={t("posture.cbom.workflow.privateCIDRsHelp")}>
+            {(control) => (
+              <Textarea
+                {...control}
+                value={privateText}
+                onChange={(event) => updatePrivateCIDRs(event.target.value)}
+                className="min-h-20 font-mono text-xs"
+                placeholder={t("posture.cbom.workflow.privateCIDRsPlaceholder")}
                 spellCheck={false}
               />
             )}

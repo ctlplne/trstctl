@@ -16027,7 +16027,11 @@ export interface components {
             worker_limit: number;
         };
         CBOMScanRequest: {
+            /** @description Request a private TLS probe; requires egress:private and an operator CBOM private egress ceiling. */
+            allow_private_endpoint?: boolean;
             host_configs?: string[];
+            /** @description Exact CIDRs for this scan, each contained by the operator cbom.private_egress_cidrs ceiling. */
+            private_egress_cidrs?: string[];
             tls_endpoints?: string[];
         };
         CMDBCertificateExport: {

@@ -44,8 +44,8 @@ func TestServedCBOMNativeScanObservesMLDSALeaves(t *testing.T) {
 	}
 	for _, algorithm := range []boundarycrypto.Algorithm{pqc.MLDSA44, pqc.MLDSA65, pqc.MLDSA87} {
 		t.Run(string(algorithm), func(t *testing.T) {
-			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.CBOMTLSProbeOpenSSL = executable })
-			token := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
+			h := newOperatingServedHarness(t, config.Protocols{}, withCBOMLoopbackEgress, func(d *Deps) { d.CBOMTLSProbeOpenSSL = executable })
+			token := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read", "egress:private")
 			key, err := pqc.GenerateHostMLDSASubjectKey(boundarycrypto.CertificateRequestTemplate{CommonName: "scan.example.test", DNSNames: []string{"scan.example.test"}}, algorithm)
 			if err != nil {
 				t.Fatal(err)
@@ -80,7 +80,8 @@ func TestServedCBOMNativeScanObservesMLDSALeaves(t *testing.T) {
 			}
 			// A request cannot override the operator's executable. Unknown JSON fields
 			// follow the API's normal compatibility behavior and must have no effect.
-			request := map[string]any{"tls_endpoints": []string{address}, "tls_probe_openssl": "/tenant-must-not-select-executable"}
+			request := map[string]any{"tls_endpoints": []string{address}, "tls_probe_openssl": "/tenant-must-not-select-executable",
+				"allow_private_endpoint": true, "private_egress_cidrs": []string{"127.0.0.1/32"}}
 			status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans/preview", token, request)
 			if status != http.StatusOK {
 				t.Fatalf("preview status=%d body=%s", status, body)

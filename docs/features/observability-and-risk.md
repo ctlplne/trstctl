@@ -410,6 +410,18 @@ prior facts so a failed probe cannot falsely clear a risk. `GET /api/v1/cbom/ass
 The four-worker, 64-slot CBOM bulkhead prevents a wide sweep from starving API or
 enrollment work.
 
+CBOM TLS probes check each resolved address immediately before connect. Private,
+loopback, link-local and metadata addresses are refused by default, including
+when a public DNS name resolves inward. To scan an approved private endpoint,
+an operator sets `cbom.private_egress_cidrs` (or
+`TRSTCTL_CBOM_PRIVATE_EGRESS_CIDRS`) as the maximum reachable ranges. The
+request must include `allow_private_endpoint: true` and narrower
+`private_egress_cidrs`, and its caller needs `egress:private` as well as
+`discovery:write`. Link-local and metadata addresses remain refused. The
+optional native OpenSSL fallback is restricted to authorized literal IP
+addresses because the native executable cannot enforce a DNS dial hook;
+hostnames use the guarded Go probe.
+
 The same inventory exports as a CycloneDX 1.6 CBOM that scanners and agencies can
 ingest: `GET /api/v1/cbom/export/cyclonedx` (`risk:read`), `trstctl-cli cbom
 export-cyclonedx`, or **Download CycloneDX CBOM** under the crypto inventory in Posture.

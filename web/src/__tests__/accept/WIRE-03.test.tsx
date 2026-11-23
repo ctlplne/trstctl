@@ -147,6 +147,21 @@ describe("WIRE-03 Posture CBOM wiring", () => {
     expect(within(row).getByText(/RSA-1024 below policy floor/)).toBeInTheDocument();
   });
 
+  it("sends an explicit private CIDR grant when reviewing an internal CBOM endpoint", async () => {
+    const user = userEvent.setup();
+    renderPosture();
+    await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
+    await user.type(screen.getByLabelText("TLS services"), "api.internal:8443");
+    await user.type(screen.getByLabelText("Approved private CIDRs"), "10.20.0.0/16");
+    await user.click(screen.getByRole("button", { name: "Review scan plan" }));
+    expect(apiMock.previewCBOMScan).toHaveBeenCalledWith({
+      tls_endpoints: ["api.internal:8443"],
+      allow_private_endpoint: true,
+      private_egress_cidrs: ["10.20.0.0/16"],
+    });
+  });
+
   it("shows a zero-finding scan as inconclusive even when older inventory rows exist", async () => {
     apiMock.startCBOMScan.mockResolvedValueOnce({
       migration_progress: scannedProgress,

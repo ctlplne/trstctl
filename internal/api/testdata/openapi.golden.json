@@ -13528,7 +13528,18 @@
       },
       "CBOMScanRequest": {
         "properties": {
+          "allow_private_endpoint": {
+            "description": "Request a private TLS probe; requires egress:private and an operator CBOM private egress ceiling.",
+            "type": "boolean"
+          },
           "host_configs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "private_egress_cidrs": {
+            "description": "Exact CIDRs for this scan, each contained by the operator cbom.private_egress_cidrs ceiling.",
             "items": {
               "type": "string"
             },

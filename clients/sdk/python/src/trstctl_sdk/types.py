@@ -3992,7 +3992,9 @@ CBOMScanPreview = TypedDict(
 CBOMScanRequest = TypedDict(
     'CBOMScanRequest',
     {
+        'allow_private_endpoint': bool,
         'host_configs': list[str],
+        'private_egress_cidrs': list[str],
         'tls_endpoints': list[str],
     },
     total=False,

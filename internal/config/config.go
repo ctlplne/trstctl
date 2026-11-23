@@ -162,7 +162,8 @@ type Config struct {
 
 // CBOM configures local cryptographic inventory. Tenant requests never select executables.
 type CBOM struct {
-	TLSProbeOpenSSL string `json:"tls_probe_openssl,omitempty"`
+	TLSProbeOpenSSL    string   `json:"tls_probe_openssl,omitempty"`
+	PrivateEgressCIDRs []string `json:"private_egress_cidrs,omitempty"`
 }
 
 // License configures the offline license file. Empty means Community.
@@ -4201,6 +4202,7 @@ func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 
 func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setString(getenv, "TRSTCTL_CBOM_TLS_PROBE_OPENSSL", &c.CBOM.TLSProbeOpenSSL)
+	setCSV(getenv, "TRSTCTL_CBOM_PRIVATE_EGRESS_CIDRS", &c.CBOM.PrivateEgressCIDRs)
 	setString(getenv, "TRSTCTL_SERVER_ADDR", &c.Server.Addr)
 	setString(getenv, "TRSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
 	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
@@ -4937,11 +4939,17 @@ func validateHierarchyRevocationBaseURL(c *Config) []error {
 }
 
 func validateCBOMConfig(c *Config) []error {
+	var errs []error
 	path := c.CBOM.TLSProbeOpenSSL
 	if path != "" && (!filepath.IsAbs(path) || strings.ContainsRune(path, 0)) {
-		return []error{errors.New("cbom.tls_probe_openssl must be an absolute local executable path")}
+		errs = append(errs, errors.New("cbom.tls_probe_openssl must be an absolute local executable path"))
 	}
-	return nil
+	for _, raw := range c.CBOM.PrivateEgressCIDRs {
+		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
+			errs = append(errs, fmt.Errorf("cbom.private_egress_cidrs: %w", err))
+		}
+	}
+	return errs
 }
 
 func validateLicenseConfig(c *Config) []error {
