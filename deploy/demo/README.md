@@ -7,8 +7,16 @@ sources), the web/API server, and a seed job that creates realistic demo data
 through served HTTPS APIs.
 
 ```bash
-docker compose -f deploy/demo/docker-compose.yml up --build
+docker compose -f deploy/demo/docker-compose.yml up -d --build trstctl
+bash scripts/ci/provision-compose-agid-verdict.sh deploy/demo/docker-compose.yml
+docker compose -f deploy/demo/docker-compose.yml up -d --build
 ```
+
+The first command starts the signer and control plane without the seed, which
+waits for readiness. The control plane publishes only its AGID verdict public
+key, and the second command installs that key in the signer's separate local
+trust floor. This is an evaluation ceremony; production operators review the
+public binding before provisioning their own signer.
 
 The UI and demo IdP bind to host loopback, so the disposable demo
 operators are not exposed to the LAN. The IdP uses an exact callback allowlist,

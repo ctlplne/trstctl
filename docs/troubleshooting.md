@@ -31,6 +31,13 @@ The control plane only starts once Postgres and NATS report healthy
 
 - Check the datastore health: `docker compose -f deploy/docker/docker-compose.yml ps`.
 - Inspect the control-plane logs: `docker compose -f deploy/docker/docker-compose.yml logs trstctl`.
+- `AGID verdict key must be provisioned locally by the signer operator` means
+  the control plane exported its public verdict key and refused to let the
+  control-plane RPC install trust. In the disposable Compose eval stack, run
+  `bash scripts/ci/provision-compose-agid-verdict.sh deploy/docker/docker-compose.yml`
+  and wait for the restarting control plane to become healthy. For production,
+  review the public binding and install it through the signer one-shot under
+  the operator's custody procedure; keep both custody volumes intact.
 - A configuration error (see above) will show in those logs; the container's
   health check runs `trstctl -check-config`.
 - `discovery finding identity conflict` is a fail-closed event-history diagnostic,

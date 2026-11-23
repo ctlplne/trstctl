@@ -1,13 +1,15 @@
 # trstctl container distribution
 
 Reproducible, signed, SBOM-bearing container images for the trstctl control
-plane, plus a one-command blank evaluation stack.
+plane, plus a blank evaluation stack with an explicit signer trust step.
 
 Need a populated live-demo environment instead? Use
 [`deploy/demo`](../demo/README.md):
 
 ```bash
-docker compose -f deploy/demo/docker-compose.yml up --build
+docker compose -f deploy/demo/docker-compose.yml up -d --build trstctl
+bash scripts/ci/provision-compose-agid-verdict.sh deploy/demo/docker-compose.yml
+docker compose -f deploy/demo/docker-compose.yml up -d --build
 ```
 
 The demo stack runs on <https://127.0.0.1:9443> with local SSO and seeded owners,
@@ -18,8 +20,18 @@ PostgreSQL/NATS wiring without demo fixtures.
 ## Evaluate with Docker Compose
 
 ```bash
-docker compose -f deploy/docker/docker-compose.yml up --build
+docker compose -f deploy/docker/docker-compose.yml up -d --build trstctl
+bash scripts/ci/provision-compose-agid-verdict.sh deploy/docker/docker-compose.yml
+docker compose -f deploy/docker/docker-compose.yml up -d --wait --wait-timeout 180
 ```
+
+On first boot, the control plane seals an AGID verdict key and exports its
+public half, then refuses to serve until the isolated signer trusts that exact
+public key. The explicit second command performs the signer-local one-shot
+ceremony for this disposable evaluation stack. It carries no private key into
+the signer and does not enable trust-floor writes over RPC. For production,
+review the exported public binding and provision signer trust under your own
+operator procedure; this CI helper deliberately automates the eval step.
 
 This assembles seven Compose services (one exits after key generation):
 

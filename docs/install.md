@@ -23,8 +23,15 @@ separate signer, PostgreSQL, NATS, local login, persistent named volumes, and
 the browser trust-publication path together:
 
 ```bash
+docker compose -f deploy/docker/docker-compose.yml up -d --build trstctl
+bash scripts/ci/provision-compose-agid-verdict.sh deploy/docker/docker-compose.yml
 docker compose -f deploy/docker/docker-compose.yml up --build --detach --wait --wait-timeout 180
 ```
+
+The middle command is the disposable evaluation stack's signer-local AGID
+public-key trust ceremony. The signer cannot accept that trust through the
+control-plane RPC; production deployment requires operator review and local
+provisioning of the exported binding.
 
 For a pre-populated click-through environment, use
 `deploy/demo/docker-compose.yml`. Both Compose files are intentionally local

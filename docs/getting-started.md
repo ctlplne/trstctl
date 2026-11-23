@@ -12,7 +12,7 @@ you preserve the error and inspect service health.
 
 New to the product? Read the [six-tool product map](product-map.md) first.
 
-One Compose command builds and starts the blank evaluation services. You then trust
+Three Compose steps build, provision signer trust, and start the blank evaluation services. You then trust
 one certificate-only file, sign in through the loopback-only local identity
 provider, and follow the in-product wizard. The control plane is usually ready
 about two minutes after a cached build; a first image download/build takes
@@ -21,7 +21,7 @@ longer. Issuance itself is sub-second (measured under
 the optional agent-install step.
 
 If you want a pre-populated demo environment instead of a blank
-first-run, use the demo stack: `docker compose -f deploy/demo/docker-compose.yml up --build`
+first-run, use the [demo stack's three-step startup](../deploy/demo/README.md)
 serves a seeded UI (owners, certificates, secrets, transit keys, managed keys)
 with local SSO at <https://127.0.0.1:9443>. Everything below uses the blank
 stack at <https://localhost:8443>; the two can run side by side. The demo seed
@@ -71,8 +71,16 @@ if test -n "$(git status --porcelain --untracked-files=normal)"; then
   export TRSTCTL_BUILD_COMMIT="${TRSTCTL_BUILD_COMMIT}-dirty"
 fi
 export TRSTCTL_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+docker compose -f deploy/docker/docker-compose.yml up -d --build trstctl
+bash scripts/ci/provision-compose-agid-verdict.sh deploy/docker/docker-compose.yml
 docker compose -f deploy/docker/docker-compose.yml up --build --detach --wait --wait-timeout 180
 ```
+
+The control plane's first boot exports only its AGID verdict public key, then
+waits for the isolated signer's trust floor. The second command installs that
+public key through the signer one-shot for this disposable eval stack. It does
+not grant the control plane a signer trust-write RPC. A production operator
+must review and install the binding under their own custody procedure.
 
 These build arguments stamp the control plane and separate signer from the same
 checkout. A `-dirty` suffix means tracked or untracked work was present; it does
