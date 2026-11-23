@@ -77,6 +77,11 @@ type SecretSyncJob struct {
 	RequestedAt            time.Time
 	UpdatedAt              time.Time
 	DeliveredAt            *time.Time
+	EventSHA256            string
+	EventID                string
+	// VerifyRewrapPair authenticates a retained outbox copy against the
+	// current event before the job/outbox intent lock is acquired.
+	VerifyRewrapPair func(context.Context, []byte, []byte, []byte) (bool, error)
 }
 
 // SecretSyncTerminalHistoryRow is the cross-tenant startup/rebuild inventory used

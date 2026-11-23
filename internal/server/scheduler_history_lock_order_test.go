@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -53,7 +54,7 @@ func TestOrdinaryMutationCannotInvertBackupAndHistoryFencesAUD116(t *testing.T) 
 		base:        store.NewHistoryRewriteCoordinator(st),
 		readAttempt: make(chan struct{}),
 	}
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true},
 		events.WithHistoryRewriteCoordinator(probe),

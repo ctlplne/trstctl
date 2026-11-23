@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -49,7 +50,7 @@ func newEventProtectionOffboardFixture(t *testing.T) eventProtectionOffboardFixt
 	receiver := &eventprivacy.PreparationReceiver{Claims: s, Guard: s, Custody: keys}
 	verifier := &eventprivacy.ActivationVerifier{Custody: keys}
 	p := projections.New(s, projections.WithEventProtectionActivationVerifier(verifier), projections.WithEventProtectionOffboardPolicy(policy))
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
 		func(log *events.Log) {
 			policy.Log = log
 			admission.Policy.Log, reader.Policy.Log, receiver.Policy.Log, verifier.Policy.Log = log, log, log, log
@@ -63,16 +64,25 @@ func newEventProtectionOffboardFixture(t *testing.T) eventProtectionOffboardFixt
 	t.Cleanup(func() { _ = log.Close() })
 	record := func(ctx context.Context, next events.Event) (events.Event, error) {
 		var result events.Event
-		err := s.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
-			var err error
-			result, err = log.Append(ctx, next)
-			if err != nil {
-				return err
-			}
-			if next.Type == projections.EventTenantRegistered || next.Type == projections.EventTenantOffboarded {
-				return p.ApplyTenantLifecycleTx(ctx, tx, result)
-			}
-			return p.ApplyTx(ctx, tx, result)
+		admissionMode := store.KeyStateShared
+		if next.Type == projections.EventTenantOffboarded {
+			admissionMode = store.KeyStateExclusive
+		}
+		err := s.WithGlobalKeyStateAdmission(ctx, admissionMode, func(admitted context.Context) error {
+			return s.WithTenant(admitted, next.TenantID, func(tx pgx.Tx) error {
+				owned, err := s.BindKeyStateOwnerTx(admitted, tx, next.TenantID, admissionMode)
+				if err != nil {
+					return err
+				}
+				result, err = log.Append(owned, next)
+				if err != nil {
+					return err
+				}
+				if next.Type == projections.EventTenantRegistered || next.Type == projections.EventTenantOffboarded {
+					return p.ApplyTenantLifecycleTx(owned, tx, result)
+				}
+				return p.ApplyTx(owned, tx, result)
+			})
 		})
 		return result, err
 	}
@@ -125,16 +135,21 @@ func TestEventProtectionOffboardIntentIsAtomicAcrossLiveAndRetainedProjection(t 
 	}
 	var offboard events.Event
 	rollback := errors.New("fixture SQL interruption after source append")
-	if err := f.store.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		var err error
-		offboard, err = f.log.Append(ctx, events.Event{ID: projections.TenantOffboardEventID(tenantA, f.registration.ID), Type: projections.EventTenantOffboarded, TenantID: tenantA, Data: []byte(`{"rows_deleted":0}`)})
-		if err != nil {
-			return err
-		}
-		if err := f.projector.ApplyTenantLifecycleTx(ctx, tx, offboard); err != nil {
-			return err
-		}
-		return rollback
+	if err := f.store.WithGlobalKeyStateAdmission(ctx, store.KeyStateExclusive, func(admitted context.Context) error {
+		return f.store.WithTenant(admitted, tenantA, func(tx pgx.Tx) error {
+			owned, err := f.store.BindKeyStateOwnerTx(admitted, tx, tenantA, store.KeyStateExclusive)
+			if err != nil {
+				return err
+			}
+			offboard, err = f.log.Append(owned, events.Event{ID: projections.TenantOffboardEventID(tenantA, f.registration.ID), Type: projections.EventTenantOffboarded, TenantID: tenantA, Data: []byte(`{"rows_deleted":0}`)})
+			if err != nil {
+				return err
+			}
+			if err := f.projector.ApplyTenantLifecycleTx(owned, tx, offboard); err != nil {
+				return err
+			}
+			return rollback
+		})
 	}); !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
@@ -168,8 +183,14 @@ func TestEventProtectionOffboardIntentIsAtomicAcrossLiveAndRetainedProjection(t 
 	if err := f.projector.Apply(ctx, f.activation); err != nil {
 		t.Fatalf("later offboard prevented exact historical activation readback: %v", err)
 	}
-	if err := f.store.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		return f.projector.ApplyTenantLifecycleTx(ctx, tx, offboard)
+	if err := f.store.WithGlobalKeyStateAdmission(ctx, store.KeyStateExclusive, func(admitted context.Context) error {
+		return f.store.WithTenant(admitted, tenantA, func(tx pgx.Tx) error {
+			owned, err := f.store.BindKeyStateOwnerTx(admitted, tx, tenantA, store.KeyStateExclusive)
+			if err != nil {
+				return err
+			}
+			return f.projector.ApplyTenantLifecycleTx(owned, tx, offboard)
+		})
 	}); err != nil {
 		t.Fatal(err)
 	}

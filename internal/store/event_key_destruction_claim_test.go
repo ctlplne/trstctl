@@ -26,8 +26,8 @@ func TestEventKeyDestructionRequiresExactPostDeleteInvocation(t *testing.T) {
 		CreationDigest: strings.Repeat("a", 64), OffboardEventID: "offboard-source", OffboardSequence: 9,
 		OffboardedAt: at, NotBefore: at.Add(time.Hour),
 	}
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		_, err := s.OffboardTenantForEventKeyDestructionTx(ctx, tx, command)
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+		_, err := s.OffboardTenantForEventKeyDestructionTx(owned, tx, command)
 		return err
 	}); err != nil {
 		t.Fatal(err)

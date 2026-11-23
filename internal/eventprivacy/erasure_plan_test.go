@@ -10,7 +10,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -59,7 +61,7 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 	admission := &eventprivacy.SourceAdmission{Policy: policy, Guard: planFixtureTenantGuard{}, Custody: custody}
 	reader := &eventprivacy.SourceKeys{Policy: policy, Custody: custody}
 	open := func(path string) *events.Log {
-		log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: path},
+		log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: path},
 			func(log *events.Log) {
 				policy.Log = log
 				admission.Policy.Log = log
@@ -118,6 +120,11 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 	if err != nil {
 		t.Fatal(err)
 	}
+	artifactKey := []byte("fixture-erasure-plan-artifact-key")
+	var artifact bytes.Buffer
+	if _, err := backup.WriteLogWithKeyThrough(t.Context(), source, &artifact, artifactKey, cut); err != nil {
+		t.Fatal(err)
+	}
 	var old []events.BackupHistoryRecord
 	var raw bytes.Buffer
 	if err := source.ExportBackupHistoryThrough(t.Context(), cut, func(record events.BackupHistoryRecord) error {
@@ -160,9 +167,25 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 		Name string `json:"name"`
 	}{"current fixture"})
 	planner := eventprivacy.ErasurePlanner{Policy: policy, Custody: checkedCustody}
-	if err := planner.WithPlan(t.Context(), func(_ context.Context, plan *eventprivacy.ErasurePlan) error {
+	// CR-045: the pre-removal artifact provides this pinned source before the
+	// target log exists. Keep the live planner for the later resume controls.
+	readerPlanner := planner
+	readerPlanner.Policy.Reader = policy.Log
+	readerPlanner.Policy.Log = nil
+	if err := readerPlanner.WithPlan(t.Context(), func(_ context.Context, plan *eventprivacy.ErasurePlan) error {
 		if !planSkips(t, plan, private) || !planSkips(t, plan, registration) || planSkips(t, plan, newest) || planSkips(t, plan, other) {
 			t.Fatal("current erasure range crossed lifetime/tenant boundaries")
+		}
+		wrongKey := private
+		wrongEnvelope := *private.Protection
+		wrongEnvelope.KeyID = "3da85aae-a727-4e47-8815-d92a4037eb91"
+		wrongKey.Protection = &wrongEnvelope
+		called := false
+		if err := plan.WithSource(t.Context(), wrongKey, func(context.Context, bool) error {
+			called = true
+			return nil
+		}); err == nil || called {
+			t.Fatal("erased lifetime accepted a protected envelope from another key")
 		}
 		forged := other
 		forged.SensitiveErased = true
@@ -171,6 +194,19 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 		}
 		return nil
 	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := backup.WithVerifiedHistoryReader(t.Context(), bytes.NewReader(artifact.Bytes()), artifactKey,
+		func(history *backup.VerifiedHistoryReader) error {
+			artifactPlanner := eventprivacy.ErasurePlanner{Policy: eventprivacy.SourcePolicy{
+				Reader: history, Trust: key.JWKS()}, Custody: checkedCustody}
+			return artifactPlanner.WithPlan(t.Context(), func(_ context.Context, plan *eventprivacy.ErasurePlan) error {
+				if plan.Head() != cut || !planSkips(t, plan, private) || planSkips(t, plan, other) {
+					t.Fatal("HMAC-verified pre-removal artifact did not isolate erased lifetime")
+				}
+				return nil
+			})
+		}); err != nil {
 		t.Fatal(err)
 	}
 	for _, check := range []struct {

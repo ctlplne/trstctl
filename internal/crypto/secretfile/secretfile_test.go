@@ -10,8 +10,50 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
+
+// CR-045: a persisted integrity key must enter protected memory without a
+// heap-backed read, and the exact-size reader must preserve file custody.
+func TestLoadProtectedExactKeepsJournalKeyInProtectedMemoryCR045(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "journal.key")
+	material := bytes.Repeat([]byte{0x31}, 32)
+	if err := secretfile.Create(path, material); err != nil {
+		t.Fatal(err)
+	}
+	buf, err := secretfile.LoadProtectedExact(path, 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := buf.Use(func(held []byte) error {
+		if !bytes.Equal(held, material) {
+			t.Fatal("protected file reader changed the exact key")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	buf.Destroy()
+	if err := buf.Use(func([]byte) error {
+		t.Fatal("destroyed key was borrowed")
+		return nil
+	}); err != secret.ErrDestroyed {
+		t.Fatalf("destroyed protected key use=%v", err)
+	}
+	if _, err := secretfile.LoadProtectedExact(path, 31); err == nil {
+		t.Fatal("reader accepted a key larger than its exact bound")
+	}
+	if runtime.GOOS != "windows" {
+		link := filepath.Join(t.TempDir(), "journal-link.key")
+		if err := os.Symlink(path, link); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := secretfile.LoadProtectedExact(link, 32); err == nil {
+			t.Fatal("protected reader accepted a symlink key")
+		}
+	}
+}
 
 func TestLoadOrCreateCreatesPrivateFileAndReloads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "secret.bin")

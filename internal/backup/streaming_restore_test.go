@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -109,7 +110,7 @@ func syntheticEventBackup(t *testing.T, records int, payloadBytes int, key []byt
 
 func openStreamingLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}

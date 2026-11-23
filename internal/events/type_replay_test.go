@@ -7,6 +7,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -83,7 +84,7 @@ func TestReplayTenantTypesThroughColdRestartFindsHistoricalLanes(t *testing.T) {
 	tenancy.SetRouter(nil)
 	t.Cleanup(func() { tenancy.SetRouter(nil) })
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(t.Context(), cfg)
+	log, err := eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +105,7 @@ func TestReplayTenantTypesThroughColdRestartFindsHistoricalLanes(t *testing.T) {
 		t.Fatal(err)
 	}
 	tenancy.SetRouter(nil)
-	log, err = events.Open(t.Context(), cfg)
+	log, err = eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestReplayTenantTypesThroughColdRestartFindsHistoricalLanes(t *testing.T) {
 
 func TestReplayTypesThroughColdRestartPreservesCrossTenantSourceOrder(t *testing.T) {
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(t.Context(), cfg)
+	log, err := eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +143,7 @@ func TestReplayTypesThroughColdRestartPreservesCrossTenantSourceOrder(t *testing
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(t.Context(), cfg)
+	log, err = eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

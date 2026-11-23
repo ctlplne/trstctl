@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -106,7 +107,7 @@ func TestProtectedRetentionArchivePreservesLockedCiphertextAfterKeyRemoval(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)), events.WithEventProtection(events.EventProtection{Admission: fixture, Keys: keys}))
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)), events.WithEventProtection(events.EventProtection{Admission: fixture, Keys: keys}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +280,7 @@ func TestProtectedRetentionArchivePreservesLockedCiphertextAfterKeyRemoval(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)), events.WithEventProtection(events.EventProtection{Admission: fixture, Keys: keys}))
+	log, err = eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)), events.WithEventProtection(events.EventProtection{Admission: fixture, Keys: keys}))
 	if err != nil {
 		t.Fatal(err)
 	}

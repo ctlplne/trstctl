@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -67,7 +68,7 @@ func newLaneDrillHarness(t *testing.T) *laneDrillHarness {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

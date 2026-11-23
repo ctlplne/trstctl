@@ -5,10 +5,11 @@ import (
 	"testing"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventstest"
 )
 
 func TestLifetimeFoldUsesExactFiniteCutBeforeLaterMalformedControl(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -84,6 +84,17 @@ type secretIntegrationOutboxDispatcher struct {
 	afterDynamicSecretDelivery func(error)
 }
 
+func secretIntegrationProjector(st *store.Store, log *events.Log, access tenantseal.Access) *projections.Projector {
+	options := []projections.Option{projections.WithCanonicalEventSource(log)}
+	if access != nil {
+		options = append(options, projections.WithRewrapPairVerifier(
+			func(ctx context.Context, tenantID string, before, after, aad []byte) (bool, error) {
+				return tenantseal.VerifyRewrapPair(ctx, access, tenantID, before, after, aad)
+			}))
+	}
+	return projections.New(st, options...)
+}
+
 var errSecretSyncReceiverNoDelivery = errors.New("server: secret-sync command completed without receiver delivery")
 
 func queueSecretSyncEvent(ctx context.Context, st *store.Store, log *events.Log, kek seal.KeyWrapper, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte, tenantCrypto tenantseal.Access) error {
@@ -141,7 +152,7 @@ func queueSecretSyncEvent(ctx context.Context, st *store.Store, log *events.Log,
 	if err := validateCanonicalSecretSyncQueued(ctx, event, command, value, kek, tenantCrypto); err != nil {
 		return err
 	}
-	if err := projections.New(st).Apply(ctx, event); err != nil {
+	if err := secretIntegrationProjector(st, log, tenantCrypto).Apply(ctx, event); err != nil {
 		return err
 	}
 	stored, err := st.GetSecretSyncJob(ctx, tenantID, jobID)
@@ -378,7 +389,7 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 		if record.TargetOrder <= 0 {
 			return true, errors.New("server: migration-derived secret-sync command cannot be terminalized by a new worker")
 		}
-		if err := validateProjectedSecretSyncSource(ctx, d.log, record, payload); err != nil {
+		if err := validateProjectedSecretSyncSourceWithCustody(ctx, d.store, d.log, d.tenantCrypto, record, payload); err != nil {
 			return true, err
 		}
 		if m.Attempts < 1 {
@@ -810,7 +821,7 @@ func (d *secretIntegrationOutboxDispatcher) recoverDynamicSecretIssued(ctx conte
 			return true, err
 		}
 	}
-	return true, projections.New(d.store).Apply(ctx, canonical)
+	return true, secretIntegrationProjector(d.store, d.log, d.tenantCrypto).Apply(ctx, canonical)
 }
 
 // recoverDynamicSecretPrepared projects retained worker-created preparation
@@ -850,7 +861,7 @@ func (d *secretIntegrationOutboxDispatcher) recoverDynamicSecretPrepared(ctx con
 			return true, err
 		}
 	}
-	return true, projections.New(d.store).Apply(ctx, canonical)
+	return true, secretIntegrationProjector(d.store, d.log, d.tenantCrypto).Apply(ctx, canonical)
 }
 
 // PostgreSQL timestamptz persists microseconds, while an immutable event/outbox
@@ -949,7 +960,7 @@ func (d *secretIntegrationOutboxDispatcher) recoverDynamicSecretRevocationOutcom
 		if !found {
 			return false, false, nil
 		}
-		if err := projections.New(d.store).Apply(ctx, retained); err != nil {
+		if err := secretIntegrationProjector(d.store, d.log, d.tenantCrypto).Apply(ctx, retained); err != nil {
 			return false, false, err
 		}
 		return true, retained.Type == projections.EventDynamicSecretLeaseRevocationFailed, nil
@@ -1064,7 +1075,7 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 			if d.log == nil {
 				return orchestrator.DefiniteNoEffect(errors.New("server: event-derived secret-sync delivery requires retained event history"))
 			}
-			if err := validateProjectedSecretSyncSource(ctx, d.log, projected, payload); err != nil {
+			if err := validateProjectedSecretSyncSourceWithCustody(ctx, d.store, d.log, d.tenantCrypto, projected, payload); err != nil {
 				return orchestrator.DefiniteNoEffect(err)
 			}
 		} else if projected.Status == store.SecretSyncJobPending {
@@ -1254,6 +1265,57 @@ func validateProjectedSecretSyncSource(
 	job store.SecretSyncJob,
 	outbox secretSyncOutboxPayload,
 ) error {
+	return validateProjectedSecretSyncSourcePair(ctx, log, job, outbox, nil)
+}
+
+// validateProjectedSecretSyncSourceWithCustody pins the canonical history and
+// key state through its authenticated comparison. B survives an outer session
+// loss until this proof transaction has actually committed or rolled back.
+func validateProjectedSecretSyncSourceWithCustody(
+	ctx context.Context, st *store.Store, log *events.Log, access tenantseal.Access,
+	job store.SecretSyncJob, outbox secretSyncOutboxPayload,
+) error {
+	return withProjectedSecretSyncSourceCustody(ctx, st, log, access, job.TenantID,
+		func(readCtx context.Context, verify func([]byte, []byte, []byte) (bool, error)) error {
+			return validateProjectedSecretSyncSourcePair(readCtx, log, job, outbox, verify)
+		})
+}
+
+func withProjectedSecretSyncSourceCustody(
+	ctx context.Context, st *store.Store, log *events.Log, access tenantseal.Access, tenantID string,
+	check func(context.Context, func([]byte, []byte, []byte) (bool, error)) error,
+) error {
+	if st == nil || log == nil || access == nil || tenantID == "" || check == nil {
+		return errors.New("server: secret-sync source custody is unavailable")
+	}
+	return st.WithGlobalKeyStateAdmission(ctx, store.KeyStateShared, func(admitted context.Context) error {
+		return log.WithHistoryRead(admitted, func(readCtx context.Context) error {
+			tx, err := st.SystemPool().Begin(readCtx)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = tx.Rollback(context.Background()) }()
+			if err := st.LockGlobalKeyStateCommitTx(readCtx, tx, store.KeyStateShared); err != nil {
+				return err
+			}
+			if err := check(readCtx,
+				func(before, after, aad []byte) (bool, error) {
+					return tenantseal.VerifyRewrapPair(readCtx, access, tenantID, before, after, aad)
+				}); err != nil {
+				return err
+			}
+			if err := st.AssertGlobalKeyStateAdmissionAlive(readCtx); err != nil {
+				return err
+			}
+			return tx.Commit(readCtx)
+		})
+	})
+}
+
+func validateProjectedSecretSyncSourcePair(
+	ctx context.Context, log *events.Log, job store.SecretSyncJob, outbox secretSyncOutboxPayload,
+	verify func(before, after, aad []byte) (bool, error),
+) error {
 	if job.TargetOrder <= 0 {
 		return errors.New("server: event-derived secret-sync source order is invalid")
 	}
@@ -1298,8 +1360,21 @@ func validateProjectedSecretSyncSource(
 		queued.ValueDigest != job.ValueDigest || queued.IdempotencyKey != job.IdempotencyKey ||
 		queued.RequestBinding != job.RequestBinding || outbox.ID != queued.ID ||
 		outbox.Key != queued.RemoteKey || outbox.Target != queued.Target ||
-		outbox.RequestBinding != queued.RequestBinding || !bytes.Equal(outbox.Sealed, queued.Sealed) {
+		outbox.RequestBinding != queued.RequestBinding {
 		return fmt.Errorf("%w: projected/outbox secret-sync command differs from retained queued source", store.ErrIdempotencyConflict)
+	}
+	if !bytes.Equal(outbox.Sealed, queued.Sealed) {
+		if verify == nil {
+			return fmt.Errorf("%w: projected/outbox sealed secret-sync source differs", store.ErrIdempotencyConflict)
+		}
+		same, err := verify(queued.Sealed, outbox.Sealed,
+			secretSyncAAD(job.TenantID, job.Target, job.ID, job.RemoteKey))
+		if err != nil {
+			return fmt.Errorf("server: authenticate retained secret-sync pair: %w", err)
+		}
+		if !same {
+			return fmt.Errorf("%w: retained secret-sync pair has different payload", store.ErrIdempotencyConflict)
+		}
 	}
 	return nil
 }
@@ -1825,7 +1900,7 @@ func (d *secretIntegrationOutboxDispatcher) validateAndProjectSecretSyncEvidence
 			return err
 		}
 	}
-	return projections.New(d.store).Apply(ctx, canonical)
+	return secretIntegrationProjector(d.store, d.log, d.tenantCrypto).Apply(ctx, canonical)
 }
 
 func (d *secretIntegrationOutboxDispatcher) appendAndProjectID(ctx context.Context, eventID, tenantID, eventType string, payload any) error {
@@ -1873,5 +1948,5 @@ func (d *secretIntegrationOutboxDispatcher) appendAndProjectID(ctx context.Conte
 			return err
 		}
 	}
-	return projections.New(d.store).Apply(ctx, canonical)
+	return secretIntegrationProjector(d.store, d.log, d.tenantCrypto).Apply(ctx, canonical)
 }

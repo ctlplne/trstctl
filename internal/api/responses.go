@@ -40,6 +40,11 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		// status: wrapping it as 400 told the caller to change a request that
 		// was fine (the restore rehearsal's owner create, CI 41548425634).
 		writeDatastoreBusy(a, w)
+	case store.IsApplicationSecretRewrapBusy(err):
+		w.Header().Set("Retry-After", "1")
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable,
+			"credential key rewrap is in progress; retry the same request after it completes").
+			WithExtension("code", "rewrap_in_progress"))
 	case errors.As(err, &ae):
 		p := problem.New(ae.status, ae.detail)
 		for k, v := range ae.ext {

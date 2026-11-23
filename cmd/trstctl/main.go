@@ -33,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/cli/evaluate"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/journalkey"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
@@ -74,6 +75,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	// credential and no network trust.
 	if len(args) > 0 && args[0] == "token" {
 		return runToken(ctx, args[1:], getenv, stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "journal-key" {
+		return runJournalKey(args[1:], getenv, stderr)
 	}
 	if len(args) > 0 && args[0] == "connector" {
 		return runConnector(ctx, args[1:], getenv, stdout, stderr)
@@ -117,6 +121,27 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return err
 	}
 	return serveControlPlane(ctx, cfg, getenv, flags, stderr)
+}
+
+// runJournalKey is the explicit local setup step for the target's versioned
+// event-ingress integrity key. Served and recovery paths only read existing keys.
+func runJournalKey(args []string, getenv func(string) string, stderr io.Writer) error {
+	if len(args) != 1 || args[0] != "provision" {
+		return errors.New("usage: trstctl journal-key provision")
+	}
+	cfg, err := config.Load(getenv)
+	if err != nil {
+		return fmt.Errorf("journal-key: configuration: %w", err)
+	}
+	activeID, paths, err := cfg.Secrets.IngressJournalKeyFiles()
+	if err != nil {
+		return fmt.Errorf("journal-key: resolve active version: %w", err)
+	}
+	if err := journalkey.Provision(paths[activeID]); err != nil {
+		return fmt.Errorf("journal-key: provision version %q: %w", activeID, err)
+	}
+	_, _ = fmt.Fprintf(stderr, "Provisioned ingress journal key version %q at %s.\n", activeID, paths[activeID])
+	return nil
 }
 
 type rootFlags struct {

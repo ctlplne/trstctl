@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
@@ -22,7 +23,7 @@ const drTenant = "11111111-1111-1111-1111-111111111111"
 
 func openLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -392,7 +393,7 @@ func TestFullRestoreRejectsDifferentManifestOnResume(t *testing.T) {
 func TestBackupRestorePreservesRewriteRetentionSequenceGapSubjectAndAuditCheckpointBoundary(t *testing.T) {
 	ctx := context.Background()
 	const otherTenant = "22222222-2222-2222-2222-222222222222"
-	src, err := events.Open(
+	src, err := eventstest.OpenFixture(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		events.WithHistoryRewriteContinuityVerifier(func(context.Context, events.TenantDataContinuityEvidence) error {
@@ -405,8 +406,8 @@ func TestBackupRestorePreservesRewriteRetentionSequenceGapSubjectAndAuditCheckpo
 	t.Cleanup(func() { _ = src.Close() })
 
 	rewritten, err := src.Append(ctx, events.Event{
-		ID: "backup-rewrite-source", Type: "secret.version.written", TenantID: drTenant,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "backup-rewrite-source", Type: "fixture.opaque.rewrite", TenantID: drTenant,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	})
 	if err != nil {
 		t.Fatalf("append rewrite source: %v", err)

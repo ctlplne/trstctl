@@ -10,12 +10,12 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -42,7 +42,7 @@ func TestServedSCIMBulkProvisionsUsersAndGroupsInOneRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessions := auth.NewSessionIssuer([]byte("scim-bulk-session-secret-0123456789012"), time.Hour)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

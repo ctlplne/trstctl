@@ -157,7 +157,7 @@ func TestCertificateRecordingTwoSessionsFenceFirstAppendAndReplay(t *testing.T) 
 				}
 				// Only the two explicitly named owned connections are observed.
 				//trstctl:system-query — owned integration fixture connection-lock census; no tenant data is selected (AN-1 exemption).
-				if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE application_name IN ('first_leaf_recording_peer_0','first_leaf_recording_peer_1') AND wait_event_type='Lock' AND wait_event='advisory'`).Scan(&blocked); err != nil {
+				if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND wait_event='advisory'`).Scan(&blocked); err != nil {
 					t.Fatal(err)
 				}
 				if blocked == 2 {

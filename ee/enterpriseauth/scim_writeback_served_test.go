@@ -13,6 +13,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
@@ -127,7 +128,7 @@ func TestServedSCIMWritebackPushesLocalMemberChangesToTheDirectory(t *testing.T)
 		t.Fatal(err)
 	}
 	sessions := auth.NewSessionIssuer([]byte("scim-writeback-session-secret-012345678"), time.Hour)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

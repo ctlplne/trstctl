@@ -25,6 +25,9 @@ import "trstctl.com/trstctl/internal/store"
 //   - Ephemeral — state that is NOT required to recover and regenerates on its own
 //     (rate-limit token buckets). Captured incidentally by the PostgreSQL dump but
 //     never depended on for a correct restore.
+//   - TargetLocal — durable recovery admission and proof state owned by the
+//     destination. It must survive a target import but must never come from the
+//     source PostgreSQL artifact.
 
 // RecoveredByLogRebuild is the event-sourced read model; the event-log backup +
 // projections.Rebuild restores it.
@@ -153,6 +156,7 @@ var RecoveredFromPostgresBackup = []string{
 	"application_secret_import_batches",
 	"application_secret_import_name_fences",
 	"application_secret_tenant_epochs",
+	"application_secret_rewrap_gates",
 	"application_secret_mutation_receipts",
 	"application_secret_import_receipts",
 	// One bounded row per tenant retains the UUID-ring position and live-replica
@@ -297,6 +301,21 @@ var RecoveredFromPostgresBackup = []string{
 	"provider_breakglass_grants",
 }
 
+// TargetLocal state is durable on the destination and is never imported from
+// source. A crash must retain its marker and unresolved admission evidence.
+var TargetLocal = []string{
+	// Authenticated restore/rebuild proof material belongs to the recovery
+	// target and an exact operation. Importing a source's rows would authorize
+	// the wrong key state; successful rebuild consumes and clears its own rows.
+	"trstctl_recovery.tenant_key_domain_snapshots",
+	"trstctl_recovery.recovery_pair_proofs",
+	"trstctl_recovery.restore_outbox_pairs",
+	"trstctl_recovery.raw_history_journal",
+	"trstctl_recovery.restore_markers",
+	"trstctl_recovery.restore_activity_tokens",
+	"trstctl_recovery.event_ingress_journal",
+}
+
 // Ephemeral state is not required for a correct restore (it regenerates).
 var Ephemeral = []string{
 	"rate_limits",
@@ -346,6 +365,7 @@ const (
 	ClassLogRebuild     RecoveryClass = "recovered-by-log-rebuild"
 	ClassPostgresBackup RecoveryClass = "recovered-from-postgres-backup"
 	ClassEphemeral      RecoveryClass = "ephemeral"
+	ClassTargetLocal    RecoveryClass = "target-local"
 )
 
 // Classify returns the recovery class of a table and whether it is in the
@@ -365,6 +385,11 @@ func Classify(table string) (RecoveryClass, bool) {
 	for _, t := range Ephemeral {
 		if t == table {
 			return ClassEphemeral, true
+		}
+	}
+	for _, t := range TargetLocal {
+		if t == table {
+			return ClassTargetLocal, true
 		}
 	}
 	return "", false

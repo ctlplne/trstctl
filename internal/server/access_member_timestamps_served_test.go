@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
@@ -36,7 +37,7 @@ func TestServedMemberUpdatePreservesCreationAndRetryResponse(t *testing.T) {
 		}
 	}
 	token := seedServedAPIToken(t, ctx, st, tenantID, "member-admin", memberAdminScopes)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}

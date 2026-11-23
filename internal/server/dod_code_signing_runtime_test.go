@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest/githuboidc"
@@ -23,7 +24,6 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
 )
@@ -78,7 +78,7 @@ func TestDODCodeSigningProductionAssembly(t *testing.T) {
 	}
 
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}

@@ -17,6 +17,10 @@ import (
 
 var ErrCipherLeaseExpired = errors.New("tenantseal: cipher is outside its fenced callback")
 
+// ErrRewrapVerificationUnavailable refuses a differing copy when the Access
+// implementation has no protected, authenticated pair capability.
+var ErrRewrapVerificationUnavailable = errors.New("tenantseal: authenticated rewrap verification is unavailable")
+
 // Status is the stable public reason tenant cryptographic access failed closed.
 // Projection states retain their exact spellings; runtime custody failures use
 // separate honest values instead of pretending an authenticated unwrap failure
@@ -88,6 +92,28 @@ type Cipher interface {
 // tenant-domain fence and lends a callback-scoped Cipher.
 type Access interface {
 	WithTenant(ctx context.Context, tenantID string, fn func(Cipher) error) error
+}
+
+// VerifyRewrapPair authenticates two actual sealed copies under one tenant
+// lease. A caller must supply the exact field AAD; the cipher chooses only the
+// wrappers and generations permitted by that tenant's fenced key state.
+func VerifyRewrapPair(ctx context.Context, access Access, tenantID string, before, after, aad []byte) (bool, error) {
+	if access == nil || tenantID == "" || len(before) == 0 || len(after) == 0 {
+		return false, ErrRewrapVerificationUnavailable
+	}
+	var same bool
+	err := access.WithTenant(ctx, tenantID, func(cipher Cipher) error {
+		verifier, ok := cipher.(interface {
+			VerifyRewrapPair(before, after, aad []byte) (bool, error)
+		})
+		if !ok {
+			return ErrRewrapVerificationUnavailable
+		}
+		var err error
+		same, err = verifier.VerifyRewrapPair(before, after, aad)
+		return err
+	})
+	return same, err
 }
 
 // SharedDomainStore keeps the projection read and the complete crypto callback
@@ -203,6 +229,9 @@ func (r *Resolver) withDomain(
 				}
 				return seal.Open(deployment, container, aad)
 			},
+			func(before, after, aad []byte) (bool, error) {
+				return seal.AuthenticatedRewrapPair(deployment, before, nil, deployment, after, nil, aad)
+			},
 		)
 		defer cipher.invalidate()
 		return fn(cipher)
@@ -234,6 +263,8 @@ func (r *Resolver) withDomain(
 	defer domainKey.Destroy()
 
 	sealKey, sealBinding := domainKey, binding
+	var nextKey TransientDomainKEK
+	var nextBinding []byte
 	open := func(container, aad []byte) ([]byte, error) {
 		return seal.OpenDomain(domainKey, container, aad, binding)
 	}
@@ -255,11 +286,11 @@ func (r *Resolver) withDomain(
 	case domainAccessDualRotation:
 		// New data seals under the next generation; a container opens
 		// with the key its own domain label names, and only those two.
-		nextBinding, err := DomainBinding(domain.TenantID, domain.DomainID, domain.NextGeneration)
+		nextBinding, err = DomainBinding(domain.TenantID, domain.DomainID, domain.NextGeneration)
 		if err != nil {
 			return statusError(StatusCorrupt, err)
 		}
-		nextKey, err := r.registry.OpenDomainKEK(
+		nextKey, err = r.registry.OpenDomainKEK(
 			ctx,
 			WrapperRef{Kind: domain.NextWrapperKind, ID: domain.NextWrapperID},
 			domain.NextWrappedDomainKEK,
@@ -291,11 +322,52 @@ func (r *Resolver) withDomain(
 			}
 		}
 	}
+	selectPairWrapper := func(container []byte) (seal.KeyWrapper, []byte, error) {
+		label, err := seal.Domain(container)
+		if err != nil {
+			return nil, nil, err
+		}
+		switch mode {
+		case domainAccessTenantOnly:
+			if bytes.Equal(label, binding) {
+				return domainKey, binding, nil
+			}
+		case domainAccessDualMigration:
+			if label == nil {
+				return deployment, nil, nil
+			}
+			if bytes.Equal(label, binding) {
+				return domainKey, binding, nil
+			}
+		case domainAccessDualRotation:
+			if bytes.Equal(label, nextBinding) {
+				return nextKey, nextBinding, nil
+			}
+			if bytes.Equal(label, binding) {
+				return domainKey, binding, nil
+			}
+		}
+		return nil, nil, seal.ErrDomain
+	}
 	cipher := newLeasedCipher(
 		func(plaintext, aad []byte) ([]byte, error) {
 			return seal.SealDomain(sealKey, plaintext, aad, sealBinding)
 		},
 		open,
+		func(before, after, aad []byte) (bool, error) {
+			beforeWrapper, beforeDomain, err := selectPairWrapper(before)
+			if err != nil {
+				return false, err
+			}
+			afterWrapper, afterDomain, err := selectPairWrapper(after)
+			if err != nil {
+				return false, err
+			}
+			return seal.AuthenticatedRewrapPair(
+				beforeWrapper, before, beforeDomain,
+				afterWrapper, after, afterDomain, aad,
+			)
+		},
 	)
 	defer cipher.invalidate()
 	return fn(cipher)
@@ -493,16 +565,18 @@ func DomainBinding(tenantID, domainID string, generation int64) ([]byte, error) 
 }
 
 type cipherFunc func(value, aad []byte) ([]byte, error)
+type pairFunc func(before, after, aad []byte) (bool, error)
 
 type leasedCipher struct {
 	mu     sync.Mutex
 	active bool
 	seal   cipherFunc
 	open   cipherFunc
+	pair   pairFunc
 }
 
-func newLeasedCipher(sealFn, openFn cipherFunc) *leasedCipher {
-	return &leasedCipher{active: true, seal: sealFn, open: openFn}
+func newLeasedCipher(sealFn, openFn cipherFunc, pair pairFunc) *leasedCipher {
+	return &leasedCipher{active: true, seal: sealFn, open: openFn, pair: pair}
 }
 
 func (c *leasedCipher) Seal(plaintext, aad []byte) ([]byte, error) {
@@ -523,10 +597,23 @@ func (c *leasedCipher) Open(container, aad []byte) ([]byte, error) {
 	return c.open(container, aad)
 }
 
+func (c *leasedCipher) VerifyRewrapPair(before, after, aad []byte) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.active {
+		return false, ErrCipherLeaseExpired
+	}
+	if c.pair == nil {
+		return false, ErrRewrapVerificationUnavailable
+	}
+	return c.pair(before, after, aad)
+}
+
 func (c *leasedCipher) invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.active = false
 	c.seal = nil
 	c.open = nil
+	c.pair = nil
 }

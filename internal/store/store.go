@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"strings"
+	"sync/atomic"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,6 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"strconv"
 	"time"
+	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/tenancy"
 )
 
@@ -45,7 +49,11 @@ const appRole = "trstctl_app"
 // under row-level security via WithTenant; system operations (migrations,
 // projections) use the pool directly.
 type Store struct {
-	pool *pgxpool.Pool
+	pool               *pgxpool.Pool
+	rewrapFleetCutover RewrapFleetCutover
+	// canonicalEventSource lets every production projector built from this
+	// Store read the same retained event generation after a key rewrap.
+	canonicalEventSource atomic.Pointer[events.Log]
 	// probePool is a tiny dedicated pool for readiness/liveness probes, so a
 	// request-pool saturation (AN-7 backpressure: the main pool sheds load with a
 	// 503) can never make /readyz report PostgreSQL unreachable. It carries no
@@ -67,7 +75,11 @@ type Store struct {
 	// the request pool, and waiters parked there starved it into the acquire
 	// window under a burst (DP2-061 convoy).
 	lockPool *pgxpool.Pool
-	sizes    PoolSizes
+	// restorePool holds restore-admission sessions. These sessions wrap work
+	// that can itself need the lock and request pools; sharing either pool
+	// would let a burst consume all connections before its nested work starts.
+	restorePool *pgxpool.Pool
+	sizes       PoolSizes
 	// historyRewriteOperationGate admits only one local contender to the
 	// deployment-wide PostgreSQL operation lock. Without it, maxConns local
 	// waiters can each pin a session and starve the elected callback's cutover.
@@ -105,6 +117,8 @@ const bookkeepingPoolMaxConns = 4
 // command can wait for the projection lock without touching the request pool.
 const lockPoolMaxConns = 8
 
+const restorePoolMaxConns = 8
+
 // Bounded-latency defaults (OPS-TIMEOUTS-001): a saturated pool or a runaway
 // query fails closed with a structured error instead of hanging a request.
 const (
@@ -121,10 +135,17 @@ var ErrDatastoreBusy = errors.New("store: datastore busy: connection pool acquir
 type OpenOption func(*openOptions)
 
 type openOptions struct {
-	statementTimeout time.Duration
-	acquireTimeout   time.Duration
-	pools            PoolSizes
-	tracer           pgx.QueryTracer
+	statementTimeout   time.Duration
+	acquireTimeout     time.Duration
+	pools              PoolSizes
+	tracer             pgx.QueryTracer
+	rewrapFleetCutover RewrapFleetCutover
+}
+
+// WithRewrapFleetCutover supplies the owner-attested old/new login boundary
+// required before a tenant or deployment key-domain rewrite can arm its gate.
+func WithRewrapFleetCutover(cutover RewrapFleetCutover) OpenOption {
+	return func(o *openOptions) { o.rewrapFleetCutover = cutover }
 }
 
 // WithQueryTracer observes every statement and batch the store's pools send
@@ -144,14 +165,16 @@ func WithStatementTimeout(d time.Duration) OpenOption {
 
 // WithAcquireTimeout bounds how long a transaction may wait for a pooled
 // connection before failing closed with ErrDatastoreBusy (0 keeps the default).
-// PoolSizes is the per-replica connection budget: the request pool and the four
-// dedicated pools. Zero fields keep the defaults (16, 2, 2, 4, 8).
+// PoolSizes is the per-replica connection budget: the request pool and five
+// dedicated pools. Zero fields keep the defaults (16, 2, 2, 4, 8, 8).
 type PoolSizes struct {
-	Request, Probe, Reserved, Bookkeeping, Lock int32
+	Request, Probe, Reserved, Bookkeeping, Lock, Restore int32
 }
 
 // Total is the number of PostgreSQL connections one replica may hold.
-func (p PoolSizes) Total() int32 { return p.Request + p.Probe + p.Reserved + p.Bookkeeping + p.Lock }
+func (p PoolSizes) Total() int32 {
+	return p.Request + p.Probe + p.Reserved + p.Bookkeeping + p.Lock + p.Restore
+}
 
 func (p PoolSizes) withDefaults() PoolSizes {
 	pick := func(v, def int32) int32 {
@@ -161,7 +184,7 @@ func (p PoolSizes) withDefaults() PoolSizes {
 		return def
 	}
 	return PoolSizes{Request: pick(p.Request, maxConns), Probe: pick(p.Probe, probePoolMaxConns), Reserved: pick(p.Reserved, reservedPoolMaxConns),
-		Bookkeeping: pick(p.Bookkeeping, bookkeepingPoolMaxConns), Lock: pick(p.Lock, lockPoolMaxConns)}
+		Bookkeeping: pick(p.Bookkeeping, bookkeepingPoolMaxConns), Lock: pick(p.Lock, lockPoolMaxConns), Restore: pick(p.Restore, restorePoolMaxConns)}
 }
 
 // WithPoolSizes sets the connection budget (docs/operations.md, "Connection
@@ -200,6 +223,9 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 	// caller forgot a context deadline. Long system operations (read-model
 	// rebuild/restore) explicitly widen it inside their own transactions.
 	cfg.ConnConfig.RuntimeParams["statement_timeout"] = strconv.FormatInt(options.statementTimeout.Milliseconds(), 10)
+	// Every pool below copies this config. The rewrap cutover can then identify
+	// upgraded sessions by build while the old login role stays NOLOGIN.
+	cfg.ConnConfig.RuntimeParams["application_name"] = storeBuildApplicationName(buildinfo.Version(), buildinfo.Commit())
 	if options.tracer != nil {
 		cfg.ConnConfig.Tracer = options.tracer
 	}
@@ -221,7 +247,7 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 	probePool, err := pgxpool.NewWithConfig(ctx, probeCfg)
 	if err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("store: connect probe pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, err)
+		return nil, fmt.Errorf("store: connect probe pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d, restore %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, sizes.Restore, err)
 	}
 	if err := probePool.Ping(ctx); err != nil {
 		probePool.Close()
@@ -235,7 +261,7 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 	if err != nil {
 		probePool.Close()
 		pool.Close()
-		return nil, fmt.Errorf("store: connect reserved pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, err)
+		return nil, fmt.Errorf("store: connect reserved pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d, restore %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, sizes.Restore, err)
 	}
 	if err := reservedPool.Ping(ctx); err != nil {
 		reservedPool.Close()
@@ -251,7 +277,7 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		reservedPool.Close()
 		probePool.Close()
 		pool.Close()
-		return nil, fmt.Errorf("store: connect bookkeeping pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, err)
+		return nil, fmt.Errorf("store: connect bookkeeping pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d, restore %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, sizes.Restore, err)
 	}
 	if err := bookkeepingPool.Ping(ctx); err != nil {
 		bookkeepingPool.Close()
@@ -269,7 +295,7 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		reservedPool.Close()
 		probePool.Close()
 		pool.Close()
-		return nil, fmt.Errorf("store: connect lock pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, err)
+		return nil, fmt.Errorf("store: connect lock pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d, restore %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, sizes.Restore, err)
 	}
 	if err := lockPool.Ping(ctx); err != nil {
 		lockPool.Close()
@@ -279,18 +305,69 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("store: ping lock pool: %w", err)
 	}
+	restoreCfg := cfg.Copy()
+	restoreCfg.MaxConns = sizes.Restore
+	restoreCfg.MinConns = 1
+	restorePool, err := pgxpool.NewWithConfig(ctx, restoreCfg)
+	if err != nil {
+		lockPool.Close()
+		bookkeepingPool.Close()
+		reservedPool.Close()
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: connect restore-admission pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d, restore %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, sizes.Restore, err)
+	}
+	if err := restorePool.Ping(ctx); err != nil {
+		restorePool.Close()
+		lockPool.Close()
+		bookkeepingPool.Close()
+		reservedPool.Close()
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: ping restore-admission pool: %w", err)
+	}
 	slog.Info("store: connection budget", slog.Int("request", int(sizes.Request)), slog.Int("probe", int(sizes.Probe)), slog.Int("reserved", int(sizes.Reserved)),
-		slog.Int("bookkeeping", int(sizes.Bookkeeping)), slog.Int("lock", int(sizes.Lock)), slog.Int("total_per_replica", int(sizes.Total())))
+		slog.Int("bookkeeping", int(sizes.Bookkeeping)), slog.Int("lock", int(sizes.Lock)), slog.Int("restore", int(sizes.Restore)), slog.Int("total_per_replica", int(sizes.Total())))
 	return &Store{
 		pool:                        pool,
+		rewrapFleetCutover:          options.rewrapFleetCutover,
 		probePool:                   probePool,
 		reservedPool:                reservedPool,
 		bookkeepingPool:             bookkeepingPool,
 		lockPool:                    lockPool,
+		restorePool:                 restorePool,
 		sizes:                       sizes,
 		acquireTimeout:              options.acquireTimeout,
 		historyRewriteOperationGate: make(chan struct{}, 1),
 	}, nil
+}
+
+func storeBuildApplicationName(version, commit string) string {
+	clean := func(value string) string {
+		var out strings.Builder
+		for _, r := range value {
+			if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' ||
+				r >= '0' && r <= '9' || r == '.' || r == '-' || r == '_' {
+				out.WriteRune(r)
+			}
+		}
+		if out.Len() == 0 {
+			return "unknown"
+		}
+		return out.String()
+	}
+	version, commit = clean(version), clean(commit)
+	// PostgreSQL truncates application_name to 63 bytes. Reserve room for the
+	// commit first so a long release label cannot hide the exact binary build.
+	const prefix = "trstctl/"
+	if len(commit) > 40 {
+		commit = commit[:40]
+	}
+	limit := 63 - len(prefix) - 1 - len(commit)
+	if len(version) > limit {
+		version = version[:limit]
+	}
+	return prefix + version + "/" + commit
 }
 
 // begin starts a transaction with a bounded pool-acquire window: when the pool
@@ -371,6 +448,9 @@ func (s *Store) Close() {
 	if s.lockPool != nil {
 		s.lockPool.Close()
 	}
+	if s.restorePool != nil {
+		s.restorePool.Close()
+	}
 	s.pool.Close()
 }
 
@@ -391,7 +471,7 @@ type PoolStat struct {
 }
 
 // PoolStats reports every pool by name (request, probe, reserved, bookkeeping,
-// lock) so the server can export trstctl_store_pool_connections.
+// lock, restore) so the server can export trstctl_store_pool_connections.
 func (s *Store) PoolStats() map[string]PoolStat {
 	out := map[string]PoolStat{}
 	add := func(name string, p *pgxpool.Pool) {
@@ -406,6 +486,7 @@ func (s *Store) PoolStats() map[string]PoolStat {
 	add("reserved", s.reservedPool)
 	add("bookkeeping", s.bookkeepingPool)
 	add("lock", s.lockPool)
+	add("restore", s.restorePool)
 	return out
 }
 
@@ -562,6 +643,9 @@ func (s *Store) withTenantTxOptions(ctx context.Context, tenantID string, option
 	if err := fn(tx); err != nil {
 		return err
 	}
+	if err := s.AssertGlobalKeyStateAdmissionAlive(ctx); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
@@ -627,6 +711,9 @@ func (s *Store) withTenantProjectionTxOptions(
 		return fmt.Errorf("store: set tenant projection: %w", err)
 	}
 	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := s.AssertGlobalKeyStateAdmissionAlive(ctx); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

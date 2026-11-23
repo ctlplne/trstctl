@@ -48,16 +48,16 @@ func tenantKeyDomainFixture(tenantID string) store.TenantKeyDomain {
 
 // TestTenantKeyDomainRLSAndWrappedKeyBytes proves the independently wrapped
 // domain record is tenant-confined at PostgreSQL, including its binary wrapped
-// key. Tenant B cannot select or overwrite tenant A's row even when it supplies
-// A's tenant_id to the repository sink.
+// key. Tenant B cannot select or overwrite tenant A's row; the direct SQL
+// assertions keep the database RLS check independent of the repository owner.
 func TestTenantKeyDomainRLSAndWrappedKeyBytes(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 	seedTwoTenants(t, s)
 
 	want := tenantKeyDomainFixture(tenantA)
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		return s.ApplyTenantKeyDomainSnapshotTx(ctx, tx, want)
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+		return s.ApplyTenantKeyDomainSnapshotTx(owned, tx, want)
 	}); err != nil {
 		t.Fatalf("project tenant A key domain: %v", err)
 	}
@@ -85,8 +85,8 @@ func TestTenantKeyDomainRLSAndWrappedKeyBytes(t *testing.T) {
 
 	crossTenant := tenantKeyDomainFixture(tenantA)
 	crossTenant.State = store.TenantKeyDomainStateSealed
-	if err := s.WithTenant(ctx, tenantB, func(tx pgx.Tx) error {
-		return s.ApplyTenantKeyDomainSnapshotTx(ctx, tx, crossTenant)
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantB, func(owned context.Context, tx pgx.Tx) error {
+		return s.ApplyTenantKeyDomainSnapshotTx(owned, tx, crossTenant)
 	}); err == nil {
 		t.Fatal("tenant B projected a row carrying tenant A's tenant_id; RLS WITH CHECK must reject it")
 	}
@@ -96,6 +96,25 @@ func TestTenantKeyDomainRLSAndWrappedKeyBytes(t *testing.T) {
 	}
 	if unchanged.State != store.TenantKeyDomainStateMigrating {
 		t.Fatalf("tenant A state = %q after tenant B overwrite attempt, want migrating", unchanged.State)
+	}
+
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantB, func(owned context.Context, tx pgx.Tx) error {
+		return s.ApplyTenantKeyDomainSnapshotTx(owned, tx, tenantKeyDomainFixture(tenantB))
+	}); err != nil {
+		t.Fatalf("project tenant B key domain for SQL RLS check: %v", err)
+	}
+	if err := s.WithTenant(ctx, tenantB, func(tx pgx.Tx) error {
+		var visible int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM tenant_key_domains WHERE tenant_id=$1`, tenantA).Scan(&visible); err != nil {
+			return err
+		}
+		if visible != 0 {
+			t.Fatalf("tenant B SQL SELECT saw %d tenant A key-domain rows", visible)
+		}
+		_, err := tx.Exec(ctx, `UPDATE tenant_key_domains SET tenant_id=$1 WHERE tenant_id=$2`, tenantA, tenantB)
+		return err
+	}); err == nil {
+		t.Fatal("tenant B SQL UPDATE changed its key-domain row to tenant A; RLS WITH CHECK must reject it")
 	}
 }
 
@@ -209,8 +228,8 @@ func TestTenantKeyDomainSchemaRequiresOperationAndPositiveSequence(t *testing.T)
 		t.Run(test.name, func(t *testing.T) {
 			domain := tenantKeyDomainFixture(tenantA)
 			test.change(&domain)
-			if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-				return s.ApplyTenantKeyDomainSnapshotTx(ctx, tx, domain)
+			if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+				return s.ApplyTenantKeyDomainSnapshotTx(owned, tx, domain)
 			}); err == nil {
 				t.Fatalf("schema accepted %s", test.name)
 			}
@@ -228,8 +247,8 @@ func TestTenantKeyDomainOffboardErasesOnlyNamedTenant(t *testing.T) {
 
 	for _, tenantID := range []string{tenantA, tenantB} {
 		domain := tenantKeyDomainFixture(tenantID)
-		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			return s.ApplyTenantKeyDomainSnapshotTx(ctx, tx, domain)
+		if err := withKeyStateOwnerTenantTx(ctx, s, tenantID, func(owned context.Context, tx pgx.Tx) error {
+			return s.ApplyTenantKeyDomainSnapshotTx(owned, tx, domain)
 		}); err != nil {
 			t.Fatalf("seed key domain for %s: %v", tenantID, err)
 		}

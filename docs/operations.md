@@ -201,8 +201,8 @@ Two more answers are part of the idempotency contract under concurrency:
 
 ### Connection budget
 
-Each replica opens five PostgreSQL pools from the same DSN. The request pool
-carries client commands; the four small pools carry work that must keep moving
+Each replica opens six PostgreSQL pools from the same DSN. The request pool
+carries client commands; the five small pools carry work that must keep moving
 while the request pool sheds load, and request handlers can never borrow from
 them:
 
@@ -213,16 +213,28 @@ them:
 | reserved | 2 | `TRSTCTL_POSTGRES_RESERVED_CONNS` / `postgres.reserved_conns` | the durable projection tail (apply and checkpoint) |
 | bookkeeping | 4 | `TRSTCTL_POSTGRES_BOOKKEEPING_CONNS` / `postgres.bookkeeping_conns` | idempotency claim, record and release statements |
 | lock | 8 | `TRSTCTL_POSTGRES_LOCK_CONNS` / `postgres.lock_conns` | sessions holding projection, lifecycle issuance/revocation, and host-result advisory locks |
+| restore | 8 | `TRSTCTL_POSTGRES_RESTORE_CONNS` / `postgres.restore_conns` | restore admission sessions around mutation, projection, backup and maintenance work |
 
-The default budget is **32 connections per replica** (each small pool keeps one
-connection warm, so an idle replica holds about five). Size PostgreSQL so that
-`max_connections` ≥ replicas × 32 + `superuser_reserved_connections` + every
+The default budget is **40 connections per replica** (each small pool keeps one
+connection warm, so an idle replica holds about six). Size PostgreSQL so that
+`max_connections` ≥ replicas × 40 + `superuser_reserved_connections` + every
 other client of the database (backup tooling, the doctor, dashboards). Every
 pool is opened and pinged at startup: a PostgreSQL that cannot honor the budget
 fails the process closed with a message naming the budget and the settings,
 instead of starving at runtime. The control plane logs `store: connection
 budget` at startup and exports `trstctl_store_pool_connections{pool,state}`
 (max, total, acquired, idle) on every `/metrics` scrape.
+Each pool labels its PostgreSQL sessions `trstctl/<version>/<commit>` so an
+operator can identify the binary build during a tenant-key rewrap cutover.
+Before a tenant-domain migration or deployment KEK rotation, the database owner
+must move the fleet to a distinct new login, disable LOGIN on the retired login,
+drain its existing sessions and supply the three `postgres.rewrap_*` settings.
+Both login roles must be explicit `trstctl_app` members. Rewrap admission checks
+PostgreSQL's live role and session state and refuses an old or unidentified
+application session; ordinary service startup does not change database roles.
+The same check runs again before the temporary rewrap gate is released; if the
+retired login was reenabled, the gate stays armed until the owner disables it
+and retries completion.
 
 A tenant burst that holds every request-pool connection is shed with 503s as
 above, but it cannot make `/readyz` time out (probe pool), starve the tail into

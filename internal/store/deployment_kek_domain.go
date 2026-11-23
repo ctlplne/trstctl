@@ -79,6 +79,9 @@ func (d DeploymentKEKDomain) Rotating() bool { return d.NextGeneration > 0 }
 // The event sequence is a monotonic guard, so replaying the operator tenant's
 // history (a rebuild, a restore) never moves the row backwards.
 func (s *Store) ApplyDeploymentKEKSnapshotTx(ctx context.Context, tx pgx.Tx, d DeploymentKEKDomain) error {
+	if err := s.RequireKeyStateOwnerTx(ctx, tx, d.OperatorTenantID, KeyStateExclusive); err != nil {
+		return err
+	}
 	if d.DomainID == "" {
 		return errors.New("store: a deployment KEK snapshot needs its domain id")
 	}

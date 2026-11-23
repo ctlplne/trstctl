@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/governance/misuse"
 	"trstctl.com/trstctl/internal/config"
@@ -23,7 +24,7 @@ import (
 func TestMisuseAlertIsWrittenForAFindingTheTailProjectedM2L4(t *testing.T) {
 	ctx := context.Background()
 	st := newMisuseTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

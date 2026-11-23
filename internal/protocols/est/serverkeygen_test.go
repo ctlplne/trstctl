@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -207,7 +208,7 @@ func serverKeygenFixture(t *testing.T) (caFixture, []byte, []byte, []byte) {
 
 func openESTEventLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open embedded EST event log: %v", err)
 	}

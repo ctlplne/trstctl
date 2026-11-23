@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
@@ -48,7 +49,7 @@ func TestAUD69APIExplorerRequestAndTokenJourney(t *testing.T) {
 	}
 	admin := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", adminScopes)
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

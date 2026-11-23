@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -42,7 +43,16 @@ func eventProtectionCompletedRebuild(t *testing.T, mode string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(signer.Close)
-	log, runtime, err := openConfiguredEventSource(t.Context(), cfg, st, key, true, nil)
+	deployment, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(deployment.Destroy)
+	core, err := newRunTenantCustodyCore(cfg, st, deployment, signer.signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, runtime, err := openConfiguredEventSourceWithCustody(t.Context(), cfg, st, key, true, nil, core)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +129,12 @@ func eventProtectionCompletedRebuild(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncWire, err := json.Marshal(projections.SecretSyncQueued{ID: "erased-rebuild-sync", SecretName: "erased/database", SecretVersion: 1, Target: "ci", RemoteKey: "TOKEN", ValueDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", IdempotencyKey: "erased-rebuild-sync-command", Sealed: []byte("sealed fixture")})
+	syncSealed, err := sealTenantValue(t.Context(), core.access, deployment, tenant,
+		[]byte("private preflight value"), secretSyncAAD(tenant, "ci", "erased-rebuild-sync", "TOKEN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	syncWire, err := json.Marshal(projections.SecretSyncQueued{ID: "erased-rebuild-sync", SecretName: "erased/database", SecretVersion: 1, Target: "ci", RemoteKey: "TOKEN", ValueDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", IdempotencyKey: "erased-rebuild-sync-command", Sealed: syncSealed})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +213,14 @@ func eventProtectionCompletedRebuild(t *testing.T, mode string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		older, protection, err := openConfiguredEventSource(t.Context(), cfg, transferStore, key, false, nil)
+		// The older-prefix transfer is an explicit test-owned raw-history
+		// fixture. It does not cross the configured production restore owner.
+		older, err := openHistoryAwareEventLog(t.Context(), cfg.NATS, transferStore, key,
+			events.WithBackupHistoryAdmission(func(ctx context.Context, _ uint64, _ string,
+				run func(context.Context) (int, error),
+			) (int, error) {
+				return run(ctx)
+			}))
 		if err != nil {
 			transferStore.Close()
 			t.Fatal(err)
@@ -211,7 +233,7 @@ func eventProtectionCompletedRebuild(t *testing.T, mode string) {
 			}
 			return nil
 		})
-		closeErr := errors.Join(older.Close(), protection.Close())
+		closeErr := older.Close()
 		transferStore.Close()
 		if err := errors.Join(restoreErr, closeErr); err != nil {
 			t.Fatal(err)

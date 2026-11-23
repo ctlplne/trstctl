@@ -16,7 +16,7 @@ import (
 
 func TestRetainedReplayAndLookupShareOneHistoryRead(t *testing.T) {
 	ctx := context.Background()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestRetainedReplayLookupPreservesIdentityAndCallbackIsolation(t *testing.T)
 	for _, field := range []string{"exact", "payload", "actor", "tenant", "time", "schema", "type"} {
 		t.Run(field, func(t *testing.T) {
 			ctx := t.Context()
-			log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+			log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -119,7 +119,7 @@ func TestRetainedReplayLookupPreservesIdentityAndCallbackIsolation(t *testing.T)
 
 func TestRetainedReplayLookupKeepsPrivacyCutAndErrorBoundaries(t *testing.T) {
 	ctx := t.Context()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

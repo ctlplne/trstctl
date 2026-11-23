@@ -18,13 +18,19 @@ func TestProductionEventLogConstructorsCannotBypassHistorySafety(t *testing.T) {
 	t.Parallel()
 	root := filepath.Clean(filepath.Join("..", ".."))
 	allowed := map[string]bool{
-		"internal/perf/live.go":                      true, // isolated benchmark/evaluation harness
-		"internal/server/history_rewrite.go":         true, // central production constructor
-		"scripts/perf/cmd/capacitycalibrate/main.go": true, // benchmark command
-		"scripts/perf/cmd/soakcapture/main.go":       true, // benchmark command
-		"scripts/perf/cmd/spineburst/main.go":        true, // benchmark command
+		"internal/eventstest/fixture.go":     true, // explicit test-only fixture adapter
+		"internal/server/history_rewrite.go": true, // central production constructor
 	}
 	found := make(map[string]bool)
+	allowedFixture := map[string]int{
+		"internal/perf/live.go":                      1,
+		"scripts/perf/cmd/capacitycalibrate/main.go": 1,
+		"scripts/perf/cmd/soakcapture/main.go":       1,
+		"scripts/perf/cmd/spineburst/main.go":        2,
+	}
+	fixtureFound := make(map[string]int)
+	fixtureOptionFound := make(map[string]int)
+	productionOptionFound := make(map[string]int)
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -34,7 +40,7 @@ func TestProductionEventLogConstructorsCannotBypassHistorySafety(t *testing.T) {
 				return filepath.SkipDir
 			}
 			switch entry.Name() {
-			case ".git", "vendor", "node_modules", "dist":
+			case ".git", "private", "vendor", "node_modules", "dist":
 				return filepath.SkipDir
 			}
 			return nil
@@ -47,20 +53,26 @@ func TestProductionEventLogConstructorsCannotBypassHistorySafety(t *testing.T) {
 			return err
 		}
 		alias := ""
+		fixtureAlias := ""
 		for _, spec := range file.Imports {
 			importPath, err := strconv.Unquote(spec.Path.Value)
 			if err != nil {
 				return err
 			}
-			if importPath != "trstctl.com/trstctl/internal/events" {
-				continue
-			}
-			alias = "events"
-			if spec.Name != nil {
-				alias = spec.Name.Name
+			switch importPath {
+			case "trstctl.com/trstctl/internal/events":
+				alias = "events"
+				if spec.Name != nil {
+					alias = spec.Name.Name
+				}
+			case "trstctl.com/trstctl/internal/eventstest":
+				fixtureAlias = "eventstest"
+				if spec.Name != nil {
+					fixtureAlias = spec.Name.Name
+				}
 			}
 		}
-		if alias == "" {
+		if alias == "" && fixtureAlias == "" {
 			return nil
 		}
 		file, err = parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
@@ -78,12 +90,26 @@ func TestProductionEventLogConstructorsCannotBypassHistorySafety(t *testing.T) {
 				return true
 			}
 			selector, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || selector.Sel.Name != "Open" {
+			if !ok {
 				return true
 			}
 			pkg, ok := selector.X.(*ast.Ident)
-			if ok && pkg.Name == alias {
-				found[rel] = true
+			if !ok {
+				return true
+			}
+			if pkg.Name == alias {
+				switch selector.Sel.Name {
+				case "Open":
+					found[rel] = true
+				case "WithFixtureAppendAdmission":
+					fixtureOptionFound[rel]++
+				case "WithRequiredAppendAdmission", "WithAppendAdmission",
+					"WithRequiredBackupHistoryAdmission", "WithBackupHistoryAdmission":
+					productionOptionFound[rel+":"+selector.Sel.Name]++
+				}
+			}
+			if pkg.Name == fixtureAlias && selector.Sel.Name == "OpenFixture" {
+				fixtureFound[rel]++
 			}
 			return true
 		})
@@ -101,6 +127,26 @@ func TestProductionEventLogConstructorsCannotBypassHistorySafety(t *testing.T) {
 		if !found[path] {
 			t.Errorf("constructor census allowlist entry %s is stale", path)
 		}
+	}
+	for path, count := range fixtureFound {
+		if count != allowedFixture[path] {
+			t.Errorf("production %s calls test-only OpenFixture %d times; reviewed count is %d", path, count, allowedFixture[path])
+		}
+	}
+	for path, count := range allowedFixture {
+		if fixtureFound[path] != count {
+			t.Errorf("fixture census allowlist entry %s saw %d calls, want %d", path, fixtureFound[path], count)
+		}
+	}
+	if len(fixtureOptionFound) != 1 || fixtureOptionFound["internal/eventstest/fixture.go"] != 1 {
+		t.Errorf("test-only fixture admission options moved outside the explicit fixture helper: %v", fixtureOptionFound)
+	}
+	if len(productionOptionFound) != 4 ||
+		productionOptionFound["internal/server/event_protection_source.go:WithRequiredAppendAdmission"] != 1 ||
+		productionOptionFound["internal/server/event_protection_source.go:WithAppendAdmission"] != 1 ||
+		productionOptionFound["internal/server/event_protection_source.go:WithRequiredBackupHistoryAdmission"] != 1 ||
+		productionOptionFound["internal/server/event_protection_source.go:WithBackupHistoryAdmission"] != 1 {
+		t.Errorf("configured production source lost its event or raw-history admission adapter: %v", productionOptionFound)
 	}
 	providerSource, err := os.ReadFile(filepath.Join(root, "ee", "provider", "grantcmd.go"))
 	if err != nil {

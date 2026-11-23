@@ -204,6 +204,14 @@ func TestStoreSystemPoolIsTheNamedRLSBypassAccessor(t *testing.T) {
 func TestSystemPoolProductionUseInventory(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	approved := map[string]int{
+		// CR-045: source-pair custody takes one system transaction only to
+		// pin the deployment-wide key-state cut. It checks the one requested
+		// tenant's rewrap pair and never reads another tenant's payload.
+		"internal/server/secret_integrations_outbox.go": 1,
+		// CR-045: bootstrap checks only pg_catalog schema/RLS metadata before a
+		// tenant is known; it reads no tenant row or payload and creates the
+		// target-local restore admission tables through the owner connection.
+		"internal/store/restore_admission.go": 1,
 		// J2: one full-restore transaction replaces cross-tenant independent
 		// command state only after the artifact and event rebuild validate. The
 		// transaction never returns tenant payloads; every restored receiver row
@@ -407,6 +415,17 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// window across tenants — tenant ids and names only, at most one batch —
 		// and purges each in its own tenant's RLS transaction under the name's lock.
 		"internal/store/secret_tombstones.go": 1,
+		// CR-045: the fenced full-restore owner enumerates tenant IDs for one
+		// operation, then reads each row under that tenant's RLS; its second
+		// system transaction settles a pair only after exact owner and hashes.
+		"internal/store/restore_outbox_pairs.go": 2,
+		// CR-045: raw broker intent and ACK readback are target-local writes.
+		// Only the exact full-restore owner stages/settles each tenant-scoped row.
+		"internal/store/restore_raw_history_journal.go": 2,
+		// Disposable PostgreSQL role setup lives in storetest, which production
+		// packages cannot import. These four system statements create/grant,
+		// disable and drop only fixture login roles, never tenant data.
+		"internal/storetest/rewrap_cutover.go": 4,
 	}
 	found := map[string]int{}
 

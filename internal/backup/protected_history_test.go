@@ -9,6 +9,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -59,7 +60,7 @@ func (f *protectedBackupKeys) WithKey(_ context.Context, ref eventprotect.KeyRef
 
 // Real NATS and AEAD; admission and memory-only custody are explicit codec
 // fixtures. This does not qualify production offboarding or persistent removal.
-func protectedHistoryFixture(t fuzzFixtureTB) (*events.Log, *protectedBackupKeys, []events.BackupHistoryRecord) {
+func protectedHistoryFixture(t fuzzFixtureTB, keepActive ...bool) (*events.Log, *protectedBackupKeys, []events.BackupHistoryRecord) {
 	t.Helper()
 	raw, err := seal.GenerateKEK()
 	if err != nil {
@@ -75,7 +76,7 @@ func protectedHistoryFixture(t fuzzFixtureTB) (*events.Log, *protectedBackupKeys
 	// the ClusterFuzzLite shim's F panics on Context.
 	ctx := context.Background()
 	f := &protectedBackupKeys{key: key, ref: eventprotect.KeyRef{TenantID: "60aad68e-4613-4658-a75a-10ee97084edf", ID: "06bc0318-6b02-471c-b3c4-54257995848a"}}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithEventProtection(events.EventProtection{Admission: f, Keys: f}))
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithEventProtection(events.EventProtection{Admission: f, Keys: f}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,9 +94,46 @@ func protectedHistoryFixture(t fuzzFixtureTB) (*events.Log, *protectedBackupKeys
 	if history[0].Event.Protection == nil || history[0].Event.SchemaVersion != 1 || f.calls != 1 {
 		t.Fatal("fixture did not store one actual protected source event")
 	}
-	key.Destroy()
-	f.closed = true
+	if len(keepActive) == 0 || !keepActive[0] {
+		key.Destroy()
+		f.closed = true
+	}
 	return log, f, history
+}
+
+// CR-045: a verified artifact's protected raw bytes are opened with the
+// creation key before any target history mutation, then the readable value is
+// destroyed by the caller after nested-field validation.
+func TestProtectedRawArtifactRecordAuthenticatesBeforePublicationCR045(t *testing.T) {
+	_, keys, history := protectedHistoryFixture(t, true)
+	opened, err := events.AuthenticateBackupHistoryRecord(t.Context(), history[0], keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := events.DecodeBackupHistoryEvent(history[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := events.ValidateBackupHistoryEvent(decoded); err != nil {
+		t.Fatal(err)
+	}
+	openedFromVerifiedArtifact, err := events.AuthenticateBackupHistoryEvent(t.Context(), decoded, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(openedFromVerifiedArtifact.Data)
+	if !bytes.Equal(openedFromVerifiedArtifact.Data, opened.Data) {
+		t.Fatal("verified artifact event did not authenticate to the same payload")
+	}
+	defer secret.Wipe(opened.Data)
+	if opened.SensitiveErased || string(opened.Data) != `{"email":"protected-backup@example.invalid"}` ||
+		opened.Actor == nil || opened.Actor.Subject != "private-backup-actor@example.invalid" {
+		t.Fatalf("authenticated protected artifact returned wrong event: %+v", opened)
+	}
+	keys.closed = true
+	if _, err := events.AuthenticateBackupHistoryRecord(t.Context(), history[0], keys); err == nil {
+		t.Fatal("unavailable active key authenticated protected artifact")
+	}
 }
 
 func TestProtectedEventBackupRetainsExactSourceWithoutKeyAccess(t *testing.T) {
@@ -122,7 +160,7 @@ func TestProtectedEventBackupRetainsExactSourceWithoutKeyAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(authorizer.Destroy)
-	target, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithBackupRestoreAuthorizer(authorizer))
+	target, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithBackupRestoreAuthorizer(authorizer))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,8 +3,11 @@
 package projections_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,13 +15,76 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/winaccounts"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventstest"
 	"trstctl.com/trstctl/internal/hostaccounts"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func windowsPreparedFixtureSeal(t *testing.T, value, aad []byte) []byte {
+	t.Helper()
+	key, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x63}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	container, err := seal.Seal(key, value, aad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return container
+}
+
+func openWindowsPreparedLog(t *testing.T) *events.Log {
+	t.Helper()
+	key, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x63}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	}, events.WithAppendAdmission(func(ctx context.Context, event events.Event,
+		publish func(context.Context) (events.Event, error),
+	) (events.Event, error) {
+		if event.Type == projections.EventSecretStaticRotationAdvanced {
+			var advanced projections.SecretStaticRotationAdvanced
+			if err := json.Unmarshal(event.Data, &advanced); err != nil {
+				return events.Event{}, err
+			}
+			if advanced.ID == "" {
+				return events.Event{}, errors.New("static-rotation fixture ID is missing")
+			}
+			for _, field := range []struct {
+				part string
+				data []byte
+			}{{"prepared", advanced.SealedPreparation}, {"new", advanced.SealedNew}, {"old", advanced.SealedOld}} {
+				if len(field.data) == 0 {
+					continue
+				}
+				plaintext, err := seal.OpenIntoLocked(key, field.data,
+					[]byte(event.TenantID+"/static-rotation/"+advanced.ID+"/"+field.part), nil)
+				if err != nil {
+					return events.Event{}, err
+				}
+				plaintext.Destroy()
+			}
+		} else if fixtureHasSealedField(event.Data) {
+			return events.Event{}, fmt.Errorf("unclassified Windows fixture sealed event %s", event.Type)
+		}
+		return publish(ctx)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	return log
+}
 
 // CR-156: an old prepared event can hold sub-microsecond precision even
 // though PostgreSQL stores the projected timestamp at microsecond precision.
@@ -93,7 +159,7 @@ func TestWindowsLocalPreparedNanosecondsDoNotStopRetainedRotation(t *testing.T) 
 
 func windowsPreparedTimeFixture(t *testing.T) (*store.Store, *events.Log, events.Event, hostaccounts.RotationIntent, string) {
 	t.Helper()
-	s, log := newStore(t), openLog(t)
+	s, log := newStore(t), openWindowsPreparedLog(t)
 	registration := appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "time-review"})
 	if err := projections.New(s).Apply(t.Context(), registration); err != nil {
 		t.Fatal(err)
@@ -126,7 +192,11 @@ func appendWindowsPreparedNanosecondEvent(t *testing.T, log *events.Log, queued 
 	return appendWindowsPreparedTimeEvent(t, log, uuid.NewString(), projections.EventSecretStaticRotationAdvanced,
 		queued.Time.Truncate(time.Microsecond).Add(time.Millisecond+789*time.Nanosecond), 2, projections.SecretStaticRotationAdvanced{
 			ID: intent.RotationID, TenantEpoch: epoch, FromPhase: store.SecretStaticRotationQueued, Phase: store.SecretStaticRotationPrepared,
-			ProviderType: "windows", SealedPreparation: []byte("sealed preparation fixture"), SealedOld: []byte("sealed predecessor fixture"),
+			ProviderType: "windows",
+			SealedPreparation: windowsPreparedFixtureSeal(t, []byte("preparation fixture"),
+				[]byte(tenantA+"/static-rotation/"+intent.RotationID+"/prepared")),
+			SealedOld: windowsPreparedFixtureSeal(t, []byte("predecessor fixture"),
+				[]byte(tenantA+"/static-rotation/"+intent.RotationID+"/old")),
 			WindowsLocalIntent: &intent,
 		})
 }

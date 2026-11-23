@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -381,7 +382,7 @@ func lifecycleRewriteLog(t *testing.T, options ...events.OpenOption) *events.Log
 			return nil
 		}),
 	}, options...)
-	log, err := events.Open(context.Background(), config.NATS{
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	}, options...)
 	if err != nil {

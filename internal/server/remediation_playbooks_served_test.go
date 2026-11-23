@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -66,7 +67,7 @@ func TestServedRemediationPlaybooksCAPREM01RightSizeEndToEnd(t *testing.T) {
 		string(authz.ConnectorsRead),
 	})
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -280,7 +281,7 @@ func TestServedOwnerDrivenSelfRemediationCAPREM02EndToEnd(t *testing.T) {
 		string(authz.OwnersRead), string(authz.OwnersWrite),
 	})
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

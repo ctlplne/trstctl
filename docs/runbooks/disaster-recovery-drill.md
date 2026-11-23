@@ -59,8 +59,9 @@ The attestation carries `events_verified`, `keys_verified`, `secrets_verified` a
 sentence naming the check (event log, CA keys or stored secrets); the tenant,
 secret or key it stopped at goes to the control plane's log, not the signed
 evidence. Its signed attestation cannot say `restored` unless all of those checks
-pass. The separate event-log-only restore remains useful for projection recovery,
-but it is never a full DR verdict.
+pass. An event-log-only backup remains useful for inspection, but the
+event-only restore command refuses because it lacks paired PostgreSQL state.
+It cannot produce a DR verdict.
 
 The scheduled result is not a volatile health flag. The control plane signs a
 versioned JSON statement through the isolated `audit-export` signer handle. The

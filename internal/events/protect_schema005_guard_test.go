@@ -38,7 +38,7 @@ func TestEnvelopeDecodeErrorCarriesStreamSequence(t *testing.T) {
 
 func TestReplayPreservesEnvelopeDecodeErrorSequence(t *testing.T) {
 	ctx := context.Background()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

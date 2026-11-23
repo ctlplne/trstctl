@@ -23,6 +23,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/agent"
 	agentrelay "trstctl.com/trstctl/internal/agent/relay"
@@ -34,7 +35,6 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
@@ -501,7 +501,7 @@ func dodRunAllNativeConnectorsProductionAssembly(t *testing.T) {
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}
@@ -672,7 +672,7 @@ func dodRunFocusedNativeConnector(t *testing.T, entryID, connectorName string, e
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}

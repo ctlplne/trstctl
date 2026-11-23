@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -107,7 +108,7 @@ func TestSuccessfulBuildTransfersNotificationOwnershipToShutdown(t *testing.T) {
 func notificationOwnershipTestStack(t *testing.T) (*store.Store, *events.Log) {
 	t.Helper()
 	st := newServerTestStore(t)
-	log, err := events.Open(context.Background(), config.NATS{
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	})
 	if err != nil {

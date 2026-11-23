@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -105,7 +106,7 @@ func TestMigrationRunDifferentReceiptCatchesUpAppendWonProjectionLostAUD40(t *te
 	st := newStore(t)
 	ctx := context.Background()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +164,7 @@ func TestMigrationRunDifferentReceiptCatchesUpAppendWonProjectionLostAUD40(t *te
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

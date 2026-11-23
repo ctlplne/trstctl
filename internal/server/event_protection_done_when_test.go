@@ -289,7 +289,7 @@ func (s *doneWhenStack) open(t *testing.T) (*Server, *events.Log, *eventProtecti
 		t.Fatal(err)
 	}
 	s.signer = signer
-	log, runtime, err := openConfiguredEventSource(t.Context(), s.cfg, s.st, key, true, nil)
+	log, runtime, err := openConfiguredEventSourceFixture(t, s.cfg, s.st, key, true, nil)
 	if err != nil {
 		signer.Close()
 		t.Fatal(err)

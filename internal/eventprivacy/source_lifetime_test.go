@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/eventprivacy"
@@ -54,7 +55,7 @@ func appendSource(t *testing.T, log *events.Log, id, kind string, when time.Time
 func sourceFixture(t *testing.T, mutate func(*eventprivacy.Activated)) (eventprivacy.SourcePolicy, *events.Log, events.Event, eventprivacy.Activated) {
 	t.Helper()
 	base := t.TempDir()
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,6 +87,28 @@ func sourceFixture(t *testing.T, mutate func(*eventprivacy.Activated)) (eventpri
 	}
 	appendSource(t, log, request.KeyID, eventprivacy.EventActivated, creation.CreatedAt, activation)
 	return eventprivacy.SourcePolicy{Log: log}, log, registration, activation
+}
+
+// CR-045: full restore needs the exact artifact's pinned history as the
+// lifetime authority before the target event log has received any bytes.
+// A read-only source can therefore supply lifetime lookup with no live Log.
+func TestSourcePolicyReadsLifetimeFromInjectedHistoryReaderCR045(t *testing.T) {
+	policy, log, registration, activation := sourceFixture(t, nil)
+	policy.Reader = log
+	policy.Log = nil
+	lifetime, err := policy.LatestLifetime(t.Context(), sourceTenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lifetime.Registration.ID != registration.ID || lifetime.Activation == nil ||
+		lifetime.Activation.Body.KeyID != activation.KeyID {
+		t.Fatalf("injected reader selected wrong lifetime: %+v", lifetime)
+	}
+	ref := eventprotect.KeyRef{TenantID: sourceTenant, ID: activation.KeyID}
+	byKey, found, err := policy.LifetimeForKey(t.Context(), ref)
+	if err != nil || !found || byKey.Registration.ID != registration.ID {
+		t.Fatalf("injected reader key lookup = %+v, found=%t, err=%v", byKey, found, err)
+	}
 }
 
 func TestSourceAuthorityKeepsFirstRegistrationThroughRename(t *testing.T) {

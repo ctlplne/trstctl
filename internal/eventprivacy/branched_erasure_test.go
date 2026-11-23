@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -66,7 +67,7 @@ func TestBranchedErasureRequiresExactCurrentCreationAndReceipt(t *testing.T) {
 	if _, err := custody.Destroy(t.Context(), authorizer.want); err != nil {
 		t.Fatal(err)
 	}
-	branch, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "branch")})
+	branch, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "branch")})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 )
 
 func TestEndpointVerificationAlertSnapshotKeepsClosedVersionedShape(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +76,7 @@ func TestEndpointVerificationAlertSnapshotKeepsClosedVersionedShape(t *testing.T
 }
 
 func TestEndpointVerificationHistoricalAlertVersionAndSupersededDecision(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}

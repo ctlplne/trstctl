@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
@@ -27,7 +28,7 @@ func TestServedAuditDownloadLimitIsPerCallerA234L3(t *testing.T) {
 	ctx := context.Background()
 	const tenant = "6b7c8d9e-0f1a-4b2c-8d3e-4f5a6b7c8d9e"
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

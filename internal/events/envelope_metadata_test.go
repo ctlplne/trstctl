@@ -71,7 +71,7 @@ func TestMetadataRecoversTransferredProtectedSourceWithoutCustodian(t *testing.T
 		t.Fatal("fixture must contain one retained source event")
 	}
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "restored")}
-	target, err := Open(t.Context(), cfg, WithRequiredPrivacyEventPolicies())
+	target, err := openFixture(t.Context(), cfg, WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestMetadataRecoversTransferredProtectedSourceWithoutCustodian(t *testing.T
 	if err := target.Close(); err != nil {
 		t.Fatal(err)
 	}
-	target, err = Open(t.Context(), cfg, WithRequiredPrivacyEventPolicies())
+	target, err = openFixture(t.Context(), cfg, WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestMetadataIndexRejectsFalsePointers(t *testing.T) {
 
 func TestMetadataTypesKeepSourceOrderRangeAndColdRecovery(t *testing.T) {
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")}
-	log, err := Open(t.Context(), cfg)
+	log, err := openFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestMetadataTypesKeepSourceOrderRangeAndColdRecovery(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = Open(t.Context(), cfg)
+	log, err = openFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestMetadataTypesKeepSourceOrderRangeAndColdRecovery(t *testing.T) {
 
 func TestMetadataIndexUpgradePreservesSourceAndRebuildsPointers(t *testing.T) {
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")}
-	log, err := Open(t.Context(), cfg)
+	log, err := openFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestMetadataIndexUpgradePreservesSourceAndRebuildsPointers(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = Open(t.Context(), cfg)
+	log, err = openFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

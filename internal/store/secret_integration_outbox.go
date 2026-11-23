@@ -8,11 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -261,6 +263,93 @@ func (s *Store) ApplySecretSyncIntentTx(
 		return fmt.Errorf("%w: secret-sync payload does not match job command", ErrIdempotencyConflict)
 	}
 	effectLane := "secret.sync:" + job.Target
+	// Read and authenticate retained ciphertext before the job's lower-order
+	// intent lock. The locked path below rechecks the complete row image before
+	// consuming this proof; a worker update between the reads causes a retry.
+	verifiedOutboxRows := make(map[int64]string)
+	recoveryKeyHashes := make(map[int64]string)
+	verifyCandidate := func(query string, args ...any) error {
+		var id int64
+		var rowImage string
+		var retainedPayload []byte
+		err := tx.QueryRow(ctx, query, args...).Scan(&id, &rowImage, &retainedPayload)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if _, already := verifiedOutboxRows[id]; already {
+			return nil
+		}
+		retained, err := decodeSecretSyncOutboxBinding(retainedPayload)
+		if err != nil {
+			return fmt.Errorf("%w: retained secret-sync payload is invalid", ErrIdempotencyConflict)
+		}
+		if !bytes.Equal(retained.Sealed, proposedPayload.Sealed) {
+			if operationID, recovery := recoveryPairProofOperation(ctx); recovery {
+				if len(job.EventSHA256) != 64 {
+					return ErrRecoveryPairProofMismatch
+				}
+				keyHash, err := s.RecoveryKeyStateDigestTx(ctx, tx, job.TenantID, operationID)
+				if err != nil {
+					return err
+				}
+				if err := s.ConsumeRecoveryPairProofTx(ctx, tx, RecoveryPairProof{
+					TenantID: job.TenantID, OperationID: operationID, EventID: job.EventID,
+					PairKind: "sync_outbox", RowID: strconv.FormatInt(id, 10),
+					EventSHA256: job.EventSHA256, RowSHA256: crypto.SHA256Hex([]byte(rowImage)),
+					KeyStateSHA256: keyHash,
+				}); err != nil {
+					return err
+				}
+				recoveryKeyHashes[id] = keyHash
+			} else {
+				if job.VerifyRewrapPair == nil {
+					return fmt.Errorf("%w: secret-sync retained ciphertext differs", ErrIdempotencyConflict)
+				}
+				same, err := job.VerifyRewrapPair(ctx, retained.Sealed, proposedPayload.Sealed,
+					[]byte(job.TenantID+"/secret-sync/"+job.Target+"/"+job.ID+"/"+job.RemoteKey))
+				if err != nil || !same {
+					return fmt.Errorf("%w: secret-sync retained ciphertext differs", ErrIdempotencyConflict)
+				}
+			}
+		}
+		verifiedOutboxRows[id] = rowImage
+		return nil
+	}
+	if err := verifyCandidate(`SELECT o.id, to_jsonb(o)::text, o.payload
+		FROM outbox AS o JOIN secret_sync_jobs AS j
+		  ON j.tenant_id=o.tenant_id AND j.outbox_id=o.id
+		WHERE j.tenant_id=$1 AND j.id=$2`, job.TenantID, job.ID); err != nil {
+		return err
+	}
+	if err := verifyCandidate(`SELECT id, to_jsonb(o)::text, payload FROM outbox AS o
+		WHERE tenant_id=$1 AND idempotency_key=$2 AND destination=$3`,
+		job.TenantID, job.IdempotencyKey, destination); err != nil {
+		return err
+	}
+	verifiedRow := func(id int64, rowImage string, retainedPayload []byte) bool {
+		if before, ok := verifiedOutboxRows[id]; ok {
+			return before == rowImage
+		}
+		// A concurrent projector can commit the identical immutable event
+		// after the pre-lock read saw no row. Exact payload equality needs no
+		// ciphertext pair proof; a differing copy still fails closed here.
+		return bytes.Equal(retainedPayload, payload)
+	}
+	checkRecoveryKey := func(id int64) error {
+		old, ok := recoveryKeyHashes[id]
+		if !ok {
+			return nil
+		}
+		operationID, _ := recoveryPairProofOperation(ctx)
+		current, err := s.RecoveryKeyStateDigestTx(ctx, tx, job.TenantID, operationID)
+		if err != nil || current != old {
+			return ErrRecoveryPairProofMismatch
+		}
+		return nil
+	}
 
 	// The job id is derived from tenant + raw Idempotency-Key and therefore stays
 	// stable even when a colliding retry changes target (and thus outbox key).
@@ -288,17 +377,17 @@ func (s *Store) ApplySecretSyncIntentTx(
 		if !SecretSyncCommandMatches(existing, job) {
 			return fmt.Errorf("%w: secret-sync job %s", ErrIdempotencyConflict, job.ID)
 		}
-		var existingDestination, existingKey, existingLane string
+		var existingDestination, existingKey, existingLane, existingRowImage string
 		var existingPayload []byte
 		var existingOrder int64
 		var orderFromEvent bool
 		if err := tx.QueryRow(ctx,
-			`SELECT destination, payload, idempotency_key, effect_lane,
+			`SELECT to_jsonb(o)::text, destination, payload, idempotency_key, effect_lane,
 			        secret_sync_target_order, secret_sync_order_from_event
-			   FROM outbox
+			   FROM outbox AS o
 			  WHERE tenant_id = $1 AND id = $2`,
 			job.TenantID, existing.OutboxID).Scan(
-			&existingDestination, &existingPayload, &existingKey, &existingLane,
+			&existingRowImage, &existingDestination, &existingPayload, &existingKey, &existingLane,
 			&existingOrder, &orderFromEvent); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) &&
 				(existing.Status == SecretSyncJobDelivered || existing.Status == SecretSyncJobFailed) {
@@ -313,8 +402,12 @@ func (s *Store) ApplySecretSyncIntentTx(
 		if err != nil {
 			return fmt.Errorf("store: secret-sync stored outbox payload: %w", err)
 		}
-		if existingDestination != destination || (existingLane != "" && existingLane != effectLane) || existingKey != job.IdempotencyKey || existing.TargetOrder != existingOrder || (orderFromEvent && job.TargetOrder != existingOrder) || storedPayload.ID != job.ID || storedPayload.Key != job.RemoteKey || storedPayload.Target != job.Target || storedPayload.RequestBinding != job.RequestBinding {
+		if existingDestination != destination || (existingLane != "" && existingLane != effectLane) || existingKey != job.IdempotencyKey || existing.TargetOrder != existingOrder || (orderFromEvent && job.TargetOrder != existingOrder) || storedPayload.ID != job.ID || storedPayload.Key != job.RemoteKey || storedPayload.Target != job.Target || storedPayload.RequestBinding != job.RequestBinding ||
+			!verifiedRow(existing.OutboxID, existingRowImage, existingPayload) {
 			return fmt.Errorf("%w: secret-sync job/outbox binding differs", ErrIdempotencyConflict)
+		}
+		if err := checkRecoveryKey(existing.OutboxID); err != nil {
+			return err
 		}
 		if existingLane == "" {
 			if _, err := tx.Exec(ctx,
@@ -336,25 +429,29 @@ func (s *Store) ApplySecretSyncIntentTx(
 		existingDestination, existingLane string
 		existingKey                       string
 		existingPayload                   []byte
+		existingRowImage                  string
 		existingOrder                     int64
 		orderFromEvent                    bool
 	)
 	err = tx.QueryRow(ctx,
-		`SELECT id, destination, effect_lane, idempotency_key, payload,
+		`SELECT id, to_jsonb(o)::text, destination, effect_lane, idempotency_key, payload,
 		        secret_sync_target_order, secret_sync_order_from_event
-		   FROM outbox
+		   FROM outbox AS o
 		  WHERE tenant_id = $1 AND idempotency_key = $2 AND destination = $3`,
 		job.TenantID, job.IdempotencyKey, destination).Scan(
-		&existingOutboxID, &existingDestination, &existingLane, &existingKey,
+		&existingOutboxID, &existingRowImage, &existingDestination, &existingLane, &existingKey,
 		&existingPayload, &existingOrder, &orderFromEvent)
 	if err == nil {
+		if err := checkRecoveryKey(existingOutboxID); err != nil {
+			return err
+		}
 		storedPayload, decodeErr := decodeSecretSyncOutboxBinding(existingPayload)
 		if decodeErr != nil || existingDestination != destination ||
 			(existingLane != "" && existingLane != effectLane) ||
 			existingKey != job.IdempotencyKey || storedPayload.ID != job.ID ||
 			storedPayload.Key != job.RemoteKey || storedPayload.Target != job.Target ||
 			storedPayload.RequestBinding != job.RequestBinding ||
-			!bytes.Equal(storedPayload.Sealed, proposedPayload.Sealed) ||
+			!verifiedRow(existingOutboxID, existingRowImage, existingPayload) ||
 			existingOrder == 0 ||
 			(orderFromEvent && (existingOrder < 0 || existingOrder != job.TargetOrder)) ||
 			(!orderFromEvent && existingOrder > 0) {

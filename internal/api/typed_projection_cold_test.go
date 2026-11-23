@@ -4,6 +4,7 @@ package api
 
 import (
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	configpkg "trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -11,7 +12,7 @@ import (
 
 func TestTypedRequestProjectionsRecoverAfterColdEventLogRestart(t *testing.T) {
 	cfg := configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(t.Context(), cfg)
+	log, err := eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +30,7 @@ func TestTypedRequestProjectionsRecoverAfterColdEventLogRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(t.Context(), cfg)
+	log, err = eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

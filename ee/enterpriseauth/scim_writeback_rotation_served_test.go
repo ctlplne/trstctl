@@ -9,11 +9,11 @@ import (
 	"net/url"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -53,7 +53,7 @@ func TestServedSCIMWritebackBearerRotatesWithoutRestartA207L1(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessions := auth.NewSessionIssuer([]byte("a207l1-writeback-session-secret-0123456"), time.Hour)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

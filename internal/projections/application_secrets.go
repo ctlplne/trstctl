@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -101,6 +102,34 @@ type applicationSecretSemanticApproval struct {
 // field except Requester. Requester is the sole authorized privacy rewrite in this
 // domain: normalizing any other string would let a rewrite hide command drift.
 func ApplicationSecretMutationSemanticDigest(event events.Event, payload ApplicationSecretMutation) (string, error) {
+	return applicationSecretMutationSemanticDigest(event, payload, "trstctl.application-secret-mutation-receipt.v1")
+}
+
+// ApplicationSecretMutationSemanticDigestV2 binds the same command fields as
+// v1, but identifies a sealed value by its stable payload nonce/ciphertext.
+// This digest is comparison data only: a differing wrapper may be accepted
+// only after both actual containers authenticate under the exact tenant AAD.
+func ApplicationSecretMutationSemanticDigestV2(event events.Event, payload ApplicationSecretMutation) (string, error) {
+	if len(payload.Sealed) != 0 {
+		stable, err := seal.PayloadCiphertext(payload.Sealed)
+		if err != nil {
+			return "", err
+		}
+		payload.Sealed = stable
+	}
+	if payload.Sync != nil {
+		copyOfSync := *payload.Sync
+		stable, err := seal.PayloadCiphertext(copyOfSync.Sealed)
+		if err != nil {
+			return "", err
+		}
+		copyOfSync.Sealed = stable
+		payload.Sync = &copyOfSync
+	}
+	return applicationSecretMutationSemanticDigest(event, payload, "trstctl.application-secret-mutation-receipt.v2")
+}
+
+func applicationSecretMutationSemanticDigest(event events.Event, payload ApplicationSecretMutation, domain string) (string, error) {
 	var approval *applicationSecretSemanticApproval
 	if payload.Approval != nil {
 		approval = &applicationSecretSemanticApproval{
@@ -134,7 +163,7 @@ func ApplicationSecretMutationSemanticDigest(event events.Event, payload Applica
 		Sync          *SecretSyncQueued                  `json:"sync,omitempty"`
 		Approval      *applicationSecretSemanticApproval `json:"approval,omitempty"`
 	}{
-		Domain:  "trstctl.application-secret-mutation-receipt.v1",
+		Domain:  domain,
 		EventID: event.ID, EventType: event.Type, TenantID: event.TenantID,
 		EventTime: event.Time.UTC(), SchemaVersion: schemaVersionOf(event), TenantEpoch: payload.TenantEpoch,
 		Action: payload.Action, Name: payload.Name, OwnerID: payload.OwnerID, Expected: payload.ExpectedVersion,
@@ -349,15 +378,38 @@ func (p *Projector) applyApplicationSecretTx(ctx context.Context, tx pgx.Tx, eve
 	if err != nil {
 		return true, err
 	}
-	if err := p.store.ApplyApplicationSecretMutationTx(ctx, tx, store.ApplicationSecretMutation{
+	digestV2, err := ApplicationSecretMutationSemanticDigestV2(event, payload)
+	if err != nil {
+		return true, fmt.Errorf("projections: application-secret v2 receipt: %w", err)
+	}
+	eventHash, err := recoveryEventSHA256(event)
+	if err != nil {
+		return true, err
+	}
+	mutation := store.ApplicationSecretMutation{
 		TenantID: event.TenantID, TenantEpoch: payload.TenantEpoch,
-		EventID: event.ID, SemanticDigest: digest,
+		EventID: event.ID, SemanticDigest: digest, SemanticDigestV2: digestV2, EventSHA256: eventHash,
 		RequestBinding: payload.RequestBinding, Action: payload.Action,
 		Name: payload.Name, OwnerID: payload.OwnerID, ExpectedVersion: payload.ExpectedVersion,
 		ResultVersion: payload.ResultVersion, Sealed: payload.Sealed,
 		SourceVersion: payload.SourceVersion, SourceWrittenAt: payload.SourceWrittenAt,
 		OccurredAt: event.Time, ApprovalFrom: from, ApprovalTo: to, Approval: payload.Approval,
-	}); err != nil {
+	}
+	verifier := p.applicationSecretReceiptVerifier
+	if recoveryVerifier, ok := ctx.Value(applicationSecretRecoveryVerifierContextKey{}).(func(context.Context, string, ApplicationSecretMutation) error); ok {
+		verifier = recoveryVerifier
+	}
+	if verifier != nil {
+		mutation.VerifyReceiptContainers = func(verifyCtx context.Context) error {
+			return verifier(verifyCtx, event.TenantID, payload)
+		}
+	}
+	if pair := p.pairVerifierFor(ctx); pair != nil {
+		mutation.VerifyRewrapPair = func(verifyCtx context.Context, before, after, aad []byte) (bool, error) {
+			return pair(verifyCtx, event.TenantID, before, after, aad)
+		}
+	}
+	if err := p.store.ApplyApplicationSecretMutationTx(ctx, tx, mutation); err != nil {
 		// Retained history may contain a target that was finalized in an erased
 		// tenant lifecycle and appended only after the UUID was registered again.
 		// It remains source evidence, but it is not a command for the current epoch.
@@ -368,15 +420,24 @@ func (p *Projector) applyApplicationSecretTx(ctx context.Context, tx pgx.Tx, eve
 		}
 		return true, err
 	}
+	return true, p.applyEmbeddedApplicationSecretSyncTx(ctx, tx, event, payload, eventHash)
+}
+
+// The full-restore partial pass builds this exact receiver association without
+// applying the enclosing secret mutation before its independent tenant epoch is
+// imported. Ordinary live and final replay call the same sink after mutation.
+func (p *Projector) applyEmbeddedApplicationSecretSyncTx(ctx context.Context, tx pgx.Tx,
+	event events.Event, payload ApplicationSecretMutation, eventHash string,
+) error {
 	if payload.Sync == nil {
-		return true, nil
+		return nil
 	}
 	if payload.Sync.TenantEpoch != "" && payload.Sync.TenantEpoch != payload.TenantEpoch {
-		return true, fmt.Errorf("projections: embedded secret-sync tenant epoch differs from its application-secret command")
+		return fmt.Errorf("projections: embedded secret-sync tenant epoch differs from its application-secret command")
 	}
 	targetOrder, err := secretSyncTargetOrder(event.Sequence)
 	if err != nil {
-		return true, err
+		return err
 	}
 	outboxPayload, err := json.Marshal(struct {
 		ID             string `json:"id"`
@@ -389,15 +450,21 @@ func (p *Projector) applyApplicationSecretTx(ctx context.Context, tx pgx.Tx, eve
 		RequestBinding: payload.Sync.RequestBinding, Sealed: payload.Sync.Sealed,
 	})
 	if err != nil {
-		return true, err
+		return err
 	}
-	return true, p.store.ApplySecretSyncIntentTx(ctx, tx, store.SecretSyncJob{
+	job := store.SecretSyncJob{
 		ID: payload.Sync.ID, TenantID: event.TenantID, TenantEpoch: payload.TenantEpoch,
 		SecretName:    payload.Sync.SecretName,
 		SecretVersion: payload.Sync.SecretVersion, Target: payload.Sync.Target,
 		RemoteKey: payload.Sync.RemoteKey, ValueDigest: payload.Sync.ValueDigest,
-		Status: store.SecretSyncJobPending, IdempotencyKey: payload.Sync.IdempotencyKey,
+		Status: store.SecretSyncJobPending, IdempotencyKey: payload.Sync.IdempotencyKey, EventSHA256: eventHash, EventID: event.ID,
 		TargetOrder:    targetOrder,
 		RequestBinding: payload.Sync.RequestBinding, RequestedAt: event.Time, UpdatedAt: event.Time,
-	}, "secret.sync."+payload.Sync.Target, outboxPayload)
+	}
+	if pair := p.pairVerifierFor(ctx); pair != nil {
+		job.VerifyRewrapPair = func(verifyCtx context.Context, before, after, aad []byte) (bool, error) {
+			return pair(verifyCtx, event.TenantID, before, after, aad)
+		}
+	}
+	return p.store.ApplySecretSyncIntentTx(ctx, tx, job, "secret.sync."+payload.Sync.Target, outboxPayload)
 }

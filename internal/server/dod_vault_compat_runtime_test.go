@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/authz"
@@ -51,7 +52,7 @@ func TestDODVaultCompatProductionAssembly(t *testing.T) {
 	}
 
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

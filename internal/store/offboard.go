@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/tenancy"
@@ -454,6 +455,7 @@ var TenantScopedTables = []string{
 	"vault_cubbyhole",
 	"approved_target_event_fences",
 	"application_secret_mutation_fences",
+	"application_secret_rewrap_gates",
 	"application_secret_import_name_fences",
 	"application_secret_import_batches",
 	"application_secret_import_receipts",
@@ -574,6 +576,21 @@ func (s *Store) PreflightTenantOffboardTx(ctx context.Context, tx pgx.Tx, tenant
 	}
 	if !privacyOperationShared {
 		return ErrPrivacyHistoryOperationActive
+	}
+	// A rewrap gate and this offboard share one tenant transaction lock. A gate
+	// armed first keeps its key state and receipt epoch until completion; an
+	// offboard admitted first deletes them before a new gate can activate.
+	//trstctl:system-query — the cross-tenant system advisory namespace is keyed by tenant_id; this lock call reads no tenant row or payload.
+	if _, err := tx.Exec(ctx, `SELECT application_secret_rewrap_gate_lock($1::uuid)`, tenantID); err != nil {
+		return err
+	}
+	var rewrapInProgress bool
+	if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT rewrap_in_progress
+		FROM application_secret_rewrap_gates WHERE tenant_id=$1), false)`, tenantID).Scan(&rewrapInProgress); err != nil {
+		return err
+	}
+	if rewrapInProgress {
+		return ErrApplicationSecretRewrapInProgress
 	}
 	if err := s.TryTenantLifecycleCommitTx(ctx, tx, tenantID); err != nil {
 		return err
@@ -715,13 +732,21 @@ func (s *Store) OffboardTenant(ctx context.Context, tenantID string) (TenantDele
 		return att, fmt.Errorf("store: OffboardTenant requires a tenant id (AN-1)")
 	}
 
-	err := s.WithPrivacyRecoveryBarrier(ctx, tenantID, "tenant offboard", func(barrierCtx context.Context) error {
-		return s.WithTenant(barrierCtx, tenantID, func(tx pgx.Tx) error {
-			var err error
-			att, err = s.OffboardTenantTx(barrierCtx, tx, tenantID)
-			return err
+	err := s.WithRestoreActivity(ctx, tenantID, uuid.NewString(), "maintenance", "tenant-offboard",
+		func(restoreCtx context.Context) error {
+			return s.WithGlobalKeyStateAdmission(restoreCtx, KeyStateExclusive, func(admitted context.Context) error {
+				return s.WithPrivacyRecoveryBarrier(admitted, tenantID, "tenant offboard", func(barrierCtx context.Context) error {
+					return s.WithTenant(barrierCtx, tenantID, func(tx pgx.Tx) error {
+						owned, err := s.BindKeyStateOwnerTx(barrierCtx, tx, tenantID, KeyStateExclusive)
+						if err != nil {
+							return err
+						}
+						att, err = s.OffboardTenantTx(owned, tx, tenantID)
+						return err
+					})
+				})
+			})
 		})
-	})
 	return att, err
 }
 
@@ -763,6 +788,9 @@ func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string
 	if tenantID == "" {
 		return att, fmt.Errorf("store: OffboardTenantTx requires a tenant id (AN-1)")
 	}
+	if err := s.RequireKeyStateOwnerTx(ctx, tx, tenantID, KeyStateExclusive); err != nil {
+		return att, err
+	}
 	if err := s.PreflightTenantOffboardTx(ctx, tx, tenantID); err != nil {
 		return att, err
 	}
@@ -800,7 +828,8 @@ func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string
 				continue
 			}
 		}
-		if table == "secret_rotation_schedule_tick_rows" ||
+		if table == "application_secret_rewrap_gates" ||
+			table == "secret_rotation_schedule_tick_rows" ||
 			table == "secret_rotation_schedule_ticks" ||
 			table == "secret_rotation_schedule_commands" ||
 			table == "secret_rotation_schedule_scan_cursors" {

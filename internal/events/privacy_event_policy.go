@@ -1114,6 +1114,13 @@ func validateRegisteredPrivacyEventPayload(data []byte, eventType string, schema
 	return nil
 }
 
+// ValidateRegisteredEventPayload checks the complete registered shape of an
+// already decoded source event. Raw backup restore must apply the same closed
+// schema rule as production Append before it publishes historical wire bytes.
+func ValidateRegisteredEventPayload(event Event) error {
+	return validateRegisteredPrivacyEventPayload(event.Data, event.Type, event.SchemaVersion)
+}
+
 func validatePrivacyPayloadValue(
 	value any,
 	path []string,

@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 )
 
 // TestHeavyReadRoutesUseSeparatePool is the SPINE-005 acceptance: the heavy
@@ -27,7 +27,7 @@ func TestHeavyReadRoutesUseSeparatePool(t *testing.T) {
 	ctx := context.Background()
 
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

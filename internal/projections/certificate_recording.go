@@ -161,6 +161,46 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 	if err := ValidateSchemaVersion(e); err != nil {
 		return err
 	}
+	admissionTenant := e.TenantID
+	if e.Type == audit.EventTypeArchived {
+		var err error
+		admissionTenant, err = store.AuditCheckpointRLSID(e.TenantID)
+		if err != nil {
+			return err
+		}
+	}
+	if err := p.store.RequireRestoreProjectionTx(ctx, tx, admissionTenant); err != nil {
+		return err
+	}
+	activityTenant := e.TenantID
+	if _, err := uuid.Parse(activityTenant); err != nil {
+		activityTenant = store.RestoreControlTenantID
+	}
+	needsCanonical, err := p.store.NeedsCanonicalCommandProjectionTx(ctx, tx, activityTenant, e.ID)
+	if err != nil {
+		return err
+	}
+	if activityTenant != admissionTenant {
+		// A historical textual Provider audit scope uses the restore-control
+		// partition for its activity token, but its checkpoint writes use the
+		// mapped audit RLS partition. Restore the latter before applying.
+		if err := p.store.SetTenantGUCTx(ctx, tx, admissionTenant); err != nil {
+			return err
+		}
+	}
+	if needsCanonical {
+		if err := p.requireCurrentCanonicalEvent(ctx, e); err != nil {
+			return err
+		}
+	}
+	if err := p.requireCurrentCanonicalEventTx(ctx, tx, e); err != nil {
+		return err
+	}
+	if isKeyStateMutationEventType(e.Type) {
+		if err := p.store.RequireKeyStateOwnerTx(ctx, tx, e.TenantID, store.KeyStateExclusive); err != nil {
+			return err
+		}
+	}
 	// All existing event families enter this transaction boundary. The narrow
 	// certificate trigger records their actual sequence when they touch a leaf;
 	// a later ownership/privacy/migration write cannot go unnoticed by recovery.
@@ -172,7 +212,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 	}
-	return p.store.WithCertificateProjectionOrderTx(ctx, tx, projectionTenant, e.Sequence, func() error {
+	if err := p.store.WithCertificateProjectionOrderTx(ctx, tx, projectionTenant, e.Sequence, func() error {
 		managed, err := LegacyManagedCALeafEvidence(e)
 		if err != nil {
 			return err
@@ -198,7 +238,10 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			})
 		}
 		return p.applyCertificateOrderedEventTx(ctx, tx, e)
-	})
+	}); err != nil {
+		return err
+	}
+	return p.store.SettleCommandProjectionTx(ctx, tx, projectionTenant, e.ID)
 }
 
 func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.Tx, e events.Event) error {

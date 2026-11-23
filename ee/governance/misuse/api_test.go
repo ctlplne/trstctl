@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/governance/misuse"
 	"trstctl.com/trstctl/internal/api"
@@ -30,7 +31,7 @@ const otherMisuseTenant = "33333333-3333-3333-3333-333333333333"
 func TestMisuseFindingsRouteListsTheCallersOwnFindingsM2L1(t *testing.T) {
 	ctx := context.Background()
 	st := newMisuseTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +140,7 @@ func TestMisuseFindingsRouteListsTheCallersOwnFindingsM2L1(t *testing.T) {
 func TestMisusePolicyRoutesReadAndSetTheTenantsThresholdsM2L2(t *testing.T) {
 	ctx := context.Background()
 	st := newMisuseTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +214,7 @@ func TestMisusePolicyRoutesReadAndSetTheTenantsThresholdsM2L2(t *testing.T) {
 func TestMisuseIncidentRoutesListAndCloseM2L3(t *testing.T) {
 	ctx := context.Background()
 	st := newMisuseTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

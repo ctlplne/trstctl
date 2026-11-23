@@ -7,6 +7,7 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -15,7 +16,7 @@ import (
 func TestExactEventRecoveryRefusesConflictingRetainedIdentity(t *testing.T) {
 	ctx := context.Background()
 	const dedupe = 100 * time.Millisecond
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		events.WithDuplicateWindowForTesting(dedupe))
 	if err != nil {
 		t.Fatal(err)

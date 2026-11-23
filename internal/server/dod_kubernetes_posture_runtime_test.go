@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/agent"
 	agentk8s "trstctl.com/trstctl/internal/agent/k8s"
@@ -33,7 +34,6 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
@@ -160,7 +160,7 @@ func dodBuildKubernetesPostureServer(t *testing.T, dir string) *Server {
 	}
 
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
 	if err != nil {
 		t.Fatalf("open Kubernetes posture event log: %v", err)
 	}

@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/google/uuid"
 
@@ -59,7 +60,7 @@ func TestProviderAuthorityRebuildsExactlyFromOneEventHistory(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -126,7 +127,7 @@ func TestProviderWithdrawalEventRebuildsDistinctClosedState(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +185,7 @@ func TestProviderLegacyAuditReplayCannotCreateStateFromTextualPartition(t *testi
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +226,7 @@ func TestProviderBrandCollisionRefusesBeforeAppendAndRecoversOlderPoisonedHistor
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +302,7 @@ func TestProviderBrandRevisionSurvivesColdReplay(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +369,7 @@ func TestAUD58AssembledIdentityLifecycleScopeRestartAndRebuild(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -531,7 +532,7 @@ func TestProviderMutationConvergesAfterAppendProjectionFailure(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -630,7 +631,7 @@ func TestProviderAuthorityBootstrapPreservesPreEventRowsExactlyOnce(t *testing.T
 		}
 	}
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -692,7 +693,7 @@ func TestProviderServedMutationIsExactAndHealsPostAppendFailure(t *testing.T) {
 	servedBody := fmt.Sprintf(`{"slug":%q,"name":"Served Acme"}`, servedSlug)
 	failureBody := fmt.Sprintf(`{"slug":%q,"name":"Failure Acme"}`, failureSlug)
 	concurrentBody := fmt.Sprintf(`{"slug":%q,"name":"Concurrent Acme"}`, concurrentSlug)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -836,7 +837,7 @@ func TestEveryProviderMutationConvergesAcrossPostAppendFailure(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -977,7 +978,7 @@ func TestEveryProviderMutationConvergesAcrossPostAppendFailure(t *testing.T) {
 func TestProviderActivityIsEventBackedAndDelegationScoped(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -1012,7 +1013,7 @@ func TestProviderActivityIsEventBackedAndDelegationScoped(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1053,7 +1054,7 @@ func TestProviderAuthorityFailedFullRebuildRollsBackItsProjection(t *testing.T) 
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}

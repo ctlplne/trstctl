@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -42,7 +43,7 @@ func openStorePCAS(t *testing.T) *corestore.Store {
 func TestKEMRequestStatusResolvesConfiguredOutboxTopic(t *testing.T) {
 	ctx := context.Background()
 	cs := openStorePCAS(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +69,7 @@ func TestKEMRequestStatusResolvesConfiguredOutboxTopic(t *testing.T) {
 func TestKEMRequestRecoversLostResponseAndProjection(t *testing.T) {
 	ctx := context.Background()
 	cs := openStorePCAS(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func TestKEMRequestRecoversLostResponseAndProjection(t *testing.T) {
 func TestKEMRequestRejectsCrossTenantSignerHandleBeforeOutbox(t *testing.T) {
 	ctx := context.Background()
 	cs := openStorePCAS(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +391,7 @@ func TestService_RequestRecoveryRefusesMissingOrMismatchedPolicyBeforeOutbox(t *
 	ctx := context.Background()
 	cs := openStorePCAS(t)
 	outbox := orchestrator.NewOutbox(cs)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +474,7 @@ func TestService_RequestRecoveryRequiresPreparedTenantSuccessor(t *testing.T) {
 	ctx := context.Background()
 	cs := openStorePCAS(t)
 	outbox := orchestrator.NewOutbox(cs)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,7 +552,7 @@ func TestService_RequestRecoveryRequiresPreparedTenantSuccessor(t *testing.T) {
 
 func TestService_RecoveryPolicyAppendsPublicEventBeforeServing(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -675,7 +676,7 @@ func TestService_RecoveryPolicyAppendsPublicEventBeforeServing(t *testing.T) {
 // Skipped if an embedded event log cannot start in this environment.
 func TestService_RecordAck_LedgerCountable(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Skipf("embedded event log unavailable: %v", err)
 	}

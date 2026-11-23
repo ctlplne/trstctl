@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventstest"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/perf"
 	"trstctl.com/trstctl/internal/store"
@@ -383,7 +384,7 @@ func startEmbeddedJetStream(ctx context.Context) (*events.Log, func(), error) {
 	if err != nil {
 		return nil, func() {}, err
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir, SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir, SyncAlways: true})
 	if err != nil {
 		_ = os.RemoveAll(dir)
 		return nil, func() {}, err

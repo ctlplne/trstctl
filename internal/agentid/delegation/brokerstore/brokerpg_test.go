@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
@@ -23,7 +24,6 @@ import (
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/broker"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
@@ -51,7 +51,7 @@ const (
 func TestIssuanceReceiptSurvivesLostResponseAndProjection(t *testing.T) {
 	ctx := context.Background()
 	cs := sharedStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

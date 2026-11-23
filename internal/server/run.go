@@ -18,6 +18,7 @@ import (
 	"time"
 	"trstctl.com/trstctl/internal/lifecycle"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -129,71 +130,79 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 			st.Close()
 		}
 	}()
+	return st.WithRestoreActivityAfterDrain(ctx, store.RestoreControlTenantID, uuid.NewString(),
+		"build", "server-lifetime", func(admitted context.Context) error {
+			ctx := admitted
 
-	runSecrets, err := loadRunSecrets(cfg)
-	if err != nil {
-		return err
-	}
-	defer runSecrets.Close()
-	archiveStore, err := openArchiveObjectStore(cfg)
-	if err != nil {
-		return err
-	}
-	defer archiveStore.Destroy()
+			runSecrets, err := loadRunSecrets(cfg)
+			if err != nil {
+				return err
+			}
+			defer runSecrets.Close()
+			archiveStore, err := openArchiveObjectStore(cfg)
+			if err != nil {
+				return err
+			}
+			defer archiveStore.Destroy()
 
-	runSigner, auditKey, err := openAuditSigningRuntime(ctx, cfg)
-	if err != nil {
-		return err
-	}
-	defer runSigner.Close()
-	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, nil)
-	if err != nil {
-		return fmt.Errorf("open event log: %w", err)
-	}
-	defer func() { _ = protection.Close() }()
-	serverOwnsLog := false
-	defer func() {
-		if !serverOwnsLog {
-			_ = log.Close()
-		}
-	}()
+			runSigner, auditKey, err := openAuditSigningRuntime(ctx, cfg)
+			if err != nil {
+				return err
+			}
+			defer runSigner.Close()
+			custodyCore, err := newRunTenantCustodyCore(cfg, st, runSecrets.kek, runSigner.signer)
+			if err != nil {
+				return err
+			}
+			log, protection, err := openConfiguredEventSourceWithCustody(ctx, cfg, st, auditKey, true, nil, custodyCore)
+			if err != nil {
+				return fmt.Errorf("open event log: %w", err)
+			}
+			defer func() { _ = protection.Close() }()
+			serverOwnsLog := false
+			defer func() {
+				if !serverOwnsLog {
+					_ = log.Close()
+				}
+			}()
 
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger, egressGuard, auditKey)
-	if err != nil {
-		return err
-	}
-	deps.eventProtection = protection
-	if archiveStore != nil {
-		deps.ArchiveObjectStore = archiveStore
-	}
-	notificationOwner := ensureNotificationChannelOwnership(&deps)
-	// Until Build transfers the channels to its Dispatcher, Run owns their
-	// credential buffers. This catches edition-attach and any other pre-Build
-	// failure. After transfer this is intentionally a no-op.
-	defer notificationOwner.closeUntransferred()
-	deps.License = lic
-	if err := applyEditionAttachers(ctx, cfg, logger, lic, &deps, attachers...); err != nil {
-		return err
-	}
-	srv, err := Build(ctx, deps)
-	if err != nil {
-		return err
-	}
-	serverOwnsStore = true
-	serverOwnsLog = true
-	logger.Info("control plane assembled",
-		slog.String("addr", cfg.Server.Addr), slog.String("tls_mode", cfg.Server.TLS.Mode))
+			deps, err := buildRunDepsWithCustody(ctx, cfg, st, log, runSigner, runSecrets, logger, egressGuard, custodyCore, auditKey)
+			if err != nil {
+				return err
+			}
+			deps.eventProtection = protection
+			if archiveStore != nil {
+				deps.ArchiveObjectStore = archiveStore
+			}
+			notificationOwner := ensureNotificationChannelOwnership(&deps)
+			// Until Build transfers the channels to its Dispatcher, Run owns their
+			// credential buffers. This catches edition-attach and any other pre-Build
+			// failure. After transfer this is intentionally a no-op.
+			defer notificationOwner.closeUntransferred()
+			deps.License = lic
+			if err := applyEditionAttachers(ctx, cfg, logger, lic, &deps, attachers...); err != nil {
+				return err
+			}
+			srv, err := Build(ctx, deps)
+			if err != nil {
+				return err
+			}
+			serverOwnsStore = true
+			serverOwnsLog = true
+			logger.Info("control plane assembled",
+				slog.String("addr", cfg.Server.Addr), slog.String("tls_mode", cfg.Server.TLS.Mode))
 
-	if err := configureSnapshotCadence(srv, cfg); err != nil {
-		_ = srv.Shutdown(ctx)
-		return err
-	}
-	stopBackground, runtimeFailure, err := startBackgroundRuntime(ctx, cfg, srv, st, logger)
-	if err != nil {
-		_ = srv.Shutdown(ctx)
-		return err
-	}
-	return serveRuntime(ctx, cfg, srv, logger, stopBackground, runtimeFailure)
+			if err := configureSnapshotCadence(srv, cfg); err != nil {
+				_ = srv.Shutdown(ctx)
+				return err
+			}
+			stopBackground, runtimeFailure, err := startBackgroundRuntime(ctx, cfg, srv, st, logger)
+			if err != nil {
+				_ = srv.Shutdown(ctx)
+				return err
+			}
+			return serveRuntime(ctx, cfg, srv, logger, stopBackground, runtimeFailure)
+		})
 }
 
 // openArchiveObjectStore opens the object store when the deployment archives
@@ -252,9 +261,11 @@ func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 	if err != nil {
 		return nil, nil, fmt.Errorf("postgres acquire timeout: %w", err)
 	}
-	reqConns, probeConns, reservedConns, bookkeepingConns, lockConns, _ := cfg.Postgres.ConnectionBudget()
+	reqConns, probeConns, reservedConns, bookkeepingConns, lockConns, restoreConns, _ := cfg.Postgres.ConnectionBudget()
 	st, err := store.Open(ctx, dsn, append([]store.OpenOption{store.WithStatementTimeout(stmtTimeout), store.WithAcquireTimeout(acquireTimeout),
-		store.WithPoolSizes(store.PoolSizes{Request: int32(reqConns), Probe: int32(probeConns), Reserved: int32(reservedConns), Bookkeeping: int32(bookkeepingConns), Lock: int32(lockConns)})}, opts...)...) // #nosec G115 -- bounded small ints from config (CWE-190)
+		store.WithRewrapFleetCutover(store.RewrapFleetCutover{OldLoginRole: cfg.Postgres.RewrapOldLoginRole,
+			NewLoginRole: cfg.Postgres.RewrapNewLoginRole, MaintenanceAttestation: cfg.Postgres.RewrapMaintenanceAttestation}),
+		store.WithPoolSizes(store.PoolSizes{Request: int32(reqConns), Probe: int32(probeConns), Reserved: int32(reservedConns), Bookkeeping: int32(bookkeepingConns), Lock: int32(lockConns), Restore: int32(restoreConns)})}, opts...)...) // #nosec G115 -- bounded small ints from config (CWE-190)
 	if err != nil {
 		if stopPG != nil {
 			_ = stopPG()
@@ -262,34 +273,40 @@ func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 		return nil, nil, fmt.Errorf("open store: %w", err)
 	}
 	registerExtraMigrations(st, extraMigrations)
-	pending, err := st.PendingMigrations(ctx)
+	if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+		st.Close()
+		if stopPG != nil {
+			_ = stopPG()
+		}
+		return nil, nil, fmt.Errorf("bootstrap restore admission: %w", err)
+	}
+	err = st.WithRestoreActivity(ctx, store.RestoreControlTenantID, uuid.NewString(),
+		"build", "startup-migrations", func(admitted context.Context) error {
+			pending, err := st.PendingMigrations(admitted)
+			if err != nil {
+				return fmt.Errorf("inspect migrations: %w", err)
+			}
+			if len(pending) > 0 {
+				if !cfg.Migrate.Auto {
+					return fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRSTCTL_MIGRATE_AUTO=false): check them with 'trstctl --upgrade-preflight', take a backup (trstctl --full-backup-dir), then apply them with 'trstctl --migrate'; pending: %v", len(pending), pending)
+				}
+				attrs := []any{"count", len(pending)}
+				if plan, err := st.UpgradePlan(admitted); err == nil {
+					attrs = startupUpgradeAttrs(plan)
+				}
+				logger.Info("applying pending database migrations", attrs...)
+			}
+			if err := st.Migrate(admitted); err != nil {
+				return fmt.Errorf("migrate: %w; %s", err, failedUpgradeHint)
+			}
+			return nil
+		})
 	if err != nil {
 		st.Close()
 		if stopPG != nil {
 			_ = stopPG()
 		}
-		return nil, nil, fmt.Errorf("inspect migrations: %w", err)
-	}
-	if len(pending) > 0 {
-		if !cfg.Migrate.Auto {
-			st.Close()
-			if stopPG != nil {
-				_ = stopPG()
-			}
-			return nil, nil, fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRSTCTL_MIGRATE_AUTO=false): check them with 'trstctl --upgrade-preflight', take a backup (trstctl --full-backup-dir), then apply them with 'trstctl --migrate'; pending: %v", len(pending), pending)
-		}
-		attrs := []any{"count", len(pending)}
-		if plan, err := st.UpgradePlan(ctx); err == nil {
-			attrs = startupUpgradeAttrs(plan)
-		}
-		logger.Info("applying pending database migrations", attrs...)
-	}
-	if err := st.Migrate(ctx); err != nil {
-		st.Close()
-		if stopPG != nil {
-			_ = stopPG()
-		}
-		return nil, nil, fmt.Errorf("migrate: %w; %s", err, failedUpgradeHint)
+		return nil, nil, err
 	}
 	return st, stopPG, nil
 }
@@ -699,6 +716,10 @@ func buildRunLifecycleWindows(cfg *config.Config) (runLifecycleWindows, error) {
 }
 
 func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
+	return buildRunDepsWithCustody(ctx, cfg, st, log, signer, sec, logger, egressGuard, nil, suppliedAuditKey...)
+}
+
+func buildRunDepsWithCustody(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, custodyCore *runTenantCustodyCore, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
 	securityGuards, err := buildRunSecurityGuardDeps(ctx, cfg, st, signer, suppliedAuditKey)
 	if err != nil {
 		return Deps{}, err
@@ -719,13 +740,29 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("server.trusted_proxies: %w", err)
 	}
-	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, deploymentKEK, err := runTenantCustodyFromConfig(
-		cfg, st, log, sec.kek, signer.signer, securityGuards.auditKey,
+	if custodyCore == nil {
+		custodyCore, err = newRunTenantCustodyCore(cfg, st, sec.kek, signer.signer)
+		if err != nil {
+			return Deps{}, err
+		}
+	}
+	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, deploymentKEK, err := runTenantCustodyFromCore(
+		cfg, st, log, custodyCore, securityGuards.auditKey,
 	)
 	if err != nil {
 		return Deps{}, err
 	}
 	sec.kek = deploymentKEK.keyring
+	var tenantRecoveryAccessFactory func(string) (tenantseal.Access, error)
+	if st != nil && deploymentKEK.registry != nil {
+		tenantRecoveryAccessFactory = func(operationID string) (tenantseal.Access, error) {
+			reader, err := st.NewTenantKeyRecoveryDomainStore(operationID)
+			if err != nil {
+				return nil, err
+			}
+			return tenantseal.NewAccess(reader, deploymentKEK.keyring, deploymentKEK.registry)
+		}
+	}
 	breakglassCACertDER, breakglassPublicKeyDER, breakglassOfflineKit, breakglassRuntime, err := runBreakglassConfig(ctx, cfg, st, log, signer)
 	if err != nil {
 		return Deps{}, err
@@ -830,6 +867,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		// A1/V2: without this assignment the sealed keyring never ran in production.
 		TransitKeyringDir:           cfg.Transit.KeyringDir,
 		TenantCrypto:                tenantCrypto,
+		TenantRecoveryAccessFactory: tenantRecoveryAccessFactory,
 		IdempotencyResultProtector:  resultProtector,
 		IdempotencyResultMigrator:   resultMigrator,
 		IdempotencyResultFleetReady: cfg.Secrets.IdempotencyResultFleetReady,
@@ -942,43 +980,55 @@ func runNotifications(cfg config.Notifications, guard *egress.Guard) ([]notify.N
 	return channels, owner, nil
 }
 
-// runTenantCustodyFromConfig composes the two mutually dependent custody
-// services as one startup stage. Result protection and tenant lifecycle must
-// share the exact registry and access resolver; constructing either through a
-// parallel path would make a sealed tenant readable through the other.
-func runTenantCustodyFromConfig(
-	cfg *config.Config,
-	st *store.Store,
-	log *events.Log,
-	deployment sealKeyWrapper,
-	signer SignerProvider,
-	auditKey *jose.SigningKey,
-) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, *tenantseal.Lifecycle, tenantseal.Access, runDeploymentKEK, error) {
+// runTenantCustodyCore is the single read-only wrapper registry/keyring and
+// resolver built before event-log Open. The log-dependent lifecycle attaches
+// later without making a second resolver or reading a different key file.
+type runTenantCustodyCore struct {
+	protector *tenantseal.ResultProtector
+	migrator  *tenantseal.ResultMigrator
+	registry  tenantseal.DomainKEKManager
+	access    tenantseal.Access
+	keyring   sealKeyWrapper
+}
+
+func newRunTenantCustodyCore(
+	cfg *config.Config, st *store.Store, deployment sealKeyWrapper, signer SignerProvider,
+) (*runTenantCustodyCore, error) {
 	if st == nil {
-		return nil, nil, nil, nil, runDeploymentKEK{keyring: deployment}, nil
+		return &runTenantCustodyCore{keyring: deployment}, nil
 	}
 	protector, migrator, registry, access, keyring, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, deployment, signer)
 	if err != nil {
-		return nil, nil, nil, nil, runDeploymentKEK{}, fmt.Errorf("tenant result protection: %w", err)
+		return nil, fmt.Errorf("tenant result protection: %w", err)
 	}
-	out := runDeploymentKEK{keyring: keyring}
+	return &runTenantCustodyCore{protector: protector, migrator: migrator,
+		registry: registry, access: access, keyring: keyring}, nil
+}
+
+func runTenantCustodyFromCore(
+	cfg *config.Config, st *store.Store, log *events.Log, core *runTenantCustodyCore, auditKey *jose.SigningKey,
+) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, *tenantseal.Lifecycle, tenantseal.Access, runDeploymentKEK, error) {
+	if core == nil {
+		return nil, nil, nil, nil, runDeploymentKEK{}, errors.New("tenant custody core is unavailable")
+	}
+	out := runDeploymentKEK{keyring: core.keyring, registry: core.registry}
 	if log == nil {
-		return protector, migrator, nil, access, out, nil
+		return core.protector, core.migrator, nil, core.access, out, nil
 	}
 	lifecycle, err := tenantseal.NewLifecycle(
-		st, log, keyring, registry,
+		st, log, core.keyring, core.registry,
 		historyRewriteProofOptions(st, auditKey)...,
 	)
 	if err != nil {
 		return nil, nil, nil, nil, runDeploymentKEK{}, fmt.Errorf("tenant key-domain lifecycle: %w", err)
 	}
 	// A198: the deployment KEK's served rotation runs over the same registry.
-	if ring, ok := keyring.(*tenantseal.DeploymentKeyring); ok {
+	if ring, ok := core.keyring.(*tenantseal.DeploymentKeyring); ok {
 		settle, err := cfg.Secrets.KEKRotationSettleDuration()
 		if err != nil {
 			return nil, nil, nil, nil, runDeploymentKEK{}, err
 		}
-		out.rotation, err = tenantseal.NewDeploymentRotation(st, log, ring, registry,
+		out.rotation, err = tenantseal.NewDeploymentRotation(st, log, ring, core.registry,
 			tenantseal.WithDeploymentSettle(settle),
 			tenantseal.WithDeploymentSealedFiles(deploymentSealedFiles(cfg)...),
 			tenantseal.WithDeploymentHistoryRewriteOptions(historyRewriteProofOptions(st, auditKey)...))
@@ -986,7 +1036,7 @@ func runTenantCustodyFromConfig(
 			return nil, nil, nil, nil, runDeploymentKEK{}, fmt.Errorf("deployment KEK rotation: %w", err)
 		}
 	}
-	return protector, migrator, lifecycle, access, out, nil
+	return core.protector, core.migrator, lifecycle, core.access, out, nil
 }
 
 // idempotencyResultProtectionFromConfig builds the one wrapper registry every

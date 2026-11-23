@@ -97,6 +97,9 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 | --- | --- | --- |
 | `TRSTCTL_POSTGRES_MODE` | `bundled` | `bundled` (embedded single-node eval on a manifest-pinned host archive; downloads once and fails closed if unpinned) or `external` (managed cluster; recommended for production). |
 | `TRSTCTL_POSTGRES_DSN` | — | Connection string; **required** when mode is `external`. |
+| `TRSTCTL_POSTGRES_REWRAP_OLD_LOGIN_ROLE` | — | Login role used by the retired control-plane build before tenant or deployment key rewrap. The owner disables LOGIN and drains its sessions before the rewrap. |
+| `TRSTCTL_POSTGRES_REWRAP_NEW_LOGIN_ROLE` | — | Distinct login role used by the current control-plane build. It must equal PostgreSQL `session_user`; both login roles must explicitly belong to `trstctl_app`. |
+| `TRSTCTL_POSTGRES_REWRAP_MAINTENANCE_ATTESTATION` | — | Owner's non-secret maintenance acknowledgement for the old-login shutdown. Rewrap refuses an absent acknowledgement, an old role that can log in, a live old session, or any application-role session without this build's exact PostgreSQL application label. These fields correspond to `postgres.rewrap_*` in JSON. |
 | `TRSTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory for the **bundled** datastore; eval data persists here across restarts. |
 | `TRSTCTL_BUNDLED_PG_ARCHIVE_DIR` | `trstctl-pg-bin` under the cache root | Optional directory holding the bundled PostgreSQL's pinned archive, read before any download. The archive is authenticated against the committed SHA-256 and copied into the verified cache; nothing in the directory is trusted, so it may be a read-only mount another user owns (an air-gapped install's pre-seeded copy, or the DoD runner's view of the CI cache). |
 | `TRSTCTL_BUNDLED_PG_CACHE_ROOT` | process temporary directory | Optional root for the bundled PostgreSQL's manifest-verified executable archive cache. Use an existing, owned, private, executable directory, or a trusted sticky temporary directory. Startup checks ownership, mode, and symlinks before using it and refuses an unsafe root. The isolated DoD runner uses its owned executable tmpfs because its host receipt bind mount is not a safe cache anchor. |
@@ -107,7 +110,8 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 | `TRSTCTL_POSTGRES_PROBE_CONNS` | `2` | Probe pool: the readiness `db` check, never request work (`postgres.probe_conns`). |
 | `TRSTCTL_POSTGRES_RESERVED_CONNS` | `2` | Reserved pool: the durable projection tail's apply and checkpoint statements (`postgres.reserved_conns`). |
 | `TRSTCTL_POSTGRES_BOOKKEEPING_CONNS` | `4` | Bookkeeping pool: idempotency claim, record and release statements (`postgres.bookkeeping_conns`). |
-| `TRSTCTL_POSTGRES_LOCK_CONNS` | `8` | Lock pool: sessions holding the projection advisory lock while a command runs (`postgres.lock_conns`). The five pools total 32 connections per replica by default; see the connection budget in [operations](operations.md). |
+| `TRSTCTL_POSTGRES_LOCK_CONNS` | `8` | Lock pool: sessions holding the projection advisory lock while a command runs (`postgres.lock_conns`). |
+| `TRSTCTL_POSTGRES_RESTORE_CONNS` | `8` | Restore admission sessions for mutations, projection, backup and maintenance (`postgres.restore_conns`). The six pools total 40 connections per replica by default; see the connection budget in [operations](operations.md). |
 | `TRSTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream for single-node eval) or `external` (NATS cluster; recommended for production). |
 | `TRSTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
 | `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore. |

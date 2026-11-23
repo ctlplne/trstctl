@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
@@ -46,7 +47,7 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	dir := t.TempDir()
 	st := newServerTestStore(t)
 	natsDir := filepath.Join(dir, "nats")
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: natsDir, SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: natsDir, SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +394,7 @@ func dodReopenBreakglassStore(t *testing.T, ctx context.Context) *store.Store {
 
 func dodReopenBreakglassLog(t *testing.T, ctx context.Context, dir string) *events.Log {
 	t.Helper()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir, SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir, SyncAlways: true})
 	if err != nil {
 		t.Fatalf("reopen break-glass event log: %v", err)
 	}

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -142,7 +143,7 @@ func TestManagedKeyRecordsTheProvidersOwnDatesEndToEndA168L3(t *testing.T) {
 	if _, err := st.SystemPool().Exec(ctx, `INSERT INTO tenants (tenant_id, name) VALUES ($1, 'a168l3 tenant') ON CONFLICT DO NOTHING`, tenant); err != nil {
 		t.Fatalf("register tenant: %v", err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -61,6 +61,7 @@ var ErrRestoreTargetNotEmpty = errors.New("backup: restore target log is not emp
 // verified PostgreSQL artifact before either datastore is changed.
 type EventLogBackupSummary struct {
 	EventCutSequence    uint64
+	ArtifactSHA256      string
 	Records             int
 	HistoryEntries      int
 	ExactSequenceLayout bool
@@ -169,6 +170,7 @@ func VerifyEventLogBackupWithAuditCheckpoints(
 	}
 	summary := EventLogBackupSummary{
 		EventCutSequence:    h.EventCutSequence,
+		ArtifactSHA256:      tr.SHA256,
 		Records:             spool.records,
 		HistoryEntries:      spool.entries,
 		ExactSequenceLayout: h.HistoryLayout == exactHistoryLayout,

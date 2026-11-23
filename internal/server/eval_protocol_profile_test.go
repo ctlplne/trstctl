@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
@@ -65,7 +66,7 @@ func TestProductionDefaultsKeepProtocolsDisabled(t *testing.T) {
 
 func TestEvalProfileActivationReplaysAndStaysTenantBound(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -101,7 +102,7 @@ func TestEvalProfileActivationReplaysAndStaysTenantBound(t *testing.T) {
 
 func TestEvalProfileActivationPassesProductionPrivacyVocabulary(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
 		events.WithRequiredPrivacyEventPolicies(),

@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -487,7 +488,7 @@ func TestDynamicSecretPreparedAndIssuedHistoryFenceSurvivesDedupeExpiryAUD108(t 
 	const duplicateWindow = 100 * time.Millisecond
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx,
+	log, err := eventstest.OpenFixture(ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
 		events.WithDuplicateWindowForTesting(duplicateWindow))
 	if err != nil {
@@ -672,7 +673,7 @@ func TestDurableDynamicSecretIssueIsOutboxOnlyAndCrashReplaySafe(t *testing.T) {
 	const tenant = "11111111-1111-4111-8111-111111111119"
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1417,7 +1418,7 @@ func newDynamicSecretOutboxTestStack(t *testing.T, tenant string) (*store.Store,
 	t.Helper()
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}

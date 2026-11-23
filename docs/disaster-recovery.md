@@ -298,9 +298,10 @@ captures the complete envelope so the recovered audit trail is intact.
 
 **Integrity.** The trailer carries a **SHA-256** over the entire stream
 (header + every record), so a bit-flip, a truncation, or a removed record is
-detected — `--restore` recomputes the hash and **refuses a tampered or corrupt
-backup, fail-closed**, before appending a single event. When the deployment KEK
-exists (`TRSTCTL_SECRETS_KEK_FILE`), the trailer also carries an
+detected — the event-log phase of `--full-restore-dir` recomputes the hash and
+**refuses a tampered or corrupt backup, fail-closed**, before appending a single
+event. When the deployment KEK exists (`TRSTCTL_SECRETS_KEK_FILE`), the trailer
+also carries an
 **HMAC-SHA256** domain-derived from that key, binding the backup to this
 deployment so an attacker who can rewrite the file cannot forge a matching
 trailer. All hashing/MAC routes through the single crypto boundary; the
@@ -319,7 +320,7 @@ a callback from swapping a different history between authorization and mutation.
 A nonempty digest, direct `Append`/`Import`, or a transplanted capability is not
 restore authority.
 
-Restore verification is streaming: `--restore` rolls the SHA-256/HMAC over each
+Full-restore event verification is streaming: it rolls the SHA-256/HMAC over each
 line, writes validated event records to a temporary spool file, verifies the
 trailer, and only then replays the spool into the empty target log. Memory usage
 is bounded by the largest event line rather than by the full backup size, while a
@@ -478,28 +479,21 @@ The live rewrite never mutates older `events.jsonl` files or signed/WORM audit
 archives. Those copies may still contain the source bytes and remain subject to
 their original access, retention, legal-hold, and destruction controls.
 
-The event-log-only command is still available for projection recovery or as the
-first half of a manually coordinated datastore restore:
+An event-log-only backup remains useful for inspection and as one part of a full
+backup set. `--restore=events.jsonl` now refuses before restoring files, NATS or
+imported PostgreSQL state: the event log alone cannot restore independent
+tenant key epochs or prove whether an already-claimed secret-sync effect
+reached its receiver. Use
+`--full-restore-dir` with the paired PostgreSQL artifact and separately restored
+key custody. A full read-model `--rebuild` is for an existing intact deployment
+whose independent PostgreSQL state and original event history are still present;
+it does not turn an event-only artifact into a full recovery point.
 
-Restore into a **fresh, empty** event store and a PostgreSQL instance, then rebuild:
-
-```bash
-# Requires external Postgres and NATS, and an EMPTY event store.
-trstctl --restore=/backups/trstctl-events-2026-05-31.jsonl
-# -> "restored <N> events from ... and rebuilt the read model"
-```
-
-`--restore` re-appends every event in order (preserving ids, timestamps, and
-actors) and then **rebuilds the relational read model purely from the restored
-log** (the rebuild-from-log path). It refuses a non-empty event store so a
-misdirected restore can never duplicate the stream. It deliberately leaves the
-deployment-wide secret-sync recovery light red: events can recreate a queued or
-terminal command, but cannot prove how many worker generations had already crossed
-the external receiver boundary. Ordinary startup/readiness and the last receiver
-start both refuse secret-sync I/O while that light is red. Do not clear the row by
-SQL. Restore the paired PostgreSQL artifact with `--full-restore-dir`; its private
-offline bootstrap imports exact receiver authority, performs a final replay, and
-only then turns the light green before readiness is evaluated.
+For a tenant still sealed after a key-domain rewrap, recovery refuses an event
+and PostgreSQL sealed-copy pair that differs. Unseal that tenant before an
+ordinary rebuild, or make a new full backup after unsealing. Do not clear the
+restore marker or receiver fence by SQL to force service; the missing proof must
+be resolved before the target can serve requests or send queued effects.
 
 Full restore associates each retained `secret.sync.*` outbox row with its rebuilt
 job by tenant, receiver idempotency key, destination, exact sealed payload, and
@@ -529,10 +523,11 @@ real readiness probes to pass. Its attestation exposes those artifact, table, an
 health receipts. A missing required artifact, an event-only replay, or any failed
 recovered-runtime probe produces `failed`, never `restored`.
 
-Licensed provider projections participate in all four recovery paths: normal
-startup catch-up, `--restore`, `--full-restore-dir`/the scheduled isolated
-drill, and `--rebuild`. The tagged composition root supplies a feature-neutral
-projection factory after the recovery PostgreSQL and JetStream stores exist;
+Licensed provider projections participate in normal startup catch-up,
+`--full-restore-dir`/the scheduled isolated drill, and `--rebuild`.
+The event-only `--restore` command refuses before projection. The tagged
+composition root supplies a feature-neutral projection factory after the
+recovery PostgreSQL and JetStream stores exist;
 core still imports no `ee/` package. Before rebuilding, it captures uncovered
 pre-event provider rows exactly once for rolling upgrades. The final rebuild
 then treats the authority events as canonical for customer lifecycle,

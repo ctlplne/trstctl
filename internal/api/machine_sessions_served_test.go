@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -117,7 +118,7 @@ func newMachineSessionHarnessWithScopes(t *testing.T, grantedScopes []string) *m
 		t.Fatalf("migrate: %v", err)
 	}
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}

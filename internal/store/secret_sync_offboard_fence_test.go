@@ -96,8 +96,8 @@ func TestTenantOffboardWinsBeforeStaleReceiverBeginAUD109(t *testing.T) {
 		err     error
 	}, 1)
 	var guarded atomic.Int64
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		if err := s.PreflightTenantOffboardTx(ctx, tx, tenantA); err != nil {
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+		if err := s.PreflightTenantOffboardTx(owned, tx, tenantA); err != nil {
 			return err
 		}
 		go func() {
@@ -113,7 +113,7 @@ func TestTenantOffboardWinsBeforeStaleReceiverBeginAUD109(t *testing.T) {
 			}{token: token, proceed: proceed, err: err}
 		}()
 		<-started
-		_, err := s.OffboardTenantTx(ctx, tx, tenantA)
+		_, err := s.OffboardTenantTx(owned, tx, tenantA)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -223,8 +223,8 @@ func TestMissingTenantOffboardFenceSerializesReregistrationAUD109(t *testing.T) 
 	ctx := context.Background()
 	const tenantID = "44444444-4444-4444-8444-444444444444"
 
-	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if err := s.PreflightTenantOffboardTx(ctx, tx, tenantID); err != nil {
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantID, func(owned context.Context, tx pgx.Tx) error {
+		if err := s.PreflightTenantOffboardTx(owned, tx, tenantID); err != nil {
 			return err
 		}
 		attemptCtx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
@@ -236,7 +236,7 @@ func TestMissingTenantOffboardFenceSerializesReregistrationAUD109(t *testing.T) 
 		if err := <-registrationDone; err == nil {
 			return errors.New("registration crossed a missing-row offboard lifecycle fence")
 		}
-		_, err := s.OffboardTenantTx(ctx, tx, tenantID)
+		_, err := s.OffboardTenantTx(owned, tx, tenantID)
 		return err
 	}); err != nil {
 		t.Fatal(err)

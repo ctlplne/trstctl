@@ -152,23 +152,32 @@ func validateApplicationSecretTenantEpochAfterLifecycleTx(
 // approval states are repeated here so the store can prove the capability names
 // this exact version/result before spending it beside the mutation.
 type ApplicationSecretMutation struct {
-	TenantID        string
-	TenantEpoch     string
-	EventID         string
-	SemanticDigest  string
-	RequestBinding  string
-	Action          string
-	Name            string
-	OwnerID         string
-	ExpectedVersion int
-	ResultVersion   int
-	Sealed          []byte
-	SourceVersion   int
-	SourceWrittenAt time.Time
-	OccurredAt      time.Time
-	ApprovalFrom    string
-	ApprovalTo      string
-	Approval        *OperationApprovalUse
+	TenantID         string
+	TenantEpoch      string
+	EventID          string
+	SemanticDigest   string
+	SemanticDigestV2 string
+	EventSHA256      string
+	RequestBinding   string
+	Action           string
+	Name             string
+	OwnerID          string
+	ExpectedVersion  int
+	ResultVersion    int
+	Sealed           []byte
+	SourceVersion    int
+	SourceWrittenAt  time.Time
+	OccurredAt       time.Time
+	ApprovalFrom     string
+	ApprovalTo       string
+	Approval         *OperationApprovalUse
+	// VerifyReceiptContainers authenticates the current event's sealed fields
+	// before a v2-only replay may borrow an older independently backed-up
+	// receipt. It must use the tenant's current key state and exact field AAD.
+	VerifyReceiptContainers func(context.Context) error
+	// VerifyRewrapPair authenticates both actual ciphertext copies under the
+	// field AAD before a historical source copy may be used after key rewrap.
+	VerifyRewrapPair func(context.Context, []byte, []byte, []byte) (bool, error)
 }
 
 // ApplicationSecretMutationReceipt is the independently backed-up proof that one
@@ -177,16 +186,17 @@ type ApplicationSecretMutation struct {
 // The API uses this receipt to reconcile the crash gap between the event/projector
 // transaction committing and the HTTP idempotency response being recorded.
 type ApplicationSecretMutationReceipt struct {
-	TenantID        string
-	EventID         string
-	SemanticDigest  string
-	RequestBinding  string
-	Name            string
-	Action          string
-	ResultVersion   int
-	ResultOwnerID   string
-	ResultCreatedAt time.Time
-	ResultUpdatedAt time.Time
+	TenantID         string
+	EventID          string
+	SemanticDigest   string
+	SemanticDigestV2 string
+	RequestBinding   string
+	Name             string
+	Action           string
+	ResultVersion    int
+	ResultOwnerID    string
+	ResultCreatedAt  time.Time
+	ResultUpdatedAt  time.Time
 }
 
 // GetApplicationSecretMutationReceipt loads one exact mutation result in its
@@ -195,12 +205,12 @@ func (s *Store) GetApplicationSecretMutationReceipt(ctx context.Context, tenantI
 	var receipt ApplicationSecretMutationReceipt
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT tenant_id::text, event_id::text, semantic_sha256, request_binding,
+			`SELECT tenant_id::text, event_id::text, semantic_sha256, coalesce(semantic_sha256_v2, ''), request_binding,
 			        secret_name, action, result_version, coalesce(result_owner_id::text, ''),
 			        result_created_at, result_updated_at
 			   FROM application_secret_mutation_receipts
 			  WHERE tenant_id = $1 AND event_id = $2`, tenantID, eventID).
-			Scan(&receipt.TenantID, &receipt.EventID, &receipt.SemanticDigest,
+			Scan(&receipt.TenantID, &receipt.EventID, &receipt.SemanticDigest, &receipt.SemanticDigestV2,
 				&receipt.RequestBinding, &receipt.Name, &receipt.Action,
 				&receipt.ResultVersion, &receipt.ResultOwnerID, &receipt.ResultCreatedAt, &receipt.ResultUpdatedAt)
 	})
@@ -1175,6 +1185,7 @@ func (s *Store) GetSecretVersionAt(ctx context.Context, tenantID, name string, a
 // closed before any secret row changes.
 func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx, mutation ApplicationSecretMutation) error {
 	if mutation.TenantID == "" || mutation.TenantEpoch == "" || mutation.EventID == "" || len(mutation.SemanticDigest) != 64 ||
+		(mutation.SemanticDigestV2 != "" && len(mutation.SemanticDigestV2) != 64) ||
 		len(mutation.RequestBinding) != 64 || mutation.Name == "" ||
 		mutation.ExpectedVersion < 0 || mutation.OccurredAt.IsZero() {
 		return errors.New("store: application-secret mutation is incomplete")
@@ -1202,6 +1213,126 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 	default:
 		return fmt.Errorf("store: unsupported application-secret action %q", mutation.Action)
 	}
+	// This read-only proof precedes the secret-name lock. Crypto may need another
+	// connection to read the tenant key domain; holding a lower-order name lock
+	// while doing that can deadlock a concurrent key-state transition.
+	var preproofRow string
+	var preproofV1, preproofV2, preproofBinding, preproofName, preproofAction string
+	preproofErr := tx.QueryRow(ctx,
+		`SELECT to_jsonb(r)::text, semantic_sha256, coalesce(semantic_sha256_v2, ''),
+		        request_binding, secret_name, action
+		   FROM application_secret_mutation_receipts AS r
+		  WHERE tenant_id = $1 AND event_id = $2`, mutation.TenantID, mutation.EventID).
+		Scan(&preproofRow, &preproofV1, &preproofV2, &preproofBinding, &preproofName, &preproofAction)
+	if preproofErr != nil && !errors.Is(preproofErr, pgx.ErrNoRows) {
+		return preproofErr
+	}
+	verifiedV2 := false
+	verifiedRecoveryProof := false
+	var recoveryKeyDigest string
+	if preproofErr == nil && preproofV1 != mutation.SemanticDigest {
+		if preproofV2 == "" || preproofV2 != mutation.SemanticDigestV2 ||
+			preproofBinding != mutation.RequestBinding || preproofName != mutation.Name ||
+			preproofAction != mutation.Action {
+			return fmt.Errorf("%w: application-secret event %s", ErrIdempotencyConflict, mutation.EventID)
+		}
+		if operationID, recovery := recoveryPairProofOperation(ctx); recovery {
+			if len(mutation.EventSHA256) != 64 {
+				return ErrRecoveryPairProofMismatch
+			}
+			var err error
+			recoveryKeyDigest, err = s.RecoveryKeyStateDigestTx(ctx, tx, mutation.TenantID, operationID)
+			if err != nil {
+				return err
+			}
+			if err := s.ConsumeRecoveryPairProofTx(ctx, tx, RecoveryPairProof{
+				TenantID: mutation.TenantID, OperationID: operationID, EventID: mutation.EventID,
+				PairKind: "mutation_receipt", RowID: mutation.EventID,
+				EventSHA256:    mutation.EventSHA256,
+				RowSHA256:      crypto.SHA256Hex([]byte(preproofRow)),
+				KeyStateSHA256: recoveryKeyDigest,
+			}); err != nil {
+				return err
+			}
+			verifiedRecoveryProof = true
+		} else {
+			if mutation.VerifyReceiptContainers == nil {
+				return fmt.Errorf("%w: application-secret event %s", ErrIdempotencyConflict, mutation.EventID)
+			}
+			if err := mutation.VerifyReceiptContainers(ctx); err != nil {
+				return fmt.Errorf("%w: authenticate application-secret replay: %v", ErrIdempotencyConflict, err)
+			}
+		}
+		verifiedV2 = true
+	}
+	var sourcePreproof []byte
+	var sourcePreproofRow, sourceKeyDigest string
+	if errors.Is(preproofErr, pgx.ErrNoRows) && (mutation.Action == "recover" || mutation.Action == "undelete") {
+		var sourceTime time.Time
+		var err error
+		if mutation.Action == "recover" {
+			err = tx.QueryRow(ctx, `SELECT to_jsonb(v)::text,v.sealed,v.written_at FROM secret_store_versions AS v
+				WHERE v.tenant_id=$1 AND v.name=$2 AND v.version=$3`,
+				mutation.TenantID, mutation.Name, mutation.SourceVersion).Scan(&sourcePreproofRow, &sourcePreproof, &sourceTime)
+		} else {
+			err = tx.QueryRow(ctx, `SELECT jsonb_build_object('version',to_jsonb(v),'tombstone',to_jsonb(t))::text,
+				v.sealed,t.deleted_at FROM secret_store_tombstone_versions AS v
+				JOIN secret_store_tombstones AS t ON t.tenant_id=v.tenant_id AND t.name=v.name
+				WHERE v.tenant_id=$1 AND v.name=$2 AND v.version=$3 AND t.version=$3`,
+				mutation.TenantID, mutation.Name, mutation.SourceVersion).Scan(&sourcePreproofRow, &sourcePreproof, &sourceTime)
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrApprovalDrifted
+		}
+		if err != nil {
+			return err
+		}
+		if !sourceTime.Equal(mutation.SourceWrittenAt) {
+			return ErrApprovalDrifted
+		}
+		if !bytes.Equal(sourcePreproof, mutation.Sealed) {
+			if operationID, recovery := recoveryPairProofOperation(ctx); recovery {
+				if len(mutation.EventSHA256) != 64 {
+					return ErrRecoveryPairProofMismatch
+				}
+				sourceKeyDigest, err = s.RecoveryKeyStateDigestTx(ctx, tx, mutation.TenantID, operationID)
+				if err != nil {
+					return err
+				}
+				pairKind := "recover_source"
+				if mutation.Action == "undelete" {
+					pairKind = "undelete_tombstone"
+				}
+				proof := RecoveryPairProof{
+					TenantID: mutation.TenantID, OperationID: operationID, EventID: mutation.EventID,
+					PairKind: pairKind, RowID: fmt.Sprintf("%s:%d", mutation.Name, mutation.SourceVersion),
+					EventSHA256: mutation.EventSHA256, RowSHA256: crypto.SHA256Hex([]byte(sourcePreproofRow)),
+					KeyStateSHA256: sourceKeyDigest,
+				}
+				err := s.ConsumeRecoveryPairProofTx(ctx, tx, proof)
+				if errors.Is(err, ErrRecoveryPairProofMismatch) {
+					// A fresh target had no independent source row before the
+					// atomic rebuild. Its row was derived from an earlier pinned
+					// retained event and is bound by exact ciphertext bytes.
+					proof.RowID = "history:" + proof.RowID
+					proof.RowSHA256 = crypto.SHA256Hex(sourcePreproof)
+					err = s.ConsumeRecoveryPairProofTx(ctx, tx, proof)
+				}
+				if err != nil {
+					return err
+				}
+			} else {
+				if mutation.VerifyRewrapPair == nil {
+					return ErrApprovalDrifted
+				}
+				same, err := mutation.VerifyRewrapPair(ctx, sourcePreproof, mutation.Sealed,
+					[]byte(mutation.TenantID+"/secret-store/"+mutation.Name))
+				if err != nil || !same {
+					return ErrApprovalDrifted
+				}
+			}
+		}
+	}
 	if err := s.ValidateApplicationSecretTenantEpochTx(ctx, tx, mutation.TenantID, mutation.TenantEpoch); err != nil {
 		return err
 	}
@@ -1209,16 +1340,34 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 		applicationSecretMutationLockKey(mutation.TenantID, mutation.Name)); err != nil {
 		return err
 	}
-	var receiptDigest, receiptBinding, receiptName, receiptAction string
+	if sourceKeyDigest != "" {
+		operationID, _ := recoveryPairProofOperation(ctx)
+		currentKeyDigest, err := s.RecoveryKeyStateDigestTx(ctx, tx, mutation.TenantID, operationID)
+		if err != nil || currentKeyDigest != sourceKeyDigest {
+			return ErrRecoveryPairProofMismatch
+		}
+	}
+	var receiptRow, receiptDigest, receiptDigestV2, receiptBinding, receiptName, receiptAction string
 	receiptErr := tx.QueryRow(ctx,
-		`SELECT semantic_sha256, request_binding, secret_name, action
-		   FROM application_secret_mutation_receipts
+		`SELECT to_jsonb(r)::text, semantic_sha256, coalesce(semantic_sha256_v2, ''),
+		        request_binding, secret_name, action
+		   FROM application_secret_mutation_receipts AS r
 		  WHERE tenant_id = $1 AND event_id = $2
 		  FOR UPDATE`, mutation.TenantID, mutation.EventID).
-		Scan(&receiptDigest, &receiptBinding, &receiptName, &receiptAction)
+		Scan(&receiptRow, &receiptDigest, &receiptDigestV2, &receiptBinding, &receiptName, &receiptAction)
 	switch {
 	case receiptErr == nil:
-		if receiptDigest != mutation.SemanticDigest || receiptBinding != mutation.RequestBinding ||
+		if verifiedRecoveryProof {
+			operationID, _ := recoveryPairProofOperation(ctx)
+			currentKeyDigest, err := s.RecoveryKeyStateDigestTx(ctx, tx, mutation.TenantID, operationID)
+			if err != nil || currentKeyDigest != recoveryKeyDigest {
+				return ErrRecoveryPairProofMismatch
+			}
+		}
+		if receiptRow != preproofRow ||
+			(receiptDigest != mutation.SemanticDigest &&
+				(!verifiedV2 || receiptDigestV2 != mutation.SemanticDigestV2)) ||
+			receiptBinding != mutation.RequestBinding ||
 			receiptName != mutation.Name || receiptAction != mutation.Action {
 			return fmt.Errorf("%w: application-secret event %s", ErrIdempotencyConflict, mutation.EventID)
 		}
@@ -1274,7 +1423,7 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 		}
 	}
 	if mutation.Action == "undelete" {
-		return undeleteApplicationSecretTx(ctx, tx, mutation)
+		return undeleteApplicationSecretTx(ctx, tx, mutation, sourcePreproof, sourcePreproofRow)
 	}
 
 	var current Secret
@@ -1301,18 +1450,19 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 			return errors.New("store: application-secret recovery source is incomplete")
 		}
 		var sourceSealed []byte
+		var sourceRowImage string
 		var sourceWrittenAt time.Time
 		if err := tx.QueryRow(ctx,
-			`SELECT sealed, written_at FROM secret_store_versions
-			  WHERE tenant_id = $1 AND name = $2 AND version = $3`,
+			`SELECT to_jsonb(v)::text,v.sealed,v.written_at FROM secret_store_versions AS v
+			  WHERE v.tenant_id = $1 AND v.name = $2 AND v.version = $3`,
 			mutation.TenantID, mutation.Name, mutation.SourceVersion).
-			Scan(&sourceSealed, &sourceWrittenAt); err != nil {
+			Scan(&sourceRowImage, &sourceSealed, &sourceWrittenAt); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrSecretNotFound
 			}
 			return err
 		}
-		if !sourceWrittenAt.Equal(mutation.SourceWrittenAt) || !bytes.Equal(sourceSealed, mutation.Sealed) {
+		if !sourceWrittenAt.Equal(mutation.SourceWrittenAt) || !bytes.Equal(sourceSealed, sourcePreproof) || sourceRowImage != sourcePreproofRow {
 			return ErrApprovalDrifted
 		}
 		source := mutation.SourceVersion
@@ -1410,7 +1560,7 @@ func tombstoneApplicationSecretTx(ctx context.Context, tx pgx.Tx, mutation Appli
 // creation time and its sealed history, and the tombstone goes. The command
 // bound the tombstone's version, deletion time and sealed value; any drift
 // (a purge, a newer deletion, a live secret under the name) fails closed.
-func undeleteApplicationSecretTx(ctx context.Context, tx pgx.Tx, mutation ApplicationSecretMutation) error {
+func undeleteApplicationSecretTx(ctx context.Context, tx pgx.Tx, mutation ApplicationSecretMutation, sourcePreproof []byte, sourcePreproofRow string) error {
 	// The caller holds the name's lock already; taking it here again (it is
 	// re-entrant within the transaction) keeps the secret_store insert below
 	// visibly serialized on its arbiter (OPP-C01).
@@ -1435,16 +1585,19 @@ func undeleteApplicationSecretTx(ctx context.Context, tx pgx.Tx, mutation Applic
 		return ErrApprovalDrifted
 	}
 	var sealed []byte
+	var rowImage string
 	if err := tx.QueryRow(ctx,
-		`SELECT sealed FROM secret_store_tombstone_versions
-		  WHERE tenant_id = $1 AND name = $2 AND version = $3`,
-		mutation.TenantID, mutation.Name, version).Scan(&sealed); err != nil {
+		`SELECT jsonb_build_object('version',to_jsonb(v),'tombstone',to_jsonb(t))::text,v.sealed
+		   FROM secret_store_tombstone_versions AS v
+		   JOIN secret_store_tombstones AS t ON t.tenant_id=v.tenant_id AND t.name=v.name
+		  WHERE v.tenant_id = $1 AND v.name = $2 AND v.version = $3 AND t.version=$3`,
+		mutation.TenantID, mutation.Name, version).Scan(&rowImage, &sealed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrApprovalDrifted
 		}
 		return err
 	}
-	if !bytes.Equal(sealed, mutation.Sealed) {
+	if !bytes.Equal(sealed, sourcePreproof) || rowImage != sourcePreproofRow {
 		return ErrApprovalDrifted
 	}
 	tag, err := tx.Exec(ctx,
@@ -1491,10 +1644,10 @@ func insertApplicationSecretMutationReceiptTx(
 ) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO application_secret_mutation_receipts
-		       (tenant_id, event_id, semantic_sha256, request_binding, secret_name, action,
+		       (tenant_id, event_id, semantic_sha256, semantic_sha256_v2, request_binding, secret_name, action,
 		        result_version, result_owner_id, result_created_at, result_updated_at, applied_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, '')::uuid, $9, $10, $10)`,
-		mutation.TenantID, mutation.EventID, mutation.SemanticDigest, mutation.RequestBinding,
+		 VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, NULLIF($9, '')::uuid, $10, $11, $11)`,
+		mutation.TenantID, mutation.EventID, mutation.SemanticDigest, mutation.SemanticDigestV2, mutation.RequestBinding,
 		mutation.Name, mutation.Action, mutation.ResultVersion, mutation.OwnerID, resultCreatedAt.UTC(), mutation.OccurredAt.UTC())
 	return err
 }

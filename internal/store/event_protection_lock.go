@@ -122,7 +122,13 @@ func (s *Store) eventProtectionSession(ctx context.Context) (*pgxpool.Conn, func
 	}
 	bounded, cancel := context.WithTimeout(ctx, window)
 	defer cancel()
-	conn, err = s.lockSessionPool(ctx).Acquire(bounded)
+	lockPool := s.lockSessionPool(ctx)
+	if UsesReservedPool(ctx) && s.lockPool != nil {
+		// The reserved pool has only two connections: a tail may already
+		// hold one history view and need the other for its projection tx.
+		lockPool = s.lockPool
+	}
+	conn, err = lockPool.Acquire(bounded)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()

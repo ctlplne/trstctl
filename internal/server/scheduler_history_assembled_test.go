@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/audit"
 	backupartifact "trstctl.com/trstctl/internal/backup"
@@ -111,7 +112,7 @@ func TestSchedulerHistorySanitationClosesAssembledSurfacesAcrossRestoreRetention
 		t.Fatal(err)
 	}
 	t.Cleanup(authorizer.Destroy)
-	target, err := events.Open(
+	target, err := eventstest.OpenFixture(
 		ctx, targetCfg,
 		events.WithRequiredPrivacyEventPolicies(),
 		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)),

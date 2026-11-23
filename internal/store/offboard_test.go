@@ -4,6 +4,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -85,9 +86,12 @@ func newStore(t *testing.T) *store.Store {
 	// Per-test isolation: the package shares one database, so reset every
 	// tenant-scoped table (and the operational tables) between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE mdm_scep_nonce_fences, approved_target_event_fences, code_signing_operations,
+		`TRUNCATE trstctl_recovery.restore_activity_tokens, trstctl_recovery.restore_markers,
+		          trstctl_recovery.raw_history_journal, trstctl_recovery.restore_outbox_pairs,
+		          trstctl_recovery.recovery_pair_proofs, trstctl_recovery.tenant_key_domain_snapshots,
+		          mdm_scep_nonce_fences, approved_target_event_fences, code_signing_operations,
 		          application_secret_mutation_fences,
-		          application_secret_tenant_epochs, application_secret_mutation_receipts,
+		          application_secret_tenant_epochs, application_secret_mutation_receipts, application_secret_rewrap_gates,
 		          privacy_subject_erasures, privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
 		          secret_rotation_schedule_ticks, secret_static_rotation_commands,
@@ -328,6 +332,33 @@ func TestOffboardTenantErasesOnlyThatTenant(t *testing.T) {
 	}
 	if _, err := s.GetTenant(ctx, tenantB); err != nil {
 		t.Errorf("tenant B's row must survive A's offboarding: %v", err)
+	}
+}
+
+func TestOffboardTenantRefusesFullRestoreBeforeErasingTenant(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "restore-offboard-tenant"}); err != nil {
+		t.Fatal(err)
+	}
+	marker := store.RestoreMarker{
+		OperationID:    "11111111-1111-4111-8111-111111111801",
+		ArtifactSHA256: strings.Repeat("f", 64), EventCut: 1, DeploymentID: "offboard-restore-order",
+	}
+	if err := s.BeginFullRestore(ctx, marker); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+			store.RestoreControlTenantID, marker.OperationID)
+	})
+	if _, err := s.OffboardTenant(ctx, tenantA); !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Fatalf("direct offboard under restore marker = %v, want refusal", err)
+	}
+	var exists bool
+	if err := s.SystemPool().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tenants WHERE tenant_id=$1)`, tenantA).Scan(&exists); err != nil || !exists {
+		t.Fatalf("direct offboard erased tenant behind restore marker: exists=%t err=%v", exists, err)
 	}
 }
 

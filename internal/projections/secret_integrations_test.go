@@ -14,12 +14,118 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventstest"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/outboxgc"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func secretIntegrationFixtureSeal(t *testing.T, plaintext, aad []byte) []byte {
+	t.Helper()
+	key, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x62}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	container, err := seal.Seal(key, plaintext, aad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return container
+}
+
+func openSecretIntegrationsLog(t *testing.T) *events.Log {
+	t.Helper()
+	key, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x62}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	verify := func(container, aad []byte) error {
+		if len(container) == 0 || len(aad) == 0 {
+			return errors.New("secret integration fixture container is incomplete")
+		}
+		plaintext, err := seal.OpenIntoLocked(key, container, aad, nil)
+		if err != nil {
+			return err
+		}
+		plaintext.Destroy()
+		return nil
+	}
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	}, events.WithAppendAdmission(func(ctx context.Context, event events.Event,
+		publish func(context.Context) (events.Event, error),
+	) (events.Event, error) {
+		switch event.Type {
+		case projections.EventSecretSyncQueued:
+			var queued projections.SecretSyncQueued
+			if err := json.Unmarshal(event.Data, &queued); err != nil {
+				return events.Event{}, err
+			}
+			if queued.ID == "" || queued.Target == "" || queued.RemoteKey == "" {
+				return events.Event{}, errors.New("secret-sync fixture coordinates are incomplete")
+			}
+			if err := verify(queued.Sealed, []byte(event.TenantID+"/secret-sync/"+queued.Target+"/"+queued.ID+"/"+queued.RemoteKey)); err != nil {
+				return events.Event{}, err
+			}
+		case projections.EventDynamicSecretLeasePrepared:
+			var prepared projections.DynamicSecretLeasePrepared
+			if err := json.Unmarshal(event.Data, &prepared); err != nil {
+				return events.Event{}, err
+			}
+			if err := verify(prepared.SealedPreparation, []byte(event.TenantID+"/dynamic-secret-lease-preparation/"+prepared.ID+"/"+prepared.Provider)); err != nil {
+				return events.Event{}, err
+			}
+		case projections.EventDynamicSecretLeaseIssued:
+			var issued projections.DynamicSecretLeaseIssued
+			if err := json.Unmarshal(event.Data, &issued); err != nil {
+				return events.Event{}, err
+			}
+			if err := verify(issued.SealedCredential, []byte(event.TenantID+"/dynamic-secret-lease/"+issued.ID+"/"+issued.Provider)); err != nil {
+				return events.Event{}, err
+			}
+		default:
+			if fixtureHasSealedField(event.Data) {
+				return events.Event{}, fmt.Errorf("unclassified secret integration fixture event %s", event.Type)
+			}
+		}
+		return publish(ctx)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	return log
+}
+
+func TestSecretIntegrationFixtureRefusesWrongTenantAADBeforePublish(t *testing.T) {
+	log := openSecretIntegrationsLog(t)
+	const jobID = "fixture-sync-wrong-tenant"
+	queued := projections.SecretSyncQueued{
+		ID: jobID, Target: "ci", RemoteKey: "VALUE",
+		Sealed: secretIntegrationFixtureSeal(t, []byte("value"),
+			[]byte(tenantA+"/secret-sync/ci/"+jobID+"/VALUE")),
+	}
+	data, err := json.Marshal(queued)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(t.Context(), events.Event{
+		Type:          projections.EventSecretSyncQueued,
+		TenantID:      "22222222-2222-4222-8222-222222222222",
+		SchemaVersion: projections.SecretSyncEventSchemaVersion, Data: data,
+	}); err == nil {
+		t.Fatal("wrong-tenant secret-sync ciphertext was published")
+	}
+	if head, err := log.LastSequence(t.Context()); err != nil || head != 0 {
+		t.Fatalf("refused fixture reached history: head=%d err=%v", head, err)
+	}
+}
 
 func applyDeliveredSecretSyncFixture(ctx context.Context, s *store.Store, tenantID, jobID string, attempts int, at time.Time) error {
 	job, err := s.GetSecretSyncJob(ctx, tenantID, jobID)
@@ -53,6 +159,8 @@ func appendSecretSyncEvent(
 	switch value := payload.(type) {
 	case projections.SecretSyncQueued:
 		value.TenantEpoch = epoch
+		value.Sealed = secretIntegrationFixtureSeal(t, value.Sealed,
+			[]byte(tenantID+"/secret-sync/"+value.Target+"/"+value.ID+"/"+value.RemoteKey))
 		payload = value
 		eventID = store.SecretSyncQueuedEventID(tenantID, value.ID)
 	case projections.SecretSyncDelivered:
@@ -90,6 +198,9 @@ func appendLegacySecretSyncEvent(
 	var eventID string
 	switch value := payload.(type) {
 	case projections.SecretSyncQueued:
+		value.Sealed = secretIntegrationFixtureSeal(t, value.Sealed,
+			[]byte(tenantID+"/secret-sync/"+value.Target+"/"+value.ID+"/"+value.RemoteKey))
+		payload = value
 		eventID = store.SecretSyncQueuedEventID(tenantID, value.ID)
 	case projections.SecretSyncDelivered:
 		eventID = store.SecretSyncDeliveredEventID(tenantID, value.ID)
@@ -115,7 +226,7 @@ func appendLegacySecretSyncEvent(
 func TestSecretSyncFreshRebuildRejectsRetainedTargetInversionBeforeIOAUD109(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	registered := appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA,
 		map[string]string{"name": "retained inversion"})
 	if err := projections.New(s).Apply(ctx, registered); err != nil {
@@ -167,7 +278,7 @@ func TestSecretSyncEventOnlyRecoveryFenceAllowsOnlyOfflineBootstrapAUD109(t *tes
 		t.Run(name+"-source-had-two-receiver-starts", func(t *testing.T) {
 			ctx := context.Background()
 			source := newStore(t)
-			log := openLog(t)
+			log := openSecretIntegrationsLog(t)
 			projector := projections.New(source)
 			registered := appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA,
 				map[string]string{"name": "event-only recovery fence"})
@@ -279,7 +390,7 @@ func TestSecretSyncEventOnlyRecoveryFenceAllowsOnlyOfflineBootstrapAUD109(t *tes
 func TestSecretSyncCompletedThenOffboardedPassesWarmStartAndZeroStateRebuildAUD109(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	projector := projections.New(s)
 	apply := func(event events.Event) {
 		t.Helper()
@@ -324,7 +435,7 @@ func TestSecretSyncCompletedThenOffboardedPassesWarmStartAndZeroStateRebuildAUD1
 func TestLateLegacySecretSyncTerminalIsInertInEveryReplayModeAUD109(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	projector := projections.New(s)
 	apply := func(event events.Event) {
 		t.Helper()
@@ -423,7 +534,7 @@ func TestLateLegacySecretSyncTerminalIsInertInEveryReplayModeAUD109(t *testing.T
 func TestSecretSyncCatchUpRejectsCheckpointAheadOfTerminalEvidenceAUD109(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	projector := projections.New(s)
 	tenantEvent := appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "Acme"})
 	if err := projector.Apply(ctx, tenantEvent); err != nil {
@@ -533,7 +644,7 @@ func TestSecretSyncWarmCheckpointAndSnapshotRejectTerminalSemanticMismatchMatrix
 			t.Run(mode+"/"+candidate.name, func(t *testing.T) {
 				ctx := context.Background()
 				s := newStore(t)
-				log := openLog(t)
+				log := openSecretIntegrationsLog(t)
 				projector := projections.New(s)
 				registered := appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "Acme"})
 				if err := projector.Apply(ctx, registered); err != nil {
@@ -596,7 +707,7 @@ func TestSecretSyncLegacyFailedMigrationAuthoritySurvivesColdRebuildAUD109(t *te
 		t.Run(fmt.Sprintf("receiver-starts-%d", receiverStarts), func(t *testing.T) {
 			ctx := context.Background()
 			s := newStore(t)
-			log := openLog(t)
+			log := openSecretIntegrationsLog(t)
 			projector := projections.New(s)
 			registered := appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA,
 				map[string]string{"name": "legacy failed migration"})
@@ -720,7 +831,7 @@ func setSecretSyncReplicaFixture(t *testing.T, ctx context.Context, s *store.Sto
 func TestSecretSyncRebuildKeepsLateOldLifecycleTerminalInertAUD109(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	projector := projections.New(s)
 	registered := appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "old"})
 	if err := projector.Apply(ctx, registered); err != nil {
@@ -766,7 +877,7 @@ func TestSecretSyncEventOrderWaitsForOrderedProjectionCheckpointAUD109(t *testin
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	projector := projections.New(s)
 
 	tenantEvent := appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "Acme"})
@@ -879,7 +990,7 @@ func TestSecretSyncEventOrderWaitsForOrderedProjectionCheckpointAUD109(t *testin
 func TestSecretSyncSnapshotRestoresExactCheckpointAuthenticatedOrderAUD109(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	projector := projections.New(s)
 	mustAppend(t, log, events.Event{
 		Type: projections.EventTenantRegistered, TenantID: tenantA,
@@ -968,7 +1079,7 @@ func TestSecretSyncSnapshotRestoresExactCheckpointAuthenticatedOrderAUD109(t *te
 func TestSecretIntegrationEventsRebuildLeaseAndSealedOutbox(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	projector := projections.New(s)
 	apply := func(eventType string, payload any) {
 		t.Helper()
@@ -991,11 +1102,13 @@ func TestSecretIntegrationEventsRebuildLeaseAndSealedOutbox(t *testing.T) {
 		ExpiresAt: now.Add(time.Hour), HardExpiresAt: now.Add(2 * time.Hour),
 	})
 	apply(projections.EventDynamicSecretLeasePrepared, projections.DynamicSecretLeasePrepared{
-		ID: "lease-restart", Provider: "postgres-production", SealedPreparation: []byte("sealed-worker-preparation"),
+		ID: "lease-restart", Provider: "postgres-production", SealedPreparation: secretIntegrationFixtureSeal(t,
+			[]byte("worker-preparation"), []byte(tenantA+"/dynamic-secret-lease-preparation/lease-restart/postgres-production")),
 	})
 	apply(projections.EventDynamicSecretLeaseIssued, projections.DynamicSecretLeaseIssued{
 		ID: "lease-restart", IdempotencyKey: "issue-restart", Provider: "postgres-production", Role: "reader",
-		BackendRef: "trstctl_reader_restart", SealedCredential: []byte("sealed-dynamic-credential"),
+		BackendRef: "trstctl_reader_restart", SealedCredential: secretIntegrationFixtureSeal(t,
+			[]byte("dynamic-credential"), []byte(tenantA+"/dynamic-secret-lease/lease-restart/postgres-production")),
 		ExpiresAt: now.Add(time.Hour), HardExpiresAt: now.Add(2 * time.Hour),
 	})
 	apply(projections.EventDynamicSecretLeaseRevocationRequested, projections.DynamicSecretLeaseRevocationRequested{
@@ -1106,7 +1219,7 @@ func TestSecretIntegrationEventsRebuildLeaseAndSealedOutbox(t *testing.T) {
 func TestDynamicSecretIssuanceFailureRetainsOriginalTenantEpochAUD108(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	log := openLog(t)
+	log := openSecretIntegrationsLog(t)
 	projector := projections.New(s)
 	apply := func(event events.Event) {
 		t.Helper()

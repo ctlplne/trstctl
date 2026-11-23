@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
@@ -28,7 +29,6 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/signing"
@@ -427,7 +427,7 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}

@@ -86,7 +86,7 @@ func TestSchedulerSafetyIndexChecksOnlyNewTailAndRescansAfterDelete(t *testing.T
 func TestSchedulerSafetyIndexColdReopenAndUnsafeTail(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := Open(ctx, cfg)
+	log, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestSchedulerSafetyIndexColdReopenAndUnsafeTail(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = Open(ctx, cfg)
+	log, err = openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

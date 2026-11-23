@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -35,7 +36,7 @@ import (
 // neighbor tenant (still on the deployment key) can neither rotate nor change.
 func TestServedTenantKeyDomainRotationRewrapsTenantDataAndMovesWrappers(t *testing.T) {
 	ctx := context.Background()
-	st := newServerTestStore(t)
+	st := newServerRewrapStore(t)
 	const rotatingTenant = "55555555-5555-5555-5555-555555555555"
 	const neighborTenant = "66666666-6666-6666-6666-666666666666"
 	for _, tenant := range []store.Tenant{
@@ -66,11 +67,13 @@ func TestServedTenantKeyDomainRotationRewrapsTenantDataAndMovesWrappers(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	var ingressAccess tenantseal.Access
 	log, err := openHistoryAwareEventLog(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
 		st,
 		auditKey,
+		restoreEventIngressOptionWithCustody(st, func() tenantseal.Access { return ingressAccess }),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -98,6 +101,7 @@ func TestServedTenantKeyDomainRotationRewrapsTenantDataAndMovesWrappers(t *testi
 		_ = log.Close()
 		t.Fatal(err)
 	}
+	ingressAccess = deps.TenantCrypto
 	srv, err := Build(ctx, deps)
 	if err != nil {
 		_ = log.Close()
@@ -117,6 +121,30 @@ func TestServedTenantKeyDomainRotationRewrapsTenantDataAndMovesWrappers(t *testi
 		}
 	}
 	neighborBefore := servedSecretStoreCiphertext(t, st, neighborTenant)
+	marker := store.RestoreMarker{
+		OperationID:    "55555555-5555-4555-8555-555555555501",
+		ArtifactSHA256: strings.Repeat("a", 64), EventCut: 1, DeploymentID: "tenant-rotation-restore-order",
+	}
+	if err := st.BeginFullRestore(ctx, marker); err != nil {
+		t.Fatalf("arm restore marker before tenant migration: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+			store.RestoreControlTenantID, marker.OperationID)
+	})
+	if _, err := deps.TenantKeyDomains.Migrate(ctx, rotatingTenant,
+		tenantseal.WrapperRef{Kind: tenantseal.WrapperKindLocalFile, ID: "tenant-rotate-wrapper"}); !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Fatalf("tenant migration under restore marker = %v, want preflight refusal", err)
+	}
+	if gate, found, err := st.GetTenantApplicationSecretRewrapGate(ctx, rotatingTenant); err != nil || found && gate.InProgress {
+		t.Fatalf("tenant migration armed its rewrap gate behind restore marker: gate=%+v found=%t err=%v", gate, found, err)
+	}
+	if tag, err := st.SystemPool().Exec(ctx,
+		`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+		store.RestoreControlTenantID, marker.OperationID); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("clear exact test restore marker: rows=%d err=%v", tag.RowsAffected(), err)
+	}
 
 	if rec := servedTenantSealRequest(t, srv, tokenB, http.MethodPost, "/api/v1/platform/tenant-key-domain/rotate", "tenant-b-rotate", nil); rec.Code != http.StatusConflict {
 		t.Fatalf("deployment-key tenant rotate = %d body=%s", rec.Code, rec.Body.String())

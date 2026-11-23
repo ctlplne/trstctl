@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -22,7 +23,7 @@ import (
 func currentCustodyFixture(t *testing.T) (eventprivacy.SourceKeys, *events.Log, *eventprotect.FileAuthority, string, eventprotect.KeyRef, *sourceReadDestructionAuthority) {
 	t.Helper()
 	base := t.TempDir()
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +153,7 @@ func TestCurrentCustodyProbeDoesNotHideLaterInvalidSourceOrMissingAdapter(t *tes
 }
 
 func TestCurrentCustodyProbeLegacyNeedsNoKeysAndHonorsCancellation(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "events")})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "events")})
 	if err != nil {
 		t.Fatal(err)
 	}

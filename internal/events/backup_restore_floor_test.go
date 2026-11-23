@@ -52,7 +52,7 @@ func TestAuthorizedExactRestoreResumesUnsafeBoundPrefixAfterFloor(t *testing.T) 
 		localHistoryRewriteCoordinator: newLocalHistoryRewriteCoordinator(),
 		firstReadDone:                  make(chan struct{}),
 	}
-	partial, err := Open(ctx, cfg, WithHistoryRewriteCoordinator(historyCoordinator))
+	partial, err := openFixture(ctx, cfg, WithHistoryRewriteCoordinator(historyCoordinator))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestAuthorizedExactRestoreResumesUnsafeBoundPrefixAfterFloor(t *testing.T) 
 		t.Fatal(err)
 	}
 	t.Cleanup(authorizer.Destroy)
-	reopened, err := Open(ctx, cfg, WithBackupRestoreAuthorizer(authorizer))
+	reopened, err := openFixture(ctx, cfg, WithBackupRestoreAuthorizer(authorizer))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestBackupRestoreBrokerFenceRejectsCrossReplicaPublishAfterMetadataCheck(t 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	history := newLocalHistoryRewriteCoordinator()
-	primary, err := Open(
+	primary, err := openFixture(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true},
 		WithHistoryRewriteCoordinator(history),
@@ -369,7 +369,7 @@ func TestOpenFreezesLegacyPendingRestoreBeforeReturningUsableLog(t *testing.T) {
 		backupHistoryEvent(t, 2, "legacy-bound-suffix", "owner.updated"),
 	}
 
-	legacy, err := Open(ctx, cfg)
+	legacy, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +404,7 @@ func TestOpenFreezesLegacyPendingRestoreBeforeReturningUsableLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reopened, err := Open(ctx, cfg)
+	reopened, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("Open legacy pending restore: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestPendingRestoreRejectsUnrelatedHistoryMutationsAndReadiness(t *testing.T
 func TestOpenRequiringSanitizedSchedulerHistoryRejectsUnsafeHistoryAndInstallsFloor(t *testing.T) {
 	ctx := context.Background()
 	unsafeCfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}
-	unsafeLog, err := Open(ctx, unsafeCfg)
+	unsafeLog, err := openFixture(ctx, unsafeCfg)
 	if err != nil {
 		t.Fatal(err)
 	}

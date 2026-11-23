@@ -17,7 +17,7 @@ import (
 // projection up. Close stops the indexer.
 func TestBackgroundEventIDIndexerKeepsTheProjectionWithinALookupsReach(t *testing.T) {
 	ctx := t.Context()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, WithBackgroundEventIDIndexer())
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, WithBackgroundEventIDIndexer())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestBackgroundEventIDIndexerKeepsTheProjectionWithinALookupsReach(t *testin
 // which catch it up themselves, and indexes one further behind to the head.
 func TestBackgroundEventIDIndexerWorksOnlyPastItsLag(t *testing.T) {
 	ctx := t.Context()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestBackgroundEventIDIndexerWorksOnlyPastItsLag(t *testing.T) {
 // Without the option a log runs no background indexer: a lookup alone
 // advances the projection, by its bounded step.
 func TestEventIDIndexerIsOptIn(t *testing.T) {
-	log, err := Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

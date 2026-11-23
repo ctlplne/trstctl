@@ -70,7 +70,7 @@ func (storageKeyLocker) WithKeyLock(ctx context.Context, _ eventprotect.KeyRef, 
 	return fn(ctx)
 }
 
-func protectedStorageFixture(t *testing.T) (*Log, EventProtection, *storageProtectionAdmission) {
+func protectedStorageFixture(t *testing.T, extra ...OpenOption) (*Log, EventProtection, *storageProtectionAdmission) {
 	t.Helper()
 	base := t.TempDir()
 	keys, err := eventprotect.NewFileAuthority(eventprotect.FileAuthorityConfig{
@@ -86,8 +86,10 @@ func protectedStorageFixture(t *testing.T) (*Log, EventProtection, *storageProte
 	}
 	admission := &storageProtectionAdmission{active: map[string]eventprotect.KeyRef{ref.TenantID: ref}}
 	protection := EventProtection{Keys: keys, Admission: admission}
-	log, err := Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
-		WithRequiredPrivacyEventPolicies(), WithEventProtection(protection), WithDuplicateWindowForTesting(100*time.Millisecond))
+	options := []OpenOption{WithRequiredPrivacyEventPolicies(), WithEventProtection(protection),
+		WithDuplicateWindowForTesting(100 * time.Millisecond)}
+	options = append(options, extra...)
+	log, err := openFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, options...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,6 +115,47 @@ func TestProtectedAppendDoesNotRetryAfterAdmissionCallbackEntered(t *testing.T) 
 		return nil
 	}); err != nil || count != 0 {
 		t.Fatalf("refused append left %d source events: %v", count, err)
+	}
+}
+
+// CR-045: a protected duplicate returns before a new envelope is serialized.
+// Its proof still needs the original raw wire hash and canonical plaintext.
+func TestProtectedEarlyDuplicateDeliversCanonicalProofCR045(t *testing.T) {
+	var wireStages, canonicalCalls int
+	var firstHash string
+	log, _, _ := protectedStorageFixture(t,
+		WithIngressWireStage(func(context.Context, Event, string) error {
+			wireStages++
+			return nil
+		}),
+		WithIngressCanonicalProof(func(_ context.Context, candidate, canonical Event, hash string, duplicate bool) error {
+			canonicalCalls++
+			if candidate.ID != canonical.ID || !bytes.Equal(candidate.Data, canonical.Data) || hash == "" {
+				return errors.New("protected canonical proof did not bind the readable event")
+			}
+			if canonicalCalls == 1 {
+				if duplicate {
+					return errors.New("first publication reported duplicate")
+				}
+				firstHash = hash
+			} else if !duplicate || hash != firstHash {
+				return errors.New("protected duplicate did not reuse raw canonical wire")
+			}
+			return nil
+		}))
+	input := Event{ID: "plain-protected-duplicate", Type: protectedStorageTestType,
+		TenantID: "d59b4292-1adc-4d43-a405-781f95b1779c", Data: []byte(`{"email":"plain-value@example.invalid"}`)}
+	first, err := log.Append(t.Context(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := log.Append(t.Context(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if canonicalCalls != 2 || wireStages != 1 || second.Sequence != first.Sequence {
+		t.Fatalf("canonical callbacks=%d wire stages=%d first=%d second=%d",
+			canonicalCalls, wireStages, first.Sequence, second.Sequence)
 	}
 }
 
@@ -322,7 +365,7 @@ func TestProtectedSourceExactHistoryTransferRetainsCiphertext(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatal("fixture source must have exactly one retained record")
 	}
-	target, err := Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, WithRequiredPrivacyEventPolicies(), WithEventProtection(protection))
+	target, err := openFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, WithRequiredPrivacyEventPolicies(), WithEventProtection(protection))
 	if err != nil {
 		t.Fatal(err)
 	}

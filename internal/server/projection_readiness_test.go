@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
@@ -37,7 +38,7 @@ func TestProjectionTailFailureDegradesServedReadinessUntilCheckpointCoversIt(t *
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "projection-health"}); err != nil {
 		t.Fatalf("seed tenant: %v", err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -154,7 +155,7 @@ func TestProjectionTailFailureBehindReadModelCheckpointDegradesReadiness(t *test
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "projection-behind-checkpoint"}); err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
@@ -18,7 +19,7 @@ func TestArchivedEventRecoveryUsesExactIdentityAcrossColdRestart(t *testing.T) {
 	ctx := context.Background()
 	const dedupe = 100 * time.Millisecond
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(ctx, cfg, events.WithDuplicateWindowForTesting(dedupe))
+	log, err := eventstest.OpenFixture(ctx, cfg, events.WithDuplicateWindowForTesting(dedupe))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +47,7 @@ func TestArchivedEventRecoveryUsesExactIdentityAcrossColdRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := events.Open(ctx, cfg, events.WithDuplicateWindowForTesting(dedupe))
+	reopened, err := eventstest.OpenFixture(ctx, cfg, events.WithDuplicateWindowForTesting(dedupe))
 	if err != nil {
 		t.Fatal(err)
 	}

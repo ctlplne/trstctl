@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
@@ -30,7 +31,6 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/samltest"
 	"trstctl.com/trstctl/internal/crypto/seal"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -532,7 +532,7 @@ func buildSAMLServerWithDeps(t *testing.T, ctx context.Context, dsn string, saml
 	if err != nil {
 		t.Fatalf("open served store: %v", err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		phaseStore.Close()
 		t.Fatalf("open event log: %v", err)

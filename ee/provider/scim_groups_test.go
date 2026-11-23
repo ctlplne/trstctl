@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 )
 
@@ -255,7 +255,7 @@ func TestProviderSCIMGroupRemovalIsDurable(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}

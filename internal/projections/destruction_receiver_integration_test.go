@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -95,7 +96,7 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 	completionVerifier := &eventprivacy.CompletionVerifier{Custody: keys, Policy: *policy}
 	receiver := &eventprivacy.DestructionReceiver{Claims: s, Guard: s, Custody: keys, Authority: authority, Policy: *policy}
 	p := projections.New(s, projections.WithEventProtectionActivationVerifier(activationVerifier), projections.WithEventProtectionCompletionVerifier(completionVerifier), projections.WithEventProtectionOffboardPolicy(policy))
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
 		func(log *events.Log) {
 			policy.Log = log
 			admission.Policy.Log = log
@@ -115,23 +116,32 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 	interrupted := false
 	record := func(ctx context.Context, next events.Event) (events.Event, error) {
 		var event events.Event
-		err := s.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
-			var err error
-			event, err = log.Append(ctx, next)
-			if err != nil {
-				return err
-			}
-			if next.Type == projections.EventTenantRegistered || next.Type == projections.EventTenantOffboarded {
-				return p.ApplyTenantLifecycleTx(ctx, tx, event)
-			}
-			if err := p.ApplyTx(ctx, tx, event); err != nil {
-				return err
-			}
-			if mode == "completion-sql-rollback" && next.Type == eventprivacy.EventDestroyed && !interrupted {
-				interrupted = true
-				return errors.New("fixture SQL rollback after terminal source append and token settlement")
-			}
-			return nil
+		admissionMode := store.KeyStateShared
+		if next.Type == projections.EventTenantOffboarded {
+			admissionMode = store.KeyStateExclusive
+		}
+		err := s.WithGlobalKeyStateAdmission(ctx, admissionMode, func(admitted context.Context) error {
+			return s.WithTenant(admitted, next.TenantID, func(tx pgx.Tx) error {
+				owned, err := s.BindKeyStateOwnerTx(admitted, tx, next.TenantID, admissionMode)
+				if err != nil {
+					return err
+				}
+				event, err = log.Append(owned, next)
+				if err != nil {
+					return err
+				}
+				if next.Type == projections.EventTenantRegistered || next.Type == projections.EventTenantOffboarded {
+					return p.ApplyTenantLifecycleTx(owned, tx, event)
+				}
+				if err := p.ApplyTx(owned, tx, event); err != nil {
+					return err
+				}
+				if mode == "completion-sql-rollback" && next.Type == eventprivacy.EventDestroyed && !interrupted {
+					interrupted = true
+					return errors.New("fixture SQL rollback after terminal source append and token settlement")
+				}
+				return nil
+			})
 		})
 		return event, err
 	}
@@ -405,7 +415,7 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 			t.Fatal(err)
 		}
 		admission.Custody, reader.Custody, receiver.Custody, completionVerifier.Custody = keys, keys, keys, keys
-		restored, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "restored-events")}, func(next *events.Log) {
+		restored, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "restored-events")}, func(next *events.Log) {
 			policy.Log = next
 			admission.Policy.Log = next
 			reader.Policy.Log = next

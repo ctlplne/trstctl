@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
@@ -86,7 +87,7 @@ func TestAuditHTTPKeepsSignedRecordsAndReadableDetailsSeparateAcrossKeyRemoval(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, events.WithEventProtection(events.EventProtection{Admission: authority, Keys: custody}))
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, events.WithEventProtection(events.EventProtection{Admission: authority, Keys: custody}))
 	if err != nil {
 		t.Fatal(err)
 	}

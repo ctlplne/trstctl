@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -24,7 +25,7 @@ func TestRevoke_CascadeRecoversIndexedEdgesAfterColdLogRestart(t *testing.T) {
 	if err := h.log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: h.eventDir})
+	reopened, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: h.eventDir})
 	if err != nil {
 		t.Fatal(err)
 	}

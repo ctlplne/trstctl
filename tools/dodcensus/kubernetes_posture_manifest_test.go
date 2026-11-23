@@ -70,7 +70,7 @@ func TestKubernetesPostureRuntimeSourceBindsBothFocusedAndFullGroupModes(t *test
 		{
 			ID: "k8s_posture_routes.certificate_signing_requests", CardID: "WIRE-K8SDESC-101", Capability: "k8s_posture_routes",
 			Dependencies: []string{"trstctl.com/trstctl/internal/api"},
-			Assembly:     AssemblyProof{File: "internal/server/run.go", Function: "buildRunDeps", Binding: "returned-field", Field: "APIOptions", Calls: []string{"kubernetesCSRPostureFromConfig"}},
+			Assembly:     AssemblyProof{File: "internal/server/run.go", Function: "buildRunDepsWithCustody", Binding: "returned-field", Field: "APIOptions", Calls: []string{"kubernetesCSRPostureFromConfig"}},
 			Runtime: RuntimeProof{
 				Package: "./internal/server", Test: "TestDODKubernetesPostureRoutesProductionAssembly",
 				File: "internal/server/dod_kubernetes_posture_runtime_test.go", Mode: "assembled-handler", Method: "GET",
@@ -80,7 +80,7 @@ func TestKubernetesPostureRuntimeSourceBindsBothFocusedAndFullGroupModes(t *test
 		{
 			ID: "k8s_posture_routes.trust_bundles", CardID: "WIRE-K8SDESC-102", Capability: "k8s_posture_routes",
 			Dependencies: []string{"trstctl.com/trstctl/internal/api"},
-			Assembly:     AssemblyProof{File: "internal/server/run.go", Function: "buildRunDeps", Binding: "returned-field", Field: "APIOptions", Calls: []string{"kubernetesTrustBundlePostureFromConfig"}},
+			Assembly:     AssemblyProof{File: "internal/server/run.go", Function: "buildRunDepsWithCustody", Binding: "returned-field", Field: "APIOptions", Calls: []string{"kubernetesTrustBundlePostureFromConfig"}},
 			Runtime: RuntimeProof{
 				Package: "./internal/server", Test: "TestDODKubernetesPostureRoutesProductionAssembly",
 				File: "internal/server/dod_kubernetes_posture_runtime_test.go", Mode: "assembled-handler", Method: "GET",
@@ -150,10 +150,10 @@ func TestKubernetesPostureManifestClosesExplicitAssemblyAndRealKindRuntime(t *te
 		if !slices.Equal(entry.Dependencies, []string{"trstctl.com/trstctl/internal/api"}) {
 			t.Errorf("%s dependencies=%v, want exact served API implementation package", entry.ID, entry.Dependencies)
 		}
-		if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDeps" ||
+		if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDepsWithCustody" ||
 			entry.Assembly.Binding != "returned-field" || entry.Assembly.Field != "APIOptions" ||
 			!slices.Equal(entry.Assembly.Calls, []string{want.call}) {
-			t.Errorf("%s assembly=%+v, want buildRunDeps returned APIOptions calling %s", entry.ID, entry.Assembly, want.call)
+			t.Errorf("%s assembly=%+v, want buildRunDepsWithCustody returned APIOptions calling %s", entry.ID, entry.Assembly, want.call)
 		}
 		if entry.Runtime.Package != "./internal/server" || entry.Runtime.Test != "TestDODKubernetesPostureRoutesProductionAssembly" ||
 			entry.Runtime.File != "internal/server/dod_kubernetes_posture_runtime_test.go" ||

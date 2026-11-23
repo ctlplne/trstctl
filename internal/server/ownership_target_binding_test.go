@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -78,7 +79,7 @@ func TestOwnershipEvidenceCannotAuthorizeDifferentIdentity(t *testing.T) {
 		for _, mode := range []string{"live-projection", "full-replay"} {
 			t.Run(fmt.Sprintf("v%d/%s", version, mode), func(t *testing.T) {
 				target := newServerTestStore(t)
-				log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+				log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 				if err != nil {
 					t.Fatal(err)
 				}

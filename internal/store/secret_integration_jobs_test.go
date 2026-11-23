@@ -770,8 +770,13 @@ func TestSecretSyncIntentExactReplayKeepsOriginalPayloadAndRejectsDrift(t *testi
 	if err := apply(job, firstPayload); err != nil {
 		t.Fatalf("first secret-sync intent: %v", err)
 	}
-	if err := apply(job, resealedPayload); err != nil {
-		t.Fatalf("same command with a fresh envelope nonce: %v", err)
+	if err := apply(job, firstPayload); err != nil {
+		t.Fatalf("exact immutable command replay: %v", err)
+	}
+	// CR-045: a different sealed copy is not a rewrap proof. A fresh envelope
+	// nonce or changed plaintext needs authenticated custody before reuse.
+	if err := apply(job, resealedPayload); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("same command with an unverified fresh envelope nonce: %v", err)
 	}
 
 	drift := job

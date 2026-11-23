@@ -25,6 +25,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
@@ -283,7 +284,7 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +409,7 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +535,7 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -663,7 +664,7 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}

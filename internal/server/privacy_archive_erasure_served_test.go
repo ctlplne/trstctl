@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
@@ -40,7 +41,7 @@ func TestServedPrivacyArchiveErasureAttestations(t *testing.T) {
 		string(authz.PrivacyRead), string(authz.PrivacyWrite), string(authz.AuditRead),
 	})
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

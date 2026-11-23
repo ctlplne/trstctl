@@ -20,6 +20,7 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -145,7 +146,7 @@ func TestChaosNATSRestartPreservesAckedEvents(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: dir}
-	log1, err := events.Open(ctx, cfg)
+	log1, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("open first log: %v", err)
 	}
@@ -162,7 +163,7 @@ func TestChaosNATSRestartPreservesAckedEvents(t *testing.T) {
 		t.Fatalf("close first log: %v", err)
 	}
 
-	log2, err := events.Open(ctx, cfg)
+	log2, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("reopen log on same store: %v", err)
 	}

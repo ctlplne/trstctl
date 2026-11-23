@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -52,7 +52,7 @@ func TestServedNTLMLoginCompletesTheHandshakeOverOneConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		phaseStore.Close()
 		t.Fatal(err)

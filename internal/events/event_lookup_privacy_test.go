@@ -22,7 +22,7 @@ func TestEventLookupWithholdsMatchWhenLaterHistoryNeedsSanitation(t *testing.T) 
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			const dedupe = 100 * time.Millisecond
-			log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, WithDuplicateWindowForTesting(dedupe))
+			log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, WithDuplicateWindowForTesting(dedupe))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -1554,6 +1554,12 @@ type Postgres struct {
 	DSN     string `json:"dsn"`      // required when external
 	DataDir string `json:"data_dir"` // used when bundled (the embedded data lives here)
 	Port    int    `json:"port"`     // loopback port for the bundled datastore (default 5432)
+	// Key-domain rewrap requires a distinct old login disabled by the owner,
+	// a new login used by this process, and a maintenance attestation. These
+	// names are identifiers, never credentials.
+	RewrapOldLoginRole           string `json:"rewrap_old_login_role,omitempty"`
+	RewrapNewLoginRole           string `json:"rewrap_new_login_role,omitempty"`
+	RewrapMaintenanceAttestation string `json:"rewrap_maintenance_attestation,omitempty"`
 	// StatementTimeout bounds every statement server-side; DR rebuild/restore
 	// transactions widen it explicitly (OPS-TIMEOUTS-001). Default "60s".
 	StatementTimeout string `json:"statement_timeout,omitempty"`
@@ -1561,20 +1567,22 @@ type Postgres struct {
 	// connection before failing closed with a structured 503. Default "10s".
 	AcquireTimeout string `json:"acquire_timeout,omitempty"`
 	// Connection budget per replica (0 = default). The request pool carries
-	// client commands; the four small pools carry work that must not compete
+	// client commands; the five small pools carry work that must not compete
 	// with them: readiness probes, the durable projection tail, the idempotency
-	// bookkeeping statements and the projection-lock sessions. PostgreSQL's
+	// bookkeeping statements, projection-lock sessions and restore admission.
+	// PostgreSQL's
 	// max_connections must allow the sum for every replica (docs/operations.md).
 	MaxConns         int `json:"max_conns,omitempty"`         // request pool, default 16
 	ProbeConns       int `json:"probe_conns,omitempty"`       // default 2
 	ReservedConns    int `json:"reserved_conns,omitempty"`    // default 2
 	BookkeepingConns int `json:"bookkeeping_conns,omitempty"` // default 4
 	LockConns        int `json:"lock_conns,omitempty"`        // default 8
+	RestoreConns     int `json:"restore_conns,omitempty"`     // default 8
 }
 
 // ConnectionBudget is the per-replica PostgreSQL connection budget: the sum of
-// the request pool and the four dedicated pools, with zero fields defaulted.
-func (p Postgres) ConnectionBudget() (request, probe, reserved, bookkeeping, lock, total int) {
+// the request pool and five dedicated pools, with zero fields defaulted.
+func (p Postgres) ConnectionBudget() (request, probe, reserved, bookkeeping, lock, restore, total int) {
 	pick := func(v, def int) int {
 		if v > 0 {
 			return v
@@ -1583,7 +1591,8 @@ func (p Postgres) ConnectionBudget() (request, probe, reserved, bookkeeping, loc
 	}
 	request, probe, reserved = pick(p.MaxConns, 16), pick(p.ProbeConns, 2), pick(p.ReservedConns, 2)
 	bookkeeping, lock = pick(p.BookkeepingConns, 4), pick(p.LockConns, 8)
-	return request, probe, reserved, bookkeeping, lock, request + probe + reserved + bookkeeping + lock
+	restore = pick(p.RestoreConns, 8)
+	return request, probe, reserved, bookkeeping, lock, restore, request + probe + reserved + bookkeeping + lock + restore
 }
 
 // StatementTimeoutDuration parses the statement deadline ("" = default 60s).
@@ -3065,6 +3074,12 @@ func (s Secrets) DeletedRetentionDuration() (time.Duration, error) {
 // absent it is created (random, 0600) on first boot.
 type Secrets struct {
 	KEKFile string `json:"kek_file"`
+	// IngressJournalKeys are separate target-local HMAC keys for producer
+	// evidence. The active version signs new events; older configured versions
+	// remain readable until every journal token using them is terminal. Neither
+	// these files nor their bytes belong in PostgreSQL, NATS or backups.
+	IngressJournalActiveKeyID string              `json:"ingress_journal_active_key_id,omitempty"`
+	IngressJournalKeys        []IngressJournalKey `json:"ingress_journal_keys,omitempty"`
 	// KEKOperatorTenantID is the one tenant whose keys:write principals may
 	// rotate the deployment KEK (A198): the rotation re-wraps every tenant's
 	// data, so no tenant holds that authority by default. Unset, the
@@ -3164,6 +3179,51 @@ type Secrets struct {
 	// ValidityChecks (P14) checks, on the scanning host, whether a leaked
 	// secret still works. Off unless enabled.
 	ValidityChecks SecretValidityChecks `json:"validity_checks,omitempty"`
+}
+
+type IngressJournalKey struct {
+	ID   string `json:"id"`
+	File string `json:"file"`
+}
+
+// IngressJournalKeyFiles resolves only non-secret version IDs and paths. The
+// default places a distinct file beside the deployment KEK, which makes
+// isolated single-node fixtures follow their own KEK path without sharing a
+// process-global journal key. Runtime recovery never creates this file.
+func (s Secrets) IngressJournalKeyFiles() (string, map[string]string, error) {
+	if s.IngressJournalActiveKeyID == "" && len(s.IngressJournalKeys) == 0 {
+		if strings.TrimSpace(s.KEKFile) == "" {
+			return "", nil, errors.New("secrets.kek_file is required to locate the default ingress journal key")
+		}
+		return "v1", map[string]string{"v1": filepath.Join(filepath.Dir(s.KEKFile), "ingress-journal-v1.key")}, nil
+	}
+	if s.IngressJournalActiveKeyID == "" || len(s.IngressJournalKeys) == 0 {
+		return "", nil, errors.New("secrets.ingress_journal_keys and active key id must be configured together")
+	}
+	paths := make(map[string]string, len(s.IngressJournalKeys))
+	usedPaths := make(map[string]bool, len(s.IngressJournalKeys))
+	for _, key := range s.IngressJournalKeys {
+		if len(key.ID) == 0 || len(key.ID) > 128 || strings.TrimSpace(key.ID) != key.ID ||
+			strings.IndexFunc(key.ID, func(r rune) bool {
+				return (r < '0' || r > '9') && (r < 'A' || r > 'Z') &&
+					(r < 'a' || r > 'z') && r != '-' && r != '_' && r != '.'
+			}) >= 0 {
+			return "", nil, errors.New("secrets.ingress_journal_keys requires a plain 1-to-128-character version id")
+		}
+		if strings.TrimSpace(key.File) == "" || strings.TrimSpace(key.File) != key.File {
+			return "", nil, errors.New("secrets.ingress_journal_keys requires a nonempty file path")
+		}
+		path := filepath.Clean(key.File)
+		if path == filepath.Clean(s.KEKFile) || usedPaths[path] || paths[key.ID] != "" {
+			return "", nil, errors.New("secrets.ingress_journal_keys must use distinct IDs and files separate from the deployment KEK")
+		}
+		usedPaths[path] = true
+		paths[key.ID] = path
+	}
+	if paths[s.IngressJournalActiveKeyID] == "" {
+		return "", nil, errors.New("secrets.ingress_journal_active_key_id must name a configured version")
+	}
+	return s.IngressJournalActiveKeyID, paths, nil
 }
 
 // SecretValidityChecks configures leaked-secret validity checks (P14): which
@@ -3907,6 +3967,24 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	applyBulkheadEnv(getenv, &c.Bulkheads)
 	setBool(getenv, "TRSTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
 	setString(getenv, "TRSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
+	setString(getenv, "TRSTCTL_SECRETS_INGRESS_JOURNAL_ACTIVE_KEY_ID", &c.Secrets.IngressJournalActiveKeyID)
+	if path := getenv("TRSTCTL_SECRETS_INGRESS_JOURNAL_KEY_FILE"); path != "" {
+		if c.Secrets.IngressJournalActiveKeyID == "" {
+			c.Secrets.IngressJournalActiveKeyID = "v1"
+		}
+		found := false
+		for i := range c.Secrets.IngressJournalKeys {
+			if c.Secrets.IngressJournalKeys[i].ID == c.Secrets.IngressJournalActiveKeyID {
+				c.Secrets.IngressJournalKeys[i].File = path
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.Secrets.IngressJournalKeys = append(c.Secrets.IngressJournalKeys,
+				IngressJournalKey{ID: c.Secrets.IngressJournalActiveKeyID, File: path})
+		}
+	}
 	setString(getenv, "TRSTCTL_SECRETS_KEK_OPERATOR_TENANT_ID", &c.Secrets.KEKOperatorTenantID)
 	setString(getenv, "TRSTCTL_SECRETS_KEK_ROTATION_SETTLE", &c.Secrets.KEKRotationSettle)
 	setString(getenv, "TRSTCTL_SECRETS_DELETED_RETENTION", &c.Secrets.DeletedRetention)
@@ -4121,6 +4199,9 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setCSV(getenv, "TRSTCTL_SERVER_TRUSTED_PROXIES", &c.Server.TrustedProxies)
 	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
 	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
+	setString(getenv, "TRSTCTL_POSTGRES_REWRAP_OLD_LOGIN_ROLE", &c.Postgres.RewrapOldLoginRole)
+	setString(getenv, "TRSTCTL_POSTGRES_REWRAP_NEW_LOGIN_ROLE", &c.Postgres.RewrapNewLoginRole)
+	setString(getenv, "TRSTCTL_POSTGRES_REWRAP_MAINTENANCE_ATTESTATION", &c.Postgres.RewrapMaintenanceAttestation)
 	setString(getenv, "TRSTCTL_POSTGRES_STATEMENT_TIMEOUT", &c.Postgres.StatementTimeout)
 	setString(getenv, "TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT", &c.Postgres.AcquireTimeout)
 	setInt(getenv, "TRSTCTL_POSTGRES_MAX_CONNS", &c.Postgres.MaxConns)
@@ -4128,6 +4209,7 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setInt(getenv, "TRSTCTL_POSTGRES_RESERVED_CONNS", &c.Postgres.ReservedConns)
 	setInt(getenv, "TRSTCTL_POSTGRES_BOOKKEEPING_CONNS", &c.Postgres.BookkeepingConns)
 	setInt(getenv, "TRSTCTL_POSTGRES_LOCK_CONNS", &c.Postgres.LockConns)
+	setInt(getenv, "TRSTCTL_POSTGRES_RESTORE_CONNS", &c.Postgres.RestoreConns)
 	setString(getenv, "TRSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
 	setInt(getenv, "TRSTCTL_POSTGRES_PORT", &c.Postgres.Port)
 	setString(getenv, "TRSTCTL_NATS_MODE", &c.NATS.Mode)
@@ -5518,6 +5600,9 @@ func validateServedSurfaces(c *Config) []error {
 		if err := uuid.Validate(c.Secrets.KEKOperatorTenantID); err != nil {
 			errs = append(errs, errors.New("secrets.kek_operator_tenant_id must be a UUID"))
 		}
+	}
+	if _, _, err := c.Secrets.IngressJournalKeyFiles(); err != nil {
+		errs = append(errs, err)
 	}
 	if _, err := c.Secrets.KEKRotationSettleDuration(); err != nil {
 		errs = append(errs, err)

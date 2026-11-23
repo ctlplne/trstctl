@@ -7,11 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -20,15 +22,60 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/storetest"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
+
+func tenantTransitionAfterOrphanedPairProof(t *testing.T, s *store.Store, label string,
+	run func(context.Context) (store.TenantKeyDomain, error),
+) (store.TenantKeyDomain, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	var proofTx pgx.Tx
+	if err := s.WithGlobalKeyStateAdmission(ctx, store.KeyStateShared, func(admitted context.Context) error {
+		var err error
+		proofTx, err = s.SystemPool().Begin(admitted)
+		if err != nil {
+			return err
+		}
+		return s.LockGlobalKeyStateCommitTx(admitted, proofTx, store.KeyStateShared)
+	}); err != nil {
+		t.Fatalf("hold pair transaction before %s: %v", label, err)
+	}
+	t.Cleanup(func() { _ = proofTx.Rollback(context.Background()) })
+	type result struct {
+		domain store.TenantKeyDomain
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		domain, err := run(ctx)
+		done <- result{domain: domain, err: err}
+	}()
+	select {
+	case got := <-done:
+		t.Fatalf("%s crossed orphaned pair transaction: %v", label, got.err)
+	case <-time.After(2 * time.Second):
+	}
+	if err := proofTx.Rollback(ctx); err != nil {
+		t.Fatalf("release pair transaction before %s: %v", label, err)
+	}
+	select {
+	case got := <-done:
+		return got.domain, got.err
+	case <-ctx.Done():
+		t.Fatalf("%s did not finish after pair transaction ended", label)
+		return store.TenantKeyDomain{}, ctx.Err()
+	}
+}
 
 // TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant proves the real
 // PostgreSQL + embedded-JetStream path: tenant A's hot rows and event history
 // move without payload plaintext, sealing A does not stop B, and neither
 // tenant's resolver can use the other's protection domain.
 func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) {
-	s := newStore(t)
+	s := storetest.OpenRewrapCutoverStore(t, newStore(t), testDSN)
 	ctx := context.Background()
 	for _, tenantID := range []string{tenantA, tenantB} {
 		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: tenantID}); err != nil {
@@ -48,7 +95,7 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	log, rewriteOptions := openTenantKeyDomainHistory(t, s)
+	log, rewriteOptions := openTenantKeyDomainHistory(t, s, deployment)
 	lifecycle, err := tenantseal.NewLifecycle(s, log, deployment, registry, rewriteOptions...)
 	if err != nil {
 		t.Fatal(err)
@@ -144,14 +191,18 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	exhaustedState, err := lifecycle.RequestSeal(
-		ctx, tenantA, "tenant-a-seal-exhausted", strings.Repeat("a", 64),
-	)
+	exhaustedState, err := tenantTransitionAfterOrphanedPairProof(t, s, "RequestSeal",
+		func(callCtx context.Context) (store.TenantKeyDomain, error) {
+			return lifecycle.RequestSeal(callCtx, tenantA, "tenant-a-seal-exhausted", strings.Repeat("a", 64))
+		})
 	if err != nil || exhaustedState.State != store.TenantKeyDomainStateSealQueued ||
 		exhaustedState.OperationID == nil {
 		t.Fatalf("RequestSeal exhausted fixture state=%+v err=%v", exhaustedState, err)
 	}
-	failedState, err := lifecycle.FailSeal(ctx, tenantA, *exhaustedState.OperationID)
+	failedState, err := tenantTransitionAfterOrphanedPairProof(t, s, "FailSeal",
+		func(callCtx context.Context) (store.TenantKeyDomain, error) {
+			return lifecycle.FailSeal(callCtx, tenantA, *exhaustedState.OperationID)
+		})
 	if err != nil || failedState.State != store.TenantKeyDomainStatePartial ||
 		failedState.OperationStatus != store.TenantKeyOperationFailed ||
 		!failedState.Retryable || failedState.LastErrorCode != "seal_delivery_exhausted" {
@@ -182,7 +233,10 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 		t.Fatalf("tenant A stopped before the bounded seal worker: %v", err)
 	}
 
-	sealedState, err := lifecycle.CompleteSeal(ctx, tenantA, *queuedState.OperationID)
+	sealedState, err := tenantTransitionAfterOrphanedPairProof(t, s, "CompleteSeal",
+		func(callCtx context.Context) (store.TenantKeyDomain, error) {
+			return lifecycle.CompleteSeal(callCtx, tenantA, *queuedState.OperationID)
+		})
 	if err != nil || sealedState.State != store.TenantKeyDomainStateSealed {
 		t.Fatalf("CompleteSeal state=%+v err=%v", sealedState, err)
 	}
@@ -200,7 +254,10 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 		t.Fatalf("tenant B stopped while tenant A was sealed: %v", err)
 	}
 
-	unsealedState, err := lifecycle.Unseal(ctx, tenantA)
+	unsealedState, err := tenantTransitionAfterOrphanedPairProof(t, s, "Unseal",
+		func(callCtx context.Context) (store.TenantKeyDomain, error) {
+			return lifecycle.Unseal(callCtx, tenantA)
+		})
 	if err != nil || unsealedState.State != store.TenantKeyDomainStateUnsealed {
 		t.Fatalf("Unseal state=%+v err=%v", unsealedState, err)
 	}
@@ -239,11 +296,50 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 // cross-store history-rewrite coordinator and receipt verifier, and returns the
 // rewrite proof walls a lifecycle needs: backup-fence cutover preparation,
 // audit continuity, and a continuity receipt.
-func openTenantKeyDomainHistory(t *testing.T, s *store.Store) (*events.Log, []events.TenantDataRewriteOption) {
+func openTenantKeyDomainHistory(t *testing.T, s *store.Store, deployment seal.KeyWrapper) (*events.Log, []events.TenantDataRewriteOption) {
 	t.Helper()
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		context.Background(),
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		events.WithAppendAdmission(func(ctx context.Context, event events.Event,
+			publish func(context.Context) (events.Event, error),
+		) (events.Event, error) {
+			if event.Type == "secret.version.written" {
+				var payload struct {
+					Sealed       []byte `json:"sealed"`
+					TenantMarker string `json:"tenant_marker"`
+				}
+				if err := json.Unmarshal(event.Data, &payload); err != nil {
+					return events.Event{}, err
+				}
+				if len(payload.Sealed) == 0 || payload.TenantMarker != "" && payload.TenantMarker != event.TenantID {
+					return events.Event{}, errors.New("tenant-domain fixture container or tenant marker is invalid")
+				}
+				var aad []byte
+				switch event.TenantID {
+				case tenantA:
+					aad = []byte("credential:tenant-a")
+				case tenantB:
+					aad = []byte("credential:tenant-b")
+				default:
+					return events.Event{}, errors.New("tenant-domain fixture tenant is unknown")
+				}
+				plaintext, err := seal.OpenIntoLocked(deployment, payload.Sealed, aad, nil)
+				if err != nil {
+					return events.Event{}, err
+				}
+				plaintext.Destroy()
+			} else if storeFixtureHasSealedField(event.Data) {
+				return events.Event{}, fmt.Errorf("unclassified tenant-domain fixture sealed event %s", event.Type)
+			}
+			// CR-045: every key-state snapshot borrows an exclusive owner B.
+			// Its history read session must already be held before B opens.
+			if events.RequiresExclusiveKeyStateAdmission(event.Type) &&
+				!events.IngressHistoryReadPreheld(ctx) {
+				return events.Event{}, fmt.Errorf("CR-045 lifecycle snapshot %s opened B before history A", event.Type)
+			}
+			return publish(ctx)
+		}),
 		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(s)),
 		events.WithHistoryRewriteContinuityVerifier(func(
 			_ context.Context,
@@ -281,6 +377,42 @@ func openTenantKeyDomainHistory(t *testing.T, s *store.Store) (*events.Log, []ev
 			}, err
 		}),
 	}
+}
+
+func storeFixtureHasSealedField(data []byte) bool {
+	var value any
+	if err := json.Unmarshal(data, &value); err != nil {
+		lower := strings.ToLower(string(data))
+		return strings.Contains(lower, "sealed") || strings.Contains(lower, "ciphertext")
+	}
+	var walk func(any) bool
+	walk = func(current any) bool {
+		switch typed := current.(type) {
+		case map[string]any:
+			for name, child := range typed {
+				lower := strings.ToLower(name)
+				metadata := lower == "sealed_at" || lower == "sealed_sha256" ||
+					lower == "sealed_only_floor" || lower == "sealed_results" ||
+					lower == "sealed_tenants_not_opened" || lower == "sealed_copies" ||
+					lower == "ciphertext_sha256"
+				if !metadata && (lower == "sealed" || strings.HasPrefix(lower, "sealed_") ||
+					lower == "requester_sealed" || lower == "ciphertext" || strings.HasPrefix(lower, "ciphertext_")) {
+					return true
+				}
+				if walk(child) {
+					return true
+				}
+			}
+		case []any:
+			for _, child := range typed {
+				if walk(child) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return walk(value)
 }
 
 func readCredentialCiphertext(t *testing.T, s *store.Store, tenantID string) []byte {

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -21,7 +22,7 @@ import (
 // already revoked.
 func TestSSHProtocolRestoresTenantRevocationsFromEventLog(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode:     config.NATSEmbedded,
 		StoreDir: filepath.Join(t.TempDir(), "nats"),
 	})
@@ -68,7 +69,7 @@ func TestSSHProtocolRestoresTenantRevocationsFromEventLog(t *testing.T) {
 func TestSSHProtocolBoundsRequestCatchUpAndRestoresAfterRestart(t *testing.T) {
 	ctx := context.Background()
 	storeDir := filepath.Join(t.TempDir(), "nats")
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestSSHProtocolBoundsRequestCatchUpAndRestoresAfterRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir})
+	reopened, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +143,7 @@ func TestSSHProtocolBoundsRequestCatchUpAndRestoresAfterRestart(t *testing.T) {
 // source-of-truth event from silently producing an incomplete KRL at startup.
 func TestSSHProtocolFailsClosedOnMalformedRevocationHistory(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode:     config.NATSEmbedded,
 		StoreDir: filepath.Join(t.TempDir(), "nats"),
 	})

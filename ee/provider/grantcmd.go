@@ -87,7 +87,33 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	// refuses to replay until the central server has completed AUD-116 sanitation.
 	log, err := events.OpenRequiringSanitizedSchedulerHistory(ctx, natsConfig,
 		events.WithRequiredPrivacyEventPolicies(),
-		events.WithHistoryRewriteCoordinator(corestore.NewHistoryRewriteCoordinator(st)))
+		events.WithHistoryRewriteCoordinator(corestore.NewHistoryRewriteCoordinator(st)),
+		events.WithRequiredAppendAdmission(),
+		// The offline command emits only delegation events. It has no tenant
+		// custody keys, so it cannot authenticate sealed-bearing events. Keep
+		// its narrow producer inside the same key-state, history and restore
+		// fences used by the serving event source.
+		events.WithAppendAdmission(func(admitCtx context.Context, candidate events.Event,
+			publish func(context.Context) (events.Event, error),
+		) (events.Event, error) {
+			if candidate.Type != EventDelegationGranted && candidate.Type != EventDelegationRevoked {
+				return events.Event{}, fmt.Errorf("provider-grant: unexpected event type %q", candidate.Type)
+			}
+			var published events.Event
+			err := st.WithRestoreIngressSession(admitCtx, func(session context.Context) error {
+				return st.WithGlobalKeyStateAdmission(session, corestore.KeyStateShared, func(keyState context.Context) error {
+					return events.WithIngressHistoryRead(keyState, func(history context.Context) error {
+						return st.WithRestoreEventIngress(history, candidate.TenantID, candidate.ID, candidate.Type,
+							func(owner context.Context) error {
+								var publishErr error
+								published, publishErr = publish(owner)
+								return publishErr
+							})
+					})
+				})
+			})
+			return published, err
+		}))
 	if err != nil {
 		return fmt.Errorf("provider-grant: open event log (run this offline when using embedded NATS): %w", err)
 	}

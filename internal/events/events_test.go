@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
 
@@ -27,7 +28,7 @@ func embeddedCfg(t *testing.T) config.NATS {
 
 func openEmbedded(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), embeddedCfg(t))
+	log, err := eventstest.OpenFixture(context.Background(), embeddedCfg(t))
 	if err != nil {
 		t.Fatalf("Open embedded: %v", err)
 	}
@@ -119,7 +120,7 @@ func TestConcurrentStreamMetadataAndReplayAUD127(t *testing.T) {
 		t.Fatal("external server not ready")
 	}
 	t.Cleanup(srv.Shutdown)
-	log, err := events.Open(context.Background(), config.NATS{
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{
 		Mode:               config.NATSExternal,
 		URL:                srv.ClientURL(),
 		Replicas:           1,
@@ -235,7 +236,7 @@ func TestAppendAssignsSequenceAndTime(t *testing.T) {
 
 func TestJetStreamDuplicateMemoryReallyExpires(t *testing.T) {
 	const duplicateWindow = 100 * time.Millisecond // JetStream's supported minimum.
-	log, err := events.Open(context.Background(), embeddedCfg(t),
+	log, err := eventstest.OpenFixture(context.Background(), embeddedCfg(t),
 		events.WithDuplicateWindowForTesting(duplicateWindow))
 	if err != nil {
 		t.Fatal(err)
@@ -264,7 +265,7 @@ func TestJetStreamDuplicateMemoryReallyExpires(t *testing.T) {
 
 func TestEventByIDAcceptsExactRetainedDuplicatesAndRejectsConflicts(t *testing.T) {
 	const duplicateWindow = 100 * time.Millisecond
-	log, err := events.Open(context.Background(), embeddedCfg(t),
+	log, err := eventstest.OpenFixture(context.Background(), embeddedCfg(t),
 		events.WithDuplicateWindowForTesting(duplicateWindow))
 	if err != nil {
 		t.Fatal(err)
@@ -429,7 +430,7 @@ func TestDurabilityAcrossReopen(t *testing.T) {
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
 	ctx := context.Background()
 
-	log1, err := events.Open(ctx, cfg)
+	log1, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -440,7 +441,7 @@ func TestDurabilityAcrossReopen(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	log2, err := events.Open(ctx, cfg) // same StoreDir
+	log2, err := eventstest.OpenFixture(ctx, cfg) // same StoreDir
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -461,7 +462,7 @@ func TestEmbeddedStreamIsSingleReplica(t *testing.T) {
 	// a temp store dir, so this also exercises the RESIL-001 default not breaking Open.
 	cfg := config.Default().NATS
 	cfg.StoreDir = t.TempDir()
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("Open embedded with defaults: %v", err)
 	}
@@ -500,7 +501,7 @@ func TestExternalReplicasStrictModeFailsOnSingleNode(t *testing.T) {
 	if config.DefaultExternalReplicas <= 1 {
 		t.Fatalf("DefaultExternalReplicas = %d, want >1 (the knob this test guards)", config.DefaultExternalReplicas)
 	}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err == nil {
 		_ = log.Close()
 		t.Fatal("Open external (single-node, default replicas) succeeded; want strict durability failure")
@@ -527,7 +528,7 @@ func TestExternalSingleReplicaRequiresExplicitAllow(t *testing.T) {
 	defer srv.Shutdown()
 
 	ctx := context.Background()
-	_, err = events.Open(ctx, config.NATS{Mode: config.NATSExternal, URL: srv.ClientURL(), Replicas: 1})
+	_, err = eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSExternal, URL: srv.ClientURL(), Replicas: 1})
 	if err == nil {
 		t.Fatal("Open external Replicas=1 without allow flag succeeded; want eval opt-in failure")
 	}
@@ -535,7 +536,7 @@ func TestExternalSingleReplicaRequiresExplicitAllow(t *testing.T) {
 		t.Fatalf("Open error = %v, want explicit allow-single-replica guidance", err)
 	}
 
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode:               config.NATSExternal,
 		URL:                srv.ClientURL(),
 		Replicas:           1,
@@ -576,7 +577,7 @@ func TestExternalModeIsConfigOnly(t *testing.T) {
 	defer srv.Shutdown()
 
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode:               config.NATSExternal,
 		URL:                srv.ClientURL(),
 		Replicas:           1,
@@ -664,7 +665,7 @@ func TestLegacySchedulerWriteFloorRequiresUnforgeableRestoreAuthority(t *testing
 		t.Fatal(err)
 	}
 	t.Cleanup(authorizer.Destroy)
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		context.Background(), embeddedCfg(t),
 		events.WithBackupRestoreAuthorizer(authorizer),
 	)
@@ -771,7 +772,7 @@ func TestEventByIDNeverReturnsUnsafeLegacySchedulerPayload(t *testing.T) {
 
 func TestEventByIDUnsafeLegacyPayloadWinsOverDuplicateConflict(t *testing.T) {
 	const duplicateWindow = 100 * time.Millisecond
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		context.Background(), embeddedCfg(t),
 		events.WithDuplicateWindowForTesting(duplicateWindow),
 	)

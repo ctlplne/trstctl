@@ -25,7 +25,9 @@ func TestDeploymentKEKDomainFollowsItsEventsAndIsReadInsideTheTenantFence(t *tes
 		t.Fatalf("a deployment that never rotated has a record: found=%v err=%v", found, err)
 	}
 	apply := func(d store.DeploymentKEKDomain) error {
-		return s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error { return s.ApplyDeploymentKEKSnapshotTx(ctx, tx, d) })
+		return withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+			return s.ApplyDeploymentKEKSnapshotTx(owned, tx, d)
+		})
 	}
 	now := time.Now().UTC()
 	rotating := store.DeploymentKEKDomain{

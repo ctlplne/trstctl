@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/config"
@@ -218,7 +219,7 @@ func TestKMIPAttributeOperations(t *testing.T) {
 // and no event carries it in the clear.
 func TestKMIPDurableKeyPairReplays(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

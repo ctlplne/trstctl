@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -113,7 +114,7 @@ func TestIssuanceHistoryCountsRenewalsWithoutCountingObservations(t *testing.T) 
 	check("legacy neighbor does not contaminate this tenant", otherTenant, 1)
 	// An unavailable historical prefix cannot authorize dropping the existing
 	// inventory or pretending its unknown issuance facts were verified empty.
-	missingHistory, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	missingHistory, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +140,7 @@ func TestIssuanceHistoryCountsRenewalsWithoutCountingObservations(t *testing.T) 
 func billingHistory(t *testing.T, cs *corestore.Store) (*events.Log, *projections.Projector, *orchestrator.Orchestrator) {
 	t.Helper()
 	ctx := t.Context()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

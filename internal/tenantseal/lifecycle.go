@@ -27,6 +27,34 @@ var (
 
 const tenantKeyDomainHistoryStage = "jetstream_hot_history"
 
+type tenantRewrapOperationContextKey struct{}
+
+type tenantRewrapOperation struct {
+	tenantID, operationID, kind string
+}
+
+func tenantRewrapSnapshotAllowed(kind, eventType string) bool {
+	switch kind {
+	case store.TenantKeyOperationMigrate:
+		switch eventType {
+		case projections.EventTenantKeyDomainMigrationStarted,
+			projections.EventTenantKeyDomainMigrationProgressed,
+			projections.EventTenantKeyDomainMigrationCompleted,
+			projections.EventTenantKeyDomainMigrationFailed:
+			return true
+		}
+	case store.TenantKeyOperationRotate:
+		switch eventType {
+		case projections.EventTenantKeyDomainRotationStarted,
+			projections.EventTenantKeyDomainRotationProgressed,
+			projections.EventTenantKeyDomainRotationCompleted,
+			projections.EventTenantKeyDomainRotationFailed:
+			return true
+		}
+	}
+	return false
+}
+
 var tenantKeyDomainSealOperationNamespace = uuid.MustParse("ebffb468-4321-4d13-8f5f-3b56515744ec")
 
 // DomainKEKManager combines the exact wrapper operations needed by the served
@@ -37,6 +65,7 @@ var tenantKeyDomainSealOperationNamespace = uuid.MustParse("ebffb468-4321-4d13-8
 type DomainKEKManager interface {
 	DomainKEKRegistry
 	DomainKEKCreator
+	ConfiguredWrapper(WrapperRef) bool
 }
 
 // Lifecycle coordinates one tenant's independently wrapped key domain across
@@ -64,7 +93,7 @@ func NewLifecycle(
 		return nil, ErrLifecycleNotConfigured
 	}
 	return &Lifecycle{
-		store: st, log: log, projector: projections.New(st),
+		store: st, log: log, projector: projections.New(st, projections.WithCanonicalEventSource(log)),
 		deployment: deployment, manager: manager,
 		rewriteOptions: append([]events.TenantDataRewriteOption(nil), rewriteOptions...),
 	}, nil
@@ -89,11 +118,63 @@ func (l *Lifecycle) Migrate(
 	tenantID string,
 	ref WrapperRef,
 ) (store.TenantKeyDomain, error) {
+	if l == nil || l.store == nil {
+		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
+	}
+	if err := l.validateMigrationPreconditions(tenantID, ref); err != nil {
+		return store.TenantKeyDomain{}, err
+	}
+	var out store.TenantKeyDomain
+	err := l.store.WithRestoreActivity(ctx, tenantID, uuid.NewString(), "maintenance", "tenant-domain-migrate",
+		func(restoreCtx context.Context) error {
+			return l.store.WithGlobalKeyStateAdmission(restoreCtx, store.KeyStateExclusive, func(admitted context.Context) error {
+				var inner error
+				out, inner = l.migrateAdmitted(admitted, tenantID, ref)
+				return inner
+			})
+		})
+	return out, err
+}
+
+func (l *Lifecycle) migrateAdmitted(
+	ctx context.Context, tenantID string, ref WrapperRef,
+) (store.TenantKeyDomain, error) {
 	if err := l.validateMigrationPreconditions(tenantID, ref); err != nil {
 		return store.TenantKeyDomain{}, err
 	}
 	var out store.TenantKeyDomain
 	err := l.log.WithHistoryOperation(ctx, func(operationCtx context.Context) error {
+		if current, err := l.store.GetTenantKeyDomain(operationCtx, tenantID); err == nil &&
+			current.OperationKind == store.TenantKeyOperationMigrate &&
+			current.OperationStatus == store.TenantKeyOperationCompleted {
+			gate, found, gateErr := l.store.GetTenantApplicationSecretRewrapGate(operationCtx, tenantID)
+			if gateErr != nil {
+				return gateErr
+			}
+			if found && gate.InProgress && gate.Kind == store.TenantKeyOperationMigrate {
+				if err := l.store.CompleteTenantApplicationSecretRewrap(operationCtx, tenantID, gate.OperationID); err != nil {
+					return err
+				}
+				out = current
+				return nil
+			}
+			return ErrMigrationAlreadyDone
+		} else if err != nil && !errors.Is(err, store.ErrTenantKeyDomainNotFound) {
+			return err
+		}
+		access, err := NewAccess(l.store, l.deployment, l.manager)
+		if err != nil {
+			return err
+		}
+		if err := backfillMutationReceipts(operationCtx, l.store, l.log, access, tenantID); err != nil {
+			return err
+		}
+		rewrapOperationID, err := l.store.BeginTenantApplicationSecretRewrap(operationCtx, tenantID, store.TenantKeyOperationMigrate)
+		if err != nil {
+			return err
+		}
+		operationCtx = context.WithValue(operationCtx, tenantRewrapOperationContextKey{},
+			tenantRewrapOperation{tenantID: tenantID, operationID: rewrapOperationID, kind: store.TenantKeyOperationMigrate})
 		domain, key, err := l.beginOrResumeMigration(operationCtx, tenantID, ref)
 		if err != nil {
 			return err
@@ -162,6 +243,9 @@ func (l *Lifecycle) Migrate(
 		if err := l.appendSnapshot(operationCtx, tenantID, projections.EventTenantKeyDomainMigrationCompleted, domain); err != nil {
 			return err
 		}
+		if err := l.store.CompleteTenantApplicationSecretRewrap(operationCtx, tenantID, rewrapOperationID); err != nil {
+			return err
+		}
 		out, err = l.store.GetTenantKeyDomain(operationCtx, tenantID)
 		return err
 	})
@@ -190,6 +274,15 @@ func (l *Lifecycle) RequestSeal(
 	ctx context.Context,
 	tenantID, idempotencyKey, requestBinding string,
 ) (store.TenantKeyDomain, error) {
+	return l.withExclusiveKeyStateTransition(ctx, tenantID, "tenant-domain-seal-request", func(admitted context.Context) (store.TenantKeyDomain, error) {
+		return l.requestSealAdmitted(admitted, tenantID, idempotencyKey, requestBinding)
+	})
+}
+
+func (l *Lifecycle) requestSealAdmitted(
+	ctx context.Context,
+	tenantID, idempotencyKey, requestBinding string,
+) (store.TenantKeyDomain, error) {
 	if l == nil || l.store == nil || l.log == nil || l.projector == nil {
 		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
 	}
@@ -199,6 +292,11 @@ func (l *Lifecycle) RequestSeal(
 	}
 	var out store.TenantKeyDomain
 	err = l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		owned, err := l.store.BindKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive)
+		if err != nil {
+			return err
+		}
+		ctx := owned
 		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
 			return err
 		}
@@ -222,7 +320,9 @@ func (l *Lifecycle) RequestSeal(
 			out = domain
 			return nil
 		case !tenantKeyDomainCanQueueSeal(tenantID, domain):
-			return ErrLifecycleConflict
+			// This branch has only read and locked the domain. No event,
+			// outbox row or state change was attempted.
+			return store.RestoreActivityNoEffect(ErrLifecycleConflict)
 		}
 
 		domain.OperationID = &operationID
@@ -242,14 +342,17 @@ func (l *Lifecycle) RequestSeal(
 		if err != nil {
 			return err
 		}
-		event, err := l.log.Append(ctx, events.Event{
-			Type:     projections.EventTenantKeyDomainSealRequested,
-			TenantID: tenantID, SchemaVersion: 1, Data: payload,
-		})
-		if err != nil {
-			return err
-		}
-		if err := l.projector.ApplyTx(ctx, tx, event); err != nil {
+		if err := l.store.WithKeyStateSnapshotEvent(ctx, tx, tenantID,
+			projections.EventTenantKeyDomainSealRequested, func(eventCtx context.Context) error {
+				event, err := l.log.Append(eventCtx, events.Event{
+					Type:     projections.EventTenantKeyDomainSealRequested,
+					TenantID: tenantID, SchemaVersion: 1, Data: payload,
+				})
+				if err != nil {
+					return err
+				}
+				return l.projector.ApplyTx(eventCtx, tx, event)
+			}); err != nil {
 			return err
 		}
 		out = domain
@@ -275,12 +378,26 @@ func (l *Lifecycle) CompleteSeal(
 	ctx context.Context,
 	tenantID, operationID string,
 ) (store.TenantKeyDomain, error) {
+	return l.withExclusiveKeyStateTransition(ctx, tenantID, "tenant-domain-seal-complete", func(admitted context.Context) (store.TenantKeyDomain, error) {
+		return l.completeSealAdmitted(admitted, tenantID, operationID)
+	})
+}
+
+func (l *Lifecycle) completeSealAdmitted(
+	ctx context.Context,
+	tenantID, operationID string,
+) (store.TenantKeyDomain, error) {
 	if l == nil || l.store == nil || l.log == nil || l.projector == nil ||
 		strings.TrimSpace(tenantID) == "" || strings.TrimSpace(operationID) == "" {
 		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
 	}
 	var out store.TenantKeyDomain
 	err := l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		owned, err := l.store.BindKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive)
+		if err != nil {
+			return err
+		}
+		ctx := owned
 		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
 			return err
 		}
@@ -333,12 +450,26 @@ func (l *Lifecycle) FailSeal(
 	ctx context.Context,
 	tenantID, operationID string,
 ) (store.TenantKeyDomain, error) {
+	return l.withExclusiveKeyStateTransition(ctx, tenantID, "tenant-domain-seal-fail", func(admitted context.Context) (store.TenantKeyDomain, error) {
+		return l.failSealAdmitted(admitted, tenantID, operationID)
+	})
+}
+
+func (l *Lifecycle) failSealAdmitted(
+	ctx context.Context,
+	tenantID, operationID string,
+) (store.TenantKeyDomain, error) {
 	if l == nil || l.store == nil || l.log == nil || l.projector == nil ||
 		strings.TrimSpace(tenantID) == "" || strings.TrimSpace(operationID) == "" {
 		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
 	}
 	var out store.TenantKeyDomain
 	err := l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		owned, err := l.store.BindKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive)
+		if err != nil {
+			return err
+		}
+		ctx := owned
 		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
 			return err
 		}
@@ -395,7 +526,29 @@ func (l *Lifecycle) FailSeal(
 // Unseal proves the configured wrapper can authenticate and open the exact
 // persisted tenant-domain KEK before making the domain available again.
 func (l *Lifecycle) Unseal(ctx context.Context, tenantID string) (store.TenantKeyDomain, error) {
-	return l.transition(ctx, tenantID, store.TenantKeyOperationUnseal)
+	return l.withExclusiveKeyStateTransition(ctx, tenantID, "tenant-domain-unseal", func(admitted context.Context) (store.TenantKeyDomain, error) {
+		return l.transition(admitted, tenantID, store.TenantKeyOperationUnseal)
+	})
+}
+
+func (l *Lifecycle) withExclusiveKeyStateTransition(
+	ctx context.Context, tenantID, lane string, fn func(context.Context) (store.TenantKeyDomain, error),
+) (store.TenantKeyDomain, error) {
+	if l == nil || l.store == nil || l.log == nil {
+		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
+	}
+	var out store.TenantKeyDomain
+	err := l.store.WithRestoreActivity(ctx, tenantID, uuid.NewString(), "maintenance", lane,
+		func(restoreCtx context.Context) error {
+			return l.store.WithGlobalKeyStateAdmission(restoreCtx, store.KeyStateExclusive, func(admitted context.Context) error {
+				return l.log.WithHistoryRead(admitted, func(history context.Context) error {
+					var inner error
+					out, inner = fn(history)
+					return inner
+				})
+			})
+		})
+	return out, err
 }
 
 func (l *Lifecycle) validateMigrationPreconditions(tenantID string, ref WrapperRef) error {
@@ -405,7 +558,8 @@ func (l *Lifecycle) validateMigrationPreconditions(tenantID string, ref WrapperR
 	if strings.TrimSpace(tenantID) == "" {
 		return errors.New("tenantseal: migration requires tenant_id (AN-1)")
 	}
-	if !knownWrapperKind(ref.Kind) || strings.TrimSpace(ref.ID) == "" || strings.TrimSpace(ref.ID) != ref.ID {
+	if !knownWrapperKind(ref.Kind) || strings.TrimSpace(ref.ID) == "" ||
+		strings.TrimSpace(ref.ID) != ref.ID || !l.manager.ConfiguredWrapper(ref) {
 		return ErrWrapperNotConfigured
 	}
 	if err := l.log.HistoryRewriteReady(); err != nil {
@@ -421,68 +575,76 @@ func (l *Lifecycle) beginOrResumeMigration(
 ) (store.TenantKeyDomain, TransientDomainKEK, error) {
 	var domain store.TenantKeyDomain
 	var key TransientDomainKEK
-	err := l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
-			return err
-		}
-		current, err := l.store.GetTenantKeyDomainTx(ctx, tx, tenantID)
-		switch {
-		case errors.Is(err, store.ErrTenantKeyDomainNotFound):
-			domainID := uuid.NewString()
-			operationID := uuid.NewString()
-			binding, err := DomainBinding(tenantID, domainID, 1)
+	err := l.log.WithHistoryRead(ctx, func(history context.Context) error {
+		ctx := history
+		return l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			owned, err := l.store.BindKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive)
 			if err != nil {
 				return err
 			}
-			created, wrapped, err := l.manager.CreateDomainKEK(ctx, ref, binding)
-			if err != nil {
-				return classifyDomainOpenError(err)
-			}
-			key = created
-			domain = store.TenantKeyDomain{
-				TenantID: tenantID, DomainID: domainID, Generation: 1,
-				ProtectionMode: store.TenantKeyProtectionTenantDomain,
-				State:          store.TenantKeyDomainStateMigrating,
-				WrapperKind:    ref.Kind, WrapperID: ref.ID, WrappedDomainKEK: wrapped,
-				OperationID: &operationID, OperationKind: store.TenantKeyOperationMigrate,
-				OperationStatus: store.TenantKeyOperationRunning,
-				MigrationStage:  "created", ProgressCompleted: 0,
-				ProgressTotal:         int64(len(store.TenantKeyDomainCiphertextMigrationStages()) + 1),
-				Retryable:             true,
-				LegacyHistoryExposure: store.TenantKeyLegacyHotHistoryPending,
-				CreatedAt:             time.Now().UTC(),
-			}
-			domain.MigrationStartedAt = &domain.CreatedAt
-			return l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainMigrationStarted, domain)
-		case err != nil:
-			return err
-		case current.WrapperKind != ref.Kind || current.WrapperID != ref.ID:
-			return ErrLifecycleConflict
-		case current.OperationKind != store.TenantKeyOperationMigrate:
-			return ErrLifecycleConflict
-		case current.OperationStatus == store.TenantKeyOperationCompleted:
-			return ErrMigrationAlreadyDone
-		case current.OperationStatus != store.TenantKeyOperationRunning && current.OperationStatus != store.TenantKeyOperationFailed:
-			return ErrLifecycleConflict
-		default:
-			binding, err := DomainBinding(current.TenantID, current.DomainID, current.Generation)
-			if err != nil {
+			ctx := owned
+			if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
 				return err
 			}
-			opened, err := l.manager.OpenDomainKEK(
-				ctx, WrapperRef{Kind: current.WrapperKind, ID: current.WrapperID},
-				current.WrappedDomainKEK, binding,
-			)
-			if err != nil {
-				return classifyDomainOpenError(err)
+			current, err := l.store.GetTenantKeyDomainTx(ctx, tx, tenantID)
+			switch {
+			case errors.Is(err, store.ErrTenantKeyDomainNotFound):
+				domainID := uuid.NewString()
+				operationID := uuid.NewString()
+				binding, err := DomainBinding(tenantID, domainID, 1)
+				if err != nil {
+					return err
+				}
+				created, wrapped, err := l.manager.CreateDomainKEK(ctx, ref, binding)
+				if err != nil {
+					return classifyDomainOpenError(err)
+				}
+				key = created
+				domain = store.TenantKeyDomain{
+					TenantID: tenantID, DomainID: domainID, Generation: 1,
+					ProtectionMode: store.TenantKeyProtectionTenantDomain,
+					State:          store.TenantKeyDomainStateMigrating,
+					WrapperKind:    ref.Kind, WrapperID: ref.ID, WrappedDomainKEK: wrapped,
+					OperationID: &operationID, OperationKind: store.TenantKeyOperationMigrate,
+					OperationStatus: store.TenantKeyOperationRunning,
+					MigrationStage:  "created", ProgressCompleted: 0,
+					ProgressTotal:         int64(len(store.TenantKeyDomainCiphertextMigrationStages()) + 1),
+					Retryable:             true,
+					LegacyHistoryExposure: store.TenantKeyLegacyHotHistoryPending,
+					CreatedAt:             time.Now().UTC(),
+				}
+				domain.MigrationStartedAt = &domain.CreatedAt
+				return l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainMigrationStarted, domain)
+			case err != nil:
+				return err
+			case current.WrapperKind != ref.Kind || current.WrapperID != ref.ID:
+				return ErrLifecycleConflict
+			case current.OperationKind != store.TenantKeyOperationMigrate:
+				return ErrLifecycleConflict
+			case current.OperationStatus == store.TenantKeyOperationCompleted:
+				return ErrMigrationAlreadyDone
+			case current.OperationStatus != store.TenantKeyOperationRunning && current.OperationStatus != store.TenantKeyOperationFailed:
+				return ErrLifecycleConflict
+			default:
+				binding, err := DomainBinding(current.TenantID, current.DomainID, current.Generation)
+				if err != nil {
+					return err
+				}
+				opened, err := l.manager.OpenDomainKEK(
+					ctx, WrapperRef{Kind: current.WrapperKind, ID: current.WrapperID},
+					current.WrappedDomainKEK, binding,
+				)
+				if err != nil {
+					return classifyDomainOpenError(err)
+				}
+				key, domain = opened, current
+				domain.State = store.TenantKeyDomainStateMigrating
+				domain.OperationStatus = store.TenantKeyOperationRunning
+				domain.Retryable = true
+				domain.LastErrorCode, domain.LastError = "", ""
+				return l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainMigrationProgressed, domain)
 			}
-			key, domain = opened, current
-			domain.State = store.TenantKeyDomainStateMigrating
-			domain.OperationStatus = store.TenantKeyOperationRunning
-			domain.Retryable = true
-			domain.LastErrorCode, domain.LastError = "", ""
-			return l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainMigrationProgressed, domain)
-		}
+		})
 	})
 	if err != nil && key != nil {
 		key.Destroy()
@@ -515,7 +677,7 @@ func (l *Lifecycle) failMigration(
 	if err := l.appendSnapshot(ctx, domain.TenantID, projections.EventTenantKeyDomainMigrationFailed, domain); err != nil {
 		return errors.Join(cause, err)
 	}
-	return cause
+	return store.RestoreActivityTerminal(cause)
 }
 
 func (l *Lifecycle) transition(
@@ -529,6 +691,11 @@ func (l *Lifecycle) transition(
 		return store.TenantKeyDomain{}, errors.New("tenantseal: lifecycle requires tenant_id (AN-1)")
 	}
 	err := l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		owned, err := l.store.BindKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive)
+		if err != nil {
+			return err
+		}
+		ctx := owned
 		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
 			return err
 		}
@@ -595,11 +762,19 @@ func (l *Lifecycle) appendSnapshot(
 	tenantID, eventType string,
 	domain store.TenantKeyDomain,
 ) error {
-	return l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
-			return err
-		}
-		return l.appendSnapshotTx(ctx, tx, tenantID, eventType, domain)
+	return l.store.WithGlobalKeyStateAdmission(ctx, store.KeyStateExclusive, func(admitted context.Context) error {
+		return l.log.WithHistoryRead(admitted, func(history context.Context) error {
+			return l.store.WithTenant(history, tenantID, func(tx pgx.Tx) error {
+				owned, err := l.store.BindKeyStateOwnerTx(history, tx, tenantID, store.KeyStateExclusive)
+				if err != nil {
+					return err
+				}
+				if err := l.store.LockTenantKeyDomainExclusiveTx(owned, tx, tenantID); err != nil {
+					return err
+				}
+				return l.appendSnapshotTx(owned, tx, tenantID, eventType, domain)
+			})
+		})
 	})
 }
 
@@ -609,17 +784,31 @@ func (l *Lifecycle) appendSnapshotTx(
 	tenantID, eventType string,
 	domain store.TenantKeyDomain,
 ) error {
+	if err := l.store.RequireKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive); err != nil {
+		return err
+	}
 	payload, err := json.Marshal(snapshotFromDomain(domain))
 	if err != nil {
 		return err
 	}
-	event, err := l.log.Append(ctx, events.Event{
-		Type: eventType, TenantID: tenantID, SchemaVersion: 1, Data: payload,
-	})
-	if err != nil {
-		return err
+	appendAndProject := func(eventCtx context.Context) error {
+		event, err := l.log.Append(eventCtx, events.Event{
+			Type: eventType, TenantID: tenantID, SchemaVersion: 1, Data: payload,
+		})
+		if err != nil {
+			return err
+		}
+		return l.projector.ApplyTx(eventCtx, tx, event)
 	}
-	return l.projector.ApplyTx(ctx, tx, event)
+	if operation, ok := ctx.Value(tenantRewrapOperationContextKey{}).(tenantRewrapOperation); ok {
+		if operation.tenantID != tenantID || operation.kind != domain.OperationKind ||
+			!tenantRewrapSnapshotAllowed(operation.kind, eventType) {
+			return store.ErrApplicationSecretRewrapInProgress
+		}
+		return l.store.WithRewrapCoordinatorEvent(ctx, tx, tenantID, operation.operationID,
+			eventType, appendAndProject)
+	}
+	return l.store.WithKeyStateSnapshotEvent(ctx, tx, tenantID, eventType, appendAndProject)
 }
 
 func snapshotFromDomain(domain store.TenantKeyDomain) projections.TenantKeyDomainSnapshot {

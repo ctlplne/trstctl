@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -117,7 +118,7 @@ func TestRetiredLegacyPolicyRepairsSignerCustodyAfterColdRestart(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}

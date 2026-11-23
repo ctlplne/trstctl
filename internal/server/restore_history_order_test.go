@@ -78,3 +78,22 @@ func TestNormalHistoryConstructorRejectsPendingRestoreBeforeSanitation(t *testin
 		t.Fatalf("normal constructor order = pending:%d recovery:%d sanitation:%d", pending, recovery, sanitize)
 	}
 }
+
+func TestFullRestoreOwnsKeyStateBeforeTargetBrokerOpenCR045(t *testing.T) {
+	source, err := os.ReadFile("backup.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(source)
+	start := strings.Index(body, "func restoreEventLogAdmitted(")
+	end := strings.Index(body[start:], "\nfunc ")
+	if start < 0 || end <= 0 {
+		t.Fatal("cannot locate full restore event-log admission")
+	}
+	body = body[start : start+end]
+	guard := strings.Index(body, "st.WithRestoreRawHistoryAdmission(")
+	open := strings.Index(body, "openConfiguredEventSourceWithExistingCustodyBeforeOpen(")
+	if guard < 0 || open <= guard {
+		t.Fatalf("target broker Open escaped raw-history A/B owner admission: guard=%d open=%d", guard, open)
+	}
+}

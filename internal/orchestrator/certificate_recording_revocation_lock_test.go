@@ -144,7 +144,7 @@ func TestCertificateRecordingAndRevocationAcquireMetadataBeforeRows(t *testing.T
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		//trstctl:system-query — exact owned test connection wait kind only, not tenant data or statement text (AN-1 exemption).
-		if err := s.SystemPool().QueryRow(ctx, `SELECT coalesce(max(wait_event),'') FROM pg_stat_activity WHERE application_name='recording_revocation_order_peer' AND wait_event_type='Lock'`).Scan(&wait); err != nil {
+		if err := s.SystemPool().QueryRow(ctx, `SELECT coalesce(max(wait_event),'') FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%lock_certificate_metadata_order%'`).Scan(&wait); err != nil {
 			t.Fatal(err)
 		}
 		if wait != "" {

@@ -250,6 +250,10 @@ type PostgresStateIdentity struct {
 	// from. Empty means signatures are recorded but not required — what an
 	// in-place restore of this deployment's own artifact needs.
 	TrustAnchors [][]byte
+	// RestoreMarker is set only by the paired full-restore owner. It permits
+	// staging a differing sealed outbox pair for post-import authentication;
+	// a generic importer still requires exact payload bytes.
+	RestoreMarker *store.RestoreMarker
 }
 
 // Close releases the locked key material the identity holds. The signer is
@@ -503,11 +507,42 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 // verifies under key. This is the check standing between an operator-supplied
 // file and attacker-chosen api_tokens rows in the restored database.
 func RestorePostgresStateWithKey(ctx context.Context, st *store.Store, r io.Reader, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
+	if st == nil {
+		// A nil target has no mutable state to admit. Preserve the verifier's
+		// original manifest-first error for callers probing an invalid artifact,
+		// then refuse a valid artifact because there is nowhere safe to import it.
+		rows, _, err := readPostgresStateForRestore(ctx, r, key, id)
+		wipePostgresRows(rows)
+		if err != nil {
+			return PostgresStateSummary{}, err
+		}
+		return PostgresStateSummary{}, store.ErrRestoreAdmissionLost
+	}
+	var summary PostgresStateSummary
+	err := st.WithRestoreImportAdmission(ctx, func(admitted context.Context) error {
+		var importErr error
+		summary, importErr = restorePostgresStateAdmitted(admitted, st, r, key, id)
+		return importErr
+	})
+	return summary, err
+}
+
+func restorePostgresStateAdmitted(ctx context.Context, st *store.Store, r io.Reader, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
 	rowsByTable, summary, err := readPostgresStateForRestore(ctx, r, key, id)
 	if err != nil {
 		return PostgresStateSummary{}, err
 	}
 	defer wipePostgresRows(rowsByTable)
+	var fullRestoreOperationID string
+	if id.RestoreMarker != nil {
+		if err := st.RequireFullRestoreImportOwner(ctx, *id.RestoreMarker); err != nil {
+			return summary, err
+		}
+		if summary.EventCutSequence != id.RestoreMarker.EventCut {
+			return summary, errors.New("backup: PostgreSQL artifact cut differs from admitted full restore")
+		}
+		fullRestoreOperationID = id.RestoreMarker.OperationID
+	}
 
 	tx, err := st.SystemPool().Begin(ctx)
 	if err != nil {
@@ -540,7 +575,7 @@ func RestorePostgresStateWithKey(ctx context.Context, st *store.Store, r io.Read
 	if err != nil {
 		return summary, err
 	}
-	outboxRows, secretSyncAssociations, err := reconcileSecretSyncOutboxRows(ctx, tx, outboxRows)
+	outboxRows, secretSyncAssociations, err := reconcileSecretSyncOutboxRows(ctx, st, tx, outboxRows, fullRestoreOperationID)
 	if err != nil {
 		return summary, err
 	}
@@ -792,11 +827,14 @@ type secretSyncOutboxRestoreAssociation struct {
 // Missing/partial authority fails before any retained outbox row is replaced.
 func reconcileSecretSyncOutboxRows(
 	ctx context.Context,
+	st *store.Store,
 	tx pgx.Tx,
 	rows []json.RawMessage,
+	fullRestoreOperationID string,
 ) ([]json.RawMessage, []secretSyncOutboxRestoreAssociation, error) {
 	normalized := make([]json.RawMessage, 0, len(rows))
 	associations := make([]secretSyncOutboxRestoreAssociation, 0)
+	var stagedPairs []store.RestoreOutboxPair
 	seenStableKeys := make(map[string]struct{})
 	for index, raw := range rows {
 		var fields map[string]json.RawMessage
@@ -881,13 +919,25 @@ func reconcileSecretSyncOutboxRows(
 		}
 		expectedDestination := "secret.sync." + rebuilt.target
 		expectedLane := "secret.sync:" + rebuilt.target
-		if rebuilt.targetOrder == 0 || rebuilt.outboxTargetOrder != rebuilt.targetOrder ||
-			rebuilt.destination != expectedDestination || rebuilt.effectLane != expectedLane ||
-			rebuilt.idempotencyKey != row.IdempotencyKey ||
-			row.Destination != expectedDestination ||
-			(row.EffectLane != "" && row.EffectLane != expectedLane) ||
-			!bytes.Equal(payload, rebuilt.payload) {
-			return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d differs from rebuilt command identity", index+1)
+		var mismatches []string
+		if rebuilt.targetOrder == 0 || rebuilt.outboxTargetOrder != rebuilt.targetOrder {
+			mismatches = append(mismatches, "order")
+		}
+		if rebuilt.destination != expectedDestination || row.Destination != expectedDestination {
+			mismatches = append(mismatches, "destination")
+		}
+		if rebuilt.effectLane != expectedLane || row.EffectLane != "" && row.EffectLane != expectedLane {
+			mismatches = append(mismatches, "effect lane")
+		}
+		if rebuilt.idempotencyKey != row.IdempotencyKey {
+			mismatches = append(mismatches, "idempotency key")
+		}
+		payloadDiffers := !bytes.Equal(payload, rebuilt.payload)
+		if payloadDiffers && fullRestoreOperationID == "" {
+			mismatches = append(mismatches, "payload")
+		}
+		if len(mismatches) != 0 {
+			return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d differs from rebuilt command identity (%s)", index+1, strings.Join(mismatches, ", "))
 		}
 		var binding struct {
 			ID             string `json:"id"`
@@ -900,6 +950,20 @@ func reconcileSecretSyncOutboxRows(
 			binding.Key != rebuilt.remoteKey || binding.Target != rebuilt.target ||
 			binding.RequestBinding != rebuilt.requestBinding || len(binding.Sealed) == 0 {
 			return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d payload differs from rebuilt command identity", index+1)
+		}
+		if payloadDiffers {
+			beforeSealed, afterSealed, err := sealedOutboxPairCopies(rebuilt.payload, payload)
+			if err != nil {
+				return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d has changed non-sealed command fields: %w", index+1, err)
+			}
+			stagedPairs = append(stagedPairs, store.RestoreOutboxPair{
+				TenantID: row.TenantID, OperationID: fullRestoreOperationID,
+				JobID: rebuilt.jobID, EventSequence: rebuilt.targetOrder, OutboxID: row.ID,
+				EventPayloadSHA256: crypto.SHA256Hex(rebuilt.payload),
+				RowPayloadSHA256:   crypto.SHA256Hex(payload),
+				EventSealedSHA256:  crypto.SHA256Hex(beforeSealed),
+				RowSealedSHA256:    crypto.SHA256Hex(afterSealed),
+			})
 		}
 		associationTargetOrder := rebuilt.targetOrder
 		associationOrderFromEvent := rebuilt.outboxOrderFromEvent
@@ -1006,7 +1070,45 @@ func reconcileSecretSyncOutboxRows(
 			})
 		}
 	}
+	for _, pair := range stagedPairs {
+		if err := st.StageRestoreOutboxPairTx(ctx, tx, pair); err != nil {
+			return nil, nil, err
+		}
+	}
 	return normalized, associations, nil
+}
+
+// A full restore may defer only the sealed bytes of one otherwise identical
+// command. Arbitrary extra fields, changed non-secret metadata and an absent
+// sealed container still fail before the artifact replaces the rebuilt row.
+func sealedOutboxPairCopies(before, after []byte) ([]byte, []byte, error) {
+	var left, right map[string]json.RawMessage
+	if err := json.Unmarshal(before, &left); err != nil {
+		return nil, nil, err
+	}
+	if err := json.Unmarshal(after, &right); err != nil {
+		return nil, nil, err
+	}
+	if len(left) != len(right) {
+		return nil, nil, errors.New("field set differs")
+	}
+	for name, value := range left {
+		other, found := right[name]
+		if !found || name != "sealed" && !bytes.Equal(bytes.TrimSpace(value), bytes.TrimSpace(other)) {
+			return nil, nil, errors.New("non-sealed field differs")
+		}
+	}
+	var beforeSealed, afterSealed []byte
+	if err := json.Unmarshal(left["sealed"], &beforeSealed); err != nil {
+		return nil, nil, err
+	}
+	if err := json.Unmarshal(right["sealed"], &afterSealed); err != nil {
+		return nil, nil, err
+	}
+	if len(beforeSealed) == 0 || len(afterSealed) == 0 {
+		return nil, nil, errors.New("sealed field is empty")
+	}
+	return beforeSealed, afterSealed, nil
 }
 
 // decodePostgresJSONBytea decodes the exact text representation emitted by
@@ -1351,6 +1453,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"secret_store_tombstones",
 		"secret_store_tombstone_versions",
 		"application_secret_mutation_receipts",
+		"application_secret_rewrap_gates",
 		"application_secret_import_receipts",
 		"ssh_keys",
 		"tenant_branding",

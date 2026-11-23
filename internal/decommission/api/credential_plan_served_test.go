@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -38,7 +39,7 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err := st.UpsertTenant(ctx, corestore.Tenant{TenantID: tenantA, Name: "CA re-protection QA"}); err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}

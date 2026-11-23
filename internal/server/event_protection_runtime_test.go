@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/eventprotect"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secrets"
 )
 
 func eventProtectionRuntimeConfigFixture(t *testing.T) *config.Config {
@@ -76,12 +77,21 @@ func TestEventProtectionRuntimeBindsAdmissionAndKeysBeforeOpenAndRefusesMissingC
 	cfg.NATS.AllowSingleReplica = true
 	cfg.NATS.URL = startBackupTestNATS(t).ClientURL()
 	configureExternalAuditTestSigner(t, cfg)
+	deployment, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(deployment.Destroy)
 	signer, key, err := openAuditSigningRuntime(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(signer.Close)
-	log, runtime, err := openConfiguredEventSource(t.Context(), cfg, st, key, true, nil)
+	core, err := newRunTenantCustodyCore(cfg, st, deployment, signer.signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, runtime, err := openConfiguredEventSourceWithCustody(t.Context(), cfg, st, key, true, nil, core)
 	if err != nil {
 		t.Fatal(err)
 	}

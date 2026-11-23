@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -16,7 +17,6 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/editionseam"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
 	succapi "trstctl.com/trstctl/internal/succession/api"
@@ -59,7 +59,7 @@ func TestKEMRewrap_ConfiguredOutboxTopicBinds(t *testing.T) {
 	}
 
 	outbox := orchestrator.NewOutbox(cs)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("event log: %v", err)
 	}

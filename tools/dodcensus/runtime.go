@@ -844,7 +844,9 @@ func (trace *runtimeTrace) evalExpression(fn runtimeFunction, expression ast.Exp
 		return returns
 	case *ast.CallExpr:
 		name := expressionName(value.Fun)
-		if name == "buildRunDeps" {
+		// The test helper delegates directly to the production custody-aware
+		// constructor. Both calls return that constructor's Deps value.
+		if name == "buildRunDeps" || name == "buildRunDepsWithCustody" {
 			return []runtimeTaint{taintDeps}
 		}
 		if name == "Build" {

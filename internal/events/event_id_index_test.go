@@ -18,7 +18,7 @@ import (
 func TestEventIDIndexColdReplayAndDeletionUseExactGeneration(t *testing.T) {
 	ctx := t.Context()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := Open(ctx, cfg)
+	log, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestEventIDIndexColdReplayAndDeletionUseExactGeneration(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(ctx, cfg)
+	reopened, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestEventIDIndexColdReplayAndDeletionUseExactGeneration(t *testing.T) {
 func TestEventIDIndexCrashBetweenEntryAndCursorReplaysWithoutConflict(t *testing.T) {
 	ctx := t.Context()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := Open(ctx, cfg)
+	log, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestEventIDIndexCrashBetweenEntryAndCursorReplaysWithoutConflict(t *testing
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(ctx, cfg)
+	reopened, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestEventIDIndexRefusesRetentionCapInsteadOfRepairingIt(t *testing.T) {
 // concurrent dynamic-secret issuer).
 func TestEventIDLookupPinsAgainWhenAnotherIndexedPastItsHead(t *testing.T) {
 	ctx := t.Context()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

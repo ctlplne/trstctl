@@ -1078,6 +1078,17 @@ func seedRecoveredFromPostgresTables(
 	if err != nil {
 		t.Fatalf("seed independent PostgreSQL tables: %v", err)
 	}
+	// A closed rewrap gate is owner-written and belongs to independent PostgreSQL
+	// state. Seed it after the app-role epoch transaction has committed.
+	if err := st.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO application_secret_rewrap_gates
+			(tenant_id,tenant_epoch,operation_id,operation_kind,rewrap_in_progress,v2_required)
+			VALUES ($1,$2,$3,'migrate',false,false)`, tenantA,
+			"00000000-0000-0000-0000-00000000a017", "00000000-0000-0000-0000-00000000a047")
+		return err
+	}); err != nil {
+		t.Fatalf("seed owner-written rewrap gate: %v", err)
+	}
 	// OIDC logout receipts belong to the fixed auth partition, not the tenant
 	// that consumed the browser session. Exercise that RLS scope in the DR cut.
 	if err := st.WithTenantProjection(ctx, "00000000-0000-0000-0000-000000000002", func(tx pgx.Tx) error {

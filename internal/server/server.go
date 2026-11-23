@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/hostaccounts"
 	"trstctl.com/trstctl/internal/servicedependents"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -597,6 +598,9 @@ type Deps struct {
 	// RLS-scoped tenant key-domain fence. Production Run always supplies it;
 	// narrow embed tests may retain the legacy KEK-only composition.
 	TenantCrypto tenantseal.Access
+	// TenantRecoveryAccessFactory resolves only event-derived, operation-bound
+	// key snapshots during an atomic read-model rebuild.
+	TenantRecoveryAccessFactory func(string) (tenantseal.Access, error)
 	// IdempotencyResultProtector is the tenant-bound outer envelope for every
 	// cached mutation response. Production Run always sets it before Build. Nil is
 	// retained only for narrow test/library compositions that do not claim the
@@ -1176,11 +1180,30 @@ func resolveSignTokenProvider(d Deps) signing.SignTokenProvider {
 	return nil
 }
 
-func Build(ctx context.Context, d Deps) (_ *Server, err error) {
-	d.DriftRoots, err = drift.ApprovedRoots(d.DriftRoots)
+func Build(ctx context.Context, d Deps) (*Server, error) {
+	if d.Store == nil || d.Log == nil {
+		return nil, errors.New("server: store and log are required")
+	}
+	approvedRoots, err := drift.ApprovedRoots(d.DriftRoots)
 	if err != nil {
 		return nil, fmt.Errorf("server: drift roots: %w", err)
 	}
+	d.DriftRoots = approvedRoots
+	d.Store.BindCanonicalEventSource(d.Log)
+	if err := d.Store.BootstrapRestoreAdmission(ctx); err != nil {
+		return nil, fmt.Errorf("server: bootstrap restore admission: %w", err)
+	}
+	var built *Server
+	err = d.Store.WithRestoreActivity(ctx, store.RestoreControlTenantID, uuid.NewString(),
+		"build", "server-build", func(admitted context.Context) error {
+			var buildErr error
+			built, buildErr = buildAdmitted(admitted, d)
+			return buildErr
+		})
+	return built, err
+}
+
+func buildAdmitted(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err := requireTenantAuthAttachment(d); err != nil {
 		return nil, err
 	}
@@ -1505,12 +1528,47 @@ func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchest
 func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, error) {
 	options := append([]projections.Option(nil), d.LicensedProjectionOptions...)
 	options = append(options, ownershipProjectionOptions(d.OwnershipAttestationCadence)...)
+	if d.TenantCrypto != nil {
+		access := d.TenantCrypto
+		options = append(options,
+			projections.WithApplicationSecretReceiptVerifier(func(verifyCtx context.Context, tenantID string, mutation projections.ApplicationSecretMutation) error {
+				return tenantseal.AuthenticateApplicationSecretMutationContainers(verifyCtx, access, tenantID, mutation)
+			}),
+			projections.WithRewrapPairVerifier(func(verifyCtx context.Context, tenantID string, before, after, aad []byte) (bool, error) {
+				return tenantseal.VerifyRewrapPair(verifyCtx, access, tenantID, before, after, aad)
+			}),
+		)
+	}
+	if d.TenantRecoveryAccessFactory != nil {
+		factory := d.TenantRecoveryAccessFactory
+		options = append(options,
+			projections.WithApplicationSecretRecoveryVerifierFactory(func(operationID string) (func(context.Context, string, projections.ApplicationSecretMutation) error, error) {
+				access, err := factory(operationID)
+				if err != nil {
+					return nil, err
+				}
+				return func(verifyCtx context.Context, tenantID string, mutation projections.ApplicationSecretMutation) error {
+					return tenantseal.AuthenticateApplicationSecretMutationContainers(verifyCtx, access, tenantID, mutation)
+				}, nil
+			}),
+			projections.WithRewrapRecoveryPairVerifierFactory(func(operationID string) (func(context.Context, string, []byte, []byte, []byte) (bool, error), error) {
+				access, err := factory(operationID)
+				if err != nil {
+					return nil, err
+				}
+				return func(verifyCtx context.Context, tenantID string, before, after, aad []byte) (bool, error) {
+					return tenantseal.VerifyRewrapPair(verifyCtx, access, tenantID, before, after, aad)
+				}, nil
+			}),
+		)
+	}
 	if d.eventProtection != nil {
 		options = append(options, d.eventProtection.projectionOptions()...)
 	}
 	if d.AuditSigningKey != nil {
 		options = append(options, projections.WithRestoreDrillVerificationKeys(d.AuditSigningKey.JWKS()))
 	}
+	options = append(options, projections.WithCanonicalEventSource(d.Log))
 	proj := projections.New(d.Store, options...)
 	if _, err := proj.RestoreFromSnapshot(ctx, d.Log); err != nil {
 		return nil, fmt.Errorf("server: restore read model from snapshot: %w", err)
@@ -2127,7 +2185,7 @@ func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 		// A126: each create and rotate is a lifecycle fact in the event log,
 		// recorded after its material is saved and projected for the
 		// versions listing.
-		s.transit.SetFactRecorder(transitFactRecorder{log: d.Log, store: d.Store, projector: projections.New(d.Store)})
+		s.transit.SetFactRecorder(transitFactRecorder{log: d.Log, store: d.Store, projector: projections.New(d.Store, projections.WithCanonicalEventSource(d.Log))})
 		if file := transitpkg.NewStore(d.TransitKeyringDir, d.KEK); file != nil {
 			importCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			imported, err := transitpkg.ImportFileKeyring(importCtx, file, d.Store, sealer)

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	configpkg "trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -15,7 +16,7 @@ import (
 
 func TestScheduledAuditSummaryMemoPinsHeadAndBoundsWindows(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

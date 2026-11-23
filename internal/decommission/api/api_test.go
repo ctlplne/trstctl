@@ -27,6 +27,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -354,7 +355,7 @@ func TestReprotection_CredentialStartRequiresCurrentReviewedPlanBeforeOutbox(t *
 		t.Fatal(err)
 	}
 	outbox := orchestrator.NewOutbox(cs)
-	log, err := events.Open(context.Background(), config.NATS{
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats"),
 	})
 	if err != nil {

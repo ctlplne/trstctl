@@ -539,10 +539,8 @@ func TestReconcileOutboxHealsCTSubmissionCrashGapExactlyOnce(t *testing.T) {
 
 func TestReconcileOutboxHealsLicensedCryptoMigrationCrashGapExactlyOnce(t *testing.T) {
 	s := newStore(t)
-	log := openLog(t)
 	ctx := context.Background()
 	ob := orchestrator.NewOutbox(s)
-	orch := orchestrator.NewOrchestrator(log, s, ob)
 
 	const (
 		runID     = "red-004-licensed-crypto-run"
@@ -563,6 +561,19 @@ func TestReconcileOutboxHealsLicensedCryptoMigrationCrashGapExactlyOnce(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	// This test's fixed event contains no sealed host-job or approval payload.
+	// Exact-byte admission keeps the fixture from silently accepting another
+	// sealed-bearing shape while exercising the orphaned outbox recovery path.
+	log := openLogWithOptions(t, events.WithAppendAdmission(func(ctx context.Context, event events.Event,
+		publish func(context.Context) (events.Event, error),
+	) (events.Event, error) {
+		if event.Type != projections.EventLicensedCryptoMigrationStarted ||
+			event.TenantID != tenantA || !bytes.Equal(event.Data, data) {
+			return events.Event{}, errors.New("unexpected licensed crypto migration fixture event")
+		}
+		return publish(ctx)
+	}))
+	orch := orchestrator.NewOrchestrator(log, s, ob)
 	if _, err := log.Append(ctx, events.Event{
 		Type:     projections.EventLicensedCryptoMigrationStarted,
 		TenantID: tenantA,

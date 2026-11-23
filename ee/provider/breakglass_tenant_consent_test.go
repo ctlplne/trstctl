@@ -7,9 +7,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 )
 
 // A95: tenant-scoped break-glass with dual consent. When the customer's own
@@ -96,7 +96,7 @@ func TestProviderRequestProjectsIntoTheCustomersRequestTableA95(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

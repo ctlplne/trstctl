@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	googleuuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -78,7 +79,7 @@ func TestAgentRemovalFirstWriterAndCompletedDenial(t *testing.T) {
 	if err != nil || len(pending) != 1 || pending[0].Event.ID != canonical.ID {
 		t.Fatalf("pre-append refusal lost pending recovery event: count=%d err=%v", len(pending), err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

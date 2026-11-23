@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/auditcompliance"
 	"trstctl.com/trstctl/internal/audit"
@@ -90,7 +91,7 @@ func TestLicensedAssemblyRetentionSurvivesCoreDowngrade(t *testing.T) {
 	st := newAuditTestStore(t)
 	dsn := st.SystemPool().Config().ConnString()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +143,7 @@ func TestLicensedAssemblyRetentionSurvivesCoreDowngrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

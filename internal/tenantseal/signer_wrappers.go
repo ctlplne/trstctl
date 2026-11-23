@@ -37,6 +37,10 @@ type SignerWrapperRegistry struct {
 	signer func() SignerTenantKEK
 }
 
+func (r *SignerWrapperRegistry) ConfiguredWrapper(ref WrapperRef) bool {
+	return r != nil && r.kinds[ref.ID] == ref.Kind && ref.ID != ""
+}
+
 // NewSignerWrapperRegistry builds the exact pkcs11 wrapper registry. It does
 // not reach the signer; the first tenant operation does.
 func NewSignerWrapperRegistry(ids []string, signer func() SignerTenantKEK) (*SignerWrapperRegistry, error) {
@@ -192,6 +196,11 @@ func (k *signerDomainKEK) Destroy() {
 // kinds or to the deployment KEK.
 type RoutedWrapperRegistry struct {
 	byKind map[string]DomainKEKManager
+}
+
+func (r *RoutedWrapperRegistry) ConfiguredWrapper(ref WrapperRef) bool {
+	m, err := r.manager(ref)
+	return err == nil && m.ConfiguredWrapper(ref)
 }
 
 var _ DomainKEKManager = (*RoutedWrapperRegistry)(nil)

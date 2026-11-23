@@ -14,12 +14,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -434,7 +434,7 @@ func buildServer(t *testing.T, ctx context.Context, dsn string, oidc config.OIDC
 	if err != nil {
 		t.Fatalf("open served store: %v", err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		phaseStore.Close()
 		t.Fatalf("open event log: %v", err)

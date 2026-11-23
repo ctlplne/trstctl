@@ -5,13 +5,14 @@ package api
 import (
 	"context"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	configpkg "trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 )
 
 func TestHeadMemoRejectsSameHeadFromAnotherHistoryGeneration(t *testing.T) {
-	log, err := events.Open(t.Context(), configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(t.Context(), configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

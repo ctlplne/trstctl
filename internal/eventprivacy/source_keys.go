@@ -37,7 +37,7 @@ func canonicalKeyRef(ref eventprotect.KeyRef) (eventprotect.KeyRef, error) {
 // until the complete source read and generation verification succeed.
 func (policy SourcePolicy) LifetimeForKey(ctx context.Context, ref eventprotect.KeyRef) (Lifetime, bool, error) {
 	ref, err := canonicalKeyRef(ref)
-	if err != nil || policy.Log == nil {
+	if err != nil || policy.sourceReader() == nil {
 		return Lifetime{}, false, ErrSource
 	}
 	var result Lifetime
@@ -60,11 +60,12 @@ func (policy SourcePolicy) LifetimeForKey(ctx context.Context, ref eventprotect.
 
 func (reader SourceKeys) WithKey(ctx context.Context, ref eventprotect.KeyRef, visit func(seal.KeyWrapper) error) error {
 	ref, err := canonicalKeyRef(ref)
-	if err != nil || reader.Policy.Log == nil || reader.Custody == nil || visit == nil {
+	source := reader.Policy.sourceReader()
+	if err != nil || source == nil || reader.Custody == nil || visit == nil {
 		return ErrSource
 	}
-	return reader.Policy.Log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		meta, found, err := reader.Policy.Log.TenantMetadataByID(readCtx, ref.TenantID, ref.ID)
+	return source.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		meta, found, err := source.TenantMetadataByID(readCtx, ref.TenantID, ref.ID)
 		if err != nil {
 			return err
 		}

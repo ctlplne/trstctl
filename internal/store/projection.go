@@ -991,6 +991,48 @@ func (s *Store) TruncateReadModel(ctx context.Context) error {
 // tenant. The session's trstctl.tenant_id GUC is set per event by the caller via
 // SetTenantGUCTx so any tenant-scoped logic still sees the right tenant.
 func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
+	return s.rebuildReadModelTx(ctx, nil, func(_ context.Context, tx pgx.Tx) error { return apply(tx) }, false)
+}
+
+// RebuildReadModelWithPreflightTx authenticates retained pair evidence while
+// the old model still exists, then truncates and replays in that SAME owner
+// transaction. Global session admission A must already be held by the caller;
+// its distinct transaction lock B spans preflight through final commit.
+func (s *Store) RebuildReadModelWithPreflightTx(
+	ctx context.Context, preflight, apply func(pgx.Tx) error,
+) error {
+	if preflight == nil || apply == nil {
+		return ErrKeyStateAdmissionUnavailable
+	}
+	return s.rebuildReadModelTx(ctx,
+		func(_ context.Context, tx pgx.Tx) error { return preflight(tx) },
+		func(_ context.Context, tx pgx.Tx) error { return apply(tx) }, true)
+}
+
+// RebuildReadModelWithKeyStateContextTx gives only this admitted, atomic
+// rebuild transaction a replay capability for its own key-state snapshots.
+// Ordinary direct store/projector callers cannot construct that capability.
+func (s *Store) RebuildReadModelWithKeyStateContextTx(
+	ctx context.Context,
+	preflight, apply func(context.Context, pgx.Tx) error,
+) error {
+	if apply == nil {
+		return ErrKeyStateAdmissionUnavailable
+	}
+	return s.rebuildReadModelTx(ctx, preflight, apply, true)
+}
+
+func (s *Store) rebuildReadModelTx(
+	ctx context.Context, preflight, apply func(context.Context, pgx.Tx) error, requireKeyStateAdmission bool,
+) error {
+	return s.WithRestoreRebuildAdmission(ctx, func(admitted context.Context) error {
+		return s.rebuildReadModelTxAdmitted(admitted, preflight, apply, requireKeyStateAdmission)
+	})
+}
+
+func (s *Store) rebuildReadModelTxAdmitted(
+	ctx context.Context, preflight, apply func(context.Context, pgx.Tx) error, requireKeyStateAdmission bool,
+) error {
 	if err := s.AssertNoPrivacySubjectErasurePreparations(ctx); err != nil {
 		return err
 	}
@@ -999,10 +1041,25 @@ func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) er
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	rebuildCtx := ctx
+	if requireKeyStateAdmission {
+		if err := s.LockGlobalKeyStateCommitTx(ctx, tx, KeyStateShared); err != nil {
+			return err
+		}
+		rebuildCtx, err = s.keyStateReplayContext(ctx, tx)
+		if err != nil {
+			return err
+		}
+	}
 	// DR rebuilds legitimately exceed the bounded statement deadline
 	// (OPS-TIMEOUTS-001): widen it for THIS transaction only.
 	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = 0"); err != nil {
 		return fmt.Errorf("store: widen rebuild statement deadline: %w", err)
+	}
+	if preflight != nil {
+		if err := preflight(rebuildCtx, tx); err != nil {
+			return err
+		}
 	}
 	if err := preserveIndependentAttestationsTx(ctx, tx); err != nil {
 		return err
@@ -1010,13 +1067,16 @@ func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) er
 	if _, err := tx.Exec(ctx, `TRUNCATE `+strings.Join(ReadModelTables, ", ")+` CASCADE`); err != nil {
 		return err
 	}
-	if err := apply(tx); err != nil {
+	if err := apply(rebuildCtx, tx); err != nil {
 		return err
 	}
 	if err := restoreIndependentAttestationsTx(ctx, tx); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err := s.AssertGlobalKeyStateAdmissionAlive(rebuildCtx); err != nil {
+		return err
+	}
+	return tx.Commit(rebuildCtx)
 }
 
 // RestoreReadModelTx runs apply inside ONE owner-role transaction, for the atomic
@@ -1029,22 +1089,52 @@ func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) er
 // and apply carries tenant_id explicitly on every write, so AN-1 holds with RLS
 // bypassed for this trusted system operation.
 func (s *Store) RestoreReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
-	if err := s.AssertNoPrivacySubjectErasurePreparations(ctx); err != nil {
-		return err
+	if apply == nil {
+		return ErrKeyStateAdmissionUnavailable
 	}
-	tx, err := s.begin(ctx)
-	if err != nil {
-		return err
+	return s.RestoreReadModelWithKeyStateContextTx(ctx,
+		func(_ context.Context, tx pgx.Tx) error { return apply(tx) })
+}
+
+// RestoreReadModelWithKeyStateContextTx keeps the distinct transaction half B
+// through snapshot replacement and tail replay. Its callback receives a
+// transaction-bound replay context; a caller holding an outer A grant borrows
+// that grant, while a direct caller acquires A before opening the transaction.
+func (s *Store) RestoreReadModelWithKeyStateContextTx(
+	ctx context.Context, apply func(context.Context, pgx.Tx) error,
+) error {
+	if apply == nil {
+		return ErrKeyStateAdmissionUnavailable
 	}
-	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = 0"); err != nil {
-		_ = tx.Rollback(ctx)
-		return fmt.Errorf("store: widen restore statement deadline: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := apply(tx); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return s.WithRestoreSnapshotAdmission(ctx, func(restored context.Context) error {
+		return s.WithGlobalKeyStateAdmission(restored, KeyStateShared, func(admitted context.Context) error {
+			if err := s.AssertNoPrivacySubjectErasurePreparations(admitted); err != nil {
+				return err
+			}
+			tx, err := s.begin(admitted)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = tx.Rollback(admitted) }()
+			if err := s.LockGlobalKeyStateCommitTx(admitted, tx, KeyStateShared); err != nil {
+				return err
+			}
+			replayCtx, err := s.keyStateReplayContext(admitted, tx)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(replayCtx, "SET LOCAL statement_timeout = 0"); err != nil {
+				return fmt.Errorf("store: widen restore statement deadline: %w", err)
+			}
+			if err := apply(replayCtx, tx); err != nil {
+				return err
+			}
+			if err := s.AssertGlobalKeyStateAdmissionAlive(replayCtx); err != nil {
+				return err
+			}
+			return tx.Commit(replayCtx)
+		})
+	})
 }
 
 // SetTenantGUCTx sets the trstctl.tenant_id session variable on tx (LOCAL to the

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
@@ -36,7 +37,7 @@ func TestServedIncidentExecutionRefusesMutationAndRetainsHistoryAUD41(t *testing
 	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "incident-commander", []string{
 		string(authz.IncidentsRead), string(authz.IncidentsWrite),
 	})
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

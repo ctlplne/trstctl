@@ -626,7 +626,7 @@ func TestCertificateRecordingRecoveryWaitsForActualLaterWriterRowLock(t *testing
 		default:
 		}
 		//trstctl:system-query — one owned fixture connection's lock wait; no tenant data or unrelated sessions (AN-1 exemption).
-		if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE application_name='first_leaf_order_reader' AND wait_event_type='Lock' AND query LIKE '%lock_certificate_metadata_order%'`).Scan(&blocked); err != nil {
+		if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%lock_certificate_metadata_order%'`).Scan(&blocked); err != nil {
 			t.Fatal(err)
 		}
 		if blocked == 1 {

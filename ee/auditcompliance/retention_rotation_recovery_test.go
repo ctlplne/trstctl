@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
@@ -19,7 +20,7 @@ import (
 // event's identity.
 func TestRecoveryAfterTheAuditKeyRotatesKeepsTheArchivedKeyA234L1(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

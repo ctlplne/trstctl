@@ -12,12 +12,12 @@ import (
 	"slices"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -50,7 +50,7 @@ func newA207Deployment(t *testing.T, scimToken string, groupRoles map[string]str
 		t.Fatalf("write scim token file: %v", err)
 	}
 	d.sessions = auth.NewSessionIssuer([]byte("a207-session-secret-012345678901234"), time.Hour)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

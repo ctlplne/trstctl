@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -34,7 +35,7 @@ func TestGuardedLateDestructionCompletionPreservesNewKeyAndFirstTerminalIdentity
 	t.Cleanup(func() { _ = keys.Close() })
 	admission := &eventprivacy.SourceAdmission{Guard: guard, Custody: keys, Policy: eventprivacy.SourcePolicy{Trust: signer.JWKS()}}
 	reader := &eventprivacy.SourceKeys{Custody: keys, Policy: eventprivacy.SourcePolicy{Trust: signer.JWKS()}}
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
 		func(log *events.Log) {
 			admission.Policy.Log = log
 			reader.Policy.Log = log

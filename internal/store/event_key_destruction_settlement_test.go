@@ -3,6 +3,7 @@
 package store_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -27,8 +28,8 @@ func TestEventKeyDestructionSettlementIsExactAtomicAndPreservesDeliveryFinalizat
 		CreationDigest: strings.Repeat("a", 64), OffboardEventID: "offboard-source", OffboardSequence: 9,
 		OffboardedAt: at, NotBefore: at.Add(time.Hour),
 	}
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		if _, err := s.OffboardTenantForEventKeyDestructionTx(ctx, tx, request); err != nil {
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+		if _, err := s.OffboardTenantForEventKeyDestructionTx(owned, tx, request); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `UPDATE outbox SET status='processing',worker_id='fixture',attempts=1,

@@ -435,135 +435,155 @@ func (o *Orchestrator) emitTenantOffboardOperation(ctx context.Context, next eve
 		claim                       tenantOffboardClaim
 		recoveredAfterReceiverErase bool
 	)
-	err := o.store.WithPrivacyRecoveryBarrier(ctx, next.TenantID, "tenant offboard", func(privacyCtx context.Context) error {
-		return o.log.WithHistoryRead(privacyCtx, func(readCtx context.Context) error {
-			// Commit the non-PII receiver before Append. Offboard deletes this row
-			// atomically with the tenant; if Append wins but deletion rolls back, a
-			// retry sees the pending receiver and performs the rare ID recovery scan.
-			if err := o.store.WithTenant(readCtx, next.TenantID, func(tx pgx.Tx) error {
-				// First callback statement: this takes the fail-fast transaction
-				// side of the already-held privacy grant, then the lifecycle lock.
-				if err := o.store.PreflightTenantOffboardTx(readCtx, tx, next.TenantID); err != nil {
-					return err
-				}
-				snapshot, err := o.store.LockTenantRegistrationSnapshotTx(readCtx, tx, next.TenantID)
-				if err != nil {
-					return err
-				}
-				if !snapshot.Exists {
-					receiverExists, err := tenantOffboardReceiverExistsTx(
-						readCtx, tx, next.TenantID)
-					if err != nil {
-						return err
-					}
-					if receiverExists {
-						return fmt.Errorf(
-							"%w: tenant is absent while an offboard receiver remains",
-							ErrIdempotencyConflict,
-						)
-					}
-					// Successful offboard atomically removes both the tenant row and
-					// its pending receiver. Only that exact missing/missing shape may
-					// pay for a pinned O(total) lifecycle fold.
-					canonical, err = recoverErasedTenantOffboard(
-						readCtx, o.log, next)
-					if err != nil {
-						return err
-					}
-					recoveredAfterReceiverErase = true
-					if prepareOnly {
-						return nil
-					}
-					return o.proj.ApplyTenantLifecycleTx(readCtx, tx, canonical)
-				}
-				registrationIdentity, err := tenantRegistrationIdentityForOffboard(
-					readCtx, o.log, next.TenantID, snapshot)
-				if err != nil {
-					return err
-				}
-				eventID := projections.TenantOffboardEventID(next.TenantID, registrationIdentity)
-				if next.ID != "" && next.ID != eventID {
-					return ErrIdempotencyConflict
-				}
-				next.ID = eventID
-				claim, err = prepareTenantOffboardTx(readCtx, tx, next)
-				return err
-			}); err != nil {
-				return err
-			}
-			if recoveredAfterReceiverErase || prepareOnly {
-				return nil
-			}
-
-			var recovered bool
-			if !claim.Created {
-				var err error
-				canonical, recovered, err = o.log.EventByID(readCtx, claim.EventID)
-				if err != nil {
-					return err
-				}
-			}
-
-			if err := o.store.WithTenant(readCtx, next.TenantID, func(tx pgx.Tx) error {
-				// Keep the privacy-operation try-lock as the first callback statement.
-				if err := o.store.PreflightTenantOffboardTx(readCtx, tx, next.TenantID); err != nil {
-					return err
-				}
-				snapshot, err := o.store.LockTenantRegistrationSnapshotTx(readCtx, tx, next.TenantID)
-				if err != nil {
-					return err
-				}
-				if !snapshot.Exists {
-					// A same-command contender may have committed the erase while this
-					// retry waited on lifecycle. Recover its exact envelope once.
-					if !recovered {
-						canonical, recovered, err = o.log.EventByID(readCtx, claim.EventID)
-						if err != nil {
+	err := o.store.WithRestoreActivity(ctx, next.TenantID, uuid.NewString(), "maintenance",
+		"tenant-offboard-command", func(restoreCtx context.Context) error {
+			return o.store.WithGlobalKeyStateAdmission(restoreCtx, store.KeyStateExclusive, func(keyCtx context.Context) error {
+				return o.store.WithPrivacyRecoveryBarrier(keyCtx, next.TenantID, "tenant offboard", func(privacyCtx context.Context) error {
+					return o.log.WithHistoryRead(privacyCtx, func(readCtx context.Context) error {
+						// Commit the non-PII receiver before Append. Offboard deletes this row
+						// atomically with the tenant; if Append wins but deletion rolls back, a
+						// retry sees the pending receiver and performs the rare ID recovery scan.
+						if err := o.store.WithTenant(readCtx, next.TenantID, func(tx pgx.Tx) error {
+							owned, err := o.store.BindKeyStateOwnerTx(readCtx, tx, next.TenantID, store.KeyStateExclusive)
+							if err != nil {
+								return err
+							}
+							readCtx := owned
+							// First callback statement: this takes the fail-fast transaction
+							// side of the already-held privacy grant, then the lifecycle lock.
+							if err := o.store.PreflightTenantOffboardTx(readCtx, tx, next.TenantID); err != nil {
+								return err
+							}
+							snapshot, err := o.store.LockTenantRegistrationSnapshotTx(readCtx, tx, next.TenantID)
+							if err != nil {
+								return err
+							}
+							if !snapshot.Exists {
+								receiverExists, err := tenantOffboardReceiverExistsTx(
+									readCtx, tx, next.TenantID)
+								if err != nil {
+									return err
+								}
+								if receiverExists {
+									return fmt.Errorf(
+										"%w: tenant is absent while an offboard receiver remains",
+										ErrIdempotencyConflict,
+									)
+								}
+								// Successful offboard atomically removes both the tenant row and
+								// its pending receiver. Only that exact missing/missing shape may
+								// pay for a pinned O(total) lifecycle fold.
+								canonical, err = recoverErasedTenantOffboard(
+									readCtx, o.log, next)
+								if err != nil {
+									return err
+								}
+								recoveredAfterReceiverErase = true
+								if prepareOnly {
+									return nil
+								}
+								return o.proj.ApplyTenantLifecycleTx(readCtx, tx, canonical)
+							}
+							registrationIdentity, err := tenantRegistrationIdentityForOffboard(
+								readCtx, o.log, next.TenantID, snapshot)
+							if err != nil {
+								return err
+							}
+							eventID := projections.TenantOffboardEventID(next.TenantID, registrationIdentity)
+							if next.ID != "" && next.ID != eventID {
+								return ErrIdempotencyConflict
+							}
+							next.ID = eventID
+							claim, err = prepareTenantOffboardTx(readCtx, tx, next)
+							return err
+						}); err != nil {
 							return err
 						}
-					}
-					if !recovered {
-						return fmt.Errorf("%w: offboard receiver disappeared without its event", ErrIdempotencyConflict)
-					}
-					expected := next
-					expected.Time = canonical.Time
-					if err := projections.ValidateTenantLifecycleCanonical(expected, canonical); err != nil {
-						return fmt.Errorf("%w: %v", ErrIdempotencyConflict, err)
-					}
-					return o.proj.ApplyTenantLifecycleTx(readCtx, tx, canonical)
-				}
-				registrationIdentity, err := tenantRegistrationIdentityForOffboard(
-					readCtx, o.log, next.TenantID, snapshot)
-				if err != nil {
-					return err
-				}
-				if projections.TenantOffboardEventID(next.TenantID, registrationIdentity) != claim.EventID {
-					return fmt.Errorf("%w: tenant lifecycle changed before offboard append", ErrIdempotencyConflict)
-				}
-				current, err := prepareTenantOffboardTx(readCtx, tx, next)
-				if err != nil {
-					return err
-				}
-				if current.EventID != claim.EventID || !current.EventTime.Equal(claim.EventTime) {
-					return fmt.Errorf("%w: offboard receiver changed between phases", ErrIdempotencyConflict)
-				}
-				next.Time = current.EventTime
-				if !recovered {
-					canonical, err = o.log.Append(readCtx, next)
-					if err != nil {
-						return err
-					}
-				}
-				if err := projections.ValidateTenantLifecycleCanonical(next, canonical); err != nil {
-					return fmt.Errorf("%w: %v", ErrIdempotencyConflict, err)
-				}
-				return o.proj.ApplyTenantLifecycleTx(readCtx, tx, canonical)
-			}); err != nil {
-				return err
-			}
-			return nil
+						if recoveredAfterReceiverErase || prepareOnly {
+							return nil
+						}
+
+						var recovered bool
+						if !claim.Created {
+							var err error
+							canonical, recovered, err = o.log.EventByID(readCtx, claim.EventID)
+							if err != nil {
+								return err
+							}
+						}
+
+						if err := o.store.WithTenant(readCtx, next.TenantID, func(tx pgx.Tx) error {
+							owned, err := o.store.BindKeyStateOwnerTx(readCtx, tx, next.TenantID, store.KeyStateExclusive)
+							if err != nil {
+								return err
+							}
+							readCtx := owned
+							// Keep the privacy-operation try-lock as the first callback statement.
+							if err := o.store.PreflightTenantOffboardTx(readCtx, tx, next.TenantID); err != nil {
+								return err
+							}
+							snapshot, err := o.store.LockTenantRegistrationSnapshotTx(readCtx, tx, next.TenantID)
+							if err != nil {
+								return err
+							}
+							if !snapshot.Exists {
+								// A same-command contender may have committed the erase while this
+								// retry waited on lifecycle. Recover its exact envelope once.
+								if !recovered {
+									canonical, recovered, err = o.log.EventByID(readCtx, claim.EventID)
+									if err != nil {
+										return err
+									}
+								}
+								if !recovered {
+									return fmt.Errorf("%w: offboard receiver disappeared without its event", ErrIdempotencyConflict)
+								}
+								expected := next
+								expected.Time = canonical.Time
+								if err := projections.ValidateTenantLifecycleCanonical(expected, canonical); err != nil {
+									return fmt.Errorf("%w: %v", ErrIdempotencyConflict, err)
+								}
+								return o.proj.ApplyTenantLifecycleTx(readCtx, tx, canonical)
+							}
+							registrationIdentity, err := tenantRegistrationIdentityForOffboard(
+								readCtx, o.log, next.TenantID, snapshot)
+							if err != nil {
+								return err
+							}
+							if projections.TenantOffboardEventID(next.TenantID, registrationIdentity) != claim.EventID {
+								return fmt.Errorf("%w: tenant lifecycle changed before offboard append", ErrIdempotencyConflict)
+							}
+							current, err := prepareTenantOffboardTx(readCtx, tx, next)
+							if err != nil {
+								return err
+							}
+							if current.EventID != claim.EventID || !current.EventTime.Equal(claim.EventTime) {
+								return fmt.Errorf("%w: offboard receiver changed between phases", ErrIdempotencyConflict)
+							}
+							next.Time = current.EventTime
+							if !recovered {
+								err = o.store.WithKeyStateSnapshotEvent(readCtx, tx, next.TenantID,
+									next.Type, func(eventCtx context.Context) error {
+										var appendErr error
+										canonical, appendErr = o.log.Append(eventCtx, next)
+										return appendErr
+									})
+								if err != nil {
+									return err
+								}
+							}
+							if err := projections.ValidateTenantLifecycleCanonical(next, canonical); err != nil {
+								return fmt.Errorf("%w: %v", ErrIdempotencyConflict, err)
+							}
+							return o.proj.ApplyTenantLifecycleTx(readCtx, tx, canonical)
+						}); err != nil {
+							return err
+						}
+						return nil
+					})
+				})
+			})
 		})
-	})
 	if err != nil {
 		return events.Event{}, err
 	}

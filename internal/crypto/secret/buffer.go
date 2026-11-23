@@ -25,10 +25,11 @@ var ErrDestroyed = errors.New("secret: buffer has been destroyed")
 // secret inside Use, which holds the read side of mu for the whole borrow and
 // therefore makes Destroy wait rather than unmap memory out from under it.
 type Buffer struct {
-	mu     sync.RWMutex
-	region []byte // full page-rounded backing region, released by free
-	data   []byte // user-facing view into region (region[:size])
-	freed  bool
+	mu      sync.RWMutex
+	region  []byte // full page-rounded backing region, released by free
+	data    []byte // user-facing view into region (region[:size])
+	release func([]byte) error
+	freed   bool
 }
 
 // New allocates a zeroed Buffer of the given size in locked, non-dumpable
@@ -42,6 +43,20 @@ func New(size int) (*Buffer, error) {
 		return nil, err
 	}
 	return &Buffer{region: region, data: region[:size:size]}, nil
+}
+
+// NewProtected is the fail-closed allocation path for plaintext recovered
+// only to authenticate a sealed rewrap pair. It never uses the ordinary heap
+// fallback available to other Buffer callers on unsupported platforms.
+func NewProtected(size int) (*Buffer, error) {
+	if size <= 0 {
+		return nil, ErrInvalidSize
+	}
+	region, err := allocProtected(size)
+	if err != nil {
+		return nil, err
+	}
+	return &Buffer{region: region, data: region[:size:size], release: freeProtected}, nil
 }
 
 // NewFrom copies src into a new Buffer. src is not modified; callers that want
@@ -106,7 +121,11 @@ func (b *Buffer) Destroy() {
 		return
 	}
 	Wipe(b.region)
-	_ = free(b.region)
+	if b.release != nil {
+		_ = b.release(b.region)
+	} else {
+		_ = free(b.region)
+	}
 	b.region = nil
 	b.data = nil
 	b.freed = true

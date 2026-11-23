@@ -91,6 +91,14 @@ type LocalWrapperRegistry struct {
 	pathsByID map[string]string
 }
 
+func (r *LocalWrapperRegistry) ConfiguredWrapper(ref WrapperRef) bool {
+	if r == nil || ref.Kind != WrapperKindLocalFile {
+		return false
+	}
+	_, ok := r.pathsByID[ref.ID]
+	return ok
+}
+
 // NewLocalWrapperRegistry builds an exact local wrapper registry. It does not
 // read or create wrapper files; availability and custody checks happen inside
 // tenantwrap when a fenced operation needs the key.

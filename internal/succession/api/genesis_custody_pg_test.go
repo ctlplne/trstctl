@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	succapi "trstctl.com/trstctl/internal/succession/api"
 )
@@ -21,7 +21,7 @@ import (
 func TestGenesisWorkloadCustodyValidation(t *testing.T) {
 	ctx := context.Background()
 	cs := openStorePCAS(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

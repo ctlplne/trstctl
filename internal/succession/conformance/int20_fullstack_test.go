@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
@@ -311,7 +312,7 @@ func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack 
 	// the served control plane requires (the batch-2 lab replay caught two
 	// payloads that drifted from their shapes while the unit tests stayed green).
 	logOptions = append([]events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, logOptions...)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, logOptions...)
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, logOptions...)
 	if err != nil {
 		t.Fatalf("open embedded JetStream: %v", err)
 	}

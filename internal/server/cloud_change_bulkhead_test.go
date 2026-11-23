@@ -10,7 +10,7 @@ import (
 	"time"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventstest"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -18,7 +18,7 @@ import (
 func TestCloudChangeSaturationKeepsNotificationAndDatabaseAvailableA264(t *testing.T) {
 	ctx := t.Context()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

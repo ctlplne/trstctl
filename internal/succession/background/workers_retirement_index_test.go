@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -30,7 +31,7 @@ func TestRetirementWorkerUsesTenantBoundPredecessorForLegacyBlankPolicy(t *testi
 func TestRetirementWorkerIndexedEvidenceAcrossColdRestart(t *testing.T) {
 	ctx := t.Context()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,7 @@ func TestRetirementWorkerIndexedEvidenceAcrossColdRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

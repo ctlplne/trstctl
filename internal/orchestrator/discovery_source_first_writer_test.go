@@ -209,7 +209,7 @@ func TestDiscoverySourceTwoReplicaFirstWriterFencePrecedesAppend(t *testing.T) {
 	blocked := 0
 	for ctx.Err() == nil {
 		//trstctl:system-query — fixture observes only its two owned connection names, no tenant data.
-		if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE application_name='discovery_first_writer_peer_0' AND wait_event_type='Lock' AND wait_event='advisory'`).Scan(&blocked); err != nil {
+		if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND wait_event='advisory'`).Scan(&blocked); err != nil {
 			t.Fatal(err)
 		}
 		if blocked > 0 {

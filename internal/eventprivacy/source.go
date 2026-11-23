@@ -49,11 +49,36 @@ type Lifetime struct {
 	HoldClearance *HoldClearanceSource
 }
 
+// HistoryReader is the read-only source view used to select an event-key
+// lifetime. Recovery supplies the HMAC-verified artifact view before target
+// JetStream is populated; ordinary serving uses events.Log. Implementations
+// must pin one finite generation through WithHistoryRead.
+type HistoryReader interface {
+	WithHistoryRead(context.Context, func(context.Context) error) error
+	LastSequence(context.Context) (uint64, error)
+	ReplayTenantMetadataTypesThrough(context.Context, string, uint64, uint64, []string,
+		func(events.EnvelopeMetadata) error) error
+	TenantMetadataByID(context.Context, string, string) (events.EnvelopeMetadata, bool, error)
+	EventAtSequence(context.Context, uint64) (events.Event, bool, error)
+	ReplayTypesThrough(context.Context, uint64, uint64, []string, func(events.Event) error) error
+}
+
 type SourcePolicy struct {
-	Log   *events.Log
-	Trust *jose.JWKSet
+	Log    *events.Log
+	Reader HistoryReader
+	Trust  *jose.JWKSet
 	// VerificationKeys are separately pinned historical public keys.
 	VerificationKeys *jose.JWKSet
+}
+
+func (policy SourcePolicy) sourceReader() HistoryReader {
+	if policy.Reader != nil {
+		return policy.Reader
+	}
+	if policy.Log == nil {
+		return nil
+	}
+	return policy.Log
 }
 
 // LatestLifetime returns authority only after the complete finite source fold
@@ -68,11 +93,12 @@ func (policy SourcePolicy) LatestLifetime(ctx context.Context, tenantID string) 
 }
 
 func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string, visit func(Lifetime) error) error {
-	if policy.Log == nil {
+	reader := policy.sourceReader()
+	if reader == nil {
 		return ErrSource
 	}
-	return policy.Log.WithHistoryRead(ctx, func(read context.Context) error {
-		head, err := policy.Log.LastSequence(read)
+	return reader.WithHistoryRead(ctx, func(read context.Context) error {
+		head, err := reader.LastSequence(read)
 		if err != nil {
 			return err
 		}
@@ -83,18 +109,19 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 // replayLifetimesThrough keeps every tenant fold inside the same captured cut,
 // even when another writer appends within the retained history generation.
 func (policy SourcePolicy) replayLifetimesThrough(ctx context.Context, tenantID string, head uint64, visit func(Lifetime) error) error {
-	if policy.Log == nil || tenantID == "" || visit == nil {
+	reader := policy.sourceReader()
+	if reader == nil || tenantID == "" || visit == nil {
 		return ErrSource
 	}
 	if parsed, err := uuid.Parse(tenantID); err == nil && parsed != uuid.Nil {
 		tenantID = parsed.String()
 	}
-	return policy.Log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+	return reader.WithHistoryRead(ctx, func(readCtx context.Context) error {
 		var current *Lifetime
 		var lifetimes []*Lifetime
 		byKey := make(map[string]*Lifetime)
 		seen := make(map[string]events.EnvelopeMetadata)
-		err := policy.Log.ReplayTenantMetadataTypesThrough(readCtx, tenantID, 1, head, []string{eventRegistered, eventOffboarded, EventRequested, EventActivated, EventHoldClearance, EventDestroyed}, func(meta events.EnvelopeMetadata) error {
+		err := reader.ReplayTenantMetadataTypesThrough(readCtx, tenantID, 1, head, []string{eventRegistered, eventOffboarded, EventRequested, EventActivated, EventHoldClearance, EventDestroyed}, func(meta events.EnvelopeMetadata) error {
 			if meta.SchemaVersion != 1 {
 				return ErrSource
 			}
@@ -102,7 +129,7 @@ func (policy SourcePolicy) replayLifetimesThrough(ctx context.Context, tenantID 
 				// The durable identity index compares complete stored envelopes,
 				// including ciphertext, without opening custody. ID/header equality
 				// alone would accept a changed historical payload or actor.
-				canonical, found, err := policy.Log.TenantMetadataByID(readCtx, tenantID, meta.ID)
+				canonical, found, err := reader.TenantMetadataByID(readCtx, tenantID, meta.ID)
 				if err != nil {
 					return errors.Join(ErrSource, err)
 				}
@@ -137,7 +164,7 @@ func (policy SourcePolicy) replayLifetimesThrough(ctx context.Context, tenantID 
 			if meta.DeclaredKeyID != "" {
 				return ErrSource
 			}
-			event, found, err := policy.Log.EventAtSequence(readCtx, meta.Sequence)
+			event, found, err := reader.EventAtSequence(readCtx, meta.Sequence)
 			if err != nil {
 				return err
 			}

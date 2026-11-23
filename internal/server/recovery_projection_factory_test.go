@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -41,7 +42,7 @@ func (p *recoveryReceiptProjection) Apply(_ context.Context, event events.Event)
 func TestRecoveryProjectionFactoryJoinsTheActualRebuild(t *testing.T) {
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -180,7 +181,7 @@ func (p *lifecycleAssemblyRegressionProjection) ApplyTx(
 func TestBuildSharesConfiguredProjectorWithLiveTenantLifecycle(t *testing.T) {
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
 	})
 	if err != nil {
@@ -238,7 +239,7 @@ func TestBuildSharesConfiguredProjectorWithLiveTenantLifecycle(t *testing.T) {
 func TestProjectCatchUpSeparatesLifecycleExtensionReplayFromLiveCoreState(t *testing.T) {
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
 	})
 	if err != nil {
@@ -320,7 +321,7 @@ func TestProjectCatchUpSeparatesLifecycleExtensionReplayFromLiveCoreState(t *tes
 func TestProjectCatchUpPinsOneHeadAcrossExtensionAndCoreThenRestartCatchesTail(t *testing.T) {
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
 	})
 	if err != nil {

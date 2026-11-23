@@ -5,8 +5,10 @@ package projections_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,6 +160,31 @@ func TestAgentHeartbeatRebuildFeedsAgentsAPI(t *testing.T) {
 	}
 	if len(agents) != 1 || agents[0].LastSeenAt == nil {
 		t.Fatalf("store agents after rebuild = %+v, want one liveness-projected row", agents)
+	}
+}
+
+func TestDirectRebuildRefusesFullRestoreMarkerBeforeReadModelReset(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	if err := s.UpsertTenant(t.Context(), store.Tenant{TenantID: tenantA, Name: "rebuild marker tenant"}); err != nil {
+		t.Fatal(err)
+	}
+	marker := store.RestoreMarker{
+		OperationID:    "49900000-0000-4000-8000-000000000111",
+		ArtifactSHA256: strings.Repeat("a", 64), EventCut: 0, DeploymentID: "direct-rebuild-target",
+	}
+	if err := s.BeginFullRestore(t.Context(), marker); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1`, store.RestoreControlTenantID)
+	})
+	if err := projections.New(s).Rebuild(t.Context(), log); !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Fatalf("direct rebuild under full-restore marker=%v, want refusal", err)
+	}
+	if _, err := s.GetTenant(t.Context(), tenantA); err != nil {
+		t.Fatalf("direct rebuild changed tenant read model before refusal: %v", err)
 	}
 }
 

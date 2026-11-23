@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -67,7 +67,7 @@ func TestServedMixedTenantLoginMethods(t *testing.T) {
 				}
 				d.LDAP = config.LDAP{Enabled: true, URL: endpoint, UserDNTemplate: "uid={username},ou=people,dc=example,dc=org", BindDN: "cn=admin,dc=example,dc=org", BindPasswordFile: password, GroupSearchBaseDN: "ou=groups,dc=example,dc=org", GroupFilter: "(member={user_dn})", GroupNameAttribute: "cn", EmailAttribute: "mail", SessionSecretFile: filepath.Join(t.TempDir(), "ldap-session"), SessionTTL: "1h", TenantMappings: []config.TenantMapping{{Group: "trstctl-admins", TenantID: tenant, Roles: []string{"admin"}}}}
 			}
-			d.Log, err = events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+			d.Log, err = eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 			if err != nil {
 				t.Fatal(err)
 			}

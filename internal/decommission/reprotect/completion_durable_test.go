@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -53,7 +54,7 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 		t.Fatalf("migrate PostgreSQL: %v", err)
 	}
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +190,7 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

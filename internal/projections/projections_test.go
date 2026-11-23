@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
@@ -82,12 +83,14 @@ func newStore(t *testing.T) *store.Store {
 	// Per-test isolation: the whole package shares one database, so reset the
 	// read model and the orchestrator's state/outbox tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE oidc_session_locators, oidc_logout_receipts,
+		`TRUNCATE trstctl_recovery.restore_activity_tokens, trstctl_recovery.restore_markers,
+		          oidc_session_locators, oidc_logout_receipts,
 		          ca_ceremony_cancel_commands, ca_ceremony_effect_commands, provider_suspend_commands,
 		          workload_attester_trust_commands, workload_attester_trust_receipts,
 		          identity_terminal_commands, identity_terminal_receipts,
 		          certificate_revocation_authority_fences, certificate_revocation_authority_commands,
-		          approved_target_event_fences, application_secret_mutation_fences,
+		          approved_target_event_fences, application_secret_mutation_fences, application_secret_rewrap_gates,
+		          deployment_kek_domain,
 		          application_secret_tenant_epochs, application_secret_mutation_receipts,
 		          secret_sync_jobs, dynamic_secret_leases,
 		          secret_store_versions, secret_store,
@@ -133,7 +136,7 @@ func newStore(t *testing.T) *store.Store {
 
 func openLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}

@@ -16,11 +16,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/eventprivacy"
@@ -29,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // backupIntegrityLabel domain-separates the derived backup HMAC key from any other
@@ -55,6 +59,19 @@ func recoveryProjectionOptions(
 	factories []EditionProjectionOptionsFactory,
 	extra ...projections.Option,
 ) ([]projections.Option, error) {
+	return recoveryProjectionOptionsWithCustody(ctx, cfg, st, log, auditKey, nil, factories, extra...)
+}
+
+func recoveryProjectionOptionsWithCustody(
+	ctx context.Context,
+	cfg *config.Config,
+	st *store.Store,
+	log *events.Log,
+	auditKey *jose.SigningKey,
+	core *runTenantCustodyCore,
+	factories []EditionProjectionOptionsFactory,
+	extra ...projections.Option,
+) ([]projections.Option, error) {
 	if auditKey == nil {
 		return nil, errors.New("recovery requires the restored audit signing key to verify restore-drill history")
 	}
@@ -66,6 +83,46 @@ func recoveryProjectionOptions(
 	// Core options must not depend on the presence of an edition factory.
 	options := ownershipProjectionOptions(cadence)
 	options = append(options, projections.WithRestoreDrillVerificationKeys(auditKey.JWKS()))
+	options = append(options, projections.WithCanonicalEventSource(log))
+	if core != nil {
+		if st == nil || core.access == nil || core.keyring == nil || core.registry == nil {
+			return nil, errors.New("recovery requires complete configured tenant custody")
+		}
+		access := core.access
+		recoveryAccess := func(operationID string) (tenantseal.Access, error) {
+			reader, err := st.NewTenantKeyRecoveryDomainStore(operationID)
+			if err != nil {
+				return nil, err
+			}
+			return tenantseal.NewAccess(reader, core.keyring, core.registry)
+		}
+		options = append(options,
+			projections.WithApplicationSecretReceiptVerifier(func(verifyCtx context.Context, tenantID string, mutation projections.ApplicationSecretMutation) error {
+				return tenantseal.AuthenticateApplicationSecretMutationContainers(verifyCtx, access, tenantID, mutation)
+			}),
+			projections.WithRewrapPairVerifier(func(verifyCtx context.Context, tenantID string, before, after, aad []byte) (bool, error) {
+				return tenantseal.VerifyRewrapPair(verifyCtx, access, tenantID, before, after, aad)
+			}),
+			projections.WithApplicationSecretRecoveryVerifierFactory(func(operationID string) (func(context.Context, string, projections.ApplicationSecretMutation) error, error) {
+				staged, err := recoveryAccess(operationID)
+				if err != nil {
+					return nil, err
+				}
+				return func(verifyCtx context.Context, tenantID string, mutation projections.ApplicationSecretMutation) error {
+					return tenantseal.AuthenticateApplicationSecretMutationContainers(verifyCtx, staged, tenantID, mutation)
+				}, nil
+			}),
+			projections.WithRewrapRecoveryPairVerifierFactory(func(operationID string) (func(context.Context, string, []byte, []byte, []byte) (bool, error), error) {
+				staged, err := recoveryAccess(operationID)
+				if err != nil {
+					return nil, err
+				}
+				return func(verifyCtx context.Context, tenantID string, before, after, aad []byte) (bool, error) {
+					return tenantseal.VerifyRewrapPair(verifyCtx, staged, tenantID, before, after, aad)
+				}, nil
+			}),
+		)
+	}
 	options = append(options, extra...)
 	if len(factories) == 0 {
 		return options, nil
@@ -174,17 +231,30 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 		return 0, fmt.Errorf("open store for event backup coordination: %w", err)
 	}
 	defer st.Close()
+	if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+		return 0, fmt.Errorf("bootstrap event backup admission: %w", err)
+	}
+	var count int
+	err = st.WithRestoreActivity(ctx, store.RestoreControlTenantID, uuid.NewString(),
+		"backup", "event-backup", func(admitted context.Context) error {
+			var runErr error
+			count, runErr = runBackupAdmitted(admitted, cfg, path, st)
+			return runErr
+		})
+	return count, err
+}
+
+func runBackupAdmitted(ctx context.Context, cfg *config.Config, path string, st *store.Store) (int, error) {
 	signerRuntime, auditKey, err := openAuditSigningRuntime(ctx, cfg)
 	if err != nil {
 		return 0, err
 	}
 	defer signerRuntime.Close()
-	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, []string{path})
+	log, _, _, closeSource, err := openConfiguredEventSourceWithExistingCustody(ctx, cfg, st, auditKey, signerRuntime.signer, true, []string{path})
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
-	defer func() { _ = protection.Close() }()
-	defer func() { _ = log.Close() }()
+	defer closeSource()
 
 	// Event-only backup writes no postgres artifact, so the identity itself is
 	// unused here; deriving it still fail-fasts on a broken manifest-key config.
@@ -308,6 +378,25 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
 		return backup.FullManifest{}, errors.New("full backup requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
 	}
+	st, err := store.Open(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("open store for full backup: %w", err)
+	}
+	defer st.Close()
+	if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+		return backup.FullManifest{}, fmt.Errorf("bootstrap full backup admission: %w", err)
+	}
+	var manifest backup.FullManifest
+	err = st.WithRestoreActivity(ctx, store.RestoreControlTenantID, uuid.NewString(),
+		"backup", "full-backup", func(admitted context.Context) error {
+			var runErr error
+			manifest, runErr = runFullBackupAdmitted(admitted, cfg, dir, st)
+			return runErr
+		})
+	return manifest, err
+}
+
+func runFullBackupAdmitted(ctx context.Context, cfg *config.Config, dir string, st *store.Store) (backup.FullManifest, error) {
 	// Refuse a control-plane-only volume view before creating any artifact bytes
 	// or asking the signer to create an audit handle.
 	if err := requireFullBackupSignerCustody(cfg.Signer.KeyStoreDir, issuingCAHandle); err != nil {
@@ -325,12 +414,6 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		return backup.FullManifest{}, errors.New("full backup requires TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE because the artifact captures signer/audit secrets; set TRSTCTL_BACKUP_ALLOW_UNENCRYPTED=true only for an explicit lab override")
 	}
 
-	st, err := store.Open(ctx, cfg.Postgres.DSN)
-	if err != nil {
-		return backup.FullManifest{}, fmt.Errorf("open store for full backup: %w", err)
-	}
-	defer st.Close()
-
 	signerRuntime, auditKey, err := openAuditSigningRuntime(ctx, cfg)
 	if err != nil {
 		return backup.FullManifest{}, err
@@ -339,12 +422,11 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if err := requireFullBackupSignerCustody(cfg.Signer.KeyStoreDir, issuingCAHandle, "audit-export"); err != nil {
 		return backup.FullManifest{}, err
 	}
-	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, []string{dir})
+	log, protection, _, closeSource, err := openConfiguredEventSourceWithExistingCustody(ctx, cfg, st, auditKey, signerRuntime.signer, true, []string{dir})
 	if err != nil {
 		return backup.FullManifest{}, fmt.Errorf("open event log for full backup: %w", err)
 	}
-	defer func() { _ = protection.Close() }()
-	defer func() { _ = log.Close() }()
+	defer closeSource()
 
 	var (
 		tx            *backup.PostgresStateSnapshot
@@ -526,19 +608,20 @@ func requireFullBackupSignerCustody(dir string, handles ...string) error {
 	return nil
 }
 
-// RunRestore restores the event log from a backup at path and rebuilds the read
-// model purely from it (AN-2 / R1.1) — reconstructing the control plane's state.
-// It requires external Postgres and NATS (the recovered datastores), and the
-// event store must be empty. It returns the number of events restored.
+// RunRestore refuses an event-only artifact: it lacks independent PostgreSQL
+// tenant epochs and receiver authority needed to safely rebuild sealed state.
+// Use RunFullRestore with a verified paired artifact for recovery.
+var ErrEventOnlyRestoreRequiresPairedState = errors.New("event-only restore requires paired PostgreSQL epoch and receiver authority; use full restore")
+
 func RunRestore(ctx context.Context, cfg *config.Config, path string, factories ...EditionProjectionOptionsFactory) (int, error) {
-	return restoreEventLog(ctx, cfg, path, false, false, nil, factories...)
+	return restoreEventLog(ctx, cfg, path, false, false, nil, nil, factories...)
 }
 
 // RunRestoreWithMigrations is RunRestore for a binary whose attached families
 // keep their own schemas: their migrations apply with the core schema's, so a
 // fresh target has every table the rebuild resets and the restore fills.
 func RunRestoreWithMigrations(ctx context.Context, cfg *config.Config, path string, extraMigrations []fs.FS, factories ...EditionProjectionOptionsFactory) (int, error) {
-	return restoreEventLog(ctx, cfg, path, false, false, extraMigrations, factories...)
+	return restoreEventLog(ctx, cfg, path, false, false, extraMigrations, nil, factories...)
 }
 
 func restoreEventLog(
@@ -547,10 +630,25 @@ func restoreEventLog(
 	path string,
 	resumeIfMatching, isolatedTarget bool,
 	extraMigrations []fs.FS,
+	fullMarker *store.RestoreMarker,
 	factories ...EditionProjectionOptionsFactory,
 ) (int, error) {
 	if err := validateRestoreTargets(cfg, isolatedTarget); err != nil {
 		return 0, err
+	}
+	if fullMarker == nil {
+		st, err := store.Open(ctx, cfg.Postgres.DSN)
+		if err != nil {
+			return 0, fmt.Errorf("open target for event-only restore admission: %w", err)
+		}
+		defer st.Close()
+		if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+			return 0, err
+		}
+		return 0, st.WithRestoreActivity(ctx, store.RestoreControlTenantID, uuid.NewString(),
+			"maintenance", "event-only-restore", func(context.Context) error {
+				return store.RestoreActivityNoEffect(ErrEventOnlyRestoreRequiresPairedState)
+			})
 	}
 	f, err := os.Open(path) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
@@ -569,6 +667,9 @@ func restoreEventLog(
 	if err != nil {
 		return 0, fmt.Errorf("restore event-log preflight: %w", err)
 	}
+	if err := requireVerifiedEventArtifactIdentity(preflight, fullMarker); err != nil {
+		return 0, err
+	}
 	if preflight.HasGaps {
 		return 0, errors.New(
 			"restore event history contains unexplained deleted positions; " +
@@ -584,9 +685,52 @@ func restoreEventLog(
 		return 0, fmt.Errorf("open store: %w", err)
 	}
 	defer st.Close()
+	var restored int
+	err = st.WithFullRestoreOwner(ctx, *fullMarker, func(ownerCtx context.Context) error {
+		var runErr error
+		restored, runErr = restoreEventLogAdmitted(ownerCtx, cfg, path, f, key, st,
+			resumeIfMatching, extraMigrations, fullMarker, factories)
+		return runErr
+	})
+	return restored, err
+}
+
+func requireVerifiedEventArtifactIdentity(summary backup.EventLogBackupSummary,
+	marker *store.RestoreMarker,
+) error {
+	if marker != nil && (summary.ArtifactSHA256 != marker.EventHistorySHA256 ||
+		summary.EventCutSequence != marker.EventCut) {
+		return store.ErrRestoreInProgress
+	}
+	return nil
+}
+
+func restoreEventLogAdmitted(ctx context.Context, cfg *config.Config, path string,
+	f *os.File, key []byte, st *store.Store, resumeIfMatching bool,
+	extraMigrations []fs.FS, fullMarker *store.RestoreMarker,
+	factories []EditionProjectionOptionsFactory,
+) (int, error) {
 	registerExtraMigrations(st, extraMigrations)
 	if err := st.Migrate(ctx); err != nil {
 		return 0, fmt.Errorf("migrate: %w", err)
+	}
+	if fullMarker != nil {
+		// Derive the tenant-key history from the HMAC-verified artifact before
+		// events.Open can create or bind target JetStream state. A failed stage
+		// leaves the already-committed restore marker armed for exact resume.
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return 0, fmt.Errorf("rewind event artifact for recovery key staging: %w", err)
+		}
+		err := backup.WithVerifiedHistoryReader(ctx, f, key,
+			func(source *backup.VerifiedHistoryReader) error {
+				return projections.StageTenantKeyRecoveryArtifactHistory(ctx, st, source, fullMarker.OperationID)
+			})
+		if err != nil {
+			return 0, fmt.Errorf("stage tenant-key recovery from verified artifact: %w", err)
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return 0, fmt.Errorf("rewind event artifact after recovery key staging: %w", err)
+		}
 	}
 
 	signerRuntime, auditKey, err := openAuditSigningRuntime(ctx, cfg)
@@ -599,12 +743,53 @@ func restoreEventLog(
 		return 0, fmt.Errorf("configure authenticated backup restore authority: %w", err)
 	}
 	defer restoreAuthorizer.Destroy()
-	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, false, []string{path}, events.WithBackupRestoreAuthorizer(restoreAuthorizer))
+	var log *events.Log
+	var protection *eventProtectionRuntime
+	var core *runTenantCustodyCore
+	var closeSource func()
+	err = st.WithRestoreRawHistoryAdmission(ctx, func(openCtx context.Context) error {
+		var beforeOpen func(*eventProtectionRuntime, *runTenantCustodyCore) error
+		if fullMarker != nil {
+			beforeOpen = func(protection *eventProtectionRuntime, core *runTenantCustodyCore) error {
+				if core == nil || core.keyring == nil || core.registry == nil || protection == nil || protection.reader == nil {
+					return errors.New("full restore raw-history preflight requires configured custody")
+				}
+				reader, err := st.NewTenantKeyRecoveryDomainStore(fullMarker.OperationID)
+				if err != nil {
+					return err
+				}
+				access, err := tenantseal.NewAccess(reader, core.keyring, core.registry)
+				if err != nil {
+					return err
+				}
+				if _, err := f.Seek(0, io.SeekStart); err != nil {
+					return fmt.Errorf("rewind raw-history artifact for preflight: %w", err)
+				}
+				err = backup.WithVerifiedHistoryReader(openCtx, f, key,
+					func(source *backup.VerifiedHistoryReader) error {
+						sourceKeys := *protection.reader
+						sourceKeys.Policy.Reader, sourceKeys.Policy.Log = source, nil
+						planner := &eventprivacy.ErasurePlanner{Policy: sourceKeys.Policy,
+							Custody: protection.custody}
+						return validateVerifiedRawHistory(openCtx, source, sourceKeys, planner, access)
+					})
+				if err != nil {
+					return fmt.Errorf("authenticate raw-history artifact before target broker open: %w", err)
+				}
+				_, err = f.Seek(0, io.SeekStart)
+				return err
+			}
+		}
+		var openErr error
+		log, protection, core, closeSource, openErr = openConfiguredEventSourceWithExistingCustodyBeforeOpen(
+			openCtx, cfg, st, auditKey, signerRuntime.signer, false, []string{path}, beforeOpen,
+			events.WithBackupRestoreAuthorizer(restoreAuthorizer))
+		return openErr
+	})
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
-	defer func() { _ = protection.Close() }()
-	defer func() { _ = log.Close() }()
+	defer closeSource()
 	// Restore is the only production ingress allowed to see an artifact-bound
 	// raw prefix. Install the live floor immediately, but do not sanitize that
 	// prefix: its exact bytes are the durable resume proof for the HMAC-bound
@@ -662,7 +847,15 @@ func restoreEventLog(
 	); err != nil {
 		return n, fmt.Errorf("sanitize restored scheduler history before rebuild: %w", err)
 	}
-	if err := rebuildRestoredReadModel(ctx, cfg, st, log, auditKey, rebuildLabel, factories, protection.projectionOptions()...); err != nil {
+	if fullMarker != nil {
+		options, err := recoveryProjectionOptionsWithCustody(ctx, cfg, st, log, auditKey, core, factories, protection.projectionOptions()...)
+		if err != nil {
+			return n, err
+		}
+		if err := projections.New(st, options...).RebuildFullRestorePartial(ctx, log, *fullMarker); err != nil {
+			return n, fmt.Errorf("partial full restore read-model rebuild: %w", err)
+		}
+	} else if err := rebuildRestoredReadModelWithCustody(ctx, cfg, st, log, auditKey, core, rebuildLabel, factories, protection.projectionOptions()...); err != nil {
 		return n, err
 	}
 	return n, nil
@@ -681,7 +874,21 @@ func rebuildRestoredReadModel(
 	factories []EditionProjectionOptionsFactory,
 	extra ...projections.Option,
 ) error {
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories, extra...)
+	return rebuildRestoredReadModelWithCustody(ctx, cfg, st, log, auditKey, nil, label, factories, extra...)
+}
+
+func rebuildRestoredReadModelWithCustody(
+	ctx context.Context,
+	cfg *config.Config,
+	st *store.Store,
+	log *events.Log,
+	auditKey *jose.SigningKey,
+	core *runTenantCustodyCore,
+	label string,
+	factories []EditionProjectionOptionsFactory,
+	extra ...projections.Option,
+) error {
+	options, err := recoveryProjectionOptionsWithCustody(ctx, cfg, st, log, auditKey, core, factories, extra...)
 	if err != nil {
 		return err
 	}
@@ -795,10 +1002,41 @@ func runFullRestore(
 	// Event restore already requires the original deployment KEK and verifies
 	// its HMAC with this key. Authenticate the paired PostgreSQL artifact before
 	// any restore mutation, then use the same key at import after reopening it.
-	if err := verifyFullRestoreArtifactFiles(dir, key, manifestIdentity); err != nil {
+	eventCut, eventHistoryDigest, err := verifyFullRestoreArtifactFiles(dir, key, manifestIdentity)
+	if err != nil {
 		return result, err
 	}
+	// The marker lives in the destination database and is committed before any
+	// signer file, event stream or imported PostgreSQL row can change. Its
+	// identity is stable across a retry of this artifact on this exact target.
+	manifestDigest, _, err := backup.HashFile(filepath.Join(dir, backup.FullManifestName))
+	if err != nil {
+		return result, fmt.Errorf("hash full restore manifest: %w", err)
+	}
+	targetID := crypto.SHA256Hex([]byte(cfg.Postgres.DSN + "\x00" + cfg.NATS.URL + "\x00" +
+		cfg.Signer.KeyStoreDir + "\x00" + cfg.Secrets.KEKFile))
+	marker := store.RestoreMarker{
+		OperationID:        uuid.NewSHA1(uuid.NameSpaceOID, []byte(manifestDigest+"\x00"+targetID)).String(),
+		ArtifactSHA256:     manifestDigest,
+		EventHistorySHA256: eventHistoryDigest,
+		EventCut:           eventCut,
+		DeploymentID:       targetID,
+	}
+	admissionStore, err := store.Open(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return result, fmt.Errorf("open target for full restore admission: %w", err)
+	}
+	defer admissionStore.Close()
+	if err := admissionStore.BootstrapRestoreAdmission(ctx); err != nil {
+		return result, err
+	}
+	if err := admissionStore.BeginFullRestore(ctx, marker); err != nil {
+		return result, fmt.Errorf("begin full restore admission: %w", err)
+	}
 	if err := restoreFullBackupFileArtifacts(manifest, dir, cfg, enc.key); err != nil {
+		return result, err
+	}
+	if err := admissionStore.AdvanceFullRestore(ctx, marker, "artifacts_restored"); err != nil {
 		return result, err
 	}
 	reports, err := restoreFullBackupReportsFor(ctx, cfg, manifest, dir, enc.key, isolatedEventTarget)
@@ -807,11 +1045,14 @@ func runFullRestore(
 	}
 	result.ReportsRestored, result.ReportsMissingAtBackup = reports.Restored, reports.MissingAtBackup
 
-	eventsRestored, err := restoreEventLog(ctx, cfg, filepath.Join(dir, "events.jsonl"), true, isolatedEventTarget, extraMigrations, factories...)
+	eventsRestored, err := restoreEventLog(ctx, cfg, filepath.Join(dir, "events.jsonl"), true, isolatedEventTarget, extraMigrations, &marker, factories...)
 	if err != nil {
 		return result, err
 	}
 	result.EventsRestored = eventsRestored
+	if err := admissionStore.AdvanceFullRestore(ctx, marker, "event_partial"); err != nil {
+		return result, err
+	}
 	st, err := store.Open(ctx, cfg.Postgres.DSN)
 	if err != nil {
 		return result, fmt.Errorf("open store for postgres state restore: %w", err)
@@ -828,21 +1069,33 @@ func runFullRestore(
 			if err != nil {
 				return nil, nil, err
 			}
-			source, current, err := openConfiguredEventSource(openCtx, cfg, st, key, true, []string{dir})
+			_, current, _, closeSource, err := openConfiguredEventSourceWithExistingCustody(openCtx, cfg, st, key, signer.signer, true, []string{dir})
 			if err != nil {
 				signer.Close()
 				return nil, nil, err
 			}
-			closeCurrent := func() { _ = source.Close(); _ = current.Close(); signer.Close() }
+			closeCurrent := func() { closeSource(); signer.Close() }
 			return eventprivacy.SourcePostgresProtection{Policy: current.policy, Custody: current.custody, Cut: summary.EventCutSequence}, closeCurrent, nil
 		}
 	}
-	summary, err := backup.RestorePostgresStateWithKey(ctx, st, f, key, manifestIdentity)
+	var summary backup.PostgresStateSummary
+	manifestIdentity.RestoreMarker = &marker
+	err = st.WithFullRestoreOwner(ctx, marker, func(ownerCtx context.Context) error {
+		var importErr error
+		summary, importErr = backup.RestorePostgresStateWithKey(ownerCtx, st, f, key, manifestIdentity)
+		return importErr
+	})
 	if err != nil {
 		result.Postgres = summary
 		return result, err
 	}
 	result.Postgres = summary
+	if summary.EventCutSequence != marker.EventCut {
+		return result, fmt.Errorf("full restore imported PostgreSQL cut %d differs from admitted event cut %d", summary.EventCutSequence, marker.EventCut)
+	}
+	if err := admissionStore.AdvanceFullRestore(ctx, marker, "postgres_imported"); err != nil {
+		return result, err
+	}
 
 	// restoreEventLog rebuilds once before PostgreSQL state is imported because
 	// independent rows may reference the rebuilt model. Importing that state can
@@ -858,20 +1111,35 @@ func runFullRestore(
 		return result, fmt.Errorf("audit signing key for final full-restore rebuild: %w", err)
 	}
 	defer signerRuntime.Close()
-	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, []string{dir})
+	log, protection, core, closeSource, err := openConfiguredEventSourceWithExistingCustody(ctx, cfg, st, auditKey, signerRuntime.signer, true, []string{dir})
 	if err != nil {
 		return result, fmt.Errorf("open event log for final full-restore rebuild: %w", err)
 	}
-	defer func() { _ = protection.Close() }()
-	defer func() { _ = log.Close() }()
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories, protection.projectionOptions()...)
+	defer closeSource()
+	if err := st.WithFullRestoreOwner(ctx, marker, func(ownerCtx context.Context) error {
+		return verifyImportedRestoreOutboxPairs(ownerCtx, st, log, core.access, marker)
+	}); err != nil {
+		return result, fmt.Errorf("authenticate imported secret-sync restore pairs: %w", err)
+	}
+	if err := admissionStore.AdvanceFullRestore(ctx, marker, "pair_verified"); err != nil {
+		return result, fmt.Errorf("record authenticated restore pair proof: %w", err)
+	}
+	options, err := recoveryProjectionOptionsWithCustody(ctx, cfg, st, log, auditKey, core, factories, protection.projectionOptions()...)
 	if err != nil {
 		return result, err
 	}
 	restoreOptions := append([]projections.Option(nil), options...)
 	restoreOptions = append(restoreOptions, projections.WithSecretSyncRecoveryBootstrap())
-	if err := projections.New(st, restoreOptions...).Rebuild(ctx, log); err != nil {
+	if err := st.WithFullRestoreOwner(ctx, marker, func(ownerCtx context.Context) error {
+		return projections.New(st, restoreOptions...).Rebuild(ownerCtx, log)
+	}); err != nil {
 		return result, fmt.Errorf("final read-model rebuild after postgres state restore: %w", err)
+	}
+	if err := admissionStore.AdvanceFullRestore(ctx, marker, "final_rebuild"); err != nil {
+		return result, fmt.Errorf("record final full-restore rebuild: %w", err)
+	}
+	if err := admissionStore.FinishFullRestore(ctx, marker); err != nil {
+		return result, fmt.Errorf("clear verified full-restore marker: %w", err)
 	}
 	if err := st.AuthorizeSecretSyncReceiverRecovery(ctx); err != nil {
 		return result, fmt.Errorf("authorize secret-sync receiver I/O after full restore: %w", err)
@@ -932,29 +1200,29 @@ func verifyFullRestoreManifestArtifacts(manifest backup.FullManifest, dir string
 	return verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl"))
 }
 
-func verifyFullRestoreArtifactFiles(dir string, key []byte, id backup.PostgresStateIdentity) error {
+func verifyFullRestoreArtifactFiles(dir string, key []byte, id backup.PostgresStateIdentity) (uint64, string, error) {
 	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
-		return fmt.Errorf("open event log for full-restore preflight: %w", err)
+		return 0, "", fmt.Errorf("open event log for full-restore preflight: %w", err)
 	}
 	postgresFile, err := os.Open(filepath.Join(dir, "postgres-state.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		_ = eventFile.Close()
-		return fmt.Errorf("open postgres state for full-restore preflight: %w", err)
+		return 0, "", fmt.Errorf("open postgres state for full-restore preflight: %w", err)
 	}
-	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile, key, id)
+	cut, digest, preflightErr := verifyFullRestoreArtifactPairCut(eventFile, postgresFile, key, id)
 	eventCloseErr := eventFile.Close()
 	postgresCloseErr := postgresFile.Close()
 	if preflightErr != nil {
-		return preflightErr
+		return 0, "", preflightErr
 	}
 	if eventCloseErr != nil {
-		return fmt.Errorf("close event log after full-restore preflight: %w", eventCloseErr)
+		return 0, "", fmt.Errorf("close event log after full-restore preflight: %w", eventCloseErr)
 	}
 	if postgresCloseErr != nil {
-		return fmt.Errorf("close postgres state after full-restore preflight: %w", postgresCloseErr)
+		return 0, "", fmt.Errorf("close postgres state after full-restore preflight: %w", postgresCloseErr)
 	}
-	return nil
+	return cut, digest, nil
 }
 
 // proveFullRestoreRuntime starts the recovered assembly over the isolated
@@ -1050,9 +1318,19 @@ func verifyFullRestoreArtifactPair(
 	key []byte,
 	id backup.PostgresStateIdentity,
 ) error {
+	_, _, err := verifyFullRestoreArtifactPairCut(eventArtifact, postgresArtifact, key, id)
+	return err
+}
+
+func verifyFullRestoreArtifactPairCut(
+	eventArtifact io.Reader,
+	postgresArtifact io.Reader,
+	key []byte,
+	id backup.PostgresStateIdentity,
+) (uint64, string, error) {
 	postgresSummary, err := backup.VerifyPostgresStateWithKey(postgresArtifact, key, id)
 	if err != nil {
-		return fmt.Errorf("full restore postgres-state preflight: %w", err)
+		return 0, "", fmt.Errorf("full restore postgres-state preflight: %w", err)
 	}
 	eventSummary, err := backup.VerifyEventLogBackupWithAuditCheckpoints(
 		eventArtifact,
@@ -1060,22 +1338,22 @@ func verifyFullRestoreArtifactPair(
 		postgresSummary.AuditCheckpoints,
 	)
 	if err != nil {
-		return fmt.Errorf("full restore event-log preflight: %w", err)
+		return 0, "", fmt.Errorf("full restore event-log preflight: %w", err)
 	}
 	if eventSummary.EventCutSequence != postgresSummary.EventCutSequence {
-		return fmt.Errorf(
+		return 0, "", fmt.Errorf(
 			"full restore artifact cut mismatch: event log names cut %d but postgres state names cut %d; refusing before any restore mutation",
 			eventSummary.EventCutSequence,
 			postgresSummary.EventCutSequence,
 		)
 	}
 	if eventSummary.HasGaps {
-		return errors.New(
+		return 0, "", errors.New(
 			"full restore event history contains unexplained deleted positions; " +
 				"logical audit retention retains AN-2 source envelopes, so this is a legacy or externally damaged artifact; refusing before any restore mutation",
 		)
 	}
-	return nil
+	return eventSummary.EventCutSequence, eventSummary.ArtifactSHA256, nil
 }
 
 // RunRebuild atomically re-derives the read model from the event log already
@@ -1104,6 +1382,29 @@ func RunRebuildWithMigrations(ctx context.Context, cfg *config.Config, extraMigr
 		return 0, fmt.Errorf("open store: %w", err)
 	}
 	defer st.Close()
+	if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+		return 0, fmt.Errorf("bootstrap rebuild admission: %w", err)
+	}
+	var rebuilt int
+	err = st.WithRestoreActivity(ctx, store.RestoreControlTenantID, uuid.NewString(),
+		"maintenance", "standalone-rebuild", func(admitted context.Context) error {
+			var runErr error
+			rebuilt, runErr = runRebuildAdmitted(admitted, cfg, st, extraMigrations, factories)
+			return runErr
+		})
+	return rebuilt, err
+}
+
+func runRebuildAdmitted(ctx context.Context, cfg *config.Config, st *store.Store,
+	extraMigrations []fs.FS, factories []EditionProjectionOptionsFactory,
+) (int, error) {
+	deployment, err := kek.Load(cfg.Secrets.KEKFile)
+	if err != nil {
+		// The command has not migrated, opened history, or touched the read
+		// model. A missing existing root is a proven no-effect refusal.
+		return 0, store.RestoreActivityNoEffect(fmt.Errorf("load existing deployment KEK for rebuild: %w", err))
+	}
+	defer deployment.Destroy()
 	registerExtraMigrations(st, extraMigrations)
 	if err := st.Migrate(ctx); err != nil {
 		return 0, fmt.Errorf("migrate: %w", err)
@@ -1114,7 +1415,11 @@ func RunRebuildWithMigrations(ctx context.Context, cfg *config.Config, extraMigr
 		return 0, err
 	}
 	defer signerRuntime.Close()
-	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, nil)
+	core, err := newRunTenantCustodyCore(cfg, st, deployment, signerRuntime.signer)
+	if err != nil {
+		return 0, err
+	}
+	log, protection, err := openConfiguredEventSourceWithCustody(ctx, cfg, st, auditKey, true, nil, core)
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
@@ -1126,7 +1431,7 @@ func RunRebuildWithMigrations(ctx context.Context, cfg *config.Config, extraMigr
 	if err := log.Replay(ctx, 0, func(events.Event) error { n++; return nil }); err != nil {
 		return 0, fmt.Errorf("count event log: %w", err)
 	}
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories, protection.projectionOptions()...)
+	options, err := recoveryProjectionOptionsWithCustody(ctx, cfg, st, log, auditKey, core, factories, protection.projectionOptions()...)
 	if err != nil {
 		return 0, err
 	}

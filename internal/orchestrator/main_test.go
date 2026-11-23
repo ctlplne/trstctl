@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -110,7 +111,11 @@ func newStore(t *testing.T) *store.Store {
 	}
 	// The package shares one database; reset the spine tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE secret_rotation_schedule_commands, secret_rotation_schedules, migration_runs,
+		`TRUNCATE trstctl_recovery.raw_history_journal,
+		          trstctl_recovery.restore_outbox_pairs, trstctl_recovery.recovery_pair_proofs,
+		          trstctl_recovery.tenant_key_domain_snapshots, trstctl_recovery.event_ingress_journal,
+		          trstctl_recovery.restore_activity_tokens, trstctl_recovery.restore_markers,
+		          secret_rotation_schedule_commands, secret_rotation_schedules, migration_runs,
 		          tenants, idempotency_keys, outbox, agent_job_attempt_bindings,
 		          owners, issuers, identities, identity_transitions, deployment_targets, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          connector_delivery_receipts, lifecycle_rotation_runs
@@ -140,7 +145,7 @@ func openLog(t *testing.T) *events.Log {
 
 func openLogWithOptions(t *testing.T, opts ...events.OpenOption) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, opts...)
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, opts...)
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -30,7 +31,7 @@ func TestErasePrivacySubjectFailsBeforeTouchingStoreOrLogWithoutProofSet(t *test
 
 func TestErasePrivacySubjectFailsBeforeStoreTouchWhenLogVerifierWasNotWired(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open raw event log: %v", err)
 	}

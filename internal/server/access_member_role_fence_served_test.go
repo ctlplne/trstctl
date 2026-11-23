@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/google/uuid"
 
@@ -237,7 +238,7 @@ func TestServedRepeatOffboardSupersedesPendingRehire(t *testing.T) {
 		t.Fatal(err)
 	}
 	admin := seedServedAPIToken(t, ctx, st, tenantID, "qa-repeat-offboard-admin", []string{"*"})
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)

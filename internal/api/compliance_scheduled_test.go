@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
@@ -62,7 +63,7 @@ func TestScheduledReportProducerBindsAllAdvertisedTypesToTenantRunAndDue(t *test
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "scheduled-test", CreatedAt: time.Now().UTC()}); err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

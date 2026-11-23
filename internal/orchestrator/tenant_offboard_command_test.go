@@ -5,14 +5,126 @@ package orchestrator_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestTenantOffboardCommandRefusesFullRestoreBeforeAppend(t *testing.T) {
+	ctx := events.ContextWithActor(t.Context(), events.Actor{Subject: "customer-admin", Roles: []string{"admin"}})
+	st := newStore(t)
+	log := openLog(t)
+	projector := projections.New(st)
+	registered, err := orchestrator.ExecuteTenantRegistration(ctx, log, st, projector,
+		orchestrator.NewIdempotency(st), registrationCommand(tenantA, "restore-offboard", "restore-registration"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := store.RestoreMarker{OperationID: "11111111-1111-4111-8111-111111111803",
+		ArtifactSHA256: strings.Repeat("d", 64), EventCut: 1, DeploymentID: "orchestrator-offboard-order"}
+	if err := st.BeginFullRestore(ctx, marker); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+			store.RestoreControlTenantID, marker.OperationID)
+	})
+	orch := orchestrator.NewOrchestrator(log, st, nil, orchestrator.WithProjector(projector))
+	if _, err := orch.OffboardTenant(ctx, orchestrator.TenantOffboardCommand{
+		TenantID: tenantA, RegistrationIdentity: registered.ID,
+	}); !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Fatalf("offboard command under restore marker = %v, want refusal", err)
+	}
+	if got := countTenantEvents(t, log, tenantA, projections.EventTenantOffboarded); got != 0 {
+		t.Fatalf("restore-refused offboard appended %d events", got)
+	}
+	if _, err := st.GetTenant(ctx, tenantA); err != nil {
+		t.Fatalf("restore-refused offboard deleted tenant: %v", err)
+	}
+}
+
+func TestPrepareTenantOffboardRefusesFullRestoreBeforeReceiver(t *testing.T) {
+	ctx := events.ContextWithActor(t.Context(), events.Actor{Subject: "customer-admin", Roles: []string{"admin"}})
+	st := newStore(t)
+	log := openLog(t)
+	projector := projections.New(st)
+	registered, err := orchestrator.ExecuteTenantRegistration(ctx, log, st, projector,
+		orchestrator.NewIdempotency(st), registrationCommand(tenantA, "restore-prepare", "prepare-registration"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := store.RestoreMarker{OperationID: "11111111-1111-4111-8111-111111111804",
+		ArtifactSHA256: strings.Repeat("c", 64), EventCut: 1, DeploymentID: "orchestrator-prepare-order"}
+	if err := st.BeginFullRestore(ctx, marker); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+			store.RestoreControlTenantID, marker.OperationID)
+	})
+	orch := orchestrator.NewOrchestrator(log, st, nil, orchestrator.WithProjector(projector))
+	if err := orch.PrepareTenantOffboard(ctx, orchestrator.TenantOffboardCommand{
+		TenantID: tenantA, RegistrationIdentity: registered.ID,
+	}); !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Fatalf("prepare offboard under restore marker = %v, want refusal", err)
+	}
+	var receivers int
+	if err := st.SystemPool().QueryRow(ctx, `SELECT count(*) FROM idempotency_keys
+		WHERE tenant_id=$1 AND key LIKE $2`, tenantA, store.TenantOffboardReceiverKeyPrefix+"%").Scan(&receivers); err != nil {
+		t.Fatal(err)
+	}
+	if receivers != 0 {
+		t.Fatalf("restore-refused prepare wrote %d offboard receivers", receivers)
+	}
+}
+
+func TestTenantOffboardUsesHeldKeyStateTransactionForAdmittedAppend(t *testing.T) {
+	st := newStore(t)
+	var enforce bool
+	log := openLogWithOptions(t, events.WithAppendAdmission(func(ctx context.Context, event events.Event,
+		publish func(context.Context) (events.Event, error),
+	) (events.Event, error) {
+		if !enforce {
+			return publish(ctx)
+		}
+		var retained events.Event
+		err := st.WithRestoreEventIngress(ctx, event.TenantID, event.ID, event.Type,
+			func(admitted context.Context) error {
+				var appendErr error
+				retained, appendErr = publish(admitted)
+				return appendErr
+			})
+		return retained, err
+	}))
+	ctx := events.ContextWithActor(t.Context(), events.Actor{Subject: "customer-admin", Roles: []string{"admin"}})
+	projector := projections.New(st)
+	registered, err := orchestrator.ExecuteTenantRegistration(ctx, log, st, projector,
+		orchestrator.NewIdempotency(st), registrationCommand(tenantA, "admitted-offboard", "admitted-registration"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	enforce = true
+	deadline, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	orch := orchestrator.NewOrchestrator(log, st, nil, orchestrator.WithProjector(projector))
+	if _, err := orch.OffboardTenant(deadline, orchestrator.TenantOffboardCommand{
+		TenantID: tenantA, RegistrationIdentity: registered.ID,
+	}); err != nil {
+		t.Fatalf("offboard with admitted Append self-blocked on held key-state B: %v", err)
+	}
+	if _, err := st.GetTenant(ctx, tenantA); !store.IsNotFound(err) {
+		t.Fatalf("admitted offboard did not erase tenant: %v", err)
+	}
+}
 
 func TestTenantOffboardCommandBindsRegistrationAndPreservesOtherTenant(t *testing.T) {
 	ctx := events.ContextWithActor(t.Context(), events.Actor{Subject: "authorized-customer-admin", Roles: []string{"admin"}})

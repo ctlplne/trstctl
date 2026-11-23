@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/auditcompliance"
 	"trstctl.com/trstctl/internal/audit"
@@ -161,7 +162,7 @@ func (c *memCheckpoints) SaveAuditCheckpoint(_ context.Context, cp audit.Checkpo
 
 func openTestLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -569,7 +570,7 @@ func assertArchivedEventCount(t *testing.T, log *events.Log, tenantID string, wa
 func TestRetentionPinsArchiveAndExcludesCutoverWhileCheckpointCommits(t *testing.T) {
 	ctx := context.Background()
 	coordinator := &retentionHistoryCoordinator{}
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		events.WithHistoryRewriteCoordinator(coordinator),
@@ -731,10 +732,24 @@ func TestRewriteRealRetentionCheckpointRetainsReceiptAndReopens(t *testing.T) {
 		}
 		return nil
 	}
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		ctx,
 		cfg,
 		events.WithHistoryRewriteContinuityVerifier(verifier),
+		// This synthetic sealed value has no tenant custody service. Admit only
+		// the exact bytes the retention rewrite exercises.
+		events.WithAppendAdmission(func(admitted context.Context, candidate events.Event,
+			publish func(context.Context) (events.Event, error),
+		) (events.Event, error) {
+			if candidate.Type == audit.EventTypeArchived && candidate.TenantID == tenantID {
+				return publish(admitted)
+			}
+			if candidate.ID != "rewrite-before-retention" || candidate.Type != "secret.version.written" ||
+				candidate.TenantID != tenantID || !bytes.Equal(candidate.Data, []byte(`{"sealed":"deployment-ciphertext"}`)) {
+				return events.Event{}, fmt.Errorf("unexpected sealed retention fixture event")
+			}
+			return publish(admitted)
+		}),
 	)
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
@@ -809,7 +824,7 @@ func TestRewriteRealRetentionCheckpointRetainsReceiptAndReopens(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	reopened, err := events.Open(
+	reopened, err := eventstest.OpenFixture(
 		ctx,
 		cfg,
 		events.WithHistoryRewriteContinuityVerifier(verifier),
@@ -834,7 +849,7 @@ func TestPrivacyRewriteAfterLogicalRetentionKeepsCheckpointReplayable(t *testing
 		}
 		return nil
 	}
-	log, err := events.Open(ctx, cfg, events.WithHistoryRewriteContinuityVerifier(verifier))
+	log, err := eventstest.OpenFixture(ctx, cfg, events.WithHistoryRewriteContinuityVerifier(verifier))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -918,7 +933,7 @@ func TestPrivacyRewriteAfterLogicalRetentionKeepsCheckpointReplayable(t *testing
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := events.Open(ctx, cfg, events.WithHistoryRewriteContinuityVerifier(verifier))
+	reopened, err := eventstest.OpenFixture(ctx, cfg, events.WithHistoryRewriteContinuityVerifier(verifier))
 	if err != nil {
 		t.Fatalf("reopen after retained-prefix rewrite: %v", err)
 	}

@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/seal"
@@ -34,7 +36,7 @@ func (authority *sourceReadDestructionAuthority) AuthorizeDestruction(_ context.
 
 func TestSourceKeysUseRetainedCreationAndCurrentDestruction(t *testing.T) {
 	base := t.TempDir()
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +85,10 @@ func TestSourceKeysUseRetainedCreationAndCurrentDestruction(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// CR-045: recovery resolves this same creation through its pinned artifact
+	// reader while the target log is still empty.
+	reader.Policy.Reader = log
+	reader.Policy.Log = nil
 	if err := reader.WithKey(t.Context(), ref, func(wrapper seal.KeyWrapper) error {
 		opened, err := seal.OpenDomain(wrapper, sealed, []byte("fixture-context"), []byte("fixture-domain"))
 		defer secret.Wipe(opened)
@@ -91,6 +97,28 @@ func TestSourceKeysUseRetainedCreationAndCurrentDestruction(t *testing.T) {
 		}
 		return nil
 	}); err != nil {
+		t.Fatal(err)
+	}
+	// CR-045: before target history import, the verified artifact selects the
+	// same active creation and independently held key as the source log.
+	var artifact bytes.Buffer
+	artifactKey := []byte("fixture-active-key-artifact-hmac")
+	if _, err := backup.WriteLogWithKey(t.Context(), log, &artifact, artifactKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := backup.WithVerifiedHistoryReader(t.Context(), bytes.NewReader(artifact.Bytes()), artifactKey,
+		func(history *backup.VerifiedHistoryReader) error {
+			artifactReader := eventprivacy.SourceKeys{Policy: eventprivacy.SourcePolicy{Reader: history,
+				Trust: key.JWKS()}, Custody: keys}
+			return artifactReader.WithKey(t.Context(), ref, func(wrapper seal.KeyWrapper) error {
+				opened, err := seal.OpenDomain(wrapper, sealed, []byte("fixture-context"), []byte("fixture-domain"))
+				defer secret.Wipe(opened)
+				if err != nil || !bytes.Equal(opened, plain) {
+					t.Fatalf("artifact-selected key did not open active source bytes: %v", err)
+				}
+				return nil
+			})
+		}); err != nil {
 		t.Fatal(err)
 	}
 	appendSource(t, log, "key-read-offboard", "tenant.offboarded", creation.CreatedAt.Add(time.Nanosecond), struct {
@@ -116,6 +144,16 @@ func TestSourceKeysUseRetainedCreationAndCurrentDestruction(t *testing.T) {
 	called := false
 	if err := reader.WithKey(t.Context(), ref, func(seal.KeyWrapper) error { called = true; return nil }); !errors.Is(err, eventprotect.ErrDestroyed) || called {
 		t.Fatalf("current independent destruction was not applied to source-backed reads: %v called=%v", err, called)
+	}
+	called = false
+	if err := backup.WithVerifiedHistoryReader(t.Context(), bytes.NewReader(artifact.Bytes()), artifactKey,
+		func(history *backup.VerifiedHistoryReader) error {
+			artifactReader := eventprivacy.SourceKeys{Policy: eventprivacy.SourcePolicy{Reader: history,
+				Trust: key.JWKS()}, Custody: keys}
+			return artifactReader.WithKey(t.Context(), ref,
+				func(seal.KeyWrapper) error { called = true; return nil })
+		}); !errors.Is(err, eventprotect.ErrDestroyed) || called {
+		t.Fatalf("pre-removal artifact selected destroyed current key: %v called=%v", err, called)
 	}
 	// Completion is intentionally absent: a restored data cut can predate the
 	// worker's source completion while current independent custody is destroyed.

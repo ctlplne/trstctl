@@ -4,16 +4,19 @@ package projections_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
@@ -105,6 +108,328 @@ func TestTailWorkerProjectsOutOfBandEvent(t *testing.T) {
 	case <-runErr:
 	case <-time.After(5 * time.Second):
 		t.Error("tail worker did not stop on context cancel")
+	}
+	// CR-045: the initial tenant registration is re-fetched under exclusive A.
+	// Its shared-mode NAK must leave no unresolved durable batch start.
+	for _, tenantID := range []string{store.RestoreControlTenantID, tenantA} {
+		var unresolved int
+		if err := s.SystemPool().QueryRow(t.Context(), `SELECT count(*) FROM trstctl_recovery.restore_activity_tokens
+			WHERE tenant_id=$1 AND lane IN ('projection-tail-batch','projection-tail') AND phase='started'`, tenantID).
+			Scan(&unresolved); err != nil || unresolved != 0 {
+			t.Errorf("tail unresolved activities tenant=%s count=%d err=%v", tenantID, unresolved, err)
+		}
+	}
+}
+
+// CR-045: after a command's broker ACK and owner SQL rollback, a fresh
+// projector has no in-memory owner token. It must reject a same-ID candidate
+// whose data differs from the retained event before touching the read model.
+func TestPendingCommandProjectionRequiresCanonicalReplayCR045(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	if err := s.UpsertTenant(t.Context(), store.Tenant{TenantID: tenantA, Name: "replay fixture"}); err != nil {
+		t.Fatal(err)
+	}
+	const eventID = "plain-command-pending-replay"
+	canonical, err := log.Append(t.Context(), events.Event{ID: eventID, Type: projections.EventOwnerCreated,
+		TenantID: tenantA, Data: ownerCreated("00000000-0000-0000-0000-0000000000c1", "original")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const operationID = "49900000-0000-4000-8000-0000000000fc"
+	if _, err := s.SystemPool().Exec(t.Context(), `INSERT INTO trstctl_recovery.restore_activity_tokens
+		(tenant_id,operation_id,activity_kind,lane,event_id) VALUES ($1,$2,'projection','command-apply',$3)`,
+		tenantA, operationID, eventID); err != nil {
+		t.Fatal(err)
+	}
+	p := projections.New(s, projections.WithCanonicalEventSource(log))
+	forged := canonical
+	forged.Data = ownerCreated("00000000-0000-0000-0000-0000000000c1", "changed")
+	if err := p.Apply(t.Context(), forged); !errors.Is(err, projections.ErrCanonicalEventRequired) {
+		t.Fatalf("changed pending replay=%v, want canonical refusal", err)
+	}
+	if got := ownerCount(t, s, tenantA); got != 0 {
+		t.Fatalf("changed pending replay wrote %d owners", got)
+	}
+	if err := p.Apply(t.Context(), canonical); err != nil {
+		t.Fatalf("canonical pending replay: %v", err)
+	}
+}
+
+// CR-045: a canonical core replay can commit before an attached projection
+// returns. Its durable command token remains pending until the complete apply
+// succeeds, then a retry settles it against the retained canonical event.
+func TestPendingCommandTokenWaitsForAttachedProjectionCR045(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	if err := s.UpsertTenant(t.Context(), store.Tenant{TenantID: tenantA, Name: "attached replay fixture"}); err != nil {
+		t.Fatal(err)
+	}
+	const eventID = "plain-attached-command-pending"
+	canonical, err := log.Append(t.Context(), events.Event{ID: eventID, Type: projections.EventOwnerCreated,
+		TenantID: tenantA, Data: ownerCreated("00000000-0000-0000-0000-0000000000d1", "original")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const operationID = "49900000-0000-4000-8000-0000000000d3"
+	if _, err := s.SystemPool().Exec(t.Context(), `INSERT INTO trstctl_recovery.restore_activity_tokens
+		(tenant_id,operation_id,activity_kind,lane,event_id) VALUES ($1,$2,'projection','command-apply',$3)`,
+		tenantA, operationID, eventID); err != nil {
+		t.Fatal(err)
+	}
+	attached := &switchableTailProjection{err: errors.New("attached projection unavailable")}
+	p := projections.New(s, projections.WithCanonicalEventSource(log), projections.WithEventProjection(attached))
+	if err := p.Apply(t.Context(), canonical); err == nil {
+		t.Fatal("attached projection failure did not fail complete apply")
+	}
+	phase := func() string {
+		t.Helper()
+		var value string
+		if err := s.SystemPool().QueryRow(t.Context(), `SELECT phase FROM trstctl_recovery.restore_activity_tokens
+			WHERE tenant_id=$1 AND operation_id=$2`, tenantA, operationID).Scan(&value); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	if got := phase(); got != "started" {
+		t.Fatalf("failed attached projection settled command token as %q", got)
+	}
+	const laterOperationID = "49900000-0000-4000-8000-0000000000d4"
+	attached.err = nil
+	attached.onApply = func(ctx context.Context, event eventspec.Event) error {
+		_, err := s.SystemPool().Exec(ctx, `INSERT INTO trstctl_recovery.restore_activity_tokens
+			(tenant_id,operation_id,activity_kind,lane,event_id) VALUES ($1,$2,'projection','command-apply',$3)`,
+			tenantA, laterOperationID, event.ID)
+		return err
+	}
+	if err := p.Apply(t.Context(), canonical); err != nil {
+		t.Fatal(err)
+	}
+	if got := phase(); got != "terminal" {
+		t.Fatalf("successful canonical attached replay left command token %q", got)
+	}
+	var laterPhase string
+	if err := s.SystemPool().QueryRow(t.Context(), `SELECT phase FROM trstctl_recovery.restore_activity_tokens
+		WHERE tenant_id=$1 AND operation_id=$2`, tenantA, laterOperationID).Scan(&laterPhase); err != nil {
+		t.Fatal(err)
+	}
+	if laterPhase != "started" {
+		t.Fatalf("later same-ID attempt was settled as %q by earlier replay", laterPhase)
+	}
+}
+
+// CR-045: historical Provider audit events use a text scope in the event and
+// a reserved UUID only for their checkpoint row. Their ingress token lives in
+// the restore-control partition, so a forged replay must check that partition.
+func TestPendingLegacyProviderAuditProjectionRequiresCanonicalReplayCR045(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	const eventID = "plain-provider-audit-pending-replay"
+	data, err := json.Marshal(audit.ArchivedEvent{
+		Count: 1, BoundarySeq: 1, BoundaryHash: strings.Repeat("a", 64),
+		ArchiveURI: "archive://plain/one", SourceHistoryRetained: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := log.Append(t.Context(), events.Event{ID: eventID, Type: audit.EventTypeArchived,
+		SchemaVersion: audit.ArchivedEventSchemaVersion, TenantID: events.LegacyProviderGlobalAuditScope, Data: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const operationID = "49900000-0000-4000-8000-0000000000ff"
+	if _, err := s.SystemPool().Exec(t.Context(), `INSERT INTO trstctl_recovery.restore_activity_tokens
+		(tenant_id,operation_id,activity_kind,lane,event_id) VALUES ($1,$2,'projection','command-apply',$3)`,
+		store.RestoreControlTenantID, operationID, eventID); err != nil {
+		t.Fatal(err)
+	}
+	p := projections.New(s, projections.WithCanonicalEventSource(log))
+	forged := canonical
+	forged.Data = append([]byte(nil), canonical.Data...)
+	forged.Data = []byte(strings.Replace(string(forged.Data), "archive://plain/one", "archive://plain/two", 1))
+	if err := p.Apply(t.Context(), forged); !errors.Is(err, projections.ErrCanonicalEventRequired) {
+		t.Fatalf("changed Provider audit replay=%v, want canonical refusal", err)
+	}
+	if _, found, err := s.LatestAuditCheckpoint(t.Context(), events.LegacyProviderGlobalAuditScope); err != nil || found {
+		t.Fatalf("changed replay wrote audit checkpoint: found=%t err=%v", found, err)
+	}
+	if err := p.Apply(t.Context(), canonical); err != nil {
+		t.Fatalf("canonical Provider audit replay: %v", err)
+	}
+}
+
+// CR-045: a tail worker already holding an event object may not start the
+// projection or checkpoint after a full-restore marker commits.
+func TestTailWorkerRefusesRestoreMarkerBeforeProjectionCheckpoint(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	if _, err := log.Append(t.Context(), events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA, Data: tenantRegistered("restore tail fixture"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(t.Context(), events.Event{
+		Type: projections.EventOwnerCreated, TenantID: tenantA,
+		Data: ownerCreated("00000000-0000-0000-0000-0000000000c2", "must not tail"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	marker := store.RestoreMarker{
+		OperationID:    "49900000-0000-4000-8000-0000000000b1",
+		ArtifactSHA256: strings.Repeat("a", 64), EventCut: 2, DeploymentID: "tail-fenced-target",
+	}
+	if err := s.BeginFullRestore(t.Context(), marker); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1`, store.RestoreControlTenantID)
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	err := projections.NewTailWorker(log, projections.New(s), nil, time.Second).Run(ctx)
+	if !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Errorf("tail under restore marker=%v, want refusal", err)
+	}
+	checkpoint, err := s.ProjectionCheckpoint(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkpoint != 0 {
+		t.Errorf("tail advanced checkpoint=%d under restore marker", checkpoint)
+	}
+}
+
+type blockingRestoreTailProjection struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (*blockingRestoreTailProjection) Name() string                { return "restore-tail-blocking-fixture" }
+func (*blockingRestoreTailProjection) Reset(context.Context) error { return nil }
+func (p *blockingRestoreTailProjection) Apply(ctx context.Context, event events.Event) error {
+	if event.Type != projections.EventOwnerCreated {
+		return nil
+	}
+	close(p.entered)
+	select {
+	case <-p.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// CR-045: a live tail iteration is a durable restore blocker even when its
+// server lifetime session dies before the projection/checkpoint can settle.
+func TestTailWorkerCommitsPerEventRestoreActivityBeforeApply(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	for _, event := range []events.Event{
+		{Type: projections.EventTenantRegistered, TenantID: tenantA, Data: tenantRegistered("tail activity fixture")},
+		{Type: projections.EventOwnerCreated, TenantID: tenantA,
+			Data: ownerCreated("00000000-0000-0000-0000-0000000000c3", "held tail")},
+	} {
+		if _, err := log.Append(t.Context(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	attached := &blockingRestoreTailProjection{entered: make(chan struct{}), release: make(chan struct{})}
+	proj := projections.New(s, projections.WithEventProjection(attached))
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- projections.NewTailWorker(log, proj, nil, time.Second).Run(ctx) }()
+	select {
+	case <-attached.entered:
+	case err := <-done:
+		t.Fatalf("tail did not reach held projection: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	var started bool
+	if err := s.SystemPool().QueryRow(t.Context(), `SELECT EXISTS(
+		SELECT 1 FROM trstctl_recovery.restore_activity_tokens
+		WHERE tenant_id=$1 AND activity_kind='worker' AND lane='projection-tail' AND phase='started')`,
+		tenantA).Scan(&started); err != nil {
+		t.Fatal(err)
+	}
+	close(attached.release)
+	if !started {
+		t.Fatal("tail applied an event without a durable per-event restore activity start")
+	}
+	cancel()
+	<-done
+}
+
+func TestTailWorkerIdleCancellationSettlesBatchRestoreActivity(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- projections.NewTailWorker(log, projections.New(s), nil, time.Second).Run(ctx) }()
+	waitFor(t, func() bool {
+		var started bool
+		err := s.SystemPool().QueryRow(t.Context(), `SELECT EXISTS(
+			SELECT 1 FROM trstctl_recovery.restore_activity_tokens
+			WHERE tenant_id=$1 AND activity_kind='worker' AND lane='projection-tail-batch' AND phase='started')`,
+			store.RestoreControlTenantID).Scan(&started)
+		return err == nil && started
+	}, 5*time.Second, "idle tail batch start")
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("idle tail did not stop")
+	}
+	var unresolved int
+	if err := s.SystemPool().QueryRow(t.Context(), `SELECT count(*)
+		FROM trstctl_recovery.restore_activity_tokens
+		WHERE tenant_id=$1 AND activity_kind='worker' AND lane='projection-tail-batch' AND phase='started'`,
+		store.RestoreControlTenantID).Scan(&unresolved); err != nil {
+		t.Fatal(err)
+	}
+	if unresolved != 0 {
+		t.Fatalf("idle cancellation left %d unresolved tail batch tokens", unresolved)
+	}
+}
+
+// CR-045: an ordinary shared batch must NAK a key-state event before applying
+// it, then refetch the same offboard event under exclusive A without deadlock.
+func TestTailWorkerRetriesOffboardUnderExclusiveKeyStateAdmission(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
+	defer cancel()
+	if _, err := log.Append(ctx, events.Event{Type: projections.EventTenantRegistered,
+		TenantID: tenantA, Data: tenantRegistered("Acme")}); err != nil {
+		t.Fatal(err)
+	}
+	proj := projections.New(s)
+	if err := proj.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- projections.NewTailWorker(log, proj, nil, time.Second).Run(ctx) }()
+	if _, err := log.Append(ctx, events.Event{Type: projections.EventTenantOffboarded,
+		TenantID: tenantA, Data: []byte(`{"rows_deleted":0}`)}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool {
+		_, err := s.GetTenant(ctx, tenantA)
+		return store.IsNotFound(err)
+	}, 8*time.Second, "exclusive tail offboard")
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("offboard tail did not stop")
+	}
+	var pending int
+	if err := s.SystemPool().QueryRow(t.Context(), `SELECT count(*) FROM trstctl_recovery.restore_activity_tokens
+		WHERE tenant_id IN ($1,$2) AND lane IN ('projection-tail-batch','projection-tail') AND phase='started'`,
+		store.RestoreControlTenantID, tenantA).Scan(&pending); err != nil || pending != 0 {
+		t.Fatalf("offboard tail unresolved tokens=%d err=%v", pending, err)
 	}
 }
 
@@ -223,7 +548,7 @@ func TestTailWorkerPersistsPoisonAndClearsItAfterRestart(t *testing.T) {
 
 	storeDir := t.TempDir()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir}
-	log1, err := events.Open(ctx, cfg)
+	log1, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("open first file-backed log: %v", err)
 	}
@@ -284,7 +609,7 @@ func TestTailWorkerPersistsPoisonAndClearsItAfterRestart(t *testing.T) {
 		t.Fatalf("restart lost persisted poison: %+v", restartedHealth)
 	}
 
-	log2, err := events.Open(ctx, cfg)
+	log2, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("reopen file-backed log: %v", err)
 	}
@@ -348,7 +673,7 @@ func TestTailWorkerPersistsMalformedEnvelopeFailure(t *testing.T) {
 	}
 	defer natsServer.Shutdown()
 
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSExternal, URL: natsServer.ClientURL(),
 		Replicas: 1, AllowSingleReplica: true,
 	})
@@ -400,12 +725,17 @@ func TestTailWorkerPersistsMalformedEnvelopeFailure(t *testing.T) {
 }
 
 type switchableTailProjection struct {
-	err error
+	err     error
+	onApply func(context.Context, eventspec.Event) error
 }
 
 func (*switchableTailProjection) Name() string                { return "aud103-switchable" }
 func (*switchableTailProjection) Reset(context.Context) error { return nil }
-func (p *switchableTailProjection) Apply(context.Context, eventspec.Event) error {
+
+func (p *switchableTailProjection) Apply(ctx context.Context, event eventspec.Event) error {
+	if p.onApply != nil {
+		return p.onApply(ctx, event)
+	}
 	return p.err
 }
 

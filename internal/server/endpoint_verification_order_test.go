@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -23,7 +24,7 @@ func TestEndpointVerificationCannotAppendAheadOfCertificateMetadata(t *testing.T
 	st := newServerTestStore(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "events")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "events")})
 	if err != nil {
 		t.Fatal(err)
 	}

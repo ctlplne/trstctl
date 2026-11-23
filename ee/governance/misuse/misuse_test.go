@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	_ "trstctl.com/trstctl/ee" // registers the licensed event privacy catalog
 	"trstctl.com/trstctl/ee/governance/misuse"
@@ -95,7 +96,7 @@ func (f *usageFixture) alerts() []string {
 func TestMisuseDetectionAlertsOnceWithEvidenceM2(t *testing.T) {
 	ctx := context.Background()
 	st := newMisuseTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1597,7 +1597,7 @@ func TestPseudonymizeSubjectPreparationFollowsSignedStagingAndNoOpRetryStillComp
 		subject  = "alice@example.com"
 	)
 	coordinator := newPrivacyPreparationTestCoordinator()
-	log, err := Open(ctx, config.NATS{
+	log, err := openFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	},
 		WithHistoryRewriteCoordinator(coordinator),
@@ -1685,7 +1685,7 @@ func TestPseudonymizeSubjectEmptyStreamStillPreparesAgainstActiveGeneration(t *t
 		subject  = "alice@example.com"
 	)
 	coordinator := newPrivacyPreparationTestCoordinator()
-	log, err := Open(ctx, config.NATS{
+	log, err := openFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	},
 		WithHistoryRewriteCoordinator(coordinator),
@@ -1744,7 +1744,7 @@ func TestPseudonymizeSubjectExternalPreparationReadsFrozenCanonicalGeneration(t 
 		eventID  = "external-preparation-replay-source"
 	)
 	coordinator := newPrivacyPreparationTestCoordinator()
-	log, err := Open(ctx, config.NATS{
+	log, err := openFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	},
 		WithHistoryRewriteCoordinator(coordinator),
@@ -1811,7 +1811,7 @@ func TestPseudonymizeSubjectExternalPreparationWaitsForReadAndRevokesEscapedCont
 		eventID  = "external-preparation-pinned-read-source"
 	)
 	coordinator := newPrivacyPreparationTestCoordinator()
-	log, err := Open(ctx, config.NATS{
+	log, err := openFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	},
 		WithHistoryRewriteCoordinator(coordinator),
@@ -1933,7 +1933,7 @@ func TestPseudonymizeSubjectPreparationFailureLeavesGenerationUnchanged(t *testi
 		subject  = "alice@example.com"
 	)
 	coordinator := newPrivacyPreparationTestCoordinator()
-	log, err := Open(ctx, config.NATS{
+	log, err := openFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	},
 		WithHistoryRewriteCoordinator(coordinator),
@@ -2095,7 +2095,7 @@ func TestPseudonymizeSubjectPostCommitErrorsPreserveTargetForRestartRecovery(t *
 			coordinator := newPrivacyPreparationTestCoordinator()
 			cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
 			open := func() (*Log, error) {
-				return Open(ctx, cfg,
+				return openFixture(ctx, cfg,
 					WithHistoryRewriteCoordinator(coordinator),
 					WithHistoryRewriteContinuityVerifier(rewriteTestContinuityVerifier),
 				)

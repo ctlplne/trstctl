@@ -121,7 +121,7 @@ func rewriteTestContinuityVerifier(_ context.Context, evidence TenantDataContinu
 
 func openRewriteLog(t *testing.T, cfg config.NATS) (*Log, error) {
 	t.Helper()
-	return Open(context.Background(), cfg,
+	return openFixture(context.Background(), cfg,
 		WithHistoryRewriteContinuityVerifier(rewriteTestContinuityVerifier))
 }
 
@@ -139,6 +139,7 @@ func openSecondReplicaLog(t *testing.T, primary *Log, history HistoryRewriteCoor
 	replica := &Log{
 		nc: nc, js: js, mode: config.NATSExternal, desiredReplicas: 1,
 		history: history, continuityVerifier: rewriteTestContinuityVerifier,
+		fixtureAppendAdmission: true,
 	}
 	name, stream, err := replica.resolveActiveStream(context.Background())
 	if err != nil {
@@ -163,15 +164,15 @@ func TestTenantKeyDomainRewriteGenerationPreservesSequencesGapsSubjectsAndEnvelo
 	t.Cleanup(func() { _ = log.Close() })
 
 	target, err := log.Append(ctx, Event{
-		ID: "target-event", Type: "secret.version.written", TenantID: targetTenant,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "target-event", Type: "fixture.opaque.rewrite", TenantID: targetTenant,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	})
 	if err != nil {
 		t.Fatalf("Append target: %v", err)
 	}
 	other, err := log.Append(ctx, Event{
-		ID: "other-event", Type: "secret.version.written", TenantID: otherTenant,
-		Data: []byte(`{"sealed":"other-tenant-ciphertext"}`),
+		ID: "other-event", Type: "fixture.opaque.rewrite", TenantID: otherTenant,
+		Data: []byte(`{"opaque":"other-tenant-ciphertext"}`),
 	})
 	if err != nil {
 		t.Fatalf("Append other: %v", err)
@@ -188,7 +189,7 @@ func TestTenantKeyDomainRewriteGenerationPreservesSequencesGapsSubjectsAndEnvelo
 	}
 
 	changed, err := log.RewriteTenantData(ctx, targetTenant, func(eventType string, schemaVersion int, data []byte) ([]byte, bool, error) {
-		if eventType != "secret.version.written" {
+		if eventType != "fixture.opaque.rewrite" {
 			return nil, false, errors.New("unexpected event type")
 		}
 		if schemaVersion != DefaultSchemaVersion {
@@ -203,11 +204,11 @@ func TestTenantKeyDomainRewriteGenerationPreservesSequencesGapsSubjectsAndEnvelo
 		t.Fatalf("RewriteTenantData changed %d events, want 1", changed)
 	}
 	raw := rawStreamBytes(t, log)
-	if bytes.Contains(raw, []byte(base64.StdEncoding.EncodeToString([]byte(`{"sealed":"deployment-ciphertext"}`)))) {
+	if bytes.Contains(raw, []byte(base64.StdEncoding.EncodeToString([]byte(`{"opaque":"deployment-ciphertext"}`)))) {
 		t.Fatalf("raw hot log retains target deployment ciphertext: %s", raw)
 	}
-	if !bytes.Contains(raw, []byte(base64.StdEncoding.EncodeToString([]byte(`{"sealed":"tenant-domain-ciphertext"}`)))) ||
-		!bytes.Contains(raw, []byte(base64.StdEncoding.EncodeToString([]byte(`{"sealed":"other-tenant-ciphertext"}`)))) {
+	if !bytes.Contains(raw, []byte(base64.StdEncoding.EncodeToString([]byte(`{"opaque":"tenant-domain-ciphertext"}`)))) ||
+		!bytes.Contains(raw, []byte(base64.StdEncoding.EncodeToString([]byte(`{"opaque":"other-tenant-ciphertext"}`)))) {
 		t.Fatalf("raw hot log lost replacement or other tenant bytes: %s", raw)
 	}
 
@@ -257,14 +258,14 @@ func TestTenantKeyDomainRewriteFailureLeavesHotLogUntouched(t *testing.T) {
 	t.Cleanup(func() { _ = log.Close() })
 
 	if _, err := log.Append(ctx, Event{
-		Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"first-deployment-ciphertext"}`),
+		Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"first-deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append first: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"second-deployment-ciphertext"}`),
+		Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"second-deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append second: %v", err)
 	}
@@ -305,8 +306,8 @@ func TestTenantKeyDomainRewriteContinuityFailureRollsBackFrozenSource(t *testing
 	}
 	t.Cleanup(func() { _ = log.Close() })
 	if _, err := log.Append(ctx, Event{
-		ID: "event", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "event", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -346,8 +347,8 @@ func TestTenantKeyDomainRewriteCallsRandomizedTransformOncePerChangedEvent(t *te
 	t.Cleanup(func() { _ = log.Close() })
 	for i := 0; i < 3; i++ {
 		if _, err := log.Append(ctx, Event{
-			ID: fmt.Sprintf("event-%d", i), Type: "secret.version.written", TenantID: tenantID,
-			Data: []byte(fmt.Sprintf(`{"sealed":"deployment-ciphertext-%d"}`, i)),
+			ID: fmt.Sprintf("event-%d", i), Type: "fixture.opaque.rewrite", TenantID: tenantID,
+			Data: []byte(fmt.Sprintf(`{"opaque":"deployment-ciphertext-%d"}`, i)),
 		}); err != nil {
 			t.Fatalf("Append %d: %v", i, err)
 		}
@@ -378,8 +379,8 @@ func TestTenantKeyDomainRewriteRandomizedTransformCrashResumeDoesNotReinvoke(t *
 	}
 	for i := 0; i < 2; i++ {
 		if _, err := log.Append(ctx, Event{
-			ID: fmt.Sprintf("event-%d", i), Type: "secret.version.written", TenantID: tenantID,
-			Data: []byte(fmt.Sprintf(`{"sealed":"deployment-ciphertext-%d"}`, i)),
+			ID: fmt.Sprintf("event-%d", i), Type: "fixture.opaque.rewrite", TenantID: tenantID,
+			Data: []byte(fmt.Sprintf(`{"opaque":"deployment-ciphertext-%d"}`, i)),
 		}); err != nil {
 			t.Fatalf("Append %d: %v", i, err)
 		}
@@ -434,8 +435,8 @@ func TestTenantKeyDomainRewriteCapturesConcurrentAppendAtItsOriginalSequence(t *
 	}
 	t.Cleanup(func() { _ = log.Close() })
 	if _, err := log.Append(ctx, Event{
-		ID: "target", Type: "secret.version.written", TenantID: targetTenant,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "target", Type: "fixture.opaque.rewrite", TenantID: targetTenant,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append target: %v", err)
 	}
@@ -491,9 +492,9 @@ func TestTenantKeyDomainRewriteCrashAfterFreezeRecoversUnchangedSource(t *testin
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "target", Type: "secret.version.written",
+		ID: "target", Type: "fixture.opaque.rewrite",
 		TenantID: "11111111-1111-1111-1111-111111111111",
-		Data:     []byte(`{"sealed":"deployment-ciphertext"}`),
+		Data:     []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -541,9 +542,9 @@ func TestTenantKeyDomainRewriteCrashBeforeFreezeRecoversUnchangedSource(t *testi
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "target", Type: "secret.version.written",
+		ID: "target", Type: "fixture.opaque.rewrite",
 		TenantID: "11111111-1111-1111-1111-111111111111",
-		Data:     []byte(`{"sealed":"deployment-ciphertext"}`),
+		Data:     []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -591,9 +592,9 @@ func TestTenantKeyDomainRewriteCrashAfterActivationKeepsTargetAndFinishesScrub(t
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "target", Type: "secret.version.written",
+		ID: "target", Type: "fixture.opaque.rewrite",
 		TenantID: "11111111-1111-1111-1111-111111111111",
-		Data:     []byte(`{"sealed":"deployment-ciphertext"}`),
+		Data:     []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -620,7 +621,7 @@ func TestTenantKeyDomainRewriteCrashAfterActivationKeepsTargetAndFinishesScrub(t
 	}
 	defer func() { _ = reopened.Close() }()
 	raw := rawStreamBytes(t, reopened)
-	if bytes.Contains(raw, []byte(base64.StdEncoding.EncodeToString([]byte(`{"sealed":"deployment-ciphertext"}`)))) {
+	if bytes.Contains(raw, []byte(base64.StdEncoding.EncodeToString([]byte(`{"opaque":"deployment-ciphertext"}`)))) {
 		t.Fatalf("recovered target retains deployment ciphertext: %s", raw)
 	}
 	if _, err := reopened.js.Stream(ctx, streamName); !errors.Is(err, jetstream.ErrStreamNotFound) {
@@ -638,9 +639,9 @@ func TestTenantKeyDomainRewriteCrashMidScrubKeepsTargetAndFinishesScrub(t *testi
 	}
 	for i := 0; i < 2; i++ {
 		if _, err := log.Append(ctx, Event{
-			ID: fmt.Sprintf("target-%d", i), Type: "secret.version.written",
+			ID: fmt.Sprintf("target-%d", i), Type: "fixture.opaque.rewrite",
 			TenantID: "11111111-1111-1111-1111-111111111111",
-			Data:     []byte(fmt.Sprintf(`{"sealed":"deployment-ciphertext-%d"}`, i)),
+			Data:     []byte(fmt.Sprintf(`{"opaque":"deployment-ciphertext-%d"}`, i)),
 		}); err != nil {
 			t.Fatalf("Append %d: %v", i, err)
 		}
@@ -730,9 +731,9 @@ func TestTenantKeyDomainRewriteRecoveryRejectsMetadataAndConfigTampering(t *test
 				t.Fatalf("Open embedded: %v", err)
 			}
 			if _, err := log.Append(ctx, Event{
-				ID: "target", Type: "secret.version.written",
+				ID: "target", Type: "fixture.opaque.rewrite",
 				TenantID: "11111111-1111-1111-1111-111111111111",
-				Data:     []byte(`{"sealed":"deployment-ciphertext"}`),
+				Data:     []byte(`{"opaque":"deployment-ciphertext"}`),
 			}); err != nil {
 				t.Fatalf("Append: %v", err)
 			}
@@ -823,9 +824,9 @@ func TestTenantKeyDomainRewriteActivePendingGenerationRejectsTamperingOnOpen(t *
 				t.Fatalf("Open embedded: %v", err)
 			}
 			if _, err := log.Append(ctx, Event{
-				ID: "target", Type: "secret.version.written",
+				ID: "target", Type: "fixture.opaque.rewrite",
 				TenantID: "11111111-1111-1111-1111-111111111111",
-				Data:     []byte(`{"sealed":"deployment-ciphertext"}`),
+				Data:     []byte(`{"opaque":"deployment-ciphertext"}`),
 			}); err != nil {
 				t.Fatalf("Append: %v", err)
 			}
@@ -881,7 +882,7 @@ func TestTenantKeyDomainRewriteRequiresValidatorContinuityAndExternalCoordinator
 	ctx := context.Background()
 	log := &Log{mode: config.NATSExternal, continuityVerifier: rewriteTestContinuityVerifier}
 	transform := func(string, int, []byte) ([]byte, bool, error) {
-		return []byte(`{"sealed":"tenant-ciphertext"}`), true, nil
+		return []byte(`{"opaque":"tenant-ciphertext"}`), true, nil
 	}
 	if _, err := log.RewriteTenantData(ctx, "tenant", transform); err == nil {
 		t.Fatal("RewriteTenantData accepted missing validator, continuity callback, and distributed coordinator")
@@ -907,8 +908,8 @@ func TestTenantKeyDomainRewriteTwoReplicasPreserveConcurrentAcknowledgedAppends(
 	replica := openSecondReplicaLog(t, primary, history)
 
 	first, err := primary.Append(ctx, Event{
-		ID: "before-rewrite", Type: "secret.version.written", TenantID: targetTenant,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "before-rewrite", Type: "fixture.opaque.rewrite", TenantID: targetTenant,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	})
 	if err != nil {
 		t.Fatalf("Append initial: %v", err)
@@ -1006,8 +1007,8 @@ func TestTailFromTwoReplicasShareOneDurableCursorPerGeneration(t *testing.T) {
 	primary.history = history
 	replica := openSecondReplicaLog(t, primary, history)
 	if _, err := primary.Append(ctx, Event{
-		ID: "rewrite-me", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "rewrite-me", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append source: %v", err)
 	}
@@ -1183,8 +1184,8 @@ func TestTailFromFollowsGenerationAndRestartsAtProjectionCheckpoint(t *testing.T
 	}
 	for i := 1; i <= 2; i++ {
 		if _, err := log.Append(ctx, Event{
-			ID: fmt.Sprintf("source-%d", i), Type: "secret.version.written", TenantID: tenantID,
-			Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+			ID: fmt.Sprintf("source-%d", i), Type: "fixture.opaque.rewrite", TenantID: tenantID,
+			Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 		}); err != nil {
 			t.Fatalf("Append source %d: %v", i, err)
 		}
@@ -1326,9 +1327,9 @@ func TestTenantDataRewritePreservesOldEventDeduplicationIdentity(t *testing.T) {
 	defer func() { _ = log.Close() }()
 
 	original, err := log.Import(ctx, Event{
-		ID: eventID, Type: "secret.version.written", TenantID: tenantID,
+		ID: eventID, Type: "fixture.opaque.rewrite", TenantID: tenantID,
 		Time: time.Now().UTC().Add(-2 * eventDedupWindow),
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	})
 	if err != nil {
 		t.Fatalf("Import old event: %v", err)
@@ -1360,14 +1361,14 @@ func TestTenantDataRewritePreservesOldEventDeduplicationIdentity(t *testing.T) {
 		t.Fatalf("replacement head: %v", err)
 	}
 	canonical, err := log.Append(ctx, Event{
-		ID: eventID, Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"must-not-append"}`),
+		ID: eventID, Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"must-not-append"}`),
 	})
 	if err != nil {
 		t.Fatalf("retry old event id: %v", err)
 	}
 	if canonical.Sequence != original.Sequence ||
-		!bytes.Equal(canonical.Data, []byte(`{"sealed":"tenant-ciphertext"}`)) {
+		!bytes.Equal(canonical.Data, []byte(`{"opaque":"tenant-ciphertext"}`)) {
 		t.Fatalf("retry returned %+v, want canonical rewritten sequence %d", canonical, original.Sequence)
 	}
 	headAfterRetry, err := log.LastSequence(ctx)
@@ -1610,8 +1611,8 @@ func TestCompletedRewriteReceiptMayBeCheckpointPrunedAndReopened(t *testing.T) {
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "retained-source", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "retained-source", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -1854,8 +1855,8 @@ func TestRetentionRecoversActivePendingRewriteBeforePruningReceipt(t *testing.T)
 	}
 	defer func() { _ = log.Close() }()
 	if _, err := log.Append(ctx, Event{
-		ID: "pending-retention", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "pending-retention", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -1899,8 +1900,8 @@ func TestRewriteNoOpRestoresPriorCompletedGenerationExactlyAndReopens(t *testing
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "first-generation", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "first-generation", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -1972,8 +1973,8 @@ func TestLaterStagingCrashRestoresPriorCompletedGenerationOnOpen(t *testing.T) {
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "staging-after-success", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "staging-after-success", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -2057,8 +2058,8 @@ func TestRewritePreservesCustomTargetMetadataAcrossRestart(t *testing.T) {
 		t.Fatalf("set custom metadata: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "custom-metadata", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "custom-metadata", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -2102,8 +2103,8 @@ func TestTargetCreateFailureRestoresExactSourceConfigBytesAndReopens(t *testing.
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "create-failure", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "create-failure", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -2162,8 +2163,8 @@ func TestRewriteRecoveryRejectsSourceOnlyRestoreMetadataTamper(t *testing.T) {
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "restore-tamper", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "restore-tamper", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -2227,8 +2228,8 @@ func TestRewriteRetrySameProcessRecoversActivatedAndMidScrubAttempts(t *testing.
 			for i := 0; i < 2; i++ {
 				if _, err := log.Append(ctx, Event{
 					ID:   fmt.Sprintf("same-process-%d", i),
-					Type: "secret.version.written", TenantID: tenantID,
-					Data: []byte(fmt.Sprintf(`{"sealed":"deployment-ciphertext-%d"}`, i)),
+					Type: "fixture.opaque.rewrite", TenantID: tenantID,
+					Data: []byte(fmt.Sprintf(`{"opaque":"deployment-ciphertext-%d"}`, i)),
 				}); err != nil {
 					t.Fatalf("Append %d: %v", i, err)
 				}
@@ -2406,8 +2407,8 @@ func TestRecoveryAuthenticatesReportBeforeWalkingSourceCutSequence(t *testing.T)
 		t.Fatalf("Open embedded: %v", err)
 	}
 	if _, err := log.Append(ctx, Event{
-		ID: "signed-before-walk", Type: "secret.version.written", TenantID: tenantID,
-		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+		ID: "signed-before-walk", Type: "fixture.opaque.rewrite", TenantID: tenantID,
+		Data: []byte(`{"opaque":"deployment-ciphertext"}`),
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -2459,7 +2460,7 @@ func TestRecoveryAuthenticatesReportBeforeWalkingSourceCutSequence(t *testing.T)
 	}
 	result := make(chan openResult, 1)
 	go func() {
-		reopened, err := Open(context.Background(), cfg,
+		reopened, err := openFixture(context.Background(), cfg,
 			WithHistoryRewriteContinuityVerifier(rewriteTestContinuityVerifier))
 		result <- openResult{log: reopened, err: err}
 	}()

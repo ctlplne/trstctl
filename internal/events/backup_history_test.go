@@ -66,6 +66,54 @@ func TestExactBackupRestoreResumesAfterFirstLiveAcknowledgement(t *testing.T) {
 	}
 }
 
+// CR-045: a broker ACK can succeed while journal settlement is lost. The
+// same-artifact retry must read back the exact prefix instead of publishing a
+// second event, then complete the next source position.
+func TestBackupHistoryJournalRecoversAcknowledgedPendingRecordCR045(t *testing.T) {
+	ctx := t.Context()
+	log := openBackupHistoryTestLog(t)
+	digest := strings.Repeat("a", 64)
+	history := []BackupHistoryRecord{
+		backupHistoryEvent(t, 1, "pending-journal-one", "owner.created"),
+		backupHistoryEvent(t, 2, "pending-journal-two", "owner.updated"),
+	}
+	phases := make(map[uint64]string)
+	loseFirstSettlement := true
+	log.backupHistoryJournal = func(admitted context.Context, _ uint64, _ string,
+		action string, record BackupHistoryRecord, run func(context.Context) error,
+	) error {
+		if action != "live" {
+			return run(admitted)
+		}
+		phases[record.Sequence] = "started"
+		if err := run(admitted); err != nil {
+			return err
+		}
+		if record.Sequence == 1 && loseFirstSettlement {
+			loseFirstSettlement = false
+			return errBackupRestoreTestCrash
+		}
+		phases[record.Sequence] = "verified"
+		return nil
+	}
+	if _, err := log.RestoreBackupHistory(ctx, 2, digest, backupHistorySource(history)); !errors.Is(err, errBackupRestoreTestCrash) {
+		t.Fatalf("lost settlement result=%v", err)
+	}
+	if phases[1] != "started" {
+		t.Fatalf("ambiguous first record phase=%q", phases[1])
+	}
+	if head, err := log.LastSequence(ctx); err != nil || head != 1 {
+		t.Fatalf("acknowledged first record head=%d err=%v", head, err)
+	}
+	if _, err := log.RestoreBackupHistory(ctx, 2, digest, backupHistorySource(history)); err != nil {
+		t.Fatalf("same-artifact journal resume: %v", err)
+	}
+	if phases[1] != "verified" || phases[2] != "verified" {
+		t.Fatalf("resumed journal phases=%v", phases)
+	}
+	assertBackupHistory(t, log, 2, history)
+}
+
 func TestExactBackupRestoreRejectsDifferentBackupAgainstPartialPrefix(t *testing.T) {
 	ctx := context.Background()
 	log := openBackupHistoryTestLog(t)
@@ -102,7 +150,7 @@ func TestExactBackupRestoreReopenRecoversPublishedGapMarker(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
 	artifactDigest := strings.Repeat("d", 64)
-	log, err := Open(ctx, cfg)
+	log, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -145,7 +193,7 @@ func TestExactBackupRestoreReopenRecoversPublishedGapMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reopened, err := Open(ctx, cfg)
+	reopened, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatalf("Open with live restore marker: %v", err)
 	}
@@ -174,6 +222,112 @@ func TestExactBackupRestoreReopenRecoversPublishedGapMarker(t *testing.T) {
 	}
 	if len(replayed) != 1 || replayed[0].Sequence != 2 || replayed[0].ID != event.MessageID {
 		t.Fatalf("replayed history = %+v, want only sequence-2 live event", replayed)
+	}
+}
+
+func TestProductionOpenRefusesUnownedLegacyPendingRouteUpgradeCR045(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	source, err := openFixture(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, stream, err := source.resolveActiveStream(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := source.infoForStream(ctx, stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := strings.Repeat("b", 64)
+	streamCfg := cloneStreamConfig(info.Config)
+	if streamCfg.Metadata == nil {
+		streamCfg.Metadata = map[string]string{}
+	}
+	streamCfg.Metadata[backupRestoreMetadataDigest] = digest
+	streamCfg.Metadata[backupRestoreMetadataCut] = "0"
+	if _, err := source.js.UpdateStream(ctx, streamCfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	missing, err := Open(ctx, cfg, WithRequiredBackupHistoryAdmission())
+	if missing != nil {
+		defer func() { _ = missing.Close() }()
+	}
+	if !errors.Is(err, ErrBackupHistoryAdmissionUnavailable) {
+		t.Fatalf("pending route with missing production adapter was admitted: %v", err)
+	}
+	opened, err := Open(ctx, cfg,
+		WithRequiredBackupHistoryAdmission(),
+		WithBackupHistoryJournal(func(ctx context.Context, _ uint64, _, _ string,
+			_ BackupHistoryRecord, run func(context.Context) error,
+		) error {
+			return run(ctx)
+		}),
+		WithBackupHistoryAdmission(func(context.Context, uint64, string,
+			func(context.Context) (int, error),
+		) (int, error) {
+			return 0, ErrBackupHistoryAdmissionUnavailable
+		}))
+	if opened != nil {
+		defer func() { _ = opened.Close() }()
+	}
+	if !errors.Is(err, ErrBackupHistoryAdmissionUnavailable) {
+		t.Fatalf("unowned pending-route upgrade was admitted: %v", err)
+	}
+	srv, nc, err := openEmbedded(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawClosed := false
+	t.Cleanup(func() {
+		if !rawClosed {
+			shutdown(srv, nc)
+		}
+	})
+	js, err := jetstream.New(nc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err = js.Stream(ctx, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err = stream.Info(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Config.Metadata[backupRestoreMetadataRoute] != "" ||
+		info.Config.Metadata[backupRestoreMetadataDigest] != digest {
+		t.Fatal("unowned Open changed the pending broker route")
+	}
+	shutdown(srv, nc)
+	rawClosed = true
+	owned, err := Open(ctx, cfg, WithRequiredBackupHistoryAdmission(),
+		WithBackupHistoryAdmission(func(ctx context.Context, _ uint64, _ string,
+			run func(context.Context) (int, error),
+		) (int, error) {
+			return run(ctx)
+		}),
+		WithBackupHistoryJournal(func(ctx context.Context, _ uint64, _, _ string,
+			_ BackupHistoryRecord, run func(context.Context) error,
+		) error {
+			return run(ctx)
+		}))
+	if err != nil {
+		t.Fatalf("owner-bound pending route recovery: %v", err)
+	}
+	defer func() { _ = owned.Close() }()
+	_, stream, err = owned.resolveActiveStream(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err = owned.infoForStream(ctx, stream)
+	if err != nil || !backupRestoreRouteIsFrozen(info.Config, digest) {
+		t.Fatalf("owner-bound Open did not freeze pending broker route: %v", err)
 	}
 }
 
@@ -209,9 +363,67 @@ func TestExactBackupRestoreAllGapBoundsKeepNextSequence(t *testing.T) {
 	}
 }
 
+// CR-045: the raw restore journal must stage each gap before the marker is
+// published or deleted, as well as staging live source records.
+func TestBackupHistoryJournalSeesGapBeforeBrokerMutationCR045(t *testing.T) {
+	ctx := t.Context()
+	log := openBackupHistoryTestLog(t)
+	var seen []uint64
+	log.backupHistoryJournal = func(admitted context.Context, cut uint64, digest, _ string,
+		record BackupHistoryRecord, run func(context.Context) error,
+	) error {
+		if cut != 2 || digest != strings.Repeat("f", 64) {
+			t.Fatal("journal received another artifact identity")
+		}
+		if len(seen) == 0 {
+			head, err := log.LastSequence(admitted)
+			if err != nil || head != 0 {
+				t.Fatalf("first journal start followed broker mutation: head=%d err=%v", head, err)
+			}
+		}
+		seen = append(seen, record.Sequence)
+		return run(admitted)
+	}
+	history := []BackupHistoryRecord{
+		{Sequence: 1, GapThrough: 1},
+		backupHistoryEvent(t, 2, "journal-after-gap", "owner.created"),
+	}
+	if _, err := log.RestoreBackupHistory(ctx, 2, strings.Repeat("f", 64), backupHistorySource(history)); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 5 || seen[0] != 0 || seen[1] != 0 || seen[2] != 1 ||
+		seen[3] != 2 || seen[4] != 0 {
+		t.Fatalf("journaled source sequences = %v, want binding, index, gap, live, unbind", seen)
+	}
+}
+
+// CR-045: stream binding and index deletion are broker mutations before the
+// first source record. Both need ordered journal starts of their own.
+func TestBackupHistoryJournalStagesBindingAndIndexBeforeRecordsCR045(t *testing.T) {
+	ctx := t.Context()
+	log := openBackupHistoryTestLog(t)
+	var actions []string
+	log.backupHistoryJournal = func(admitted context.Context, _ uint64, _, action string,
+		record BackupHistoryRecord, run func(context.Context) error,
+	) error {
+		_ = record
+		actions = append(actions, action)
+		return run(admitted)
+	}
+	record := backupHistoryEvent(t, 1, "journal-first-live", "owner.created")
+	if _, err := log.RestoreBackupHistory(ctx, 1, strings.Repeat("f", 64),
+		backupHistorySource([]BackupHistoryRecord{record})); err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) != 4 || actions[0] != "bind" || actions[1] != "index" ||
+		actions[2] != "live" || actions[3] != "unbind" {
+		t.Fatalf("journal order=%v, want bind, index, live, unbind", actions)
+	}
+}
+
 func openBackupHistoryTestLog(t *testing.T) *Log {
 	t.Helper()
-	log, err := Open(context.Background(), config.NATS{
+	log, err := openFixture(context.Background(), config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	})
 	if err != nil {

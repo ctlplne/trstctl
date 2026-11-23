@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
@@ -18,7 +19,7 @@ import (
 
 func TestBackupRefusesPendingExactRestoreBeforeWritingHeader(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
 	})
 	if err != nil {

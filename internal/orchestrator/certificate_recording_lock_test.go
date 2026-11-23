@@ -95,7 +95,7 @@ func TestCertificateRecordingWaitsForRebuildTableBeforeFingerprint(t *testing.T)
 		default:
 		}
 		//trstctl:system-query — exact owned connection's lock wait, no tenant rows or statement text (AN-1 exemption).
-		if err := s.SystemPool().QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name='first_leaf_relation_order_peer' AND wait_event_type='Lock' AND wait_event='relation')`).Scan(&waiting); err != nil {
+		if err := s.SystemPool().QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND wait_event='relation')`).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting {

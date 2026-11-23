@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -36,6 +38,8 @@ type TailWorker struct {
 	applied   atomic.Uint64 // highest stream sequence known applied to the read model
 	lagPeriod time.Duration
 }
+
+var errTailNeedsExclusiveKeyState = errors.New("projections: tail event requires exclusive key-state admission")
 
 // NewTailWorker returns a tailing projection worker over log and proj. sampler may
 // be nil (no lag metric). lagPeriod is how often lag is sampled (a non-positive
@@ -115,63 +119,108 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		cancelRun()
 		sampler.Wait()
 	}()
-	advance := func(e events.Event) error {
-		return retryWhileBusy(runCtx, func() error { return w.proj.AdvanceCheckpoint(runCtx, e.Sequence) })
+	advance := func(ctx context.Context, e events.Event) error {
+		return retryWhileBusy(ctx, func() error { return w.proj.AdvanceCheckpoint(ctx, e.Sequence) })
 	}
-	tailErr := w.log.TailFrom(runCtx, w.proj.store.ProjectionCheckpoint, func(e events.Event) error {
-		var erased bool
-		if err := retryWhileBusy(runCtx, func() (err error) {
-			erased, err = w.proj.retainedSourceErased(runCtx, w.log, e)
+	var batchEventStarted bool
+	var retryExclusive bool
+	tailErr := w.log.TailFromAdmitted(runCtx, w.proj.store.ProjectionCheckpoint,
+		func(batchCtx context.Context, read func(context.Context) error) error {
+			batchEventStarted = false
+			mode := store.KeyStateShared
+			if retryExclusive {
+				mode = store.KeyStateExclusive
+			}
+			err := w.proj.store.WithRestoreActivity(batchCtx, store.RestoreControlTenantID, uuid.NewString(),
+				"worker", "projection-tail-batch", func(restored context.Context) error {
+					err := w.proj.store.WithGlobalKeyStateAdmission(restored, mode, read)
+					if !batchEventStarted && (err != nil || restored.Err() != nil) {
+						// Fetch/consumer bookkeeping cannot project an event. A
+						// cancellation before the event callback is definite
+						// no-effect evidence for this projection batch.
+						if err == nil {
+							err = context.Cause(restored)
+						}
+						return store.RestoreActivityNoEffect(err)
+					}
+					return err
+				})
+			if errors.Is(err, errTailNeedsExclusiveKeyState) {
+				// The shared read saw a key-state event before applying it.
+				// It NAKed without a projection or ACK and released history/A;
+				// refetch that event under exclusive A on the next batch.
+				retryExclusive = true
+				return nil
+			}
+			if err == nil {
+				retryExclusive = false
+			}
 			return err
-		}); err != nil {
-			return w.persistFailure(runCtx, e.Sequence, err)
-		}
-		if erased {
-			if err := advance(e); err != nil {
-				return w.persistFailure(runCtx, e.Sequence, err)
+		}, func(readCtx context.Context, e events.Event) error {
+			if isKeyStateMutationEventType(e.Type) && !retryExclusive {
+				return errTailNeedsExclusiveKeyState
 			}
-			w.applied.Store(e.Sequence)
-			return nil
-		}
-		// The lifecycle authorities observe each event once; only the store
-		// steps below are retried.
-		skip, err := secretAuthority.skip(e)
-		if err != nil {
-			return w.persistFailure(runCtx, e.Sequence, err)
-		}
-		skipDynamicSecret, err := dynamicSecretAuthority.skip(e)
-		if err != nil {
-			return w.persistFailure(runCtx, e.Sequence, err)
-		}
-		skip = skip || skipDynamicSecret
-		if err := retryWhileBusy(runCtx, func() error {
-			switch {
-			case skip:
-				return w.proj.applyEventProjections(runCtx, e)
-			case isTenantLifecycleEventType(e.Type):
-				return w.proj.ApplyRetainedTenantLifecycle(runCtx, e)
-			default:
-				// The command side can project before this durable consumer ACKs
-				// the same event. Use retained-history replay semantics for the
-				// tail only; direct command projection still refuses a duplicate
-				// decision.
-				return w.proj.Apply(governanceDecisionHistoryReplay(runCtx), e)
+			batchEventStarted = true
+			activityTenant := e.TenantID
+			if _, err := uuid.Parse(activityTenant); err != nil {
+				activityTenant = store.RestoreControlTenantID
 			}
-		}); err != nil {
-			return w.persistFailure(runCtx, e.Sequence, err)
-		}
-		// Advance the projection checkpoint as the tail applies out-of-band events
-		// (SPINE-007), so the boot catch-up watermark stays current and a restart
-		// resumes from the tail's position rather than re-replaying. If the advance
-		// fails, this invocation stops and records the sequence: acknowledging a
-		// message whose durable PostgreSQL cursor did not move would let the stream
-		// cursor get ahead of the read model.
-		if err := advance(e); err != nil {
-			return w.persistFailure(runCtx, e.Sequence, err)
-		}
-		w.applied.Store(e.Sequence)
-		return nil
-	})
+			return w.proj.store.WithRestoreActivity(readCtx, activityTenant, uuid.NewString(),
+				"worker", "projection-tail", func(ownerCtx context.Context) error {
+					var erased bool
+					if err := retryWhileBusy(ownerCtx, func() (err error) {
+						erased, err = w.proj.retainedSourceErased(ownerCtx, w.log, e)
+						return err
+					}); err != nil {
+						return w.persistFailure(ownerCtx, e.Sequence, err)
+					}
+					if erased {
+						if err := advance(ownerCtx, e); err != nil {
+							return w.persistFailure(ownerCtx, e.Sequence, err)
+						}
+						w.applied.Store(e.Sequence)
+						return nil
+					}
+					// The lifecycle authorities observe each event once; only the store
+					// steps below are retried.
+					skip, err := secretAuthority.skip(e)
+					if err != nil {
+						return w.persistFailure(ownerCtx, e.Sequence, err)
+					}
+					skipDynamicSecret, err := dynamicSecretAuthority.skip(e)
+					if err != nil {
+						return w.persistFailure(ownerCtx, e.Sequence, err)
+					}
+					skip = skip || skipDynamicSecret
+					if err := retryWhileBusy(ownerCtx, func() error {
+						switch {
+						case skip:
+							return w.proj.applyEventProjections(ownerCtx, e)
+						case isTenantLifecycleEventType(e.Type):
+							return w.proj.ApplyRetainedTenantLifecycle(ownerCtx, e)
+						default:
+							// The command side can project before this durable consumer ACKs
+							// the same event. Use retained-history replay semantics for the
+							// tail only; direct command projection still refuses a duplicate
+							// decision.
+							return w.proj.Apply(governanceDecisionHistoryReplay(ownerCtx), e)
+						}
+					}); err != nil {
+						return w.persistFailure(ownerCtx, e.Sequence, err)
+					}
+					// Advance the projection checkpoint as the tail applies out-of-band events
+					// (SPINE-007), so the boot catch-up watermark stays current and a restart
+					// resumes from the tail's position rather than re-replaying. If the advance
+					// fails, this invocation stops and records the sequence: acknowledging a
+					// message whose durable PostgreSQL cursor did not move would let the stream
+					// cursor get ahead of the read model.
+					if err := advance(ownerCtx, e); err != nil {
+						return w.persistFailure(ownerCtx, e.Sequence, err)
+					}
+					w.applied.Store(e.Sequence)
+					return nil
+				})
+		})
 	// A malformed stored envelope fails before TailFrom can invoke the callback,
 	// so the callback path above has no Event.Sequence to persist. Only that typed
 	// pre-callback error is made durable here. Fetch and ACK transport failures do

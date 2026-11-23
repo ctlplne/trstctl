@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
@@ -166,7 +167,7 @@ func TestServedSSHRevocationReachesEveryReplica(t *testing.T) {
 // unchanged stream for every host poll. Use real embedded JetStream with the
 // production scheduler-history floor and no unrelated background event writers.
 func TestServedSSHUnchangedHistorySkipsReplayAndNewRevocationCatchesUp(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +212,7 @@ func TestServedSSHUnchangedHistorySkipsReplayAndNewRevocationCatchesUp(t *testin
 }
 
 func TestSSHReplayFailureDoesNotPublishPartialKRL(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

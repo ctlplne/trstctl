@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditanchor"
@@ -39,7 +40,7 @@ func TestServedLargeAuditExportOffersRecordStreamWithoutRaisingSignerLimit(t *te
 		t.Fatal(err)
 	}
 	token := seedServedAPIToken(t, ctx, st, tenantID, "bounded-export", []string{string(authz.AuditRead)})
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +157,7 @@ func TestTerminalIncidentEvidenceRetainsSignableBudgetAboveDownloadLimit(t *test
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "incident evidence budget"}); err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

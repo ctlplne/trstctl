@@ -127,6 +127,25 @@ func (l *Log) appendWithEventProtection(ctx context.Context, e Event, explicitTi
 						(explicitTime && !canonical.Time.Equal(e.Time)) {
 						return ErrConflictingEventIdentity
 					}
+					if l.ingressCanonicalProof != nil {
+						rawCanonical, rawHash, err := l.acknowledgedCanonicalRaw(guardCtx, "", canonical.Sequence)
+						if err != nil {
+							return err
+						}
+						opened, err := l.openProtectedEvent(guardCtx, rawCanonical)
+						if err != nil {
+							return err
+						}
+						if opened.ID != canonical.ID || opened.TenantID != canonical.TenantID ||
+							opened.Type != canonical.Type || opened.SchemaVersion != canonical.SchemaVersion ||
+							!opened.Time.Equal(canonical.Time) || !bytes.Equal(opened.Data, canonical.Data) ||
+							!sameProtectedActorEncoding(opened.Actor, canonical.Actor) {
+							return ErrConflictingEventIdentity
+						}
+						if err := l.ingressCanonicalProof(guardCtx, e, opened, rawHash, true); err != nil {
+							return err
+						}
+					}
 					result = canonical
 					return nil
 				}
@@ -219,4 +238,68 @@ func (l *Log) openProtectedEvent(ctx context.Context, e Event) (Event, error) {
 	}
 	e.Data, e.Actor = opened.Data, opened.Actor
 	return e, nil
+}
+
+// AuthenticateBackupHistoryRecord opens one exact stored source envelope with
+// artifact-scoped event-key custody. The caller must wipe returned Data after
+// checking nested fields, before any raw broker publication. A destroyed key
+// remains an error here: recovery must separately verify its signed removal
+// receipt before classifying a historical event as SensitiveErased.
+func AuthenticateBackupHistoryRecord(ctx context.Context, record BackupHistoryRecord,
+	keys EventProtectionKeys,
+) (Event, error) {
+	event, err := DecodeBackupHistoryEvent(record)
+	if err != nil {
+		return Event{}, err
+	}
+	return AuthenticateBackupHistoryEvent(ctx, event, keys)
+}
+
+// ValidateBackupHistoryEvent checks the policy and protected envelope context
+// of a previously decoded raw source record without requiring its removed key.
+// Only a separately verified signed destruction may permit skipping Open.
+func ValidateBackupHistoryEvent(event Event) error {
+	if event.Protection == nil {
+		return nil
+	}
+	digest, err := PrivacyEventPolicyDigest(event.Type, event.SchemaVersion)
+	if err != nil {
+		return err
+	}
+	return eventprotect.ValidateEnvelope(protectionContext(event), digest, *event.Protection)
+}
+
+// AuthenticateBackupHistoryEvent opens a protected event from an already
+// HMAC-verified artifact reader. The caller wipes returned Data after checking
+// nested sealed fields. A missing key is never classified as erasure here.
+func AuthenticateBackupHistoryEvent(ctx context.Context, event Event,
+	keys EventProtectionKeys,
+) (Event, error) {
+	if err := ValidateBackupHistoryEvent(event); err != nil {
+		return Event{}, err
+	}
+	if event.Protection == nil {
+		return event, nil
+	}
+	if keys == nil {
+		return Event{}, ErrEventProtectionUnavailable
+	}
+	digest, err := PrivacyEventPolicyDigest(event.Type, event.SchemaVersion)
+	if err != nil {
+		return Event{}, err
+	}
+	var opened eventprotect.Payload
+	err = keys.WithKey(ctx,
+		eventprotect.KeyRef{TenantID: event.TenantID, ID: event.Protection.KeyID},
+		func(key seal.KeyWrapper) error {
+			var openErr error
+			opened, openErr = eventprotect.Open(key, protectionContext(event), digest, *event.Protection)
+			return openErr
+		})
+	if err != nil {
+		secret.Wipe(opened.Data)
+		return Event{}, err
+	}
+	event.Data, event.Actor = opened.Data, opened.Actor
+	return event, nil
 }

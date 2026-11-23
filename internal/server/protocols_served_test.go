@@ -21,6 +21,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	xacme "golang.org/x/crypto/acme"
@@ -136,7 +137,7 @@ func newServedHarnessWithOwnedStore(t *testing.T, protocols config.Protocols, ev
 	if protocols.RAKeyFile == "" && (protocols.SCEP.Enabled || protocols.CMP.Enabled) {
 		protocols.RAKeyFile = filepath.Join(dir, "protocol-ra.key")
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")}, eventOptions...)
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")}, eventOptions...)
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -1411,7 +1412,7 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 }
 
 func TestSignedDNSPluginAuditEventsSurviveProductionPrivacyGateF70(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {

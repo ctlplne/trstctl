@@ -8,17 +8,117 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+var rebuildSealedFixtures sync.Map
+
+// The v2 receipt hashes the payload framing, so these replay fixtures must be
+// actual sealed containers. Cache each plain fixture value so repeated
+// assertions compare the exact original ciphertext, including its nonce.
+func rebuildSealedFixture(t *testing.T, name, value string) []byte {
+	t.Helper()
+	fixtureKey := name + "\x00" + value
+	if cached, ok := rebuildSealedFixtures.Load(fixtureKey); ok {
+		return bytes.Clone(cached.([]byte))
+	}
+	key, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x61}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	sealed, err := seal.Seal(key, []byte(value), []byte(tenantA+"/secret-store/"+name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cached, _ := rebuildSealedFixtures.LoadOrStore(fixtureKey, sealed)
+	return bytes.Clone(cached.([]byte))
+}
+
+// The rebuild fixtures use one test-owned local KEK. Authenticate the exact
+// application-secret container and AAD before a sealed event reaches NATS.
+func applicationSecretFixtureAdmission(t *testing.T) events.OpenOption {
+	t.Helper()
+	key, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x61}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	return events.WithAppendAdmission(func(ctx context.Context, event events.Event,
+		publish func(context.Context) (events.Event, error),
+	) (events.Event, error) {
+		switch event.Type {
+		case projections.EventApplicationSecretCreated, projections.EventApplicationSecretRotated,
+			projections.EventApplicationSecretRecovered, projections.EventApplicationSecretDeleted,
+			projections.EventApplicationSecretUndeleted:
+			var mutation projections.ApplicationSecretMutation
+			if err := json.Unmarshal(event.Data, &mutation); err != nil {
+				return events.Event{}, err
+			}
+			if mutation.Name == "" || mutation.Sync != nil ||
+				(len(mutation.Sealed) == 0 && event.Type != projections.EventApplicationSecretDeleted) {
+				return events.Event{}, errors.New("application-secret fixture container is incomplete")
+			}
+			if len(mutation.Sealed) != 0 {
+				plaintext, err := seal.OpenIntoLocked(key, mutation.Sealed,
+					[]byte(event.TenantID+"/secret-store/"+mutation.Name), nil)
+				if err != nil {
+					return events.Event{}, err
+				}
+				plaintext.Destroy()
+			}
+		default:
+			if fixtureHasSealedField(event.Data) {
+				return events.Event{}, errors.New("unclassified sealed fixture event")
+			}
+		}
+		return publish(ctx)
+	})
+}
+
+func openApplicationSecretFixtureLog(t *testing.T) *events.Log {
+	t.Helper()
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	}, applicationSecretFixtureAdmission(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	return log
+}
+
+func TestApplicationSecretFixtureRefusesWrongNameAADBeforePublish(t *testing.T) {
+	log := openApplicationSecretFixtureLog(t)
+	payload, err := json.Marshal(projections.ApplicationSecretMutation{
+		Action: "create", Name: "fixture/other", ResultVersion: 1,
+		Sealed: rebuildSealedFixture(t, "fixture/original", "value"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(t.Context(), events.Event{
+		Type: projections.EventApplicationSecretCreated, TenantID: tenantA,
+		SchemaVersion: projections.ApplicationSecretMutationSchemaVersion, Data: payload,
+	}); err == nil {
+		t.Fatal("wrong-name application-secret ciphertext was published")
+	}
+	if head, err := log.LastSequence(t.Context()); err != nil || head != 0 {
+		t.Fatalf("refused fixture reached history: head=%d err=%v", head, err)
+	}
+}
 
 func appendApprovedApplicationSecretMutation(
 	t *testing.T,
@@ -152,9 +252,9 @@ func seedApplicationSecretFixture(
 
 func openApplicationSecretRewriteLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
-	}, events.WithHistoryRewriteContinuityVerifier(func(_ context.Context, evidence events.TenantDataContinuityEvidence) error {
+	}, applicationSecretFixtureAdmission(t), events.WithHistoryRewriteContinuityVerifier(func(_ context.Context, evidence events.TenantDataContinuityEvidence) error {
 		if evidence.OperationID == "" || evidence.TenantID == "" ||
 			evidence.ReceiptSequence == 0 || evidence.Receipt.ID == "" {
 			return errors.New("incomplete rewrite continuity evidence")
@@ -209,7 +309,7 @@ func TestApplicationSecretReceiptsMakeFullApprovalRebuildNonMutating(t *testing.
 	}
 	reset()
 	t.Cleanup(reset)
-	log := openLog(t)
+	log := openApplicationSecretFixtureLog(t)
 	registered, err := log.Append(ctx, events.Event{
 		Type: projections.EventTenantRegistered, TenantID: tenantA,
 		Data: tenantRegistered("application-secret-rebuild"),
@@ -220,7 +320,7 @@ func TestApplicationSecretReceiptsMakeFullApprovalRebuildNonMutating(t *testing.
 	if err := projections.New(s).Apply(ctx, registered); err != nil {
 		t.Fatalf("project application-secret tenant lifecycle root: %v", err)
 	}
-	seedApplicationSecretFixture(t, s, "app/config", []byte("sealed-v1"))
+	seedApplicationSecretFixture(t, s, "app/config", rebuildSealedFixture(t, "app/config", "sealed-v1"))
 	source, err := s.GetSecretVersion(ctx, tenantA, "app/config", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -228,7 +328,7 @@ func TestApplicationSecretReceiptsMakeFullApprovalRebuildNonMutating(t *testing.
 	base := time.Now().UTC()
 	appendApprovedApplicationSecretMutation(t, s, log, projections.ApplicationSecretMutation{
 		Action: "rotate", Name: "app/config", ExpectedVersion: 1, ResultVersion: 2,
-		Sealed: []byte("sealed-native-v2"), IdempotencyKeyDigest: hex64('1'),
+		Sealed: rebuildSealedFixture(t, "app/config", "sealed-native-v2"), IdempotencyKeyDigest: hex64('1'),
 		CommandEvidence: hex64('2'), Surface: "native",
 	}, "77200000-0000-4000-8000-000000000001", "77200000-0000-4000-8000-000000000002",
 		"77200000-0000-4000-8000-000000000003", "sha256:native-rotate", projections.EventApplicationSecretRotated, base)
@@ -240,7 +340,7 @@ func TestApplicationSecretReceiptsMakeFullApprovalRebuildNonMutating(t *testing.
 		"77200000-0000-4000-8000-000000000013", "sha256:native-recover", projections.EventApplicationSecretRecovered, base.Add(3*time.Minute))
 	appendApprovedApplicationSecretMutation(t, s, log, projections.ApplicationSecretMutation{
 		Action: "rotate", Name: "app/config", ExpectedVersion: 3, ResultVersion: 4,
-		Sealed: []byte("sealed-vault-v4"), IdempotencyKeyDigest: hex64('5'),
+		Sealed: rebuildSealedFixture(t, "app/config", "sealed-vault-v4"), IdempotencyKeyDigest: hex64('5'),
 		CommandEvidence: hex64('6'), Surface: "vault",
 	}, "77200000-0000-4000-8000-000000000021", "77200000-0000-4000-8000-000000000022",
 		"77200000-0000-4000-8000-000000000023", "sha256:vault-overwrite", projections.EventApplicationSecretRotated, base.Add(6*time.Minute))
@@ -266,12 +366,12 @@ func TestApplicationSecretReceiptsMakeFullApprovalRebuildNonMutating(t *testing.
 	// Recreate the same logical name after deletion. Without the durable delete
 	// receipt, replaying the old v2 delete during Rebuild would erase this new
 	// lineage. Every old target event must now be approval-only replay.
-	seedApplicationSecretFixture(t, s, "app/config", []byte("sealed-recreated-v1"))
+	seedApplicationSecretFixture(t, s, "app/config", rebuildSealedFixture(t, "app/config", "sealed-recreated-v1"))
 	if err := projector.Rebuild(ctx, log); err != nil {
 		t.Fatalf("full rebuild with materialized secret receipts: %v", err)
 	}
 	recreated, err := s.GetSecret(ctx, tenantA, "app/config")
-	if err != nil || recreated.Version != 1 || !bytes.Equal(recreated.Sealed, []byte("sealed-recreated-v1")) {
+	if err != nil || recreated.Version != 1 || !bytes.Equal(recreated.Sealed, rebuildSealedFixture(t, "app/config", "sealed-recreated-v1")) {
 		t.Fatalf("rebuild reapplied old secret mutation: %+v err=%v", recreated, err)
 	}
 	for _, requestID := range []string{
@@ -300,7 +400,7 @@ func TestApplicationSecretRebuildTracksOffboardLifecycleEpochs(t *testing.T) {
 		          operation_approval_requests, tenants CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	log := openLog(t)
+	log := openApplicationSecretFixtureLog(t)
 	base := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
 	const (
 		oldEpoch = "77400000-aaaa-4aaa-8aaa-000000000001"
@@ -330,11 +430,11 @@ func TestApplicationSecretRebuildTracksOffboardLifecycleEpochs(t *testing.T) {
 		t.Fatal(err)
 	}
 	appendCreate(
-		"77400000-0000-4000-8000-000000000001", oldEpoch, "old/secret", []byte("sealed-old-v1"),
+		"77400000-0000-4000-8000-000000000001", oldEpoch, "old/secret", rebuildSealedFixture(t, "old/secret", "sealed-old-v1"),
 		hex64('1'), hex64('2'), hex64('3'), "native", base.Add(time.Minute))
 	appendApprovedApplicationSecretMutation(t, s, log, projections.ApplicationSecretMutation{
 		TenantEpoch: oldEpoch, Action: "rotate", Name: "old/secret", ExpectedVersion: 1, ResultVersion: 2,
-		Sealed: []byte("sealed-old-v2"), IdempotencyKeyDigest: hex64('4'),
+		Sealed: rebuildSealedFixture(t, "old/secret", "sealed-old-v2"), IdempotencyKeyDigest: hex64('4'),
 		RequestBinding: hex64('5'), CommandEvidence: hex64('6'), Surface: "native",
 	}, "77400000-0000-4000-8000-000000000011", "77400000-0000-4000-8000-000000000012",
 		"77400000-0000-4000-8000-000000000013", "sha256:old-epoch", projections.EventApplicationSecretRotated,
@@ -353,11 +453,11 @@ func TestApplicationSecretRebuildTracksOffboardLifecycleEpochs(t *testing.T) {
 		t.Fatal(err)
 	}
 	appendCreate(
-		"77400000-0000-4000-8000-000000000021", newEpoch, "new/secret", []byte("sealed-new-v1"),
+		"77400000-0000-4000-8000-000000000021", newEpoch, "new/secret", rebuildSealedFixture(t, "new/secret", "sealed-new-v1"),
 		hex64('7'), hex64('8'), hex64('9'), "vault", base.Add(7*time.Minute))
 	appendApprovedApplicationSecretMutation(t, s, log, projections.ApplicationSecretMutation{
 		TenantEpoch: newEpoch, Action: "rotate", Name: "new/secret", ExpectedVersion: 1, ResultVersion: 2,
-		Sealed: []byte("sealed-new-v2"), IdempotencyKeyDigest: hex64('a'),
+		Sealed: rebuildSealedFixture(t, "new/secret", "sealed-new-v2"), IdempotencyKeyDigest: hex64('a'),
 		RequestBinding: hex64('b'), CommandEvidence: hex64('c'), Surface: "vault",
 	}, "77400000-0000-4000-8000-000000000031", "77400000-0000-4000-8000-000000000032",
 		"77400000-0000-4000-8000-000000000033", "sha256:new-epoch", projections.EventApplicationSecretRotated,
@@ -378,7 +478,7 @@ func TestApplicationSecretRebuildTracksOffboardLifecycleEpochs(t *testing.T) {
 			t.Fatalf("%s resurrected old-epoch secret: %v", stage, err)
 		}
 		current, err := s.GetSecret(ctx, tenantA, "new/secret")
-		if err != nil || current.Version != 2 || !bytes.Equal(current.Sealed, []byte("sealed-new-v2")) {
+		if err != nil || current.Version != 2 || !bytes.Equal(current.Sealed, rebuildSealedFixture(t, "new/secret", "sealed-new-v2")) {
 			t.Fatalf("%s lost new-epoch secret: %+v err=%v", stage, current, err)
 		}
 		if _, err := s.GetOperationApproval(ctx, tenantA, "77400000-0000-4000-8000-000000000011"); !errors.Is(err, store.ErrApprovalRequestNotFound) {
@@ -406,7 +506,7 @@ func TestApplicationSecretDelayedPriorEpochIsInertAndAdvancesWarmAndColdSequence
 		          operation_approval_decisions, operation_approval_requests, tenants CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	log := openLog(t)
+	log := openApplicationSecretFixtureLog(t)
 	projector := projections.New(s)
 	base := time.Date(2026, 8, 10, 17, 0, 0, 0, time.UTC)
 	appendEvent := func(event events.Event) events.Event {
@@ -472,7 +572,7 @@ func TestApplicationSecretDelayedPriorEpochIsInertAndAdvancesWarmAndColdSequence
 	}
 
 	appendCreate("77930000-0000-4000-8000-000000000004", newEpoch,
-		"new-lifecycle/secret", []byte("sealed-new-lifecycle"), base.Add(3*time.Minute))
+		"new-lifecycle/secret", rebuildSealedFixture(t, "new-lifecycle/secret", "sealed-new-lifecycle"), base.Add(3*time.Minute))
 	if err := projector.ProjectCatchUp(ctx, log); err != nil {
 		t.Fatalf("project new-lifecycle secret: %v", err)
 	}
@@ -487,7 +587,7 @@ func TestApplicationSecretDelayedPriorEpochIsInertAndAdvancesWarmAndColdSequence
 	// This simulates Append succeeding long after its old finalized fence was
 	// created, after the same tenant UUID has already started a new lifecycle.
 	delayed := appendCreate("77930000-0000-4000-8000-000000000005", oldEpoch,
-		"old-lifecycle/delayed", []byte("sealed-old-delayed"), base.Add(4*time.Minute))
+		"old-lifecycle/delayed", rebuildSealedFixture(t, "old-lifecycle/delayed", "sealed-old-delayed"), base.Add(4*time.Minute))
 	if err := projector.ProjectCatchUp(ctx, log); err != nil {
 		t.Fatalf("warm projection was poisoned by delayed old-lifecycle event: %v", err)
 	}
@@ -495,7 +595,7 @@ func TestApplicationSecretDelayedPriorEpochIsInertAndAdvancesWarmAndColdSequence
 		t.Fatalf("warm projection applied delayed old-lifecycle event: %v", err)
 	}
 	current, err := s.GetSecret(ctx, tenantA, "new-lifecycle/secret")
-	if err != nil || !bytes.Equal(current.Sealed, []byte("sealed-new-lifecycle")) {
+	if err != nil || !bytes.Equal(current.Sealed, rebuildSealedFixture(t, "new-lifecycle/secret", "sealed-new-lifecycle")) {
 		t.Fatalf("warm projection lost new lifecycle secret: %+v err=%v", current, err)
 	}
 	checkpoint, err := s.ProjectionCheckpoint(ctx)
@@ -516,7 +616,7 @@ func TestApplicationSecretDelayedPriorEpochIsInertAndAdvancesWarmAndColdSequence
 		t.Fatalf("cold rebuild applied delayed old-lifecycle event: %v", err)
 	}
 	current, err = s.GetSecret(ctx, tenantA, "new-lifecycle/secret")
-	if err != nil || current.Version != 1 || !bytes.Equal(current.Sealed, []byte("sealed-new-lifecycle")) {
+	if err != nil || current.Version != 1 || !bytes.Equal(current.Sealed, rebuildSealedFixture(t, "new-lifecycle/secret", "sealed-new-lifecycle")) {
 		t.Fatalf("cold rebuild did not restore new lifecycle secret: %+v err=%v", current, err)
 	}
 	checkpoint, err = s.ProjectionCheckpoint(ctx)
@@ -534,7 +634,7 @@ func TestApplicationSecretCreateColdRebuildsNativeAndVaultFromZeroPrimary(t *tes
 		          operation_approval_requests, tenants CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	log := openLog(t)
+	log := openApplicationSecretFixtureLog(t)
 	base := time.Date(2026, 8, 10, 15, 0, 0, 0, time.UTC)
 	registered, err := log.Append(ctx, events.Event{
 		Type: projections.EventTenantRegistered, TenantID: tenantA,
@@ -554,10 +654,10 @@ func TestApplicationSecretCreateColdRebuildsNativeAndVaultFromZeroPrimary(t *tes
 		t.Fatalf("append cold rebuild owner: %v", err)
 	}
 	appendApplicationSecretCreate(t, s, log,
-		"77600000-0000-4000-8000-000000000001", "cold/native", ownerID, []byte("sealed-native-v1"),
+		"77600000-0000-4000-8000-000000000001", "cold/native", ownerID, rebuildSealedFixture(t, "cold/native", "sealed-native-v1"),
 		hex64('1'), hex64('2'), hex64('3'), "native", base.Add(time.Minute))
 	appendApplicationSecretCreate(t, s, log,
-		"77600000-0000-4000-8000-000000000002", "cold/vault", "", []byte("sealed-vault-v1"),
+		"77600000-0000-4000-8000-000000000002", "cold/vault", "", rebuildSealedFixture(t, "cold/vault", "sealed-vault-v1"),
 		hex64('4'), hex64('5'), hex64('6'), "vault", base.Add(2*time.Minute))
 	projector := projections.New(s)
 	if err := projector.Project(ctx, log); err != nil {
@@ -575,8 +675,8 @@ func TestApplicationSecretCreateColdRebuildsNativeAndVaultFromZeroPrimary(t *tes
 		sealed  []byte
 		ownerID string
 	}{
-		"cold/native": {sealed: []byte("sealed-native-v1"), ownerID: ownerID},
-		"cold/vault":  {sealed: []byte("sealed-vault-v1")},
+		"cold/native": {sealed: rebuildSealedFixture(t, "cold/native", "sealed-native-v1"), ownerID: ownerID},
+		"cold/vault":  {sealed: rebuildSealedFixture(t, "cold/vault", "sealed-vault-v1")},
 	} {
 		current, err := s.GetSecret(ctx, tenantA, name)
 		if err != nil || current.Version != 1 || current.OwnerID != want.ownerID || !bytes.Equal(current.Sealed, want.sealed) {
@@ -613,11 +713,11 @@ func TestApplicationSecretPrivacyRewritePreservesExactReceiptAndAuthority(t *tes
 		t.Fatalf("project application-secret tenant lifecycle root: %v", err)
 	}
 	appendApplicationSecretCreate(t, s, log,
-		"77700000-0000-4000-8000-000000000001", "privacy/secret", "", []byte("sealed-privacy-v1"),
+		"77700000-0000-4000-8000-000000000001", "privacy/secret", "", rebuildSealedFixture(t, "privacy/secret", "sealed-privacy-v1"),
 		hex64('1'), hex64('2'), hex64('3'), "native", base.Add(time.Minute))
 	appendApprovedApplicationSecretMutation(t, s, log, projections.ApplicationSecretMutation{
 		Action: "rotate", Name: "privacy/secret", ExpectedVersion: 1, ResultVersion: 2,
-		Sealed: []byte("sealed-privacy-v2"), IdempotencyKeyDigest: hex64('4'),
+		Sealed: rebuildSealedFixture(t, "privacy/secret", "sealed-privacy-v2"), IdempotencyKeyDigest: hex64('4'),
 		RequestBinding: hex64('5'), CommandEvidence: hex64('6'), Surface: "native",
 	}, "77700000-0000-4000-8000-000000000011", "77700000-0000-4000-8000-000000000012",
 		"77700000-0000-4000-8000-000000000013", "sha256:privacy-rewrite",
@@ -675,7 +775,7 @@ func TestApplicationSecretPrivacyRewritePreservesExactReceiptAndAuthority(t *tes
 			beforeReceipt, afterReceipt, err)
 	}
 	current, err := s.GetSecret(ctx, tenantA, "privacy/secret")
-	if err != nil || current.Version != 2 || !bytes.Equal(current.Sealed, []byte("sealed-privacy-v2")) {
+	if err != nil || current.Version != 2 || !bytes.Equal(current.Sealed, rebuildSealedFixture(t, "privacy/secret", "sealed-privacy-v2")) {
 		t.Fatalf("privacy rebuild changed ciphertext result: %+v err=%v", current, err)
 	}
 	authority, err := s.GetOperationApproval(ctx, tenantA, "77700000-0000-4000-8000-000000000011")
@@ -749,7 +849,7 @@ func TestApplicationSecretPendingFenceActorSurvivesReadModelRebuild(t *testing.T
 	t.Cleanup(func() {
 		_, _ = s.SystemPool().Exec(context.Background(), `TRUNCATE application_secret_mutation_fences`)
 	})
-	log := openLog(t)
+	log := openApplicationSecretFixtureLog(t)
 	if _, err := log.Append(ctx, events.Event{
 		Type: projections.EventTenantRegistered, TenantID: tenantA,
 		Data: tenantRegistered("pending-fence-actor-rebuild"),

@@ -60,15 +60,16 @@ func (p SourcePostgresProtection) validateBinding(binding eventprotect.Context) 
 	return nil
 }
 func (p SourcePostgresProtection) withCutLifetime(ctx context.Context, tenant string, visit func(context.Context, Lifetime) error) error {
-	if p.Policy.Log == nil || visit == nil || p.Cut == 0 {
+	source := p.Policy.sourceReader()
+	if source == nil || visit == nil || p.Cut == 0 {
 		return ErrSource
 	}
 	identity, err := uuid.Parse(tenant)
 	if err != nil || identity == uuid.Nil || identity.String() != tenant {
 		return ErrSource
 	}
-	return p.Policy.Log.WithHistoryRead(ctx, func(read context.Context) error {
-		head, err := p.Policy.Log.LastSequence(read)
+	return source.WithHistoryRead(ctx, func(read context.Context) error {
+		head, err := source.LastSequence(read)
 		if err != nil {
 			return err
 		}

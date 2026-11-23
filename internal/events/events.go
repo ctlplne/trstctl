@@ -20,6 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/eventprotect"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/schedulerhistory"
@@ -99,6 +100,26 @@ func (e *EnvelopeDecodeError) Unwrap() error { return e.Err }
 // in external mode it connects to a NATS cluster by URL. Switching between them
 // is config-only.
 type Log struct {
+	// appendAdmission encloses normalized Append and Import payloads before
+	// either reaches the common JetStream publish path.
+	appendAdmission AppendAdmission
+	// ingressWireStage commits the exact serialized candidate hash before the
+	// first broker call. Production supplies a target-local journal adapter.
+	ingressWireStage IngressWireStage
+	// ingressCanonicalProof receives the raw-wire identity resolved from the
+	// acknowledged stream before the caller may settle its journal row.
+	ingressCanonicalProof IngressCanonicalProof
+	// fixtureAppendAdmission is an explicit test-owned mode for standalone
+	// event-log fixtures that have no PostgreSQL-backed ingress adapter.
+	fixtureAppendAdmission bool
+	// requiredAppendAdmission prevents a production composition from silently
+	// publishing when its PostgreSQL-backed admission adapter is absent.
+	requiredAppendAdmission bool
+	// backupHistoryAdmission surrounds the raw stream restore path, including
+	// direct library calls that bypass server maintenance commands.
+	backupHistoryAdmission         BackupHistoryAdmission
+	backupHistoryJournal           BackupHistoryJournal
+	requiredBackupHistoryAdmission bool
 	// appendObserver, when set, hears how long each Append and Import took
 	// (measurement only: the perf harness's per-request breakdown, CI-L37).
 	appendObserver func(time.Duration)
@@ -207,6 +228,80 @@ func (l *Log) streamInfo(ctx context.Context) (*jetstream.StreamInfo, error) {
 // PostgreSQL or another concrete distributed-lock implementation.
 type OpenOption func(*Log)
 
+// AppendAdmission owns prepublish checks and may refuse without invoking
+// publish. Its callback must remain active through the broker ACK, including
+// when event protection wraps the payload before publication.
+type AppendAdmission func(context.Context, Event, func(context.Context) (Event, error)) (Event, error)
+
+// IngressWireStage records the candidate wire hash under the active ingress
+// token. A failure must keep the broker untouched; an ambiguous later ACK
+// leaves this staged hash pending for canonical reconciliation.
+type IngressWireStage func(context.Context, Event, string) error
+
+// IngressCanonicalProof receives the attempted event, authenticated returned
+// canonical event, raw NATS wire hash and whether the broker discarded a
+// duplicate candidate. A failed proof leaves the admitted attempt unresolved.
+type IngressCanonicalProof func(context.Context, Event, Event, string, bool) error
+
+// BackupHistoryAdmission stays live through stream binding, every raw write,
+// and the final broker confirmation. Production supplies a target-local guard.
+type BackupHistoryAdmission func(context.Context, uint64, string, func(context.Context) (int, error)) (int, error)
+
+// BackupHistoryJournal durably stages one exact raw record before broker I/O.
+// run returns nil only after the target record has been read back and matched.
+// A failed or ambiguous run leaves the start pending for same-artifact resume.
+type BackupHistoryJournal func(context.Context, uint64, string, string, BackupHistoryRecord,
+	func(context.Context) error) error
+
+func WithBackupHistoryJournal(journal BackupHistoryJournal) OpenOption {
+	return func(log *Log) { log.backupHistoryJournal = journal }
+}
+
+func WithAppendAdmission(admit AppendAdmission) OpenOption {
+	return func(log *Log) { log.appendAdmission = admit }
+}
+
+func WithIngressWireStage(stage IngressWireStage) OpenOption {
+	return func(log *Log) { log.ingressWireStage = stage }
+}
+
+func WithIngressCanonicalProof(proof IngressCanonicalProof) OpenOption {
+	return func(log *Log) { log.ingressCanonicalProof = proof }
+}
+
+// WithFixtureAppendAdmission permits standalone test logs to append without a
+// production store adapter. It cannot satisfy a required-production source.
+// Source census limits its callers to tests and test support.
+func WithFixtureAppendAdmission() OpenOption {
+	return func(log *Log) { log.fixtureAppendAdmission = true }
+}
+
+// WithRequiredAppendAdmission makes a missing ingress adapter a write refusal
+// for both Append and Import. Production composition installs this separately
+// from the adapter so an accidentally omitted or nil adapter fails closed.
+func WithRequiredAppendAdmission() OpenOption {
+	return func(log *Log) { log.requiredAppendAdmission = true }
+}
+
+var ErrAppendAdmissionUnavailable = errors.New("events: required append admission is unavailable")
+
+// Production sources cannot physically remove the AN-2 event history through
+// the legacy recovery/conformance helpers. The exact restore owner has its own
+// separately admitted raw-history path.
+var ErrLegacyHistoryMutationUnavailable = errors.New("events: legacy physical history mutation is unavailable on a production source")
+
+func WithBackupHistoryAdmission(admit BackupHistoryAdmission) OpenOption {
+	return func(log *Log) { log.backupHistoryAdmission = admit }
+}
+
+// WithRequiredBackupHistoryAdmission makes both raw restore APIs refuse a
+// missing target-local admission adapter before reading their source artifact.
+func WithRequiredBackupHistoryAdmission() OpenOption {
+	return func(log *Log) { log.requiredBackupHistoryAdmission = true }
+}
+
+var ErrBackupHistoryAdmissionUnavailable = errors.New("events: required backup-history admission is unavailable")
+
 // WithHistoryRewriteCoordinator wires the deployment-wide shared/exclusive
 // history barrier required for generation rewrites in external NATS mode.
 func WithHistoryRewriteCoordinator(coordinator HistoryRewriteCoordinator) OpenOption {
@@ -301,6 +396,10 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 		if opt != nil {
 			opt(l)
 		}
+	}
+	if l.requiredAppendAdmission && l.fixtureAppendAdmission {
+		shutdown(srv, nc)
+		return nil, ErrAppendAdmissionUnavailable
 	}
 	if l.eventProtection != nil && (l.eventProtection.Keys == nil || l.eventProtection.Admission == nil) {
 		shutdown(srv, nc)
@@ -551,10 +650,59 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 			e.Actor = &actor
 		}
 	}
-	return l.appendWithEventProtection(ctx, e, explicitTime)
+	if l.appendAdmission != nil {
+		producerDigest, err := appendProducerDigest(e, explicitTime)
+		if err != nil {
+			return Event{}, err
+		}
+		producerScope := &ingressProducerScope{digest: producerDigest, explicitTime: explicitTime, history: l}
+		producerScope.active = true
+		defer func() {
+			producerScope.mu.Lock()
+			producerScope.active = false
+			producerScope.mu.Unlock()
+			producerScope.historyCalls.Wait()
+			secret.Wipe(producerDigest)
+		}()
+		var callbackMu sync.Mutex
+		var callbackInFlight sync.WaitGroup
+		callbackActive, callbackUsed := true, false
+		defer func() {
+			callbackMu.Lock()
+			callbackActive = false
+			callbackMu.Unlock()
+			callbackInFlight.Wait()
+		}()
+		return l.appendAdmission(context.WithValue(ctx, ingressProducerContextKey{}, producerScope), e, func(admitted context.Context) (Event, error) {
+			callbackMu.Lock()
+			if !callbackActive || callbackUsed {
+				callbackMu.Unlock()
+				return Event{}, ErrAppendAdmissionUnavailable
+			}
+			callbackUsed = true
+			callbackInFlight.Add(1)
+			callbackMu.Unlock()
+			defer callbackInFlight.Done()
+			return l.withAppendGrant(admitted, e, explicitTime, func(granted context.Context) (Event, error) {
+				return l.appendWithEventProtection(granted, e, explicitTime)
+			})
+		})
+	}
+	if l.requiredAppendAdmission || !l.fixtureAppendAdmission {
+		return Event{}, ErrAppendAdmissionUnavailable
+	}
+	if sealedBearingEventType(e.Type) || hasSealedBearingField(e.Data) {
+		return Event{}, ErrFixtureSealedAdmissionRequired
+	}
+	return l.withAppendGrant(ctx, e, explicitTime, func(granted context.Context) (Event, error) {
+		return l.appendWithEventProtection(granted, e, explicitTime)
+	})
 }
 
 func (l *Log) publishPreparedEvent(ctx context.Context, e Event) (Event, error) {
+	if err := l.requireAppendGrant(ctx, e); err != nil {
+		return Event{}, err
+	}
 	stored, err := storedForEvent(e)
 	if err != nil {
 		return Event{}, err
@@ -567,6 +715,11 @@ func (l *Log) publishPreparedEvent(ctx context.Context, e Event) (Event, error) 
 	if err != nil {
 		return Event{}, err
 	}
+	if l.ingressWireStage != nil {
+		if err := l.ingressWireStage(ctx, e, crypto.SHA256Hex(payload)); err != nil {
+			return Event{}, err
+		}
+	}
 	ack, err := l.publishToActive(ctx, subject, payload, jetstream.WithMsgID(e.ID))
 	if err != nil {
 		return Event{}, fmt.Errorf("events: append: %w: %w", ErrPublish, err)
@@ -575,31 +728,86 @@ func (l *Log) publishPreparedEvent(ctx context.Context, e Event) (Event, error) 
 		// The acknowledged source may finish cutover after the bounded publish
 		// view releases but before this canonical read. Sequence preservation lets
 		// the read fall forward to the active target.
-		canonicalStream, streamErr := l.js.Stream(ctx, ack.Stream)
-		if streamErr != nil {
-			_, canonicalStream, streamErr = l.resolveActiveStream(ctx)
-		}
-		if streamErr != nil {
-			return Event{}, fmt.Errorf("events: open duplicate canonical stream %q: %w", ack.Stream, streamErr)
-		}
-		raw, err := canonicalStream.GetMsg(ctx, ack.Sequence)
-		if err != nil {
-			return Event{}, fmt.Errorf("events: read duplicate canonical event: %w", err)
-		}
-		canonical, err := decodeStored(raw.Data, raw.Sequence)
+		canonical, rawHash, err := l.acknowledgedCanonicalRaw(ctx, ack.Stream, ack.Sequence)
 		if err != nil {
 			return Event{}, err
 		}
 		if canonical.ID != e.ID {
 			return Event{}, fmt.Errorf("events: duplicate id %q resolved to canonical id %q", e.ID, canonical.ID)
 		}
-		if canonical.Protection != nil && (canonical.TenantID != e.TenantID || canonical.Type != e.Type) {
+		sealedBearing := sealedBearingEventType(e.Type) || sealedBearingEventType(canonical.Type) ||
+			hasSealedBearingField(e.Data) || hasSealedBearingField(canonical.Data)
+		if (canonical.Protection != nil || sealedBearing) &&
+			(canonical.TenantID != e.TenantID || canonical.Type != e.Type || canonical.SchemaVersion != e.SchemaVersion) {
 			return Event{}, ErrConflictingEventIdentity
 		}
-		return l.openProtectedEvent(ctx, canonical)
+		if sealedBearing && canonical.Protection == nil &&
+			(!bytes.Equal(canonical.Data, e.Data) || !sameProtectedActorEncoding(canonical.Actor, e.Actor)) {
+			return Event{}, ErrConflictingEventIdentity
+		}
+		opened, err := l.openProtectedEvent(ctx, canonical)
+		if err != nil {
+			return Event{}, err
+		}
+		if canonical.Protection != nil {
+			grant, _ := ctx.Value(appendGrantContextKey{}).(*appendGrant)
+			if grant == nil || !bytes.Equal(opened.Data, e.Data) ||
+				!sameProtectedActorEncoding(opened.Actor, e.Actor) ||
+				(grant.explicitTime && !opened.Time.Equal(e.Time)) {
+				return Event{}, ErrConflictingEventIdentity
+			}
+		}
+		if l.ingressCanonicalProof != nil {
+			if err := l.ingressCanonicalProof(ctx, e, opened, rawHash, true); err != nil {
+				return Event{}, err
+			}
+		}
+		return opened, nil
 	}
 	e.Sequence = ack.Sequence
+	if l.ingressCanonicalProof != nil {
+		canonical, rawHash, err := l.acknowledgedCanonicalRaw(ctx, ack.Stream, ack.Sequence)
+		if err != nil {
+			return Event{}, err
+		}
+		if rawHash != crypto.SHA256Hex(payload) || canonical.ID != e.ID ||
+			canonical.TenantID != e.TenantID || canonical.Type != e.Type ||
+			!canonical.Time.Equal(e.Time) || canonical.SchemaVersion != e.SchemaVersion {
+			return Event{}, ErrConflictingEventIdentity
+		}
+		opened, err := l.openProtectedEvent(ctx, canonical)
+		if err != nil {
+			return Event{}, err
+		}
+		if !bytes.Equal(opened.Data, e.Data) || !sameProtectedActorEncoding(opened.Actor, e.Actor) {
+			return Event{}, ErrConflictingEventIdentity
+		}
+		if err := l.ingressCanonicalProof(ctx, e, opened, rawHash, false); err != nil {
+			return Event{}, err
+		}
+	}
 	return e, nil
+}
+
+func (l *Log) acknowledgedCanonicalRaw(ctx context.Context, streamName string,
+	sequence uint64,
+) (Event, string, error) {
+	canonicalStream, err := l.js.Stream(ctx, streamName)
+	if err != nil {
+		_, canonicalStream, err = l.resolveActiveStream(ctx)
+	}
+	if err != nil {
+		return Event{}, "", fmt.Errorf("events: open acknowledged canonical stream %q: %w", streamName, err)
+	}
+	raw, err := canonicalStream.GetMsg(ctx, sequence)
+	if err != nil {
+		return Event{}, "", fmt.Errorf("events: read acknowledged canonical event: %w", err)
+	}
+	canonical, err := decodeStored(raw.Data, raw.Sequence)
+	if err != nil {
+		return Event{}, "", err
+	}
+	return canonical, crypto.SHA256Hex(raw.Data), nil
 }
 
 // EventByID reads the durable, generation-specific identity projection and then
@@ -907,6 +1115,9 @@ func (l *Log) replayResolved(
 // callers must coordinate the history cut and accept that Replay will observe a
 // gap.
 func (l *Log) Delete(ctx context.Context, seq uint64) error {
+	if l.requiredAppendAdmission {
+		return ErrLegacyHistoryMutationUnavailable
+	}
 	if l.history == nil {
 		return errors.New("events: delete requires a history coordinator")
 	}
@@ -956,6 +1167,9 @@ func (l *Log) PruneTenantThroughCheckpoint(
 	boundarySequence uint64,
 	checkpoint func(context.Context) error,
 ) error {
+	if l.requiredAppendAdmission {
+		return ErrLegacyHistoryMutationUnavailable
+	}
 	if tenantID == "" {
 		return errors.New("events: legacy prefix delete requires tenant_id (AN-1)")
 	}
@@ -1251,7 +1465,11 @@ type TailCheckpointSource func(context.Context) (uint64, error)
 // generation switch, its in-memory last-success sequence is enough to continue;
 // restarting directly on a replacement generation requires TailFrom.
 func (l *Log) Tail(ctx context.Context, fn func(Event) error) error {
-	return l.tailFrom(ctx, nil, fn)
+	var callback func(context.Context, Event) error
+	if fn != nil {
+		callback = func(_ context.Context, event Event) error { return fn(event) }
+	}
+	return l.tailFrom(ctx, nil, nil, callback)
 }
 
 // TailFrom follows the active stream generation and resumes each new generation
@@ -1266,13 +1484,32 @@ func (l *Log) TailFrom(
 	if checkpoint == nil {
 		return errors.New("events: TailFrom requires a durable checkpoint source")
 	}
-	return l.tailFrom(ctx, checkpoint, fn)
+	var callback func(context.Context, Event) error
+	if fn != nil {
+		callback = func(_ context.Context, event Event) error { return fn(event) }
+	}
+	return l.tailFrom(ctx, checkpoint, nil, callback)
+}
+
+// TailFromAdmitted lets a production worker acquire restore and key-state
+// admission before each history read. The admitted context reaches the event
+// callback, so nested projection and custody checks borrow the same grants.
+func (l *Log) TailFromAdmitted(
+	ctx context.Context, checkpoint TailCheckpointSource,
+	admit func(context.Context, func(context.Context) error) error,
+	fn func(context.Context, Event) error,
+) error {
+	if checkpoint == nil || admit == nil {
+		return errors.New("events: admitted tail requires a checkpoint and admission")
+	}
+	return l.tailFrom(ctx, checkpoint, admit, fn)
 }
 
 func (l *Log) tailFrom(
 	ctx context.Context,
 	checkpoint TailCheckpointSource,
-	fn func(Event) error,
+	admit func(context.Context, func(context.Context) error) error,
+	fn func(context.Context, Event) error,
 ) error {
 	if fn == nil {
 		return errors.New("events: tail callback is required")
@@ -1288,120 +1525,128 @@ func (l *Log) tailFrom(
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
-			name, stream, err := l.resolveActiveStream(readCtx)
-			if err != nil {
-				return fmt.Errorf("events: resolve tail generation: %w", err)
-			}
-			// Exact restore binds the existing active stream before publishing its
-			// first envelope. A long-lived tailer may already have a consumer for
-			// that same stream, so checking only during consumer construction would
-			// let it apply an artifact-bound partial prefix. Recheck inside every
-			// shared history view before fetching; the restore's exclusive cutover
-			// cannot install or clear the binding between this check and the fetch.
-			if err := l.requireNoPendingBackupRestoreStream(readCtx, stream); err != nil {
-				return err
-			}
-			if consumer == nil || consumerGeneration != name {
-				consumer = nil
-				consumerGeneration = name
+		read := func(admitted context.Context) error {
+			return l.withHistoryRead(admitted, func(readCtx context.Context) error {
+				name, stream, err := l.resolveActiveStream(readCtx)
+				if err != nil {
+					return fmt.Errorf("events: resolve tail generation: %w", err)
+				}
+				// Exact restore binds the existing active stream before publishing its
+				// first envelope. A long-lived tailer may already have a consumer for
+				// that same stream, so checking only during consumer construction would
+				// let it apply an artifact-bound partial prefix. Recheck inside every
+				// shared history view before fetching; the restore's exclusive cutover
+				// cannot install or clear the binding between this check and the fetch.
+				if err := l.requireNoPendingBackupRestoreStream(readCtx, stream); err != nil {
+					return err
+				}
+				if consumer == nil || consumerGeneration != name {
+					consumer = nil
+					consumerGeneration = name
 
-				if checkpoint == nil && !haveLastApplied && name == streamName {
-					consumer, err = stream.CreateOrUpdateConsumer(readCtx, jetstream.ConsumerConfig{
-						Durable:       tailConsumerName,
-						AckPolicy:     jetstream.AckExplicitPolicy,
-						DeliverPolicy: jetstream.DeliverAllPolicy,
-						FilterSubject: subjectFilter,
-						MaxAckPending: 1,
-					})
-					if err != nil {
-						return fmt.Errorf("events: create legacy tail consumer: %w", err)
-					}
-					info, err := consumer.Info(readCtx)
-					if err != nil {
-						return fmt.Errorf("events: read legacy tail checkpoint: %w", err)
-					}
-					lastApplied = info.AckFloor.Stream
-					haveLastApplied = true
-				} else {
-					if checkpoint == nil {
-						if !haveLastApplied {
-							return errors.New("events: replacement generation tail requires TailFrom with a durable checkpoint source")
-						}
-					} else {
-						// Re-read PostgreSQL for every generation. Another replica
-						// may have advanced the shared consumer/checkpoint while this
-						// tailer was idle on the previous stream.
-						lastApplied, err = checkpoint(readCtx)
+					if checkpoint == nil && !haveLastApplied && name == streamName {
+						consumer, err = stream.CreateOrUpdateConsumer(readCtx, jetstream.ConsumerConfig{
+							Durable:       tailConsumerName,
+							AckPolicy:     jetstream.AckExplicitPolicy,
+							DeliverPolicy: jetstream.DeliverAllPolicy,
+							FilterSubject: subjectFilter,
+							MaxAckPending: 1,
+						})
 						if err != nil {
-							return fmt.Errorf("events: read durable tail checkpoint: %w", err)
+							return fmt.Errorf("events: create legacy tail consumer: %w", err)
 						}
+						info, err := consumer.Info(readCtx)
+						if err != nil {
+							return fmt.Errorf("events: read legacy tail checkpoint: %w", err)
+						}
+						lastApplied = info.AckFloor.Stream
 						haveLastApplied = true
-					}
-					consumer, err = l.sharedTailConsumer(
-						readCtx, stream, lastApplied, checkpoint, name == streamName,
-					)
-					if err != nil {
-						return err
+					} else {
+						if checkpoint == nil {
+							if !haveLastApplied {
+								return errors.New("events: replacement generation tail requires TailFrom with a durable checkpoint source")
+							}
+						} else {
+							// Re-read PostgreSQL for every generation. Another replica
+							// may have advanced the shared consumer/checkpoint while this
+							// tailer was idle on the previous stream.
+							lastApplied, err = checkpoint(readCtx)
+							if err != nil {
+								return fmt.Errorf("events: read durable tail checkpoint: %w", err)
+							}
+							haveLastApplied = true
+						}
+						consumer, err = l.sharedTailConsumer(
+							readCtx, stream, lastApplied, checkpoint, name == streamName,
+						)
+						if err != nil {
+							return err
+						}
 					}
 				}
-			}
 
-			batch, err := consumer.Fetch(1, jetstream.FetchMaxWait(250*time.Millisecond))
-			if err != nil {
-				if readCtx.Err() != nil {
-					return readCtx.Err()
-				}
-				return fmt.Errorf("events: tail fetch: %w", err)
-			}
-			for msg := range batch.Messages() {
-				md, metadataErr := msg.Metadata()
-				if metadataErr != nil {
-					_ = msg.Nak()
-					return fmt.Errorf("events: tail metadata: %w", metadataErr)
-				}
-				ev, decodeErr := decodeStored(msg.Data(), md.Sequence.Stream)
-				if decodeErr != nil {
-					_ = msg.Nak()
-					return decodeErr
-				}
-				ev, decodeErr = l.openProtectedEvent(readCtx, ev)
-				if decodeErr != nil {
-					_ = msg.Nak()
-					return decodeErr
-				}
-				if l.rejectLegacySchedulerRuns.Load() {
-					unsafe, inspectErr := schedulerhistory.RequiresSanitation(
-						ev.Type, ev.SchemaVersion, ev.Data,
-					)
-					if inspectErr != nil || unsafe {
-						_ = msg.Nak()
-						return schedulerhistory.ErrSanitationRequired
+				batch, err := consumer.Fetch(1, jetstream.FetchMaxWait(250*time.Millisecond))
+				if err != nil {
+					if readCtx.Err() != nil {
+						return readCtx.Err()
 					}
+					return fmt.Errorf("events: tail fetch: %w", err)
 				}
-				if applyErr := fn(ev); applyErr != nil {
-					_ = msg.Nak()
-					return fmt.Errorf("events: tail apply seq %d: %w", ev.Sequence, applyErr)
+				for msg := range batch.Messages() {
+					md, metadataErr := msg.Metadata()
+					if metadataErr != nil {
+						_ = msg.Nak()
+						return fmt.Errorf("events: tail metadata: %w", metadataErr)
+					}
+					ev, decodeErr := decodeStored(msg.Data(), md.Sequence.Stream)
+					if decodeErr != nil {
+						_ = msg.Nak()
+						return decodeErr
+					}
+					ev, decodeErr = l.openProtectedEvent(readCtx, ev)
+					if decodeErr != nil {
+						_ = msg.Nak()
+						return decodeErr
+					}
+					if l.rejectLegacySchedulerRuns.Load() {
+						unsafe, inspectErr := schedulerhistory.RequiresSanitation(
+							ev.Type, ev.SchemaVersion, ev.Data,
+						)
+						if inspectErr != nil || unsafe {
+							_ = msg.Nak()
+							return schedulerhistory.ErrSanitationRequired
+						}
+					}
+					if applyErr := fn(readCtx, ev); applyErr != nil {
+						_ = msg.Nak()
+						return fmt.Errorf("events: tail apply seq %d: %w", ev.Sequence, applyErr)
+					}
+					ackCtx, cancelAck := context.WithTimeout(
+						context.WithoutCancel(readCtx), tailAckConfirmationTimeout,
+					)
+					ackErr := msg.DoubleAck(ackCtx)
+					cancelAck()
+					if ackErr != nil {
+						return fmt.Errorf("events: tail ack seq %d: %w", ev.Sequence, ackErr)
+					}
+					lastApplied = ev.Sequence
+					haveLastApplied = true
 				}
-				ackCtx, cancelAck := context.WithTimeout(
-					context.WithoutCancel(readCtx), tailAckConfirmationTimeout,
-				)
-				ackErr := msg.DoubleAck(ackCtx)
-				cancelAck()
-				if ackErr != nil {
-					return fmt.Errorf("events: tail ack seq %d: %w", ev.Sequence, ackErr)
+				if batchErr := batch.Error(); batchErr != nil && !errors.Is(batchErr, nats.ErrTimeout) {
+					if readCtx.Err() != nil {
+						return readCtx.Err()
+					}
+					return fmt.Errorf("events: tail batch: %w", batchErr)
 				}
-				lastApplied = ev.Sequence
-				haveLastApplied = true
-			}
-			if batchErr := batch.Error(); batchErr != nil && !errors.Is(batchErr, nats.ErrTimeout) {
-				if readCtx.Err() != nil {
-					return readCtx.Err()
-				}
-				return fmt.Errorf("events: tail batch: %w", batchErr)
-			}
-			return nil
-		})
+				return nil
+			})
+		}
+		var err error
+		if admit != nil {
+			err = admit(ctx, read)
+		} else {
+			err = read(ctx)
+		}
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()

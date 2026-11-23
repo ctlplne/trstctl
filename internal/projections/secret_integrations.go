@@ -937,13 +937,22 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		if err != nil {
 			return true, err
 		}
+		eventHash, err := recoveryEventSHA256(e)
+		if err != nil {
+			return true, err
+		}
 		job := store.SecretSyncJob{
 			ID: payload.ID, TenantID: e.TenantID, TenantEpoch: tenantEpoch, SecretName: payload.SecretName,
 			SecretVersion: payload.SecretVersion, Target: payload.Target, RemoteKey: payload.RemoteKey,
 			ValueDigest: payload.ValueDigest, Status: store.SecretSyncJobPending,
 			TargetOrder:    targetOrder,
 			IdempotencyKey: payload.IdempotencyKey, RequestBinding: payload.RequestBinding,
-			RequestedAt: e.Time, UpdatedAt: e.Time,
+			RequestedAt: e.Time, UpdatedAt: e.Time, EventSHA256: eventHash, EventID: e.ID,
+		}
+		if pair := p.pairVerifierFor(ctx); pair != nil {
+			job.VerifyRewrapPair = func(verifyCtx context.Context, before, after, aad []byte) (bool, error) {
+				return pair(verifyCtx, e.TenantID, before, after, aad)
+			}
 		}
 		return true, p.store.ApplySecretSyncIntentTx(ctx, tx, job, "secret.sync."+payload.Target, outboxPayload)
 	case EventSecretSyncDelivered:

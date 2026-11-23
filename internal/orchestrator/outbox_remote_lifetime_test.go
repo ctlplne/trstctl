@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -46,6 +47,33 @@ func TestOutboxRemoteAdmissionUsesOneRequestConnection(t *testing.T) {
 	}), orchestrator.DestinationScope{IncludePrefixes: []string{"one-connection.probe"}})
 	if err != nil || !claimed || calls != 1 {
 		t.Fatalf("one request connection must admit and finish delivery: claimed=%v calls=%d error=%v", claimed, calls, err)
+	}
+}
+
+func TestOutboxReceiverDoesNotStartAfterFullRestoreMarker(t *testing.T) {
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	ob := orchestrator.NewOutbox(s, orchestrator.WithTenantServiceCheck(s.RequireLiveTenantService))
+	enqueue(t, s, ob, orchestrator.Entry{TenantID: tenantA, Destination: "restore-receiver.probe",
+		IdempotencyKey: "restore-receiver", Payload: []byte(`{}`)})
+	marker := store.RestoreMarker{
+		OperationID:    "49900000-0000-4000-8000-000000000141",
+		ArtifactSHA256: strings.Repeat("d", 64), EventCut: 1, DeploymentID: "outbox-target",
+	}
+	if err := s.BeginFullRestore(t.Context(), marker); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1`, store.RestoreControlTenantID)
+	})
+	calls := 0
+	_, _ = ob.DispatchOneScoped(t.Context(), orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
+		calls++
+		return nil
+	}), orchestrator.DestinationScope{IncludePrefixes: []string{"restore-receiver.probe"}})
+	if calls != 0 {
+		t.Fatalf("remote receiver started %d time(s) after restore marker", calls)
 	}
 }
 
@@ -220,8 +248,7 @@ func TestOutboxRemoteEffectBlocksErasureAfterServiceSessionLoss(t *testing.T) {
 	mustRegisterTenant(t, s, tenantA)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
-	const application = "outbox-remote-lifetime-fixture"
-	worker, err := store.Open(ctx, testDSN+"?application_name="+application)
+	worker, err := store.Open(ctx, testDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,13 +320,18 @@ func TestOutboxRemoteEffectBlocksErasureAfterServiceSessionLoss(t *testing.T) {
 	if err := s.WithTenantServiceBarrier(ctx, tenantA, func(context.Context) error { return nil }); !errors.Is(err, store.ErrTenantServiceBusy) {
 		t.Fatalf("live session did not protect the admitted call: %v", err)
 	}
-	// Select exactly the shared service-lock holder in this test's private PG
-	// instance. Do not terminate other worker, fixture or installed-lab sessions.
+	// Select exactly this tenant's shared service-lock holder in this test's
+	// private PG instance. Store.Open assigns its own application_name, so a
+	// caller-supplied name cannot identify the session. The 64-bit advisory key
+	// is split across classid/objid as unsigned 32-bit halves in pg_locks.
 	var pid int32
 	if err := s.SystemPool().QueryRow(ctx, `SELECT a.pid FROM pg_stat_activity a
-		WHERE a.application_name=$1 AND EXISTS (
+		WHERE a.datname=current_database() AND EXISTS (
 		 SELECT 1 FROM pg_locks l WHERE l.pid=a.pid AND l.locktype='advisory'
-		 AND l.mode='ShareLock' AND l.granted)`, application).Scan(&pid); err != nil {
+		 AND l.mode='ShareLock' AND l.granted AND l.objsubid=1
+		 AND l.classid::bigint::numeric*4294967296 + l.objid::bigint::numeric =
+		   mod(hashtextextended($1,0)::numeric+18446744073709551616,18446744073709551616))`,
+		"tenant-service\x1f"+tenantA).Scan(&pid); err != nil {
 		t.Fatal(err)
 	}
 	var terminated bool

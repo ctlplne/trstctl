@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"slices"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	xacme "golang.org/x/crypto/acme"
 
@@ -22,7 +23,7 @@ import (
 
 func openACMEStateLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open ACME state log: %v", err)
 	}
@@ -48,7 +49,7 @@ func rewriteBaseURL(t *testing.T, rawURL, base string) string {
 func TestACMEStateRebuildsFromEventLogAfterRestart(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestACMEStateRebuildsFromEventLogAfterRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

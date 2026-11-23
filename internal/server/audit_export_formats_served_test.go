@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auditanchor"
@@ -24,7 +25,6 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tsa"
 )
@@ -48,7 +48,7 @@ func newAuditExportHarness(t *testing.T) (*httptest.Server, string, string) {
 	tok := seedServedAPIToken(t, ctx, st, tenantID, "audit-export", []string{
 		string(authz.AuditRead), string(authz.OwnersWrite), string(authz.OwnersRead),
 	})
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -308,7 +308,7 @@ func newAnchoredAuditExportHarnessAUD51(t *testing.T) (*httptest.Server, string,
 	tok := seedServedAPIToken(t, ctx, st, tenantID, "aud-51-auditor", []string{
 		string(authz.AuditRead), string(authz.OwnersWrite), string(authz.OwnersRead),
 	})
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

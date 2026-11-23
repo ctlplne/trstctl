@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -42,6 +43,30 @@ func TestTenantKeyDomainCiphertextMigrationStagesAreFixed(t *testing.T) {
 	got[0] = "mutated"
 	if store.TenantKeyDomainCiphertextMigrationStages()[0] != want[0] {
 		t.Fatal("caller mutated the tenant ciphertext inventory")
+	}
+}
+
+func TestDirectTenantCiphertextStageRefusesFullRestore(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "restore-stage-tenant"}); err != nil {
+		t.Fatal(err)
+	}
+	marker := store.RestoreMarker{
+		OperationID: "11111111-1111-4111-8111-111111111802", ArtifactSHA256: strings.Repeat("e", 64),
+		EventCut: 1, DeploymentID: "stage-restore-order",
+	}
+	if err := s.BeginFullRestore(ctx, marker); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+			store.RestoreControlTenantID, marker.OperationID)
+	})
+	if _, err := s.RewriteTenantKeyDomainCiphertextStage(ctx, tenantA, "credentials.sealed",
+		func(before []byte) ([]byte, bool, error) { return before, false, nil }); !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Fatalf("direct ciphertext stage under restore marker = %v, want refusal", err)
 	}
 }
 

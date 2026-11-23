@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
 
@@ -30,7 +30,7 @@ func TestProviderReplayedMutationSaysItIsAReplay(t *testing.T) {
 	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
 	granted := "replay-granted-" + suffix
 	refused := "replay-refused-" + suffix
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}

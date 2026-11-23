@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 )
 
 func TestGrantCommandAuthorizesTheSCIMBoundOIDCIdentity(t *testing.T) {
@@ -19,7 +19,7 @@ func TestGrantCommandAuthorizesTheSCIMBoundOIDCIdentity(t *testing.T) {
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
 	natsConfig := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}
-	log, err := events.Open(ctx, natsConfig)
+	log, err := eventstest.OpenFixture(ctx, natsConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

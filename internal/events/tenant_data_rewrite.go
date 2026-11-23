@@ -1910,7 +1910,21 @@ func (l *Log) recoverOrCreateActiveStream(ctx context.Context, desired jetstream
 						"events: legacy pending backup restore requires a history coordinator",
 					)
 				}
-				pending, err = l.freezeLegacyBackupRestoreRoute(ctx, pendingName, pending, info)
+				freeze := func(freezeCtx context.Context) error {
+					pending, err = l.freezeLegacyBackupRestoreRoute(freezeCtx, pendingName, pending, info)
+					return err
+				}
+				if l.requiredBackupHistoryAdmission {
+					cut, parseErr := strconv.ParseUint(info.Config.Metadata[backupRestoreMetadataCut], 10, 64)
+					if parseErr != nil {
+						return nil, ErrBackupHistoryAdmissionUnavailable
+					}
+					err = l.withBackupHistoryRecordJournal(ctx, cut,
+						info.Config.Metadata[backupRestoreMetadataDigest], "bind",
+						BackupHistoryRecord{Subject: pendingName}, freeze)
+				} else {
+					err = freeze(ctx)
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -1963,15 +1977,50 @@ func (l *Log) recoverOrCreateActiveStream(ctx context.Context, desired jetstream
 		return resolveOrCreate(ctx, false)
 	}
 	var stream jetstream.Stream
-	err := l.history.WithRewriteOperation(ctx, func(ctx context.Context) error {
-		return l.history.WithCutover(ctx, func(ctx context.Context) error {
-			var err error
-			// Re-scan only after both locks are held. Another replica may have
-			// completed recovery while this opener waited for the operation wall.
-			stream, err = resolveOrCreate(ctx, true)
-			return err
+	recoverUnderCutover := func(ctx context.Context) error {
+		return l.history.WithRewriteOperation(ctx, func(ctx context.Context) error {
+			return l.history.WithCutover(ctx, func(ctx context.Context) error {
+				var err error
+				// Re-scan only after both locks are held. Another replica may have
+				// completed recovery while this opener waited for the operation wall.
+				stream, err = resolveOrCreate(ctx, true)
+				return err
+			})
 		})
-	})
+	}
+	// A legacy pending restore changes the broker route during Open. Reserve
+	// raw-history admission before taking the history cutover lock; the store
+	// adapter acquires global key-state A/B in that order and checks the exact
+	// committed restore marker. A concurrent newly pending route without this
+	// pre-admission is refused by freezeLegacyBackupRestoreRoute and retried.
+	if l.requiredBackupHistoryAdmission {
+		_, pending, found, err := l.pendingBackupRestoreStream(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			info, err := l.infoForStream(ctx, pending)
+			if err != nil {
+				return nil, err
+			}
+			if backupRestoreRouteNeedsUpgrade(info.Config) {
+				if l.backupHistoryAdmission == nil || l.backupHistoryJournal == nil {
+					return nil, ErrBackupHistoryAdmissionUnavailable
+				}
+				cut, err := strconv.ParseUint(info.Config.Metadata[backupRestoreMetadataCut], 10, 64)
+				if err != nil {
+					return nil, ErrBackupHistoryAdmissionUnavailable
+				}
+				_, err = l.withBackupHistoryAdmission(ctx, cut,
+					info.Config.Metadata[backupRestoreMetadataDigest],
+					func(ownerCtx context.Context) (int, error) {
+						return 0, recoverUnderCutover(ownerCtx)
+					})
+				return stream, err
+			}
+		}
+	}
+	err := recoverUnderCutover(ctx)
 	return stream, err
 }
 
@@ -2599,7 +2648,10 @@ func (l *Log) WithHistoryRead(ctx context.Context, fn func(context.Context) erro
 		if err := l.requireNoPendingBackupRestoreStream(readCtx, stream); err != nil {
 			return err
 		}
-		return fn(readCtx)
+		grant := &ingressHistoryReadGrant{log: l}
+		grant.active.Store(true)
+		defer grant.active.Store(false)
+		return fn(context.WithValue(readCtx, ingressHistoryReadContextKey{}, grant))
 	})
 }
 

@@ -4,6 +4,7 @@ package retirement
 
 import (
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/decommission/depstate"
@@ -15,7 +16,7 @@ func TestRetirementLaterRegistrationIndexedAcrossColdRestart(t *testing.T) {
 	const tenant = "a1000000-0000-4000-8000-000000000001"
 	const otherTenant = "b2000000-0000-4000-8000-000000000002"
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestRetirementLaterRegistrationIndexedAcrossColdRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,11 +12,11 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
 	configpkg "trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/transit"
 )
@@ -34,7 +34,7 @@ var vaultTestRequestSequence atomic.Uint64
 // Vault request/response shapes.
 func TestVaultCompatMountACLTransitServedAndReplayed(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

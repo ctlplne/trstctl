@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -58,7 +59,7 @@ func runPreparationReceiverFixtureMode(t *testing.T, interrupt, missingCustody, 
 	receiver := &eventprivacy.PreparationReceiver{Claims: s, Guard: s, Custody: keys}
 	verifier := &eventprivacy.ActivationVerifier{Custody: keys}
 	p := projections.New(s, projections.WithEventProtectionActivationVerifier(verifier))
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
 		func(log *events.Log) {
 			admission.Policy.Log = log
 			admission.Holds = eventprivacy.RetainedHoldPolicy{Policy: admission.Policy}

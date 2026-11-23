@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/assurance"
@@ -38,7 +39,7 @@ const (
 // principal and tenant headers must return only A's evidence.
 func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}

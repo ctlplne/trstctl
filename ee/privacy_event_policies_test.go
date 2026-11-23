@@ -4,9 +4,11 @@ package ee_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	enterprise "trstctl.com/trstctl/ee"
 	"trstctl.com/trstctl/ee/governance/misuse"
@@ -52,18 +54,11 @@ func TestProviderWithdrawalHasPrivacyPolicy(t *testing.T) {
 }
 
 func TestPQCHostRollbackRequestedPrivacySchemaIsVersioned(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{
-		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
-	}, events.WithRequiredPrivacyEventPolicies())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = log.Close() })
 	const eventType = "licensed_crypto.migration.tls_posture.rollback_requested"
 	legacy := []byte(`{"run_id":"run-a","intents":[{"target_id":"target-a","asset_ids":["asset-a"],"idempotency_key":"rollback-a","payload":{"sealed":"fixture"}}]}`)
 	host := []byte(`{"run_id":"run-b","intents":[{"target_id":"target-b","asset_ids":["asset-b"],"idempotency_key":"rollback-b","payload":{"sealed":"fixture"},"required_agent_id":"agent-b"}]}`)
 	relayRole := []byte(`{"run_id":"run-c","intents":[{"target_id":"target-c","asset_ids":["asset-c"],"idempotency_key":"rollback-c","payload":{"sealed":"fixture"},"required_agent_id":"agent-c","required_agent_role":"network"}]}`)
-	for _, test := range []struct {
+	tests := []struct {
 		name    string
 		version int
 		data    []byte
@@ -76,7 +71,31 @@ func TestPQCHostRollbackRequestedPrivacySchemaIsVersioned(t *testing.T) {
 		{"agent role forbidden in v2", 2, relayRole, false},
 		{"agent role admitted in v3", 3, relayRole, true},
 		{"host assignment admitted in v3", 3, host, true},
-	} {
+	}
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
+	}, events.WithRequiredPrivacyEventPolicies(),
+		// Admit every exact table case, including the rejected schema cases.
+		// That keeps privacy-policy rejection, rather than fixture admission,
+		// responsible for the negative assertions.
+		events.WithAppendAdmission(func(admitted context.Context, candidate events.Event,
+			publish func(context.Context) (events.Event, error),
+		) (events.Event, error) {
+			if candidate.Type != eventType || candidate.TenantID != store.ZeroUUID {
+				return events.Event{}, events.ErrFixtureSealedAdmissionRequired
+			}
+			for _, test := range tests {
+				if candidate.SchemaVersion == test.version && bytes.Equal(candidate.Data, test.data) {
+					return publish(admitted)
+				}
+			}
+			return events.Event{}, events.ErrFixtureSealedAdmissionRequired
+		}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := log.Append(t.Context(), events.Event{TenantID: store.ZeroUUID,
 				Type: eventType, SchemaVersion: test.version, Data: test.data})

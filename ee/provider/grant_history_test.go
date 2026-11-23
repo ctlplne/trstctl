@@ -6,9 +6,9 @@ import (
 	"context"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 )
 
@@ -16,7 +16,7 @@ func TestProviderRegrantRetainsRevokedEpisodeThroughRebuild(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestProviderBootstrapDoesNotResurrectLegacyRevokedGrant(t *testing.T) {
 		providerAuthorityTenant, CustomerID("legacy-revoked-customer"), now, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

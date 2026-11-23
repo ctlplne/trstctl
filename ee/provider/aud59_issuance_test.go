@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/google/uuid"
 
@@ -24,7 +25,7 @@ import (
 func aud59IssuanceRecorder(t *testing.T, st *corestore.Store, tenant string) func(time.Time) {
 	t.Helper()
 	ctx := t.Context()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,11 +31,73 @@ func (l *Lifecycle) Rotate(
 	tenantID string,
 	ref WrapperRef,
 ) (store.TenantKeyDomain, error) {
+	if l == nil || l.store == nil {
+		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
+	}
+	if err := l.validateRotationPreconditions(tenantID, ref); err != nil {
+		return store.TenantKeyDomain{}, err
+	}
+	var out store.TenantKeyDomain
+	err := l.store.WithRestoreActivity(ctx, tenantID, uuid.NewString(), "maintenance", "tenant-domain-rotate",
+		func(restoreCtx context.Context) error {
+			return l.store.WithGlobalKeyStateAdmission(restoreCtx, store.KeyStateExclusive, func(admitted context.Context) error {
+				var inner error
+				out, inner = l.rotateAdmitted(admitted, tenantID, ref)
+				return inner
+			})
+		})
+	return out, err
+}
+
+func (l *Lifecycle) rotateAdmitted(
+	ctx context.Context, tenantID string, ref WrapperRef,
+) (store.TenantKeyDomain, error) {
 	if err := l.validateRotationPreconditions(tenantID, ref); err != nil {
 		return store.TenantKeyDomain{}, err
 	}
 	var out store.TenantKeyDomain
 	err := l.log.WithHistoryOperation(ctx, func(operationCtx context.Context) error {
+		if current, err := l.store.GetTenantKeyDomain(operationCtx, tenantID); err == nil &&
+			current.OperationKind == store.TenantKeyOperationRotate &&
+			current.OperationStatus == store.TenantKeyOperationCompleted {
+			gate, found, gateErr := l.store.GetTenantApplicationSecretRewrapGate(operationCtx, tenantID)
+			if gateErr != nil {
+				return gateErr
+			}
+			if found && gate.InProgress && gate.Kind == store.TenantKeyOperationRotate {
+				if err := l.store.CompleteTenantApplicationSecretRewrap(operationCtx, tenantID, gate.OperationID); err != nil {
+					return err
+				}
+				out = current
+				return nil
+			}
+		} else if errors.Is(err, store.ErrTenantKeyDomainNotFound) {
+			// No gate, receipt backfill, key snapshot or history write has
+			// started. Settle this rejected attempt's durable restore token
+			// as proven no-effect so a later valid migration can begin.
+			return store.RestoreActivityNoEffect(ErrLifecycleConflict)
+		} else if err != nil {
+			return err
+		} else if current.OperationKind == store.TenantKeyOperationRotate &&
+			current.NextGeneration > 0 && ref != (WrapperRef{}) &&
+			ref != (WrapperRef{Kind: current.NextWrapperKind, ID: current.NextWrapperID}) {
+			// The active rotation already chose its next wrapper. Reject a
+			// retarget before receipt backfill or gate mutation begins.
+			return store.RestoreActivityNoEffect(ErrLifecycleConflict)
+		}
+		access, err := NewAccess(l.store, l.deployment, l.manager)
+		if err != nil {
+			return err
+		}
+		if err := backfillMutationReceipts(operationCtx, l.store, l.log, access, tenantID); err != nil {
+			return err
+		}
+		rewrapOperationID, err := l.store.BeginTenantApplicationSecretRewrap(operationCtx, tenantID, store.TenantKeyOperationRotate)
+		if err != nil {
+			return err
+		}
+		operationCtx = context.WithValue(operationCtx, tenantRewrapOperationContextKey{},
+			tenantRewrapOperation{tenantID: tenantID, operationID: rewrapOperationID, kind: store.TenantKeyOperationRotate})
 		domain, keys, err := l.beginOrResumeRotation(operationCtx, tenantID, ref)
 		if err != nil {
 			return err
@@ -106,6 +168,9 @@ func (l *Lifecycle) Rotate(
 		if err := l.appendSnapshot(operationCtx, tenantID, projections.EventTenantKeyDomainRotationCompleted, domain); err != nil {
 			return err
 		}
+		if err := l.store.CompleteTenantApplicationSecretRewrap(operationCtx, tenantID, rewrapOperationID); err != nil {
+			return err
+		}
 		out, err = l.store.GetTenantKeyDomain(operationCtx, tenantID)
 		return err
 	})
@@ -136,7 +201,8 @@ func (l *Lifecycle) validateRotationPreconditions(tenantID string, ref WrapperRe
 		return errors.New("tenantseal: rotation requires tenant_id (AN-1)")
 	}
 	if ref != (WrapperRef{}) &&
-		(!knownWrapperKind(ref.Kind) || strings.TrimSpace(ref.ID) == "" || strings.TrimSpace(ref.ID) != ref.ID) {
+		(!knownWrapperKind(ref.Kind) || strings.TrimSpace(ref.ID) == "" ||
+			strings.TrimSpace(ref.ID) != ref.ID || !l.manager.ConfiguredWrapper(ref)) {
 		return ErrWrapperNotConfigured
 	}
 	if err := l.log.HistoryRewriteReady(); err != nil {
@@ -157,86 +223,94 @@ func (l *Lifecycle) beginOrResumeRotation(
 ) (store.TenantKeyDomain, *rotationKeys, error) {
 	var domain store.TenantKeyDomain
 	keys := &rotationKeys{}
-	err := l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
-			return err
-		}
-		existing, err := l.store.GetTenantKeyDomainTx(ctx, tx, tenantID)
-		if errors.Is(err, store.ErrTenantKeyDomainNotFound) {
-			return ErrLifecycleConflict
-		}
-		if err != nil {
-			return err
-		}
-		mode, _ := resolveDomainAccessMode(tenantID, existing)
-		resuming := mode == domainAccessDualRotation
-		switch {
-		case resuming:
-			if ref != (WrapperRef{}) && ref != (WrapperRef{Kind: existing.NextWrapperKind, ID: existing.NextWrapperID}) {
+	err := l.log.WithHistoryRead(ctx, func(history context.Context) error {
+		ctx := history
+		return l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			owned, err := l.store.BindKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive)
+			if err != nil {
+				return err
+			}
+			ctx := owned
+			if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
+				return err
+			}
+			existing, err := l.store.GetTenantKeyDomainTx(ctx, tx, tenantID)
+			if errors.Is(err, store.ErrTenantKeyDomainNotFound) {
 				return ErrLifecycleConflict
 			}
-		case mode != domainAccessTenantOnly || existing.State == store.TenantKeyDomainStateSealQueued:
-			return ErrLifecycleConflict
-		}
+			if err != nil {
+				return err
+			}
+			mode, _ := resolveDomainAccessMode(tenantID, existing)
+			resuming := mode == domainAccessDualRotation
+			switch {
+			case resuming:
+				if ref != (WrapperRef{}) && ref != (WrapperRef{Kind: existing.NextWrapperKind, ID: existing.NextWrapperID}) {
+					return ErrLifecycleConflict
+				}
+			case mode != domainAccessTenantOnly || existing.State == store.TenantKeyDomainStateSealQueued:
+				return ErrLifecycleConflict
+			}
 
-		keys.sourceBinding, err = DomainBinding(existing.TenantID, existing.DomainID, existing.Generation)
-		if err != nil {
-			return statusError(StatusCorrupt, err)
-		}
-		keys.targetBinding, err = DomainBinding(existing.TenantID, existing.DomainID, existing.Generation+1)
-		if err != nil {
-			return statusError(StatusCorrupt, err)
-		}
-		keys.current, err = l.manager.OpenDomainKEK(
-			ctx, WrapperRef{Kind: existing.WrapperKind, ID: existing.WrapperID},
-			existing.WrappedDomainKEK, keys.sourceBinding,
-		)
-		if err != nil {
-			return classifyDomainOpenError(err)
-		}
-		domain = existing
-		if resuming {
-			keys.next, err = l.manager.OpenDomainKEK(
-				ctx, WrapperRef{Kind: existing.NextWrapperKind, ID: existing.NextWrapperID},
-				existing.NextWrappedDomainKEK, keys.targetBinding,
+			keys.sourceBinding, err = DomainBinding(existing.TenantID, existing.DomainID, existing.Generation)
+			if err != nil {
+				return statusError(StatusCorrupt, err)
+			}
+			keys.targetBinding, err = DomainBinding(existing.TenantID, existing.DomainID, existing.Generation+1)
+			if err != nil {
+				return statusError(StatusCorrupt, err)
+			}
+			keys.current, err = l.manager.OpenDomainKEK(
+				ctx, WrapperRef{Kind: existing.WrapperKind, ID: existing.WrapperID},
+				existing.WrappedDomainKEK, keys.sourceBinding,
 			)
 			if err != nil {
 				return classifyDomainOpenError(err)
 			}
+			domain = existing
+			if resuming {
+				keys.next, err = l.manager.OpenDomainKEK(
+					ctx, WrapperRef{Kind: existing.NextWrapperKind, ID: existing.NextWrapperID},
+					existing.NextWrappedDomainKEK, keys.targetBinding,
+				)
+				if err != nil {
+					return classifyDomainOpenError(err)
+				}
+				domain.OperationStatus = store.TenantKeyOperationRunning
+				domain.Retryable = true
+				domain.LastErrorCode, domain.LastError = "", ""
+				return l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainRotationProgressed, domain)
+			}
+
+			target := ref
+			if target == (WrapperRef{}) {
+				target = WrapperRef{Kind: existing.WrapperKind, ID: existing.WrapperID}
+			}
+			created, wrapped, err := l.manager.CreateDomainKEK(ctx, target, keys.targetBinding)
+			if err != nil {
+				return classifyDomainOpenError(err)
+			}
+			keys.next = created
+			operationID := uuid.NewString()
+			domain.NextGeneration = existing.Generation + 1
+			domain.NextWrapperKind, domain.NextWrapperID = target.Kind, target.ID
+			domain.NextWrappedDomainKEK = wrapped
+			domain.State = store.TenantKeyDomainStateRotating
+			domain.OperationID = &operationID
+			domain.OperationKind = store.TenantKeyOperationRotate
 			domain.OperationStatus = store.TenantKeyOperationRunning
+			domain.MigrationStage = "created"
+			domain.ProgressCompleted = 0
+			domain.ProgressTotal = int64(len(store.TenantKeyDomainCiphertextMigrationStages()) + 1)
+			domain.ProgressCursor = ""
 			domain.Retryable = true
 			domain.LastErrorCode, domain.LastError = "", ""
-			return l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainRotationProgressed, domain)
-		}
-
-		target := ref
-		if target == (WrapperRef{}) {
-			target = WrapperRef{Kind: existing.WrapperKind, ID: existing.WrapperID}
-		}
-		created, wrapped, err := l.manager.CreateDomainKEK(ctx, target, keys.targetBinding)
-		if err != nil {
-			return classifyDomainOpenError(err)
-		}
-		keys.next = created
-		operationID := uuid.NewString()
-		domain.NextGeneration = existing.Generation + 1
-		domain.NextWrapperKind, domain.NextWrapperID = target.Kind, target.ID
-		domain.NextWrappedDomainKEK = wrapped
-		domain.State = store.TenantKeyDomainStateRotating
-		domain.OperationID = &operationID
-		domain.OperationKind = store.TenantKeyOperationRotate
-		domain.OperationStatus = store.TenantKeyOperationRunning
-		domain.MigrationStage = "created"
-		domain.ProgressCompleted = 0
-		domain.ProgressTotal = int64(len(store.TenantKeyDomainCiphertextMigrationStages()) + 1)
-		domain.ProgressCursor = ""
-		domain.Retryable = true
-		domain.LastErrorCode, domain.LastError = "", ""
-		domain.LastTransitionEvidenceRefs = []string{
-			"tenant-domain://current-generation-kek-authenticated",
-			"tenant-domain://next-generation-kek-created",
-		}
-		return l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainRotationStarted, domain)
+			domain.LastTransitionEvidenceRefs = []string{
+				"tenant-domain://current-generation-kek-authenticated",
+				"tenant-domain://next-generation-kek-created",
+			}
+			return l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainRotationStarted, domain)
+		})
 	})
 	if err != nil {
 		keys.destroy()
@@ -266,5 +340,5 @@ func (l *Lifecycle) failRotation(
 	if err := l.appendSnapshot(ctx, domain.TenantID, projections.EventTenantKeyDomainRotationFailed, domain); err != nil {
 		return errors.Join(cause, err)
 	}
-	return cause
+	return store.RestoreActivityTerminal(cause)
 }

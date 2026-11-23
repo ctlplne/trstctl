@@ -16,11 +16,49 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // emptyEnv is a getenv that resolves every variable to "" (no overrides), so the
 // binary falls back to its built-in single-node defaults.
 func emptyEnv(string) string { return "" }
+
+// CR-045: journal integrity key creation is a deliberate local setup action.
+// Repeating it must preserve the key used to authenticate pending ingress.
+func TestRunIngressJournalKeyProvisionIsExplicitAndOneUseCR045(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "ingress-journal-v1.key")
+	env := envFunc(map[string]string{"TRSTCTL_SECRETS_KEK_FILE": filepath.Join(dir, "credential-kek.bin")})
+	if _, err := os.Stat(keyPath); !os.IsNotExist(err) {
+		t.Fatalf("journal key existed before explicit provisioning: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"journal-key", "provision"}, env, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatal("provisioning printed key material to stdout")
+	}
+	// #nosec G304 -- the path is constructed from this test's private temporary directory
+	first, err := os.ReadFile(keyPath)
+	if err != nil || len(first) != 32 {
+		t.Fatalf("journal key was not created at the configured path: %v", err)
+	}
+	defer secret.Wipe(first)
+	info, err := os.Stat(keyPath)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("journal key is not owner-only: %v", err)
+	}
+	if err := run(t.Context(), []string{"journal-key", "provision"}, env, io.Discard, io.Discard); err == nil {
+		t.Fatal("provisioning overwrote an existing journal key")
+	}
+	// #nosec G304 -- read back the same test-owned key path to prove no overwrite occurred
+	again, err := os.ReadFile(keyPath)
+	defer secret.Wipe(again)
+	if err != nil || !bytes.Equal(first, again) {
+		t.Fatalf("repeated provisioning changed the journal key: %v", err)
+	}
+}
 
 // envFunc builds a getenv backed by a map, for exercising configuration.
 func envFunc(m map[string]string) func(string) string {

@@ -472,37 +472,39 @@ func (a *API) appendAndProjectApplicationSecretMutation(
 		canonical        events.Event
 		canonicalPayload projections.ApplicationSecretMutation
 	)
-	err := a.secrets.be.Store.WithApplicationSecretMutationPrivacyBarrier(ctx, tenantID, func(barrierCtx context.Context) error {
-		// This argument may have been loaded before a privacy generation cutover
-		// and then blocked on the history-operation lock. Reload only after the
-		// shared barrier is held. The durable row is now either unchanged, deleted,
-		// or atomically rewritten with its exact approval requester.
-		latest, err := a.secrets.be.Store.GetApplicationSecretMutationFence(barrierCtx, tenantID, fence.Name)
-		if err != nil {
+	err := a.secrets.be.Store.WithGlobalKeyStateAdmission(ctx, store.KeyStateShared, func(admitted context.Context) error {
+		return a.secrets.be.Store.WithApplicationSecretMutationPrivacyBarrier(admitted, tenantID, func(barrierCtx context.Context) error {
+			// This argument may have been loaded before a privacy generation cutover
+			// and then blocked on the history-operation lock. Reload only after the
+			// shared barrier is held. The durable row is now either unchanged, deleted,
+			// or atomically rewritten with its exact approval requester.
+			latest, err := a.secrets.be.Store.GetApplicationSecretMutationFence(barrierCtx, tenantID, fence.Name)
+			if err != nil {
+				return err
+			}
+			if latest.EventID != fence.EventID || latest.Operation != fence.Operation ||
+				latest.RequestBinding != fence.RequestBinding {
+				return fmt.Errorf("%w: application-secret command changed across privacy barrier", store.ErrIdempotencyConflict)
+			}
+			latestPayload, err := validateApplicationSecretMutationFence(
+				tenantID, latest.Name, latest.Operation, latest.EventID, latest.RequestBinding, latest)
+			if err != nil {
+				return err
+			}
+			if latestPayload.Name != payload.Name || latestPayload.Action != payload.Action ||
+				latestPayload.TenantEpoch != payload.TenantEpoch ||
+				!crypto.ConstantTimeEqual([]byte(latestPayload.RequestBinding), []byte(payload.RequestBinding)) {
+				return fmt.Errorf("%w: application-secret payload changed across privacy barrier", store.ErrIdempotencyConflict)
+			}
+			approval, err := a.secrets.be.Store.ApplicationSecretMutationFenceApprovalUse(barrierCtx, tenantID, latest)
+			if err != nil {
+				return err
+			}
+			latestPayload.Approval = approval
+			canonical, canonicalPayload, err = a.appendAndProjectApplicationSecretMutationUnbarriered(
+				barrierCtx, tenantID, latest, latestPayload, recoverExisting)
 			return err
-		}
-		if latest.EventID != fence.EventID || latest.Operation != fence.Operation ||
-			latest.RequestBinding != fence.RequestBinding {
-			return fmt.Errorf("%w: application-secret command changed across privacy barrier", store.ErrIdempotencyConflict)
-		}
-		latestPayload, err := validateApplicationSecretMutationFence(
-			tenantID, latest.Name, latest.Operation, latest.EventID, latest.RequestBinding, latest)
-		if err != nil {
-			return err
-		}
-		if latestPayload.Name != payload.Name || latestPayload.Action != payload.Action ||
-			latestPayload.TenantEpoch != payload.TenantEpoch ||
-			!crypto.ConstantTimeEqual([]byte(latestPayload.RequestBinding), []byte(payload.RequestBinding)) {
-			return fmt.Errorf("%w: application-secret payload changed across privacy barrier", store.ErrIdempotencyConflict)
-		}
-		approval, err := a.secrets.be.Store.ApplicationSecretMutationFenceApprovalUse(barrierCtx, tenantID, latest)
-		if err != nil {
-			return err
-		}
-		latestPayload.Approval = approval
-		canonical, canonicalPayload, err = a.appendAndProjectApplicationSecretMutationUnbarriered(
-			barrierCtx, tenantID, latest, latestPayload, recoverExisting)
-		return err
+		})
 	})
 	return canonical, canonicalPayload, err
 }
@@ -542,26 +544,39 @@ func (a *API) appendAndProjectApplicationSecretMutationUnbarriered(
 	if err != nil {
 		return events.Event{}, projections.ApplicationSecretMutation{}, err
 	}
-	projector := projections.New(a.secrets.be.Store)
-	err = a.secrets.be.Store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		// A finalized old-lifecycle command can be retained or arrive after the
-		// tenant UUID is registered again. Check under this mutation transaction;
-		// the store takes a row lock so offboard cannot interleave with projection.
-		if err := a.secrets.be.Store.ValidateApplicationSecretTenantEpochTx(
-			ctx, tx, tenantID, canonicalPayload.TenantEpoch); err != nil {
-			return err
-		}
-		if payload.Approval != nil {
-			_, validateErr := a.secrets.be.Store.ValidateOperationApprovalUseTx(ctx, tx, tenantID, *payload.Approval, fence.EventTime)
-			if errors.Is(validateErr, store.ErrApprovalConsumed) {
-				if err := a.secrets.be.Store.ConsumeOperationApprovalTx(ctx, tx, tenantID, *payload.Approval, fence.EventID, fence.EventTime); err != nil {
-					return err
-				}
-			} else if validateErr != nil {
-				return validateErr
+	options := []projections.Option{projections.WithCanonicalEventSource(a.secrets.be.EventLog)}
+	if a.secrets.be.TenantCrypto != nil {
+		options = append(options, projections.WithRewrapPairVerifier(
+			func(verifyCtx context.Context, tenantID string, before, after, aad []byte) (bool, error) {
+				return tenantseal.VerifyRewrapPair(verifyCtx, a.secrets.be.TenantCrypto, tenantID, before, after, aad)
+			}))
+	}
+	projector := projections.New(a.secrets.be.Store, options...)
+	err = a.secrets.be.EventLog.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		return a.secrets.be.Store.WithTenant(readCtx, tenantID, func(tx pgx.Tx) error {
+			owned, err := a.secrets.be.Store.BindKeyStateOwnerTx(readCtx, tx, tenantID, store.KeyStateShared)
+			if err != nil {
+				return err
 			}
-		}
-		return projector.ApplyTx(ctx, tx, canonical)
+			// A finalized old-lifecycle command can be retained or arrive after the
+			// tenant UUID is registered again. Check under this mutation transaction;
+			// the store takes a row lock so offboard cannot interleave with projection.
+			if err := a.secrets.be.Store.ValidateApplicationSecretTenantEpochTx(
+				owned, tx, tenantID, canonicalPayload.TenantEpoch); err != nil {
+				return err
+			}
+			if payload.Approval != nil {
+				_, validateErr := a.secrets.be.Store.ValidateOperationApprovalUseTx(owned, tx, tenantID, *payload.Approval, fence.EventTime)
+				if errors.Is(validateErr, store.ErrApprovalConsumed) {
+					if err := a.secrets.be.Store.ConsumeOperationApprovalTx(owned, tx, tenantID, *payload.Approval, fence.EventID, fence.EventTime); err != nil {
+						return err
+					}
+				} else if validateErr != nil {
+					return validateErr
+				}
+			}
+			return projector.ApplyTx(owned, tx, canonical)
+		})
 	})
 	if err != nil {
 		return events.Event{}, projections.ApplicationSecretMutation{}, err

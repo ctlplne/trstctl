@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
@@ -263,13 +264,28 @@ func TestStoreExposesNoDirectApplicationSecretMutators(t *testing.T) {
 	}
 }
 
+func sealedApplicationSecretApprovalFixture(t *testing.T, name, value string) []byte {
+	t.Helper()
+	key, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x77}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	container, err := seal.Seal(key, []byte(value), []byte(tenantA+"/secret-store/"+name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return container
+}
+
 func TestApplicationSecretApprovalConsumeMutationAndReplayAreOneTransaction(t *testing.T) {
 	s := newOperationApprovalStore(t)
 	ctx := context.Background()
-	seedApplicationSecretFixture(t, s, "payments/db", []byte("sealed-v1"))
+	sealedV1 := sealedApplicationSecretApprovalFixture(t, "payments/db", "value-v1")
+	seedApplicationSecretFixture(t, s, "payments/db", sealedV1)
 	payload, request := approveApplicationSecretMutation(t, s, projections.ApplicationSecretMutation{
 		Action: "rotate", Name: "payments/db", ExpectedVersion: 1, ResultVersion: 2,
-		Sealed: []byte("sealed-v2"), IdempotencyKeyDigest: strings.Repeat("a", 64),
+		Sealed: sealedApplicationSecretApprovalFixture(t, "payments/db", "value-v2"), IdempotencyKeyDigest: strings.Repeat("a", 64),
 		CommandEvidence: strings.Repeat("b", 64), Surface: "native",
 	}, "77000000-0000-4000-8000-000000000301", "sha256:secret-rotate", "77000000-0000-4000-8000-000000000302")
 	event := applicationSecretEvent(t, "77000000-0000-4000-8000-000000000303",
@@ -287,7 +303,7 @@ func TestApplicationSecretApprovalConsumeMutationAndReplayAreOneTransaction(t *t
 		t.Fatal("conflicting history unexpectedly committed approved secret mutation")
 	}
 	current, err := s.GetSecret(ctx, tenantA, payload.Name)
-	if err != nil || current.Version != 1 || !bytes.Equal(current.Sealed, []byte("sealed-v1")) {
+	if err != nil || current.Version != 1 || !bytes.Equal(current.Sealed, sealedV1) {
 		t.Fatalf("failed projection partially mutated secret: %+v err=%v", current, err)
 	}
 	approval, err := s.GetOperationApproval(ctx, tenantA, request.ID)
@@ -342,7 +358,7 @@ func TestApplicationSecretApprovalConsumeMutationAndReplayAreOneTransaction(t *t
 func TestApplicationSecretRecoveryBindsExactSourceAndRejectsTargetDrift(t *testing.T) {
 	s := newOperationApprovalStore(t)
 	ctx := context.Background()
-	seedApplicationSecretFixture(t, s, "recoverable", []byte("sealed-source-v1"))
+	seedApplicationSecretFixture(t, s, "recoverable", sealedApplicationSecretApprovalFixture(t, "recoverable", "source-v1"))
 	source, err := s.GetSecretVersion(ctx, tenantA, "recoverable", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -385,7 +401,7 @@ func TestApplicationSecretRecoveryBindsExactSourceAndRejectsTargetDrift(t *testi
 	seedApplicationSecretFixture(t, s, "drifted", []byte("sealed-drift-v1"))
 	drift, driftRequest := approveApplicationSecretMutation(t, s, projections.ApplicationSecretMutation{
 		Action: "rotate", Name: "drifted", ExpectedVersion: 1, ResultVersion: 2,
-		Sealed: []byte("approved-but-stale"), IdempotencyKeyDigest: strings.Repeat("1", 64),
+		Sealed: sealedApplicationSecretApprovalFixture(t, "drifted", "approved-but-stale"), IdempotencyKeyDigest: strings.Repeat("1", 64),
 		CommandEvidence: strings.Repeat("2", 64), Surface: "native",
 	}, "77000000-0000-4000-8000-000000000317", "sha256:secret-target-drift", "77000000-0000-4000-8000-000000000318")
 	rotateApplicationSecretFixture(t, s, "drifted", []byte("concurrent-v2"))

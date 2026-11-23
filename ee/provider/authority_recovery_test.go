@@ -8,6 +8,7 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -181,7 +182,7 @@ func TestProviderAuthorityFailedRecoveryPreservesCurrentState(t *testing.T) {
 	if err := sink.projection.Apply(t.Context(), changed); !errors.Is(err, ErrAuthorityRebuildRequired) {
 		t.Fatalf("changed envelope reused a completion receipt: %v", err)
 	}
-	shortLog, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	shortLog, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

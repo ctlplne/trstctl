@@ -45,10 +45,10 @@ func TestBreakglassRotationManifestClosesProductionSignerAndOpenSSLRuntime(t *te
 	if !slices.Equal(entry.Dependencies, wantDependencies) {
 		t.Fatalf("dependencies=%v, want exact break-glass, CA hierarchy, and crypto-boundary packages %v", entry.Dependencies, wantDependencies)
 	}
-	if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDeps" ||
+	if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDepsWithCustody" ||
 		entry.Assembly.Binding != "returned-field" || entry.Assembly.Field != "BreakglassIssuer" ||
 		!slices.Equal(entry.Assembly.Calls, []string{"breakglassRotationFromConfig"}) {
-		t.Fatalf("assembly=%+v, want buildRunDeps returned BreakglassIssuer through breakglassRotationFromConfig", entry.Assembly)
+		t.Fatalf("assembly=%+v, want buildRunDepsWithCustody returned BreakglassIssuer through breakglassRotationFromConfig", entry.Assembly)
 	}
 	if entry.Runtime.Package != "./internal/server" || entry.Runtime.Test != "TestDODBreakglassRotationProductionAssembly" ||
 		entry.Runtime.File != "internal/server/dod_breakglass_rotation_runtime_test.go" ||

@@ -25,6 +25,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	xacme "golang.org/x/crypto/acme"
 	"google.golang.org/grpc"
@@ -95,7 +96,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	}
 
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}
@@ -174,6 +175,12 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	tsaArtifact, _ := dodEvalTimestamp(t, first.Client(), first.BaseURL(), "first-eval-timestamp")
 	artifacts["tsa"] = tsaArtifact
 	spiffeArtifact, _ := dodEvalFetchSPIFFE(t, cfg.Protocols.SPIFFE.SocketPath)
+	servedSPIFFEBundle, err := first.Server().protocols.spiffe.wl.FetchX509Bundle(ctx)
+	if err != nil || len(servedSPIFFEBundle) != 1 ||
+		!bytes.Equal(spiffeArtifact["bundle_der"].([]byte), servedSPIFFEBundle[0]) ||
+		bytes.Equal(servedSPIFFEBundle[0], caDER) {
+		t.Fatalf("SPIFFE Workload API did not deliver this tenant's distinct served CA: %v", err)
+	}
 	artifacts["spiffe"] = spiffeArtifact
 
 	firstSCEPCA := dodEvalGetBody(t, first.Client(), first.BaseURL()+"/scep?operation=GetCACert", http.StatusOK)
@@ -188,7 +195,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen PostgreSQL after server shutdown: %v", err)
 	}
-	restartedLog, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
+	restartedLog, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
 	if err != nil {
 		restartedStore.Close()
 		t.Fatalf("reopen event log after server shutdown: %v", err)

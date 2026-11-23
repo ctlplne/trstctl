@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/editionseam"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/observ"
 )
 
@@ -114,7 +114,7 @@ func TestServedAuditAnchoringStatus(t *testing.T) {
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

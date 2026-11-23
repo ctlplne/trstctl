@@ -16,7 +16,7 @@ import (
 // prefix. This is the request-path bound that a full replay could not meet.
 func TestEventLookupWarmsDurableIndexThenUsesBoundedReads(t *testing.T) {
 	ctx := context.Background()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

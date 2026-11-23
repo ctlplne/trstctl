@@ -69,6 +69,9 @@ func (plan *ErasurePlan) WithSource(ctx context.Context, event events.Event, vis
 		if tenant.String() != scope.tenant || event.Sequence < scope.first || event.Sequence > scope.last {
 			continue
 		}
+		if event.Protection != nil && event.Protection.KeyID != scope.ref.ID {
+			return ErrSource
+		}
 		return plan.custody.WithCustodyFence(ctx, scope.ref, func(fenced context.Context) error {
 			receipt, erased, err := plan.custody.DestructionReceipt(fenced, scope.ref)
 			if err != nil {
@@ -88,11 +91,12 @@ func (plan *ErasurePlan) WithSource(ctx context.Context, event events.Event, vis
 // recheck absence under a single custody fence; locks do not accumulate across
 // tenants. Missing material without completed signed evidence always refuses.
 func (planner ErasurePlanner) WithPlan(ctx context.Context, visit func(context.Context, *ErasurePlan) error) error {
-	if planner.Policy.Log == nil || visit == nil {
+	source := planner.Policy.sourceReader()
+	if source == nil || visit == nil {
 		return ErrSource
 	}
-	return planner.Policy.Log.WithHistoryRead(ctx, func(read context.Context) error {
-		head, err := planner.Policy.Log.LastSequence(read)
+	return source.WithHistoryRead(ctx, func(read context.Context) error {
+		head, err := source.LastSequence(read)
 		if err != nil {
 			return err
 		}
@@ -104,7 +108,7 @@ func (planner ErasurePlanner) WithPlan(ctx context.Context, visit func(context.C
 		if planner.Custody != nil {
 			types = append(types, eventRegistered)
 		}
-		if err := planner.Policy.Log.ReplayTypesThrough(read, 1, head, types, func(event events.Event) error {
+		if err := source.ReplayTypesThrough(read, 1, head, types, func(event events.Event) error {
 			tenant, err := uuid.Parse(event.TenantID)
 			if err != nil || tenant == uuid.Nil {
 				return ErrSource

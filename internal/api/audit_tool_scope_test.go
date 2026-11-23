@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
@@ -32,7 +33,7 @@ func (s *auditScopeCheckpoint) LatestAuditCheckpoint(_ context.Context, tenant s
 func TestAuditHTTPToolScopeAndRetainedExportChain(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	const other = "22222222-2222-2222-2222-222222222222"
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

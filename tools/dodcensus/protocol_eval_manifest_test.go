@@ -49,10 +49,10 @@ func TestEvalProtocolProfileManifestClosesProductionAssemblyAndInteropRuntime(t 
 	if !slices.Equal(entry.Dependencies, wantDependencies) {
 		t.Fatalf("dependencies=%v, want exact seven served protocol implementations %v", entry.Dependencies, wantDependencies)
 	}
-	if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDeps" ||
+	if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDepsWithCustody" ||
 		entry.Assembly.Binding != "returned-field" || entry.Assembly.Field != "Protocols" ||
 		!slices.Equal(entry.Assembly.Calls, []string{"evalProtocolProfileFromConfig"}) {
-		t.Fatalf("assembly=%+v, want buildRunDeps returned Protocols through evalProtocolProfileFromConfig", entry.Assembly)
+		t.Fatalf("assembly=%+v, want buildRunDepsWithCustody returned Protocols through evalProtocolProfileFromConfig", entry.Assembly)
 	}
 	if entry.Runtime.Package != "./internal/server" || entry.Runtime.Test != "TestDODEvalProtocolProfileProductionAssembly" ||
 		entry.Runtime.File != "internal/server/dod_eval_protocol_profile_runtime_test.go" ||

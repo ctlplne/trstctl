@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -43,7 +44,16 @@ func eventProtectionErasedWarmRecovery(t *testing.T, mode string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(signer.Close)
-	log, runtime, err := openConfiguredEventSource(t.Context(), cfg, st, key, true, nil)
+	deployment, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(deployment.Destroy)
+	core, err := newRunTenantCustodyCore(cfg, st, deployment, signer.signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, runtime, err := openConfiguredEventSourceWithCustody(t.Context(), cfg, st, key, true, nil, core)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +130,12 @@ func eventProtectionErasedWarmRecovery(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncWire, err := json.Marshal(projections.SecretSyncQueued{ID: "erased-rebuild-sync", SecretName: "erased/database", SecretVersion: 1, Target: "ci", RemoteKey: "TOKEN", ValueDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", IdempotencyKey: "erased-rebuild-sync-command", Sealed: []byte("sealed fixture")})
+	syncSealed, err := sealTenantValue(t.Context(), core.access, deployment, tenant,
+		[]byte("private preflight value"), secretSyncAAD(tenant, "ci", "erased-rebuild-sync", "TOKEN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	syncWire, err := json.Marshal(projections.SecretSyncQueued{ID: "erased-rebuild-sync", SecretName: "erased/database", SecretVersion: 1, Target: "ci", RemoteKey: "TOKEN", ValueDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", IdempotencyKey: "erased-rebuild-sync-command", Sealed: syncSealed})
 	if err != nil {
 		t.Fatal(err)
 	}

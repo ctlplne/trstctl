@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
@@ -28,7 +29,7 @@ func TestServedGuardDenialsRetainAuthenticatedTenantEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := seedServedAPIToken(t, ctx, st, tenantID, "denied-reader", []string{string(authz.AccessRead)})
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}

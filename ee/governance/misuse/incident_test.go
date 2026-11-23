@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/governance/misuse"
 	"trstctl.com/trstctl/internal/config"
@@ -23,7 +24,7 @@ import (
 func TestMisuseFindingOpensAnIncidentM2L3(t *testing.T) {
 	ctx := events.ContextWithActor(context.Background(), events.Actor{Subject: "responder"})
 	st := newMisuseTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

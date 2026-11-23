@@ -3,6 +3,7 @@
 package store_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -36,8 +37,8 @@ func TestEventKeyDestructionIntentCommitsWithEraseAndSurvivesRetry(t *testing.T)
 		OffboardedAt: at, NotBefore: at.Add(time.Hour),
 	}
 	rollback := errors.New("force SQL rollback after retained offboard")
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		if _, err := s.OffboardTenantForEventKeyDestructionTx(ctx, tx, request); err != nil {
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+		if _, err := s.OffboardTenantForEventKeyDestructionTx(owned, tx, request); err != nil {
 			return err
 		}
 		return rollback
@@ -48,8 +49,8 @@ func TestEventKeyDestructionIntentCommitsWithEraseAndSurvivesRetry(t *testing.T)
 		t.Fatalf("rollback leaked erase or key intent: got %d rows, want %d", got, before)
 	}
 	for i := 0; i < 2; i++ {
-		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-			att, err := s.OffboardTenantForEventKeyDestructionTx(ctx, tx, request)
+		if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+			att, err := s.OffboardTenantForEventKeyDestructionTx(owned, tx, request)
 			if err != nil {
 				return err
 			}
@@ -79,14 +80,14 @@ func TestEventKeyDestructionIntentCommitsWithEraseAndSurvivesRetry(t *testing.T)
 	}
 	changed := request
 	changed.NotBefore = changed.NotBefore.Add(time.Second)
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		_, err := s.OffboardTenantForEventKeyDestructionTx(ctx, tx, changed)
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+		_, err := s.OffboardTenantForEventKeyDestructionTx(owned, tx, changed)
 		return err
 	}); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("retry replaced the retained deadline: %v", err)
 	}
-	if err := s.WithTenant(ctx, tenantB, func(tx pgx.Tx) error {
-		_, err := s.OffboardTenantForEventKeyDestructionTx(ctx, tx, request)
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantB, func(owned context.Context, tx pgx.Tx) error {
+		_, err := s.OffboardTenantForEventKeyDestructionTx(owned, tx, request)
 		return err
 	}); err == nil {
 		t.Fatal("foreign transaction could authorize another tenant's erase")
@@ -99,8 +100,8 @@ func TestEventKeyDestructionIntentCommitsWithEraseAndSurvivesRetry(t *testing.T)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		_, err := s.OffboardTenantForEventKeyDestructionTx(ctx, tx, request)
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+		_, err := s.OffboardTenantForEventKeyDestructionTx(owned, tx, request)
 		return err
 	}); err != nil {
 		t.Fatalf("pending retry tried to erase the live invocation instead of retaining it: %v", err)
@@ -120,8 +121,8 @@ func TestEventKeyDestructionIntentCommitsWithEraseAndSurvivesRetry(t *testing.T)
 	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "unexpected residue"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		_, err := s.OffboardTenantForEventKeyDestructionTx(ctx, tx, request)
+	if err := withKeyStateOwnerTenantTx(ctx, s, tenantA, func(owned context.Context, tx pgx.Tx) error {
+		_, err := s.OffboardTenantForEventKeyDestructionTx(owned, tx, request)
 		return err
 	}); err == nil {
 		t.Fatal("pending retry silently erased a reintroduced registration")

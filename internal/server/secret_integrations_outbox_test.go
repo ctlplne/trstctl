@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -239,7 +240,7 @@ func TestDurableSecretSyncBindsCallerAndSkipsDeliveredRedelivery(t *testing.T) {
 	const tenant = "11111111-1111-4111-8111-111111111124"
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +348,7 @@ func newAUD109SecretSyncFixture(t *testing.T, tenantID string) (*store.Store, *e
 	t.Helper()
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +534,7 @@ func TestSecretSyncSameNamedTargetsAreTenantCapacityIsolatedAUD110(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats"),
 	})
 	if err != nil {

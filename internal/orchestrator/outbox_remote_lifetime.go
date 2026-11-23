@@ -21,6 +21,9 @@ import (
 func (o *Outbox) beginRemoteDelivery(ctx context.Context, claim claimedOutboxEntry, attemptID string) error {
 	var current bool
 	err := o.store.WithTenant(ctx, claim.msg.TenantID, func(tx pgx.Tx) error {
+		if err := o.store.RequireRestoreEffectStartTx(ctx, tx, claim.msg.TenantID); err != nil {
+			return err
+		}
 		if err := o.store.TryTenantServiceAdmissionTx(ctx, tx, claim.msg.TenantID); err != nil {
 			return err
 		}

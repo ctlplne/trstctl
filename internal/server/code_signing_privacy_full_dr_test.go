@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -25,7 +26,7 @@ import (
 
 func openCodeSigningPrivacyFullDRLog(t *testing.T, st *store.Store) *events.Log {
 	t.Helper()
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		context.Background(),
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)),

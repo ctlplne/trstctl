@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -20,11 +21,15 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	authpkg "trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	secretvault "trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -45,7 +50,7 @@ const (
 func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
-	st := newServerTestStore(t)
+	st := newServerRewrapStore(t)
 	for _, tenant := range []store.Tenant{
 		{TenantID: deploymentKEKOperatorTenant, Name: "deployment-kek-operator", EventSeq: 1},
 		{TenantID: deploymentKEKLegacyTenant, Name: "deployment-kek-legacy", EventSeq: 1},
@@ -78,7 +83,9 @@ func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := openHistoryAwareEventLog(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(root, "nats")}, st, auditKey)
+	var ingressAccess tenantseal.Access
+	log, err := openHistoryAwareEventLog(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(root, "nats")}, st, auditKey,
+		restoreEventIngressOptionWithCustody(st, func() tenantseal.Access { return ingressAccess }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,6 +121,7 @@ func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T
 		_ = log.Close()
 		t.Fatal(err)
 	}
+	ingressAccess = deps.TenantCrypto
 	srv, err := Build(ctx, deps)
 	if err != nil {
 		_ = log.Close()
@@ -136,6 +144,26 @@ func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T
 		[]byte(`{"name":"payments","kind":"aead"}`)); rec.Code != http.StatusCreated {
 		t.Fatalf("create transit key = %d body=%s", rec.Code, rec.Body.String())
 	}
+	const staleJobID = "11111111-1111-4111-8111-111111111806"
+	staleValue := []byte("stale-deployment-candidate")
+	staleSealed, err := sealTenantValue(ctx, deps.TenantCrypto, deps.KEK,
+		deploymentKEKLegacyTenant, staleValue,
+		secretSyncAAD(deploymentKEKLegacyTenant, "durable-target", staleJobID, "STALE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleEpoch, err := st.ApplicationSecretTenantEpoch(ctx, deploymentKEKLegacyTenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stalePayload, err := json.Marshal(projections.SecretSyncQueued{
+		TenantEpoch: staleEpoch, ID: staleJobID, SecretName: "db/password", SecretVersion: 1,
+		Target: "durable-target", RemoteKey: "STALE", ValueDigest: crypto.SHA256Hex(staleValue),
+		IdempotencyKey: "stale-deployment-key", RequestBinding: "stale-deployment-request", Sealed: staleSealed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	status := servedDeploymentKEKStatus(t, srv, legacy)
 	if status.Generation != 0 || status.Custody != "key_file" || status.CanRotate || status.RotationAuthority != "another_tenant" {
@@ -153,9 +181,59 @@ func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T
 		[]byte(`{"wrapper_kind":"local_file","wrapper_id":"not-configured"}`)); rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("an unconfigured wrapper = %d body=%s", rec.Code, rec.Body.String())
 	}
+	marker := store.RestoreMarker{
+		OperationID:    "77777777-7777-4777-8777-777777777701",
+		ArtifactSHA256: strings.Repeat("b", 64), EventCut: 1, DeploymentID: "deployment-rotation-restore-order",
+	}
+	if err := st.BeginFullRestore(ctx, marker); err != nil {
+		rows, queryErr := st.SystemPool().Query(ctx, `SELECT tenant_id::text,activity_kind,lane,count(*)
+			FROM trstctl_recovery.restore_activity_tokens WHERE phase='started'
+			GROUP BY tenant_id,activity_kind,lane ORDER BY tenant_id,activity_kind,lane`)
+		if queryErr == nil {
+			for rows.Next() {
+				var tenantID, kind, lane string
+				var count int
+				if scanErr := rows.Scan(&tenantID, &kind, &lane, &count); scanErr == nil {
+					t.Logf("unresolved activity before restore marker: tenant=%s kind=%s lane=%s count=%d", tenantID, kind, lane, count)
+				}
+			}
+			rows.Close()
+		}
+		t.Fatalf("arm restore marker before deployment rotation: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+			store.RestoreControlTenantID, marker.OperationID)
+	})
+	if _, err := deps.DeploymentKEK.Begin(ctx, deploymentKEKOperatorTenant,
+		tenantseal.WrapperRef{Kind: tenantseal.WrapperKindLocalFile, ID: "deploy-wrap-1"}); !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Fatalf("deployment rotation under restore marker = %v, want preflight refusal", err)
+	}
+	if gate, found, err := st.GetTenantApplicationSecretRewrapGate(ctx, deploymentKEKLegacyTenant); err != nil || found && gate.InProgress {
+		t.Fatalf("deployment rotation armed a tenant gate behind restore marker: gate=%+v found=%t err=%v", gate, found, err)
+	}
+	if tag, err := st.SystemPool().Exec(ctx,
+		`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+		store.RestoreControlTenantID, marker.OperationID); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("clear exact test restore marker: rows=%d err=%v", tag.RowsAffected(), err)
+	}
 	started := servedTenantSealRequest(t, srv, operator, http.MethodPost, "/api/v1/platform/deployment-kek/rotate", "deployment-kek-rotate-1",
 		[]byte(`{"wrapper_kind":"local_file","wrapper_id":"deploy-wrap-1"}`))
 	if started.Code != http.StatusAccepted {
+		rows, queryErr := st.SystemPool().Query(ctx, `SELECT tenant_id::text,activity_kind,lane,count(*)
+			FROM trstctl_recovery.restore_activity_tokens WHERE phase='started'
+			GROUP BY tenant_id,activity_kind,lane ORDER BY tenant_id,activity_kind,lane`)
+		if queryErr == nil {
+			for rows.Next() {
+				var tenantID, kind, lane string
+				var count int
+				if scanErr := rows.Scan(&tenantID, &kind, &lane, &count); scanErr == nil {
+					t.Logf("unresolved restore activity: tenant=%s kind=%s lane=%s count=%d", tenantID, kind, lane, count)
+				}
+			}
+			rows.Close()
+		}
 		t.Fatalf("rotate = %d body=%s", started.Code, started.Body.String())
 	}
 	var begun api.DeploymentKEKStatus
@@ -166,6 +244,9 @@ func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T
 		begun.Rotation.NextGeneration != 1 || begun.Generation != 0 || !begun.CanRotate {
 		t.Fatalf("rotation started = %+v", begun)
 	}
+	if err := st.BeginFullRestore(ctx, marker); !errors.Is(err, store.ErrRestoreActivityUnresolved) {
+		t.Fatalf("restore between deployment rewrap steps = %v, want armed-gate refusal", err)
+	}
 	if replay := servedTenantSealRequest(t, srv, operator, http.MethodPost, "/api/v1/platform/deployment-kek/rotate", "deployment-kek-rotate-1",
 		[]byte(`{"wrapper_kind":"local_file","wrapper_id":"deploy-wrap-1"}`)); replay.Code != http.StatusAccepted || !bytes.Equal(replay.Body.Bytes(), started.Body.Bytes()) {
 		t.Fatalf("replayed rotate = %d body=%s", replay.Code, replay.Body.String())
@@ -174,17 +255,23 @@ func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T
 		[]byte(`{"wrapper_kind":"local_file","wrapper_id":"deploy-wrap-2"}`)); rec.Code != http.StatusConflict {
 		t.Fatalf("a second rotation to another wrapper while one runs = %d body=%s", rec.Code, rec.Body.String())
 	}
+	var unresolvedBegins int
+	if err := st.SystemPool().QueryRow(ctx, `SELECT count(*) FROM trstctl_recovery.restore_activity_tokens
+		WHERE tenant_id=$1 AND activity_kind='maintenance' AND lane='deployment-kek-begin' AND phase='started'`,
+		store.RestoreControlTenantID).Scan(&unresolvedBegins); err != nil || unresolvedBegins != 0 {
+		t.Fatalf("conflicting no-effect rotation left %d unresolved begin tokens: %v", unresolvedBegins, err)
+	}
 
-	// New data written while the rotation runs is already under generation 1.
+	// A command that arrives during the rewrap must retry after the gate
+	// closes; it cannot publish a mutation against a moving key domain.
 	if rec := servedTenantSealRequest(t, srv, legacy, http.MethodPost, "/api/v1/secrets/store", "deployment-kek-during",
-		[]byte(`{"name":"db/during","value":"written-during-rotation"}`)); rec.Code != http.StatusCreated {
-		t.Fatalf("write during the rotation = %d body=%s", rec.Code, rec.Body.String())
+		[]byte(`{"name":"db/during","value":"written-during-rotation"}`)); rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") == "" || !strings.Contains(rec.Body.String(), "rewrap_in_progress") {
+		t.Fatalf("write during the rotation must be retryable = %d body=%s", rec.Code, rec.Body.String())
 	}
 	servedStepDeploymentKEK(t, deps, func(step int) {
-		// Every step serves reads of data under either generation.
+		// Every step serves reads of existing data under either generation.
 		for _, read := range []struct{ token, path, want string }{
 			{legacy, "/api/v1/secrets/store/db/password", "legacy-secret"},
-			{legacy, "/api/v1/secrets/store/db/during", "written-during-rotation"},
 			{operator, "/api/v1/secrets/store/db/password", "operator-secret"},
 		} {
 			if rec := servedTenantSealRequest(t, srv, read.token, http.MethodGet, read.path, "", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), read.want) {
@@ -192,6 +279,35 @@ func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T
 			}
 		}
 	})
+	if opened, err := openTenantValue(ctx, deps.TenantCrypto, deps.KEK,
+		deploymentKEKLegacyTenant, staleSealed,
+		secretSyncAAD(deploymentKEKLegacyTenant, "durable-target", staleJobID, "STALE")); err == nil {
+		secret.Wipe(opened)
+		t.Fatal("retired deployment wrapper still opens stale sealed candidate")
+	}
+	staleEventID := store.SecretSyncQueuedEventID(deploymentKEKLegacyTenant, staleJobID)
+	if _, err := log.Append(ctx, events.Event{ID: staleEventID, Type: projections.EventSecretSyncQueued,
+		TenantID: deploymentKEKLegacyTenant, SchemaVersion: projections.SecretSyncEventSchemaVersion,
+		Data: stalePayload}); err == nil {
+		t.Fatal("stale sealed secret-sync candidate appended after deployment rotation")
+	}
+	if _, found, err := log.EventByID(ctx, staleEventID); err != nil || found {
+		t.Fatalf("stale deployment candidate found=%t err=%v, want no NATS event", found, err)
+	}
+	var unresolvedIngress int
+	if err := st.SystemPool().QueryRow(ctx, `SELECT count(*)
+		FROM trstctl_recovery.restore_activity_tokens WHERE tenant_id=$1 AND activity_kind='ingress'
+		AND lane='event-append' AND event_id=$2 AND phase='started'`, deploymentKEKLegacyTenant, staleEventID).
+		Scan(&unresolvedIngress); err != nil || unresolvedIngress != 0 {
+		t.Fatalf("refused deployment candidate left %d unresolved ingress tokens: %v", unresolvedIngress, err)
+	}
+	if rec := servedTenantSealRequest(t, srv, legacy, http.MethodPost, "/api/v1/secrets/store", "deployment-kek-during",
+		[]byte(`{"name":"db/during","value":"written-during-rotation"}`)); rec.Code != http.StatusCreated {
+		t.Fatalf("write after rotation retry = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := servedTenantSealRequest(t, srv, legacy, http.MethodGet, "/api/v1/secrets/store/db/during", "", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "written-during-rotation") {
+		t.Fatalf("read after rotation retry = %d body=%s", rec.Code, rec.Body.String())
+	}
 
 	done := servedDeploymentKEKStatus(t, srv, operator)
 	if done.Generation != 1 || done.Custody != "local_file" || done.WrapperID != "deploy-wrap-1" || done.PreviousGeneration != 0 ||

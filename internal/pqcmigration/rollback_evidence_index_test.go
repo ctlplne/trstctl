@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -16,7 +17,7 @@ func TestRollbackEvidenceIndexColdRestartAndUnprojectedStart(t *testing.T) {
 	const tenant = "a1000000-0000-4000-8000-000000000001"
 	const otherTenant = "b2000000-0000-4000-8000-000000000002"
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(t.Context(), cfg)
+	log, err := eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +55,7 @@ func TestRollbackEvidenceIndexColdRestartAndUnprojectedStart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(t.Context(), cfg)
+	log, err = eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

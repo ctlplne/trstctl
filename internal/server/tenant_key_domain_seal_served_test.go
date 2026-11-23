@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/api"
 	authpkg "trstctl.com/trstctl/internal/auth"
@@ -35,7 +38,7 @@ import (
 // even though ordinary tenant-result decryption now fails closed.
 func TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal(t *testing.T) {
 	ctx := context.Background()
-	st := newServerTestStore(t)
+	st := newServerRewrapStore(t)
 	if err := st.UpsertTenant(ctx, store.Tenant{
 		TenantID: servedTestTenant, Name: "tenant-seal-served", EventSeq: 1,
 	}); err != nil {
@@ -58,11 +61,13 @@ func TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	var ingressAccess tenantseal.Access
 	log, err := openHistoryAwareEventLog(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
 		st,
 		auditKey,
+		restoreEventIngressOptionWithCustody(st, func() tenantseal.Access { return ingressAccess }),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +91,7 @@ func TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal(t *tes
 		_ = log.Close()
 		t.Fatal(err)
 	}
+	ingressAccess = deps.TenantCrypto
 	srv, err := Build(ctx, deps)
 	if err != nil {
 		_ = log.Close()
@@ -100,6 +106,71 @@ func TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal(t *tes
 	)
 	if migrate.Code != http.StatusOK {
 		t.Fatalf("migrate = %d body=%s", migrate.Code, migrate.Body.String())
+	}
+	marker := store.RestoreMarker{
+		OperationID:    "88888888-8888-4888-8888-888888888801",
+		ArtifactSHA256: strings.Repeat("c", 64), EventCut: 1, DeploymentID: "seal-restore-order",
+	}
+	if err := st.BeginFullRestore(ctx, marker); err != nil {
+		t.Fatalf("arm restore marker before seal: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+			store.RestoreControlTenantID, marker.OperationID)
+	})
+	ownerEntered, releaseOwner := make(chan struct{}), make(chan struct{})
+	defer func() {
+		select {
+		case <-releaseOwner:
+		default:
+			close(releaseOwner)
+		}
+	}()
+	ownerDone := make(chan error, 1)
+	go func() {
+		ownerDone <- st.WithFullRestoreOwner(ctx, marker, func(context.Context) error {
+			close(ownerEntered)
+			<-releaseOwner
+			return nil
+		})
+	}()
+	select {
+	case <-ownerEntered:
+	case err := <-ownerDone:
+		t.Fatalf("restore owner did not start: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("restore owner did not start in time")
+	}
+	requestCtx, cancelRequest := context.WithTimeout(ctx, 4*time.Second)
+	defer cancelRequest()
+	sealDone := make(chan error, 1)
+	go func() {
+		_, err := deps.TenantKeyDomains.RequestSeal(requestCtx, servedTestTenant, "seal-restore-order", "exact-request")
+		sealDone <- err
+	}()
+	select {
+	case err := <-sealDone:
+		t.Fatalf("seal crossed live restore owner: %v", err)
+	case <-time.After(250 * time.Millisecond):
+	}
+	keyCtx, cancelKey := context.WithTimeout(ctx, time.Second)
+	keyErr := st.WithGlobalKeyStateAdmission(keyCtx, store.KeyStateExclusive, func(context.Context) error { return nil })
+	cancelKey()
+	if keyErr != nil {
+		t.Fatalf("seal held key-state A while waiting for restore owner: %v", keyErr)
+	}
+	close(releaseOwner)
+	if err := <-ownerDone; err != nil {
+		t.Fatalf("release restore owner: %v", err)
+	}
+	if err := <-sealDone; !errors.Is(err, store.ErrRestoreInProgress) {
+		t.Fatalf("seal after marker = %v, want restore refusal", err)
+	}
+	if tag, err := st.SystemPool().Exec(ctx,
+		`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+		store.RestoreControlTenantID, marker.OperationID); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("clear exact test restore marker: rows=%d err=%v", tag.RowsAffected(), err)
 	}
 
 	first := servedTenantSealRequest(
@@ -116,6 +187,18 @@ func TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal(t *tes
 	if !receipt.Accepted || receipt.OperationID == "" || receipt.State != store.TenantKeyDomainStateSealQueued {
 		t.Fatalf("seal receipt = %+v", receipt)
 	}
+	t.Run("complete-restore-order", func(t *testing.T) {
+		servedAssertRestoreOwnerBeforeKeyState(t, st, func(checkCtx context.Context) error {
+			_, err := deps.TenantKeyDomains.CompleteSeal(checkCtx, servedTestTenant, receipt.OperationID)
+			return err
+		})
+	})
+	t.Run("fail-restore-order", func(t *testing.T) {
+		servedAssertRestoreOwnerBeforeKeyState(t, st, func(checkCtx context.Context) error {
+			_, err := deps.TenantKeyDomains.FailSeal(checkCtx, servedTestTenant, receipt.OperationID)
+			return err
+		})
+	})
 	queued, err := deps.TenantKeyDomains.Status(ctx, servedTestTenant)
 	if err != nil || queued.State != store.TenantKeyDomainStateSealQueued {
 		t.Fatalf("queued domain = %+v err=%v", queued, err)
@@ -134,6 +217,12 @@ func TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal(t *tes
 		sealed.OperationID == nil || *sealed.OperationID != receipt.OperationID {
 		t.Fatalf("sealed domain = %+v err=%v", sealed, err)
 	}
+	t.Run("unseal-restore-order", func(t *testing.T) {
+		servedAssertRestoreOwnerBeforeKeyState(t, st, func(checkCtx context.Context) error {
+			_, err := deps.TenantKeyDomains.Unseal(checkCtx, servedTestTenant)
+			return err
+		})
+	})
 
 	replay := servedTenantSealRequest(
 		t, srv, token, http.MethodPost,
@@ -149,6 +238,76 @@ func TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal(t *tes
 	)
 	if unseal.Code != http.StatusOK {
 		t.Fatalf("unseal = %d body=%s", unseal.Code, unseal.Body.String())
+	}
+}
+
+func servedAssertRestoreOwnerBeforeKeyState(t *testing.T, st *store.Store,
+	transition func(context.Context) error,
+) {
+	t.Helper()
+	ctx := context.Background()
+	marker := store.RestoreMarker{
+		OperationID: uuid.NewString(), ArtifactSHA256: strings.Repeat("e", 64),
+		EventCut: 1, DeploymentID: "tenant-transition-restore-order",
+	}
+	if err := st.BeginFullRestore(ctx, marker); err != nil {
+		t.Fatalf("arm restore marker: %v", err)
+	}
+	defer func() {
+		_, _ = st.SystemPool().Exec(context.Background(),
+			`DELETE FROM trstctl_recovery.restore_markers WHERE tenant_id=$1 AND operation_id=$2`,
+			store.RestoreControlTenantID, marker.OperationID)
+	}()
+	ownerEntered, releaseOwner := make(chan struct{}), make(chan struct{})
+	released := false
+	defer func() {
+		if !released {
+			close(releaseOwner)
+		}
+	}()
+	ownerDone := make(chan error, 1)
+	go func() {
+		ownerDone <- st.WithFullRestoreOwner(ctx, marker, func(context.Context) error {
+			close(ownerEntered)
+			<-releaseOwner
+			return nil
+		})
+	}()
+	select {
+	case <-ownerEntered:
+	case err := <-ownerDone:
+		t.Fatalf("restore owner did not start: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("restore owner did not start in time")
+	}
+	transitionCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	transitionDone := make(chan error, 1)
+	go func() { transitionDone <- transition(transitionCtx) }()
+	var earlyErr error
+	early := false
+	select {
+	case earlyErr = <-transitionDone:
+		early = true
+	case <-time.After(250 * time.Millisecond):
+	}
+	keyCtx, cancelKey := context.WithTimeout(ctx, time.Second)
+	keyErr := st.WithGlobalKeyStateAdmission(keyCtx, store.KeyStateExclusive, func(context.Context) error { return nil })
+	cancelKey()
+	close(releaseOwner)
+	released = true
+	ownerErr := <-ownerDone
+	if !early {
+		earlyErr = <-transitionDone
+	}
+	if keyErr != nil {
+		t.Errorf("transition held key-state A while waiting for restore owner: %v", keyErr)
+	}
+	if ownerErr != nil {
+		t.Errorf("release restore owner: %v", ownerErr)
+	}
+	if early || !errors.Is(earlyErr, store.ErrRestoreInProgress) {
+		t.Errorf("transition crossed restore owner or lacked marker refusal: early=%t err=%v", early, earlyErr)
 	}
 }
 

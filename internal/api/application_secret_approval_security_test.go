@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	configpkg "trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -169,7 +170,7 @@ func applicationSecretRecoveryPayload(requester string) projections.ApplicationS
 
 func openApplicationSecretRecoveryLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), configpkg.NATS{
+	log, err := eventstest.OpenFixture(context.Background(), configpkg.NATS{
 		Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir(),
 	}, events.WithDuplicateWindowForTesting(100*time.Millisecond))
 	if err != nil {

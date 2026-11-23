@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -21,7 +22,7 @@ func TestBreakglassApprovalEvidenceIndexedColdRecoveryAndConflict(t *testing.T) 
 	ctx := context.Background()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")}
 	const duplicateWindow = 100 * time.Millisecond
-	log, err := events.Open(ctx, cfg, events.WithDuplicateWindowForTesting(duplicateWindow))
+	log, err := eventstest.OpenFixture(ctx, cfg, events.WithDuplicateWindowForTesting(duplicateWindow))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func TestBreakglassApprovalEvidenceIndexedColdRecoveryAndConflict(t *testing.T) 
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg, events.WithDuplicateWindowForTesting(duplicateWindow))
+	log, err = eventstest.OpenFixture(ctx, cfg, events.WithDuplicateWindowForTesting(duplicateWindow))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
@@ -67,7 +68,7 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	}
 	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", adminScopes)
 
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		events.WithRequiredPrivacyEventPolicies(),

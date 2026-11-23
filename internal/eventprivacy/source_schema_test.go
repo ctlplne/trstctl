@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/eventprivacy"
@@ -16,7 +17,7 @@ import (
 func TestSourceLifetimeRefusesUnknownLifecycleSchema(t *testing.T) {
 	for _, kind := range []string{"tenant.registered", "tenant.offboarded"} {
 		t.Run(kind, func(t *testing.T) {
-			log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "events")})
+			log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "events")})
 			if err != nil {
 				t.Fatal(err)
 			}

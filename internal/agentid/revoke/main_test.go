@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
@@ -125,7 +126,7 @@ func newHarness(t *testing.T, dbName string) *harness {
 	t.Cleanup(func() { cs.Close() })
 
 	eventDir := t.TempDir()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: eventDir})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: eventDir})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}

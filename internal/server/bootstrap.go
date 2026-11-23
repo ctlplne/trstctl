@@ -139,27 +139,26 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 		return nil, fmt.Errorf("bootstrap: audit signing key: %w", err)
 	}
 	defer signerRuntime.Close()
-	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, nil)
-	if err != nil {
-		return nil, fmt.Errorf("bootstrap: open event log: %w", err)
-	}
-	defer func() { _ = protection.Close() }()
-	defer func() { _ = log.Close() }()
-
 	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: provision credential KEK: %w", err)
 	}
 	defer kek.Destroy()
-	resultProtector, resultMigrator, _, _, _, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek, signerRuntime.signer)
+	core, err := newRunTenantCustodyCore(cfg, st, kek, signerRuntime.signer)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: tenant result protection: %w", err)
 	}
-	if _, err := resultMigrator.MigrateAll(ctx); err != nil {
+	log, protection, err := openConfiguredEventSourceWithCustody(ctx, cfg, st, auditKey, true, nil, core)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: open event log: %w", err)
+	}
+	defer func() { _ = protection.Close() }()
+	defer func() { _ = log.Close() }()
+	if _, err := core.migrator.MigrateAll(ctx); err != nil {
 		return nil, fmt.Errorf("bootstrap: migrate historical idempotency results before mutation: %w", err)
 	}
 
-	svc := app.New(log, st, resultProtector)
+	svc := app.New(log, st, core.protector)
 	defer svc.Close()
 	// A new tenant still goes through the event-sourced registration command. An
 	// existing tenant instead has its read-model pointer verified against the

@@ -23,7 +23,7 @@ func migrationTables(t *testing.T) []string {
 	if err != nil {
 		t.Fatalf("read migrations dir: %v", err)
 	}
-	re := regexp.MustCompile(`(?i)CREATE TABLE (?:IF NOT EXISTS )?([a-z_][a-z0-9_]*)`)
+	re := regexp.MustCompile(`(?i)CREATE TABLE (?:IF NOT EXISTS )?([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)`)
 	seen := map[string]bool{}
 	for _, e := range entries {
 		if !strings.HasSuffix(e.Name(), ".sql") {
@@ -61,7 +61,7 @@ func TestBackupManifestCoversEveryPersistentStore(t *testing.T) {
 		if _, ok := backup.Classify(tbl); !ok {
 			t.Errorf("persistent table %q is not in the backup-set manifest — classify it "+
 				"(internal/backup/manifest.go): a log projection (RecoveredByLogRebuild), "+
-				"independent PG state (RecoveredFromPostgresBackup), or Ephemeral", tbl)
+				"independent PG state (RecoveredFromPostgresBackup), Ephemeral, or TargetLocal", tbl)
 		}
 	}
 }
@@ -73,10 +73,10 @@ func TestBackupManifestHasNoPhantomTables(t *testing.T) {
 	for _, tbl := range migrationTables(t) {
 		real[tbl] = true
 	}
-	all := append(append(append([]string(nil),
+	all := append(append(append(append([]string(nil),
 		backup.RecoveredByLogRebuild...),
 		backup.RecoveredFromPostgresBackup...),
-		backup.Ephemeral...)
+		backup.Ephemeral...), backup.TargetLocal...)
 	for _, tbl := range all {
 		if !real[tbl] {
 			t.Errorf("manifest names table %q that no migration creates", tbl)
@@ -87,7 +87,7 @@ func TestBackupManifestHasNoPhantomTables(t *testing.T) {
 // TestManifestClassesAreDisjoint: a table belongs to exactly one recovery class.
 func TestManifestClassesAreDisjoint(t *testing.T) {
 	count := map[string]int{}
-	for _, set := range [][]string{backup.RecoveredByLogRebuild, backup.RecoveredFromPostgresBackup, backup.Ephemeral} {
+	for _, set := range [][]string{backup.RecoveredByLogRebuild, backup.RecoveredFromPostgresBackup, backup.Ephemeral, backup.TargetLocal} {
 		for _, tbl := range set {
 			count[tbl]++
 		}
@@ -95,6 +95,23 @@ func TestManifestClassesAreDisjoint(t *testing.T) {
 	for tbl, n := range count {
 		if n != 1 {
 			t.Errorf("table %q appears in %d recovery classes; it must be in exactly one", tbl, n)
+		}
+	}
+}
+
+func TestRestoreAdmissionAndPairProofTablesStayTargetLocal(t *testing.T) {
+	for _, table := range []string{
+		"trstctl_recovery.tenant_key_domain_snapshots",
+		"trstctl_recovery.recovery_pair_proofs",
+		"trstctl_recovery.restore_outbox_pairs",
+		"trstctl_recovery.raw_history_journal",
+		"trstctl_recovery.restore_markers",
+		"trstctl_recovery.restore_activity_tokens",
+		"trstctl_recovery.event_ingress_journal", // CR-045 target-local producer/wire commitment
+	} {
+		class, ok := backup.Classify(table)
+		if !ok || class != backup.ClassTargetLocal {
+			t.Errorf("%s class=%q found=%t, want destination-owned exclusion from source import", table, class, ok)
 		}
 	}
 }

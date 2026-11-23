@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -47,7 +48,7 @@ func TestPreparationRefusesClaimThatExpiresWhileWaitingForCustody(t *testing.T) 
 	admission := &eventprivacy.SourceAdmission{Guard: s, Custody: keys}
 	reader := &eventprivacy.SourceKeys{Custody: keys}
 	policy := &eventprivacy.SourcePolicy{}
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, func(log *events.Log) {
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")}, func(log *events.Log) {
 		policy.Log = log
 		admission.Policy.Log = log
 		reader.Policy.Log = log

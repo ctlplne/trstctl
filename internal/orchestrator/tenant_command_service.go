@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
 )
 
@@ -20,13 +21,27 @@ type tenantCommandService struct {
 // The callback receives the fenced context so nested signing/projection work
 // reuses the admitted operation rather than allocating a conflicting lease.
 func (o *Orchestrator) withTenantCommand(ctx context.Context, tenantID string, fn func(context.Context, pgx.Tx) error) error {
-	fenced, release, err := o.beginTenantCommand(ctx, tenantID)
-	if err != nil {
-		return err
-	}
-	defer release()
-	return o.store.WithTenant(fenced, tenantID, func(tx pgx.Tx) error {
-		return fn(fenced, tx)
+	return o.store.WithRestoreIngressSession(ctx, func(session context.Context) error {
+		return o.store.WithGlobalKeyStateAdmission(session, store.KeyStateShared, func(admitted context.Context) error {
+			fenced, release, err := o.beginTenantCommand(admitted, tenantID)
+			if err != nil {
+				return err
+			}
+			defer release()
+			run := func(history context.Context) error {
+				return o.store.WithTenant(history, tenantID, func(tx pgx.Tx) error {
+					owned, err := o.store.BindKeyStateOwnerTx(history, tx, tenantID, store.KeyStateShared)
+					if err != nil {
+						return err
+					}
+					return fn(owned, tx)
+				})
+			}
+			if o.log == nil {
+				return run(fenced)
+			}
+			return o.log.WithHistoryRead(fenced, run)
+		})
 	})
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/auditcompliance"
 	"trstctl.com/trstctl/internal/audit"
@@ -90,7 +91,7 @@ func anchoringAuthority(t *testing.T) (*tsa.Authority, []byte) {
 func TestAnchorWorkerAnchorsGrownChainsIntoTheirOwnAuditLog(t *testing.T) {
 	ctx := context.Background()
 	const quiet = "99999999-9999-9999-9999-999999999999"
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +177,7 @@ func TestAnchorWorkerAnchorsGrownChainsIntoTheirOwnAuditLog(t *testing.T) {
 // authority, checkpoints and a tenant list.
 func TestLicensedFactoryAttachesAnchoringOnlyWithACadence(t *testing.T) {
 	authority, _ := anchoringAuthority(t)
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

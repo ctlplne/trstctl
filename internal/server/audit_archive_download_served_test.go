@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
@@ -87,7 +88,7 @@ func TestServedTenantDownloadsItsOwnSignedAuditSegments(t *testing.T) {
 	ctx := context.Background()
 	const tenant, other = "4f1e2d3c-5b6a-4978-8c9d-0e1f2a3b4c5d", "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d"
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

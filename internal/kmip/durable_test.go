@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/config"
@@ -48,7 +49,7 @@ func (c kmipDomainCipher) Open(container, aad []byte) ([]byte, error) {
 
 func TestKMIPDurableStateReplaysSealedKeysAndLifecycle(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestKMIPDurableStateReplaysSealedKeysAndLifecycle(t *testing.T) {
 
 func TestKMIPDurableReplayKeepsTenantDomainCiphertextAndSealBlocksWholeFrame(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}

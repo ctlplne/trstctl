@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/ee/provider"
 	"trstctl.com/trstctl/internal/config"
@@ -16,7 +17,7 @@ import (
 )
 
 func TestProviderWorkforceEventsPassRequiredPrivacyBoundary(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
 	}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
@@ -89,7 +90,7 @@ func TestProviderWorkforceEventsPassRequiredPrivacyBoundary(t *testing.T) {
 // of that operator must rewrite the author and audit subject while the role
 // itself (a Provider-chosen label and permission list) survives intact.
 func TestProviderRoleEventsPassRequiredPrivacyBoundary(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
 	}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {

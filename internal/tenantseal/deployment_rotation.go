@@ -110,7 +110,7 @@ func NewDeploymentRotation(
 		return nil, ErrDeploymentRotationNotConfigured
 	}
 	r := &DeploymentRotation{
-		store: st, log: log, projector: projections.New(st),
+		store: st, log: log, projector: projections.New(st, projections.WithCanonicalEventSource(log)),
 		keyring: keyring, registry: registry,
 		settle: defaultDeploymentSettle, now: time.Now,
 	}
@@ -134,6 +134,28 @@ func (r *DeploymentRotation) Status(ctx context.Context) (store.DeploymentKEKDom
 // recorded one to the same wrapper. operatorTenantID is the tenant whose
 // history records the rotation.
 func (r *DeploymentRotation) Begin(ctx context.Context, operatorTenantID string, ref WrapperRef) (store.DeploymentKEKDomain, error) {
+	if r == nil || r.store == nil {
+		return store.DeploymentKEKDomain{}, ErrDeploymentRotationNotConfigured
+	}
+	if !validWrapperRef(ref) {
+		return store.DeploymentKEKDomain{}, fmt.Errorf("%w: wrapper kind and id are required", ErrInvalidWrapperConfig)
+	}
+	if !r.registry.ConfiguredWrapper(ref) {
+		return store.DeploymentKEKDomain{}, ErrWrapperNotConfigured
+	}
+	var out store.DeploymentKEKDomain
+	err := r.store.WithRestoreActivity(ctx, store.RestoreControlTenantID, uuid.NewString(),
+		"maintenance", "deployment-kek-begin", func(restoreCtx context.Context) error {
+			return r.store.WithGlobalKeyStateAdmission(restoreCtx, store.KeyStateExclusive, func(admitted context.Context) error {
+				var inner error
+				out, inner = r.beginAdmitted(admitted, operatorTenantID, ref)
+				return inner
+			})
+		})
+	return out, err
+}
+
+func (r *DeploymentRotation) beginAdmitted(ctx context.Context, operatorTenantID string, ref WrapperRef) (store.DeploymentKEKDomain, error) {
 	if r == nil {
 		return store.DeploymentKEKDomain{}, ErrDeploymentRotationNotConfigured
 	}
@@ -144,54 +166,110 @@ func (r *DeploymentRotation) Begin(ctx context.Context, operatorTenantID string,
 		return store.DeploymentKEKDomain{}, fmt.Errorf("%w: wrapper kind and id are required", ErrInvalidWrapperConfig)
 	}
 	var out store.DeploymentKEKDomain
-	err := r.store.WithTenant(ctx, operatorTenantID, func(tx pgx.Tx) error {
-		if err := r.store.LockDeploymentKEKTx(ctx, tx); err != nil {
-			return err
-		}
-		current, found, err := r.store.DeploymentKEKDomainTx(ctx, tx)
+	err := r.log.WithHistoryOperation(ctx, func(operationCtx context.Context) error {
+		currentState, foundState, err := r.store.DeploymentKEKDomain(operationCtx)
 		if err != nil {
 			return err
 		}
-		if found && current.Rotating() {
-			if current.NextWrapperKind != ref.Kind || current.NextWrapperID != ref.ID {
-				return ErrDeploymentRotationConflict
+		gate, gateFound, err := r.store.GetTenantApplicationSecretRewrapGate(operationCtx, operatorTenantID)
+		if err != nil {
+			return err
+		}
+		if foundState && currentState.OperationStatus == store.DeploymentKEKOperationCompleted &&
+			gateFound && gate.InProgress && gate.Kind == "deployment" && gate.OperationID == currentState.OperationID {
+			if err := r.store.CompleteDeploymentApplicationSecretRewrap(operationCtx, gate.OperationID); err != nil {
+				return err
 			}
-			if current.OperationStatus == store.DeploymentKEKOperationRunning {
-				out = current
-				return nil
+			out = currentState
+			return nil
+		}
+		if foundState && currentState.Rotating() &&
+			(currentState.NextWrapperKind != ref.Kind || currentState.NextWrapperID != ref.ID) {
+			return store.RestoreActivityNoEffect(ErrDeploymentRotationConflict)
+		}
+		operationID := uuid.NewString()
+		if foundState && currentState.Rotating() {
+			operationID = currentState.OperationID
+		} else if gateFound && gate.InProgress && gate.Kind == "deployment" {
+			operationID = gate.OperationID
+		}
+		tenants, err := r.store.ListTenants(operationCtx)
+		if err != nil {
+			return err
+		}
+		access, err := NewAccess(r.store, r.keyring, r.registry)
+		if err != nil {
+			return err
+		}
+		ids := make([]string, 0, len(tenants))
+		for _, tenant := range tenants {
+			if _, err := r.store.ApplicationSecretTenantEpoch(operationCtx, tenant.TenantID); err != nil {
+				return err
 			}
-			resumed := current
-			resumed.OperationStatus = store.DeploymentKEKOperationRunning
-			resumed.LastErrorCode, resumed.LastError = "", ""
-			return r.appendTx(ctx, tx, operatorTenantID, projections.EventDeploymentKEKRotationProgressed, resumed, &out)
+			if err := backfillMutationReceipts(operationCtx, r.store, r.log, access, tenant.TenantID); err != nil {
+				return err
+			}
+			ids = append(ids, tenant.TenantID)
 		}
-		next := current
-		if !found {
-			next = store.DeploymentKEKDomain{DomainID: uuid.NewString(), CreatedAt: r.now().UTC()}
-		}
-		next.NextGeneration = next.Generation + 1
-		binding, err := DeploymentBinding(next.DomainID, next.NextGeneration)
-		if err != nil {
+		if err := r.store.BeginDeploymentApplicationSecretRewrap(operationCtx, operationID, ids); err != nil {
 			return err
 		}
-		key, wrapped, err := r.registry.CreateDomainKEK(ctx, ref, binding)
-		if err != nil {
-			return err
-		}
-		if key != nil {
-			key.Destroy()
-		}
-		started := r.now().UTC()
-		next.NextWrapperKind, next.NextWrapperID, next.NextWrappedKEK = ref.Kind, ref.ID, wrapped
-		next.OperationID = uuid.NewString()
-		next.OperationStatus = store.DeploymentKEKOperationRunning
-		next.Stage, next.ProgressCursor = store.DeploymentKEKStageSettling, ""
-		next.TenantsTotal, next.TenantsDone = 0, 0
-		next.ContainersRewrapped, next.HistoryEventsRewrapped, next.FilesRewrapped = 0, 0, 0
-		next.ContainersVerified, next.VerifyPasses, next.VerifyStragglers = 0, 0, 0
-		next.StartedAt, next.VerifiedAt = &started, nil
-		next.LastErrorCode, next.LastError = "", ""
-		return r.appendTx(ctx, tx, operatorTenantID, projections.EventDeploymentKEKRotationStarted, next, &out)
+		return r.log.WithHistoryRead(operationCtx, func(history context.Context) error {
+			return r.store.WithTenant(history, operatorTenantID, func(tx pgx.Tx) error {
+				owned, err := r.store.BindKeyStateOwnerTx(history, tx, operatorTenantID, store.KeyStateExclusive)
+				if err != nil {
+					return err
+				}
+				operationCtx := owned
+				if err := r.store.LockDeploymentKEKTx(operationCtx, tx); err != nil {
+					return err
+				}
+				current, found, err := r.store.DeploymentKEKDomainTx(operationCtx, tx)
+				if err != nil {
+					return err
+				}
+				if found && current.Rotating() {
+					if current.NextWrapperKind != ref.Kind || current.NextWrapperID != ref.ID || current.OperationID != operationID {
+						return ErrDeploymentRotationConflict
+					}
+					if current.OperationStatus == store.DeploymentKEKOperationRunning {
+						out = current
+						return nil
+					}
+					resumed := current
+					resumed.OperationStatus = store.DeploymentKEKOperationRunning
+					resumed.LastErrorCode, resumed.LastError = "", ""
+					return r.appendTx(operationCtx, tx, operatorTenantID, projections.EventDeploymentKEKRotationProgressed, resumed, &out)
+				}
+				next := current
+				if !found {
+					next = store.DeploymentKEKDomain{DomainID: uuid.NewString(), CreatedAt: r.now().UTC()}
+				}
+				next.NextGeneration = next.Generation + 1
+				binding, err := DeploymentBinding(next.DomainID, next.NextGeneration)
+				if err != nil {
+					return err
+				}
+				key, wrapped, err := r.registry.CreateDomainKEK(operationCtx, ref, binding)
+				if err != nil {
+					return err
+				}
+				if key != nil {
+					key.Destroy()
+				}
+				started := r.now().UTC()
+				next.NextWrapperKind, next.NextWrapperID, next.NextWrappedKEK = ref.Kind, ref.ID, wrapped
+				next.OperationID = operationID
+				next.OperationStatus = store.DeploymentKEKOperationRunning
+				next.Stage, next.ProgressCursor = store.DeploymentKEKStageSettling, ""
+				next.TenantsTotal, next.TenantsDone = 0, 0
+				next.ContainersRewrapped, next.HistoryEventsRewrapped, next.FilesRewrapped = 0, 0, 0
+				next.ContainersVerified, next.VerifyPasses, next.VerifyStragglers = 0, 0, 0
+				next.StartedAt, next.VerifiedAt = &started, nil
+				next.LastErrorCode, next.LastError = "", ""
+				return r.appendTx(operationCtx, tx, operatorTenantID, projections.EventDeploymentKEKRotationStarted, next, &out)
+			})
+		})
 	})
 	if err != nil {
 		return store.DeploymentKEKDomain{}, err
@@ -215,12 +293,36 @@ func knownWrapperKind(kind string) bool {
 // that no rotation needs more work now (none runs, it failed, or it is
 // waiting out its settle time); the caller steps again on its next tick.
 func (r *DeploymentRotation) Step(ctx context.Context) (done bool, err error) {
+	if r == nil || r.store == nil {
+		return true, nil
+	}
+	err = r.store.WithRestoreActivity(ctx, store.RestoreControlTenantID, uuid.NewString(),
+		"maintenance", "deployment-kek-step", func(restoreCtx context.Context) error {
+			return r.store.WithGlobalKeyStateAdmission(restoreCtx, store.KeyStateExclusive, func(admitted context.Context) error {
+				var inner error
+				done, inner = r.stepAdmitted(admitted)
+				return inner
+			})
+		})
+	return done, err
+}
+
+func (r *DeploymentRotation) stepAdmitted(ctx context.Context) (done bool, err error) {
 	if r == nil {
 		return true, nil
 	}
 	current, found, err := r.store.DeploymentKEKDomain(ctx)
 	if err != nil {
 		return true, err
+	}
+	if found && current.OperationStatus == store.DeploymentKEKOperationCompleted {
+		gate, gateFound, err := r.store.GetTenantApplicationSecretRewrapGate(ctx, current.OperatorTenantID)
+		if err != nil {
+			return true, err
+		}
+		if gateFound && gate.InProgress && gate.Kind == "deployment" && gate.OperationID == current.OperationID {
+			return true, r.store.CompleteDeploymentApplicationSecretRewrap(ctx, current.OperationID)
+		}
 	}
 	if !found || !current.Rotating() || current.OperationStatus != store.DeploymentKEKOperationRunning {
 		return true, nil
@@ -457,7 +559,17 @@ func (r *DeploymentRotation) complete(ctx context.Context, current, next store.D
 	next.Stage, next.ProgressCursor = store.DeploymentKEKStageCompleted, ""
 	next.VerifiedAt, next.RotatedAt = &now, &now
 	next.LastErrorCode, next.LastError = "", ""
-	return r.progress(ctx, current, next, projections.EventDeploymentKEKRotationCompleted)
+	if err := r.progress(ctx, current, next, projections.EventDeploymentKEKRotationCompleted); err != nil {
+		return err
+	}
+	recorded, found, err := r.store.DeploymentKEKDomain(ctx)
+	if err != nil {
+		return err
+	}
+	if !found || recorded.OperationID != current.OperationID || recorded.OperationStatus != store.DeploymentKEKOperationCompleted {
+		return ErrDeploymentRotationConflict
+	}
+	return r.store.CompleteDeploymentApplicationSecretRewrap(ctx, current.OperationID)
 }
 
 // stepFailure records why a step did not finish. A failure that a retry cannot
@@ -498,19 +610,26 @@ func (r *DeploymentRotation) fail(ctx context.Context, current store.DeploymentK
 func (r *DeploymentRotation) progress(ctx context.Context, current, next store.DeploymentKEKDomain, eventType string) error {
 	tenantID := current.OperatorTenantID
 	var out store.DeploymentKEKDomain
-	err := r.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if err := r.store.LockDeploymentKEKTx(ctx, tx); err != nil {
-			return err
-		}
-		recorded, found, err := r.store.DeploymentKEKDomainTx(ctx, tx)
-		if err != nil {
-			return err
-		}
-		if !found || recorded.LastTransitionSequence != current.LastTransitionSequence {
-			out = recorded
-			return nil
-		}
-		return r.appendTx(ctx, tx, tenantID, eventType, next, &out)
+	err := r.log.WithHistoryRead(ctx, func(history context.Context) error {
+		return r.store.WithTenant(history, tenantID, func(tx pgx.Tx) error {
+			owned, err := r.store.BindKeyStateOwnerTx(history, tx, tenantID, store.KeyStateExclusive)
+			if err != nil {
+				return err
+			}
+			ctx := owned
+			if err := r.store.LockDeploymentKEKTx(ctx, tx); err != nil {
+				return err
+			}
+			recorded, found, err := r.store.DeploymentKEKDomainTx(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if !found || recorded.LastTransitionSequence != current.LastTransitionSequence {
+				out = recorded
+				return nil
+			}
+			return r.appendTx(ctx, tx, tenantID, eventType, next, &out)
+		})
 	})
 	if err != nil {
 		return err
@@ -526,18 +645,24 @@ func (r *DeploymentRotation) appendTx(
 	next store.DeploymentKEKDomain,
 	out *store.DeploymentKEKDomain,
 ) error {
+	if err := r.store.RequireKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive); err != nil {
+		return err
+	}
 	next.UpdatedAt = r.now().UTC()
 	payload, err := json.Marshal(projections.DeploymentKEKSnapshotFrom(next))
 	if err != nil {
 		return err
 	}
-	event, err := r.log.Append(ctx, events.Event{
-		Type: eventType, TenantID: tenantID, SchemaVersion: 1, Data: payload,
-	})
-	if err != nil {
-		return err
-	}
-	if err := r.projector.ApplyTx(ctx, tx, event); err != nil {
+	if err := r.store.WithRewrapCoordinatorEvent(ctx, tx, tenantID, next.OperationID, eventType,
+		func(coordinatorCtx context.Context) error {
+			event, err := r.log.Append(coordinatorCtx, events.Event{
+				Type: eventType, TenantID: tenantID, SchemaVersion: 1, Data: payload,
+			})
+			if err != nil {
+				return err
+			}
+			return r.projector.ApplyTx(coordinatorCtx, tx, event)
+		}); err != nil {
 		return err
 	}
 	recorded, found, err := r.store.DeploymentKEKDomainTx(ctx, tx)

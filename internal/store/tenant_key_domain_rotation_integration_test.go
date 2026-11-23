@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/storetest"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -29,7 +30,7 @@ import (
 // domain onto another wrapper so the first wrapper is no longer needed, and the
 // neighbor tenant never changes.
 func TestTenantKeyDomainLifecycleRotatesOneTenantToItsNextGeneration(t *testing.T) {
-	s := newStore(t)
+	s := storetest.OpenRewrapCutoverStore(t, newStore(t), testDSN)
 	ctx := context.Background()
 	for _, tenantID := range []string{tenantA, tenantB} {
 		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: tenantID}); err != nil {
@@ -52,7 +53,7 @@ func TestTenantKeyDomainLifecycleRotatesOneTenantToItsNextGeneration(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, rewriteOptions := openTenantKeyDomainHistory(t, s)
+	log, rewriteOptions := openTenantKeyDomainHistory(t, s, deployment)
 	lifecycle, err := tenantseal.NewLifecycle(s, log, deployment, registry, rewriteOptions...)
 	if err != nil {
 		t.Fatal(err)
@@ -94,6 +95,16 @@ func TestTenantKeyDomainLifecycleRotatesOneTenantToItsNextGeneration(t *testing.
 
 	if _, err := lifecycle.Rotate(ctx, tenantA, tenantseal.WrapperRef{}); !errors.Is(err, tenantseal.ErrLifecycleConflict) {
 		t.Fatalf("a deployment-key tenant rotated before migrating: %v", err)
+	}
+	// CR-045: that precondition refusal changed no state and must not leave a
+	// durable maintenance start that blocks the later valid migration.
+	var unresolved int
+	if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM trstctl_recovery.restore_activity_tokens
+		WHERE tenant_id=$1 AND lane='tenant-domain-rotate' AND phase='started'`, tenantA).Scan(&unresolved); err != nil {
+		t.Fatal(err)
+	}
+	if unresolved != 0 {
+		t.Fatalf("precondition refusal left %d unresolved rotation starts", unresolved)
 	}
 	migrated, err := lifecycle.Migrate(ctx, tenantA, tenantseal.WrapperRef{
 		Kind: tenantseal.WrapperKindLocalFile, ID: "tenant-a-custody",
@@ -157,6 +168,13 @@ func TestTenantKeyDomainLifecycleRotatesOneTenantToItsNextGeneration(t *testing.
 	if _, err := lifecycle.RequestSeal(ctx, tenantA, "seal-during-rotation", strings.Repeat("c", 64)); !errors.Is(err, tenantseal.ErrLifecycleConflict) {
 		t.Fatalf("a seal was queued during a rotation: %v", err)
 	}
+	if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM trstctl_recovery.restore_activity_tokens
+		WHERE tenant_id=$1 AND lane='tenant-domain-seal-request' AND phase='started'`, tenantA).Scan(&unresolved); err != nil {
+		t.Fatal(err)
+	}
+	if unresolved != 0 {
+		t.Fatalf("refused seal left %d unresolved maintenance starts", unresolved)
+	}
 	if _, err := lifecycle.Rotate(ctx, tenantA, tenantseal.WrapperRef{
 		Kind: tenantseal.WrapperKindLocalFile, ID: "tenant-a-custody-next",
 	}); !errors.Is(err, tenantseal.ErrLifecycleConflict) {
@@ -165,7 +183,10 @@ func TestTenantKeyDomainLifecycleRotatesOneTenantToItsNextGeneration(t *testing.
 
 	// The retry resumes and promotes generation 2 under the same wrapper; the
 	// retired generation no longer opens anywhere in hot state or history.
-	rotated, err := lifecycle.Rotate(ctx, tenantA, tenantseal.WrapperRef{})
+	rotated, err := tenantTransitionAfterOrphanedPairProof(t, s, "Rotate",
+		func(callCtx context.Context) (store.TenantKeyDomain, error) {
+			return lifecycle.Rotate(callCtx, tenantA, tenantseal.WrapperRef{})
+		})
 	if err != nil {
 		t.Fatalf("resume rotation: %v", err)
 	}

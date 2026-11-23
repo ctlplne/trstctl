@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/eventprivacy"
@@ -21,7 +22,7 @@ func TestSourceLifetimeHistoricalDuplicatesKeepFirstCanonicalOffboard(t *testing
 			name = "conflicting-payload"
 		}
 		t.Run(name, func(t *testing.T) {
-			log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "events")}, events.WithDuplicateWindowForTesting(100*time.Millisecond))
+			log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "events")}, events.WithDuplicateWindowForTesting(100*time.Millisecond))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -17,15 +17,16 @@ import (
 // The caller bounds time and concurrency; this scan keeps no key buffers or
 // per-event results and visits only the finite public activation type cut.
 func (reader SourceKeys) VerifyCurrentCustody(ctx context.Context) error {
-	if reader.Policy.Log == nil {
+	source := reader.Policy.sourceReader()
+	if source == nil {
 		return ErrSource
 	}
-	return reader.Policy.Log.WithHistoryRead(ctx, func(read context.Context) error {
-		head, err := reader.Policy.Log.LastSequence(read)
+	return source.WithHistoryRead(ctx, func(read context.Context) error {
+		head, err := source.LastSequence(read)
 		if err != nil {
 			return err
 		}
-		if err := reader.Policy.Log.ReplayTypesThrough(read, 1, head, []string{EventActivated}, func(event events.Event) error {
+		if err := source.ReplayTypesThrough(read, 1, head, []string{EventActivated}, func(event events.Event) error {
 			activation, err := ParseActivated(event)
 			if err != nil {
 				return err
@@ -44,7 +45,7 @@ func (reader SourceKeys) VerifyCurrentCustody(ctx context.Context) error {
 			return nil
 		}
 		tenants := map[string]bool{}
-		if err := reader.Policy.Log.ReplayTypesThrough(read, 1, head, []string{eventRegistered}, func(event events.Event) error { tenants[event.TenantID] = true; return nil }); err != nil {
+		if err := source.ReplayTypesThrough(read, 1, head, []string{eventRegistered}, func(event events.Event) error { tenants[event.TenantID] = true; return nil }); err != nil {
 			return err
 		}
 		for tenant := range tenants {

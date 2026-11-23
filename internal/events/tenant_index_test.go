@@ -16,7 +16,7 @@ import (
 
 func TestReplayTenantThroughConcurrentReplicaCatchup(t *testing.T) {
 	ctx := t.Context()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded,
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded,
 		StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestReplayTenantThroughCheckpointPruneColdCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := log.Append(ctx, Event{ID: "pruned-source", TenantID: tenantID,
-		Type: "secret.version.written", Data: []byte(`{"sealed":"deployment-ciphertext"}`)}); err != nil {
+		Type: "fixture.opaque.rewrite", Data: []byte(`{"opaque":"deployment-ciphertext"}`)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := log.RewriteTenantData(ctx, tenantID,
@@ -112,7 +112,7 @@ func TestReplayTenantThroughCheckpointPruneColdCursor(t *testing.T) {
 		t.Fatalf("checkpoint-pruned tenant history returned %v", got)
 	}
 	next, err := log.Append(ctx, Event{ID: "post-prune", TenantID: tenantID,
-		Type: "secret.version.written", Data: []byte(`{"sealed":"new"}`)})
+		Type: "fixture.opaque.rewrite", Data: []byte(`{"opaque":"new"}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestReplayTenantThroughCheckpointPruneColdCursor(t *testing.T) {
 func TestReplayTenantThroughKeepsSourceOrderCutAndColdRecovery(t *testing.T) {
 	ctx := t.Context()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")}
-	log, err := Open(ctx, cfg)
+	log, err := openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestReplayTenantThroughKeepsSourceOrderCutAndColdRecovery(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = Open(ctx, cfg)
+	log, err = openFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestReplayTenantThroughKeepsSourceOrderCutAndColdRecovery(t *testing.T) {
 
 func TestReplayTenantThroughResumesBoundedIndexAfterRequestInterruption(t *testing.T) {
 	ctx := t.Context()
-	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	log, err := openFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
 	if err != nil {
 		t.Fatal(err)
 	}

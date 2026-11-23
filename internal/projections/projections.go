@@ -4305,20 +4305,167 @@ type identityTransitionEffect struct {
 // read model is always a projection of the log; nothing writes the served
 // domain read model except through here.
 type Projector struct {
-	eventProtectionErasurePlanner     *eventprivacy.ErasurePlanner
-	store                             *store.Store
-	eventProjections                  []EventProjection
-	allowSecretSyncRecoveryBootstrap  bool
-	ownershipAttestationCadence       time.Duration
-	restoreDrillVerificationKeys      *jose.JWKSet
-	eventProtectionActivationVerifier EventProtectionActivationVerifier
-	eventProtectionCompletionVerifier EventProtectionCompletionVerifier
-	eventProtectionOffboardPolicy     EventProtectionOffboardPolicy
+	eventProtectionErasurePlanner            *eventprivacy.ErasurePlanner
+	store                                    *store.Store
+	eventProjections                         []EventProjection
+	allowSecretSyncRecoveryBootstrap         bool
+	ownershipAttestationCadence              time.Duration
+	restoreDrillVerificationKeys             *jose.JWKSet
+	eventProtectionActivationVerifier        EventProtectionActivationVerifier
+	eventProtectionCompletionVerifier        EventProtectionCompletionVerifier
+	eventProtectionOffboardPolicy            EventProtectionOffboardPolicy
+	applicationSecretReceiptVerifier         func(context.Context, string, ApplicationSecretMutation) error
+	rewrapPairVerifier                       func(context.Context, string, []byte, []byte, []byte) (bool, error)
+	applicationSecretRecoveryVerifierFactory func(string) (func(context.Context, string, ApplicationSecretMutation) error, error)
+	rewrapRecoveryPairVerifierFactory        func(string) (func(context.Context, string, []byte, []byte, []byte) (bool, error), error)
+	canonicalEventSource                     *events.Log
 }
 
 // Option customizes the generic projector without coupling core to any
 // edition package.
 type Option func(*Projector)
+
+// WithApplicationSecretReceiptVerifier supplies the tenant-key custody needed
+// when a retained v1 receipt names the same v2 payload after a key rewrap. The
+// callback must authenticate every present sealed container under its exact
+// field AAD. Without it, a differing v1 receipt remains a conflict.
+func WithApplicationSecretReceiptVerifier(verify func(context.Context, string, ApplicationSecretMutation) error) Option {
+	return func(p *Projector) { p.applicationSecretReceiptVerifier = verify }
+}
+
+// WithRewrapPairVerifier supplies current tenant-key custody for two
+// independently retained ciphertext copies. It must authenticate both copies
+// under the supplied exact AAD before accepting a DEK-only rewrap difference.
+func WithRewrapPairVerifier(verify func(context.Context, string, []byte, []byte, []byte) (bool, error)) Option {
+	return func(p *Projector) { p.rewrapPairVerifier = verify }
+}
+
+// WithApplicationSecretRecoveryVerifierFactory builds a verifier tied to the
+// exact event-derived key snapshots staged for one atomic rebuild operation.
+// It keeps the verifier off the read model that rebuild truncates.
+func WithApplicationSecretRecoveryVerifierFactory(
+	factory func(string) (func(context.Context, string, ApplicationSecretMutation) error, error),
+) Option {
+	return func(p *Projector) { p.applicationSecretRecoveryVerifierFactory = factory }
+}
+
+// WithRewrapRecoveryPairVerifierFactory supplies custody from the staged,
+// event-derived key history for one atomic rebuild. Its callback must not read
+// the key-domain read model that the rebuild truncates.
+func WithRewrapRecoveryPairVerifierFactory(
+	factory func(string) (func(context.Context, string, []byte, []byte, []byte) (bool, error), error),
+) Option {
+	return func(p *Projector) { p.rewrapRecoveryPairVerifierFactory = factory }
+}
+
+// WithCanonicalEventSource supplies the retained event view used to refuse a
+// cached direct-apply object after the tenant's first completed key rewrap.
+func WithCanonicalEventSource(source *events.Log) Option {
+	return func(p *Projector) { p.canonicalEventSource = source }
+}
+
+var ErrCanonicalEventRequired = errors.New("projections: refetch the current canonical event before projection after rewrap")
+
+type canonicalReplayContextKey struct{}
+
+func canonicalEventDigest(e events.Event) (string, error) {
+	wire, err := json.Marshal(e)
+	if err != nil {
+		return "", err
+	}
+	return cryptoboundary.SHA256Hex(wire), nil
+}
+
+func (p *Projector) requireCurrentCanonicalEvent(ctx context.Context, e events.Event) error {
+	if p.canonicalEventSource == nil {
+		return ErrCanonicalEventRequired
+	}
+	canonical, found, err := p.canonicalEventSource.EventByID(ctx, e.ID)
+	if err != nil {
+		return fmt.Errorf("%w: canonical source unavailable: %v", ErrCanonicalEventRequired, err)
+	}
+	if !found {
+		return ErrCanonicalEventRequired
+	}
+	want, err := canonicalEventDigest(canonical)
+	if err != nil {
+		return err
+	}
+	got, err := canonicalEventDigest(e)
+	if err != nil {
+		return err
+	}
+	if want != got {
+		return ErrCanonicalEventRequired
+	}
+	return nil
+}
+
+func (p *Projector) withCurrentCanonicalEvent(ctx context.Context, e events.Event,
+	fn func(context.Context) error,
+) error {
+	if _, err := uuid.Parse(e.TenantID); err != nil {
+		return fn(ctx)
+	}
+	gate, found, err := p.store.GetTenantApplicationSecretRewrapGate(ctx, e.TenantID)
+	if err != nil {
+		return err
+	}
+	if !found || gate.Generation == 0 && !gate.InProgress {
+		return fn(ctx)
+	}
+	if gate.InProgress {
+		return store.ErrApplicationSecretRewrapInProgress
+	}
+	if p.canonicalEventSource == nil {
+		return ErrCanonicalEventRequired
+	}
+	return p.canonicalEventSource.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		if err := p.requireCurrentCanonicalEvent(readCtx, e); err != nil {
+			return err
+		}
+		return fn(readCtx)
+	})
+}
+
+func (p *Projector) requireCurrentCanonicalEventTx(ctx context.Context, tx pgx.Tx, e events.Event) error {
+	if _, err := uuid.Parse(e.TenantID); err != nil {
+		return nil
+	}
+	gate, found, err := p.store.GetTenantApplicationSecretRewrapGateTx(ctx, tx, e.TenantID)
+	if err != nil {
+		return err
+	}
+	if !found || gate.Generation == 0 && !gate.InProgress {
+		return nil
+	}
+	if gate.InProgress {
+		if err := p.store.RequireRewrapCoordinatorEventTx(ctx, tx, e.TenantID, e.Type); err != nil {
+			return err
+		}
+		return p.requireCurrentCanonicalEvent(ctx, e)
+	}
+	if ctx.Value(canonicalReplayContextKey{}) == true {
+		return nil // the internal replay already holds the pinned validated log view
+	}
+	mode := store.KeyStateShared
+	if isKeyStateMutationEventType(e.Type) {
+		mode = store.KeyStateExclusive
+	}
+	if err := p.store.RequireKeyStateOwnerTx(ctx, tx, e.TenantID, mode); err != nil {
+		return fmt.Errorf("%w: %v", ErrCanonicalEventRequired, err)
+	}
+	return p.requireCurrentCanonicalEvent(ctx, e)
+}
+
+type rewrapRecoveryPairVerifierContextKey struct{}
+
+func (p *Projector) pairVerifierFor(ctx context.Context) func(context.Context, string, []byte, []byte, []byte) (bool, error) {
+	if recovery, ok := ctx.Value(rewrapRecoveryPairVerifierContextKey{}).(func(context.Context, string, []byte, []byte, []byte) (bool, error)); ok {
+		return recovery
+	}
+	return p.rewrapPairVerifier
+}
 
 // EventProjection is a feature-neutral registration seam for derived projections
 // that consume the AN-2 event stream but own their own materialization. Edition
@@ -4419,6 +4566,9 @@ func WithRestoreDrillVerificationKeys(keys *jose.JWKSet) Option {
 // New returns a Projector that writes into s.
 func New(s *store.Store, opts ...Option) *Projector {
 	p := &Projector{store: s}
+	if s != nil {
+		p.canonicalEventSource = s.CanonicalEventSource()
+	}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(p)
@@ -5269,10 +5419,48 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 			e.Type,
 		)
 	}
-	if err := p.applyCore(ctx, e); err != nil {
-		return err
+	mode := store.KeyStateShared
+	if isKeyStateMutationEventType(e.Type) {
+		mode = store.KeyStateExclusive
 	}
-	return p.applyEventProjections(ctx, e)
+	activityTenant := e.TenantID
+	if _, err := uuid.Parse(activityTenant); err != nil {
+		activityTenant = store.RestoreControlTenantID
+	}
+	return p.store.WithRestoreProjectionAdmission(ctx, activityTenant, e.ID, func(restored context.Context) error {
+		return p.store.WithGlobalKeyStateAdmission(restored, mode, func(admitted context.Context) error {
+			return p.withCurrentCanonicalEvent(admitted, e, func(current context.Context) error {
+				pending, err := p.store.PendingCommandProjectionOperations(current, activityTenant, e.ID)
+				if err != nil {
+					return err
+				}
+				if len(pending) > 0 {
+					if err := p.requireCurrentCanonicalEvent(current, e); err != nil {
+						return err
+					}
+				}
+				if err := p.applyCore(current, e); err != nil {
+					return err
+				}
+				if err := p.applyEventProjections(current, e); err != nil {
+					return err
+				}
+				if len(pending) == 0 {
+					return nil
+				}
+				return p.canonicalEventSource.WithHistoryRead(current, func(readCtx context.Context) error {
+					if err := p.requireCurrentCanonicalEvent(readCtx, e); err != nil {
+						return err
+					}
+					return p.store.SettleReplayedCommandProjection(readCtx, activityTenant, e.ID, pending)
+				})
+			})
+		})
+	})
+}
+
+func isKeyStateMutationEventType(eventType string) bool {
+	return events.RequiresExclusiveKeyStateAdmission(eventType)
 }
 
 type governanceDecisionHistoryReplayKey struct{}
@@ -5330,7 +5518,11 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 		// per-table count is 0 and the verify pass still passes), so replaying the
 		// event after the rows are gone is a safe no-op.
 		if err := p.store.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
-			_, err := p.offboardTenantTx(ctx, tx, e)
+			owned, err := p.store.BindKeyStateOwnerTx(ctx, tx, e.TenantID, store.KeyStateExclusive)
+			if err != nil {
+				return err
+			}
+			_, err = p.offboardTenantTx(owned, tx, e)
 			return err
 		}); err != nil {
 			return fmt.Errorf("projections: apply %s: %w", e.Type, err)
@@ -5340,7 +5532,11 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 	if e.Type == EventSecretSyncDelivered || e.Type == EventSecretSyncFailed ||
 		e.Type == EventSecretSyncReceiverSettled || e.Type == EventSecretRotationScheduleRan {
 		return p.store.WithTenantProjection(ctx, e.TenantID, func(tx pgx.Tx) error {
-			return p.ApplyTx(ctx, tx, e)
+			owned, err := p.store.BindKeyStateOwnerTx(ctx, tx, e.TenantID, store.KeyStateShared)
+			if err != nil {
+				return err
+			}
+			return p.ApplyTx(owned, tx, e)
 		})
 	}
 	// Archive checkpoints retain legacy administrative scope strings in their
@@ -5355,7 +5551,15 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 	}
 	// Domain entity events apply under the tenant's RLS context.
 	return p.store.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
-		return p.ApplyTx(ctx, tx, e)
+		mode := store.KeyStateShared
+		if isKeyStateMutationEventType(e.Type) {
+			mode = store.KeyStateExclusive
+		}
+		owned, err := p.store.BindKeyStateOwnerTx(ctx, tx, storageTenant, mode)
+		if err != nil {
+			return err
+		}
+		return p.ApplyTx(owned, tx, e)
 	})
 }
 
@@ -5382,7 +5586,22 @@ func (p *Projector) ApplyEventProjections(ctx context.Context, e events.Event) e
 	if isTenantLifecycleEventType(e.Type) {
 		return fmt.Errorf("projections: %s extensions require ApplyTenantLifecycleTx", e.Type)
 	}
-	return p.applyEventProjections(ctx, e)
+	activityTenant := e.TenantID
+	if _, err := uuid.Parse(activityTenant); err != nil {
+		activityTenant = store.RestoreControlTenantID
+	}
+	mode := store.KeyStateShared
+	if isKeyStateMutationEventType(e.Type) {
+		mode = store.KeyStateExclusive
+	}
+	return p.store.WithRestoreProjectionAdmission(ctx, activityTenant, e.ID,
+		func(restored context.Context) error {
+			return p.store.WithGlobalKeyStateAdmission(restored, mode,
+				func(admitted context.Context) error {
+					return p.withCurrentCanonicalEvent(admitted, e,
+						func(current context.Context) error { return p.applyEventProjections(current, e) })
+				})
+		})
 }
 
 func isTenantLifecycleEventType(eventType string) bool {
@@ -5458,13 +5677,22 @@ func (p *Projector) ApplyRetainedTenantLifecycle(ctx context.Context, event even
 	if p == nil || p.store == nil || !isTenantLifecycleEventType(event.Type) {
 		return errors.New("projections: retained tenant lifecycle projection is incomplete")
 	}
-	if event.Type == EventTenantRegistered {
-		return p.store.WithTenantRegistrationFence(ctx, event.TenantID, func(tx pgx.Tx) error {
-			return p.ApplyTenantLifecycleTx(ctx, tx, event)
-		})
+	mode := store.KeyStateShared
+	if event.Type == EventTenantOffboarded {
+		mode = store.KeyStateExclusive
 	}
-	return p.store.WithTenant(ctx, event.TenantID, func(tx pgx.Tx) error {
-		return p.ApplyTenantLifecycleTx(ctx, tx, event)
+	return p.store.WithGlobalKeyStateAdmission(ctx, mode, func(admitted context.Context) error {
+		apply := func(tx pgx.Tx) error {
+			owned, err := p.store.BindKeyStateOwnerTx(admitted, tx, event.TenantID, mode)
+			if err != nil {
+				return err
+			}
+			return p.ApplyTenantLifecycleTx(owned, tx, event)
+		}
+		if event.Type == EventTenantRegistered {
+			return p.store.WithTenantRegistrationFence(admitted, event.TenantID, apply)
+		}
+		return p.store.WithTenant(admitted, event.TenantID, apply)
 	})
 }
 
@@ -10321,59 +10549,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := p.validateTenantKeyDomainExposureTransitionTx(ctx, tx, e, pl); err != nil {
 			return err
 		}
-		createdAt := pl.CreatedAt
-		if createdAt.IsZero() {
-			createdAt = e.Time
-		}
-		updatedAt := pl.UpdatedAt
-		if updatedAt.IsZero() {
-			updatedAt = e.Time
-		}
-		if e.Type == EventTenantKeyDomainMigrationStarted && pl.MigrationStartedAt == nil {
-			at := e.Time
-			pl.MigrationStartedAt = &at
-		}
-		if e.Type == EventTenantKeyDomainMigrationCompleted && pl.MigrationCompletedAt == nil {
-			at := e.Time
-			pl.MigrationCompletedAt = &at
-		}
-		if e.Type == EventTenantKeyDomainSealed && pl.SealedAt == nil {
-			at := e.Time
-			pl.SealedAt = &at
-		}
-		if e.Type == EventTenantKeyDomainUnsealed && pl.UnsealedAt == nil {
-			at := e.Time
-			pl.UnsealedAt = &at
-		}
-		if e.Type == EventTenantKeyDomainRotationCompleted && pl.RotatedAt == nil {
-			at := e.Time
-			pl.RotatedAt = &at
-		}
-		actor := ""
-		if e.Actor != nil {
-			actor = e.Actor.Subject
-		}
-		if err := p.store.ApplyTenantKeyDomainSnapshotTx(ctx, tx, store.TenantKeyDomain{
-			TenantID: e.TenantID, DomainID: pl.DomainID, Generation: pl.Generation,
-			ProtectionMode: pl.ProtectionMode, State: pl.State,
-			WrapperKind: pl.WrapperKind, WrapperID: pl.WrapperID,
-			WrappedDomainKEK: pl.WrappedDomainKEK, NextGeneration: pl.NextGeneration,
-			NextWrapperKind: pl.NextWrapperKind, NextWrapperID: pl.NextWrapperID,
-			NextWrappedDomainKEK: pl.NextWrappedDomainKEK, RotatedAt: pl.RotatedAt,
-			OperationID: pl.OperationID, OperationKind: pl.OperationKind,
-			OperationStatus: pl.OperationStatus,
-			MigrationStage:  pl.MigrationStage, ProgressCompleted: pl.ProgressCompleted,
-			ProgressTotal: pl.ProgressTotal, ProgressCursor: pl.ProgressCursor,
-			Retryable: pl.Retryable, LastErrorCode: pl.LastErrorCode,
-			LastError: pl.LastError, LegacyHistoryExposure: pl.LegacyHistoryExposure,
-			MigrationStartedAt:   pl.MigrationStartedAt,
-			MigrationCompletedAt: pl.MigrationCompletedAt, SealedAt: pl.SealedAt,
-			UnsealedAt: pl.UnsealedAt, LastTransitionEventID: e.ID,
-			LastTransitionType: e.Type, LastTransitionActor: actor,
-			LastTransitionAt:           e.Time,
-			LastTransitionEvidenceRefs: pl.TransitionEvidenceRefs,
-			LastTransitionSequence:     e.Sequence, CreatedAt: createdAt, UpdatedAt: updatedAt,
-		}); err != nil {
+		if err := p.store.ApplyTenantKeyDomainSnapshotTx(ctx, tx, tenantKeyDomainFromSnapshot(e, pl)); err != nil {
 			return err
 		}
 		if e.Type == EventTenantKeyDomainSealRequested {
@@ -11477,12 +11653,49 @@ func (p *Projector) projectFromPlannedHistory(ctx context.Context, log *events.L
 // stays the source of truth (AN-2); an explicit Rebuild still re-derives from
 // sequence 0 and resets the checkpoint.
 func (p *Projector) ProjectCatchUp(ctx context.Context, log *events.Log) error {
-	// The privacy operation grant is deliberately outermost. It closes the live
-	// race where another replica prepares SQL erasure authority after validation
-	// but before this replica replaces extension state, and preserves the global
-	// order: privacy operation -> projection -> event history.
-	return p.store.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
-		return p.projectCatchUpWithPrivacyBarrier(barrierCtx, log)
+	return p.store.WithRestoreCatchUpAdmission(ctx, func(admitted context.Context) error {
+		return p.projectCatchUpAdmitted(admitted, log)
+	})
+}
+
+func (p *Projector) projectCatchUpAdmitted(ctx context.Context, log *events.Log) error {
+	// Select the key-state mode before the privacy/history replacement barrier.
+	// Ordinary tails share admission with live writers; a retained offboard or
+	// key snapshot needs exclusive admission before any replay transaction.
+	needsExclusive := false
+	err := p.store.WithGlobalKeyStateAdmission(ctx, store.KeyStateShared, func(admitted context.Context) error {
+		if err := log.WithHistoryRead(admitted, func(read context.Context) error {
+			from, err := p.store.ProjectionCheckpoint(read)
+			if err != nil {
+				return err
+			}
+			head, err := projectionHistoryHead(read, log)
+			if err != nil {
+				return err
+			}
+			if head <= from {
+				return nil
+			}
+			return replayProjectionThrough(read, log, from+1, head, func(e events.Event) error {
+				if isKeyStateMutationEventType(e.Type) {
+					needsExclusive = true
+				}
+				return nil
+			})
+		}); err != nil || needsExclusive {
+			return err
+		}
+		return p.store.WithPrivacyReadModelReplacementBarrier(admitted, func(barrierCtx context.Context) error {
+			return p.projectCatchUpWithPrivacyBarrier(barrierCtx, log)
+		})
+	})
+	if err != nil || !needsExclusive {
+		return err
+	}
+	return p.store.WithGlobalKeyStateAdmission(ctx, store.KeyStateExclusive, func(admitted context.Context) error {
+		return p.store.WithPrivacyReadModelReplacementBarrier(admitted, func(barrierCtx context.Context) error {
+			return p.projectCatchUpWithPrivacyBarrier(barrierCtx, log)
+		})
 	})
 }
 
@@ -11662,8 +11875,12 @@ func (p *Projector) AdvanceCheckpoint(ctx context.Context, seq uint64) error {
 // carries its tenant_id explicitly, so AN-1 holds even with RLS bypassed for this
 // trusted system operation.
 func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
-	return p.store.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
-		return p.rebuildWithPrivacyBarrier(barrierCtx, log)
+	return p.store.WithRestoreRebuildAdmission(ctx, func(restoreCtx context.Context) error {
+		return p.store.WithGlobalKeyStateAdmission(restoreCtx, store.KeyStateShared, func(admitted context.Context) error {
+			return p.store.WithPrivacyReadModelReplacementBarrier(admitted, func(barrierCtx context.Context) error {
+				return p.rebuildWithPrivacyBarrier(barrierCtx, log)
+			})
+		})
 	})
 }
 
@@ -11747,7 +11964,37 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 				)
 			}
 		}
-		return p.store.RebuildReadModelTx(readCtx, func(tx pgx.Tx) error {
+		recoveryOperationID := ""
+		var verifier func(context.Context, string, ApplicationSecretMutation) error
+		var pairVerifier func(context.Context, string, []byte, []byte, []byte) (bool, error)
+		if p.applicationSecretRecoveryVerifierFactory != nil || p.rewrapRecoveryPairVerifierFactory != nil {
+			recoveryOperationID = uuid.NewString()
+			if err := stageTenantKeyRecoveryHistoryThrough(readCtx, p.store, log, recoveryOperationID, replayHead); err != nil {
+				return fmt.Errorf("projections: stage tenant key recovery history: %w", err)
+			}
+			if p.applicationSecretRecoveryVerifierFactory != nil {
+				verifier, err = p.applicationSecretRecoveryVerifierFactory(recoveryOperationID)
+				if err != nil || verifier == nil {
+					return fmt.Errorf("projections: configure recovery receipt verifier: %w", errors.Join(err, errors.New("missing verifier")))
+				}
+			}
+			if p.rewrapRecoveryPairVerifierFactory != nil {
+				pairVerifier, err = p.rewrapRecoveryPairVerifierFactory(recoveryOperationID)
+				if err != nil || pairVerifier == nil {
+					return fmt.Errorf("projections: configure recovery pair verifier: %w", errors.Join(err, errors.New("missing verifier")))
+				}
+				readCtx = context.WithValue(readCtx, rewrapRecoveryPairVerifierContextKey{}, pairVerifier)
+			}
+			if verifier == nil && pairVerifier != nil {
+				verifier = receiptVerifierFromPair(pairVerifier)
+			}
+			readCtx, err = store.WithRecoveryPairProofOperation(readCtx, recoveryOperationID)
+			if err != nil {
+				return err
+			}
+		}
+		applyRebuild := func(rebuildCtx context.Context, tx pgx.Tx) error {
+			readCtx = rebuildCtx
 			crlReplay, err := newCRLPublicationReplay(readCtx, tx)
 			if err != nil {
 				return err
@@ -11811,8 +12058,30 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 			if err := p.store.SetKeyOriginDerivationCheckedThroughTx(readCtx, tx, replayHead); err != nil {
 				return err
 			}
-			return p.store.SetExternalIssuerCheckedThroughTx(readCtx, tx, replayHead)
-		})
+			if err := p.store.SetExternalIssuerCheckedThroughTx(readCtx, tx, replayHead); err != nil {
+				return err
+			}
+			if recoveryOperationID != "" {
+				if err := p.store.AssertNoRecoveryPairProofsTx(readCtx, tx, recoveryOperationID); err != nil {
+					return err
+				}
+				return p.store.ClearTenantKeyRecoverySnapshotsTx(readCtx, tx, recoveryOperationID)
+			}
+			return nil
+		}
+		if recoveryOperationID != "" {
+			return p.store.RebuildReadModelWithKeyStateContextTx(readCtx,
+				func(proofCtx context.Context, tx pgx.Tx) error {
+					if err := p.preverifyRewrappedMutationReceipts(proofCtx, tx, log, recoveryOperationID, verifier); err != nil {
+						return err
+					}
+					if err := p.preverifyRewrappedSyncOutbox(proofCtx, tx, log, replayHead, recoveryOperationID, pairVerifier); err != nil {
+						return err
+					}
+					return p.preverifyRewrappedSourcePairs(proofCtx, tx, log, replayHead, recoveryOperationID, pairVerifier)
+				}, applyRebuild)
+		}
+		return p.store.RebuildReadModelWithKeyStateContextTx(readCtx, nil, applyRebuild)
 	})
 }
 
@@ -11865,6 +12134,18 @@ func (p *Projector) Snapshot(ctx context.Context) (int, error) {
 // wrong — at worst it costs a one-time full replay. It takes the projection advisory
 // lock so concurrent replica boots serialize (RESIL-004).
 func (p *Projector) RestoreFromSnapshot(ctx context.Context, log *events.Log) (restored bool, err error) {
+	err = p.store.WithRestoreSnapshotAdmission(ctx, func(admitted context.Context) error {
+		return p.store.WithGlobalKeyStateAdmission(admitted, store.KeyStateShared,
+			func(keyAdmitted context.Context) error {
+				var restoreErr error
+				restored, restoreErr = p.restoreFromSnapshotAdmitted(keyAdmitted, log)
+				return restoreErr
+			})
+	})
+	return restored, err
+}
+
+func (p *Projector) restoreFromSnapshotAdmitted(ctx context.Context, log *events.Log) (restored bool, err error) {
 	if err := p.validateSecretSyncRetainedHistory(ctx, log, false, false); err != nil {
 		return false, err
 	}
@@ -11935,36 +12216,36 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 			if err != nil {
 				return err
 			}
-			if err := p.store.RestoreReadModelTx(readCtx, func(tx pgx.Tx) error {
-				crlReplay, err := newCRLPublicationReplay(readCtx, tx)
+			if err := p.store.RestoreReadModelWithKeyStateContextTx(readCtx, func(replayCtx context.Context, tx pgx.Tx) error {
+				crlReplay, err := newCRLPublicationReplay(replayCtx, tx)
 				if err != nil {
 					return err
 				}
-				if _, rerr := p.store.RestoreSnapshotsTx(readCtx, tx, protection); rerr != nil {
+				if _, rerr := p.store.RestoreSnapshotsTx(replayCtx, tx, protection); rerr != nil {
 					return rerr
 				}
-				if serr := p.store.SetProjectionCheckpointTx(readCtx, tx, from); serr != nil {
+				if serr := p.store.SetProjectionCheckpointTx(replayCtx, tx, from); serr != nil {
 					return serr
 				}
-				if rerr := replayProjectionThrough(readCtx, log, from+1, replayHead, func(e events.Event) error {
+				if rerr := replayProjectionThrough(replayCtx, log, from+1, replayHead, func(e events.Event) error {
 					_, skipSecretSync := secretAuthority.skipSequences[e.Sequence]
 					_, skipDynamicSecret := dynamicSecretAuthority.skipSequences[e.Sequence]
 					if skipSecretSync || skipDynamicSecret {
 						return ValidateSchemaVersion(e)
 					}
-					if err := p.applyForRebuild(readCtx, tx, e); err != nil {
+					if err := p.applyForRebuild(replayCtx, tx, e); err != nil {
 						return err
 					}
 					return crlReplay.observe(e)
 				}); rerr != nil {
 					return rerr
 				}
-				if err := crlReplay.discardProvenCompleted(readCtx, p.store, tx); err != nil {
+				if err := crlReplay.discardProvenCompleted(replayCtx, p.store, tx); err != nil {
 					return err
 				}
 				// Advance across every position in the pinned tail, including a
 				// trailing or all-gap range that produced no live callbacks.
-				return p.store.SetProjectionCheckpointTx(readCtx, tx, replayHead)
+				return p.store.SetProjectionCheckpointTx(replayCtx, tx, replayHead)
 			}); err != nil {
 				return err
 			}
@@ -12007,6 +12288,7 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 //     rebuilt from the log.
 //   - everything else    -> set the tenant GUC on the tx, then ApplyTx.
 func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Event) error {
+	ctx = context.WithValue(ctx, canonicalReplayContextKey{}, true)
 	if events.IsLegacyProviderCoreProjectionNoop(e) {
 		return ValidateSchemaVersion(e)
 	}

@@ -38,6 +38,7 @@ const (
 type runDeploymentKEK struct {
 	keyring  sealKeyWrapper
 	rotation *tenantseal.DeploymentRotation
+	registry tenantseal.DomainKEKManager
 }
 
 // deploymentKeyringFromFile wraps the deployment key file in the deployment

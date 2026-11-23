@@ -11,12 +11,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -83,7 +83,7 @@ func TestRequestIssuanceQueuesNotificationAtomically(t *testing.T) {
 		orchestrator.WithBackoff(func(int) time.Duration { return time.Minute }),
 		orchestrator.WithRetryJitter(func(d time.Duration) time.Duration { return d }),
 	)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestStoreApprovalCheckerReportsStableRequesterTerminalReasons(t *testing.T)
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "approval-terminal-reasons"}); err != nil {
 		t.Fatalf("seed tenant: %v", err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

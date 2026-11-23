@@ -14,6 +14,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -282,6 +284,16 @@ func (l *Log) freezeLegacyBackupRestoreRoute(
 ) (jetstream.Stream, error) {
 	if err := validatePendingBackupRestoreConfig(info.Config); err != nil {
 		return nil, err
+	}
+	if l.requiredBackupHistoryAdmission {
+		cut, err := strconv.ParseUint(info.Config.Metadata[backupRestoreMetadataCut], 10, 64)
+		if err != nil {
+			return nil, ErrBackupHistoryAdmissionUnavailable
+		}
+		if err := l.requireBackupHistoryOwner(ctx, cut,
+			info.Config.Metadata[backupRestoreMetadataDigest]); err != nil {
+			return nil, err
+		}
 	}
 	if !backupRestoreRouteNeedsUpgrade(info.Config) {
 		return stream, nil
@@ -698,6 +710,24 @@ func (l *Log) RestoreAuthorizedBackupHistory(
 	authorization *crypto.BackupRestoreGrant,
 	source BackupHistorySource,
 ) (int, error) {
+	if l.requiredBackupHistoryAdmission && (l.backupHistoryAdmission == nil || l.backupHistoryJournal == nil) {
+		return 0, ErrBackupHistoryAdmissionUnavailable
+	}
+	if l.backupHistoryAdmission != nil {
+		return l.withBackupHistoryAdmission(ctx, cut, artifactDigest, func(admitted context.Context) (int, error) {
+			return l.restoreAuthorizedBackupHistoryAdmitted(admitted, cut, artifactDigest, authorization, source)
+		})
+	}
+	return l.restoreAuthorizedBackupHistoryAdmitted(ctx, cut, artifactDigest, authorization, source)
+}
+
+func (l *Log) restoreAuthorizedBackupHistoryAdmitted(
+	ctx context.Context,
+	cut uint64,
+	artifactDigest string,
+	authorization *crypto.BackupRestoreGrant,
+	source BackupHistorySource,
+) (int, error) {
 	if source == nil {
 		return 0, errors.New("events: backup history restore source is required")
 	}
@@ -711,7 +741,7 @@ func (l *Log) RestoreAuthorizedBackupHistory(
 	if intent.EventCutSequence != cut || intent.ArtifactSHA256 != artifactDigest {
 		return 0, ErrBackupRestoreAuthorizationRequired
 	}
-	if l.rejectLegacySchedulerRuns.Load() &&
+	if (l.requiredBackupHistoryAdmission || l.rejectLegacySchedulerRuns.Load()) &&
 		(l.backupRestoreAuthorizer == nil || !l.backupRestoreAuthorizer.Verify(authorization)) {
 		return 0, ErrBackupRestoreAuthorizationRequired
 	}
@@ -727,11 +757,11 @@ func (l *Log) RestoreAuthorizedBackupHistory(
 	// source preflight so even an unexpected concurrent activation cannot use the
 	// ordinary keyed-restore compatibility path to cross it without the locked-key
 	// verifier.
-	if l.rejectLegacySchedulerRuns.Load() &&
+	if (l.requiredBackupHistoryAdmission || l.rejectLegacySchedulerRuns.Load()) &&
 		(l.backupRestoreAuthorizer == nil || !l.backupRestoreAuthorizer.Verify(authorization)) {
 		return 0, ErrBackupRestoreAuthorizationRequired
 	}
-	return l.restoreBackupHistory(ctx, cut, artifactDigest, spool.source)
+	return l.restoreBackupHistoryAdmitted(ctx, cut, artifactDigest, spool.source, true)
 }
 
 func (l *Log) restoreBackupHistory(
@@ -740,6 +770,108 @@ func (l *Log) restoreBackupHistory(
 	artifactDigest string,
 	source BackupHistorySource,
 ) (int, error) {
+	if l.requiredBackupHistoryAdmission && l.backupHistoryAdmission == nil {
+		return 0, ErrBackupHistoryAdmissionUnavailable
+	}
+	if l.backupHistoryAdmission != nil {
+		return l.withBackupHistoryAdmission(ctx, cut, artifactDigest, func(admitted context.Context) (int, error) {
+			return l.restoreBackupHistoryAdmitted(admitted, cut, artifactDigest, source, false)
+		})
+	}
+	return l.restoreBackupHistoryAdmitted(ctx, cut, artifactDigest, source, false)
+}
+
+// The owner callback is a one-use lease over the entire raw restore. Returning
+// from admission ends that lease even if an adapter retained the callback.
+func (l *Log) withBackupHistoryAdmission(ctx context.Context, cut uint64, artifactDigest string,
+	run func(context.Context) (int, error),
+) (int, error) {
+	var mu sync.Mutex
+	var inFlight sync.WaitGroup
+	active, used := true, false
+	defer func() {
+		mu.Lock()
+		active = false
+		mu.Unlock()
+		inFlight.Wait()
+	}()
+	return l.backupHistoryAdmission(ctx, cut, artifactDigest, func(admitted context.Context) (int, error) {
+		mu.Lock()
+		if !active || used {
+			mu.Unlock()
+			return 0, ErrBackupHistoryAdmissionUnavailable
+		}
+		used = true
+		inFlight.Add(1)
+		mu.Unlock()
+		defer inFlight.Done()
+		owner := &backupHistoryOwnerLease{log: l, cut: cut, artifactDigest: artifactDigest}
+		owner.active.Store(true)
+		defer owner.active.Store(false)
+		return run(context.WithValue(admitted, backupHistoryOwnerKey{}, owner))
+	})
+}
+
+type backupHistoryOwnerKey struct{}
+
+type backupHistoryOwnerLease struct {
+	log            *Log
+	cut            uint64
+	artifactDigest string
+	active         atomic.Bool
+}
+
+func (l *Log) requireBackupHistoryOwner(ctx context.Context, cut uint64, artifactDigest string) error {
+	if !l.requiredBackupHistoryAdmission {
+		return nil
+	}
+	owner, ok := ctx.Value(backupHistoryOwnerKey{}).(*backupHistoryOwnerLease)
+	if !ok || owner == nil || owner.log != l || !owner.active.Load() ||
+		owner.cut != cut || owner.artifactDigest != artifactDigest || ctx.Err() != nil {
+		return ErrBackupHistoryAdmissionUnavailable
+	}
+	return nil
+}
+
+func (l *Log) requireCurrentBackupHistoryOwner(ctx context.Context, artifactDigest string) error {
+	if !l.requiredBackupHistoryAdmission {
+		return nil
+	}
+	owner, ok := ctx.Value(backupHistoryOwnerKey{}).(*backupHistoryOwnerLease)
+	if !ok || owner == nil {
+		return ErrBackupHistoryAdmissionUnavailable
+	}
+	return l.requireBackupHistoryOwner(ctx, owner.cut, artifactDigest)
+}
+
+func (l *Log) withBackupHistoryRecordJournal(ctx context.Context, cut uint64,
+	artifactDigest, action string, record BackupHistoryRecord, run func(context.Context) error,
+) error {
+	if err := l.requireBackupHistoryOwner(ctx, cut, artifactDigest); err != nil {
+		return err
+	}
+	if l.backupHistoryJournal == nil {
+		if l.requiredBackupHistoryAdmission {
+			return ErrBackupHistoryAdmissionUnavailable
+		}
+		return run(ctx)
+	}
+	return l.backupHistoryJournal(ctx, cut, artifactDigest, action, record, run)
+}
+
+func (l *Log) restoreBackupHistoryAdmitted(
+	ctx context.Context,
+	cut uint64,
+	artifactDigest string,
+	source BackupHistorySource,
+	authorized bool,
+) (int, error) {
+	if err := l.requireBackupHistoryOwner(ctx, cut, artifactDigest); err != nil {
+		return 0, err
+	}
+	if l.requiredBackupHistoryAdmission && !authorized {
+		return 0, ErrBackupRestoreAuthorizationRequired
+	}
 	if source == nil {
 		return 0, errors.New("events: backup history restore source is required")
 	}
@@ -748,6 +880,9 @@ func (l *Log) restoreBackupHistory(
 	}
 	if l.history == nil {
 		return 0, errors.New("events: backup history restore requires a history coordinator")
+	}
+	if l.requiredBackupHistoryAdmission && l.backupHistoryJournal == nil {
+		return 0, ErrBackupHistoryAdmissionUnavailable
 	}
 
 	restored := 0
@@ -769,17 +904,35 @@ func (l *Log) restoreBackupHistory(
 				)
 			}
 			var restoreBound bool
-			stream, restoreBound, err = l.bindBackupRestoreIdentity(
-				ctx, name, stream, info, cut, artifactDigest,
-			)
-			if err != nil {
+			controlRecord := BackupHistoryRecord{Subject: name}
+			if err := l.withBackupHistoryRecordJournal(ctx, cut, artifactDigest, "bind", controlRecord,
+				func(journalCtx context.Context) error {
+					var bindErr error
+					stream, restoreBound, bindErr = l.bindBackupRestoreIdentity(
+						journalCtx, name, stream, info, cut, artifactDigest)
+					if bindErr != nil {
+						return bindErr
+					}
+					boundInfo, readErr := l.infoForStream(journalCtx, stream)
+					if readErr != nil {
+						return readErr
+					}
+					if restoreBound && (boundInfo.Config.Metadata[backupRestoreMetadataDigest] != artifactDigest ||
+						boundInfo.Config.Metadata[backupRestoreMetadataCut] != strconv.FormatUint(cut, 10)) {
+						return ErrBackupHistoryPrefixMismatch
+					}
+					return nil
+				}); err != nil {
 				return err
 			}
 			// The authenticated restore can materialize or secure-delete gap
 			// positions. Drop identity facts for the old cut before changing any
 			// source envelopes; a crash may leave this restore pending for a
 			// later authorized continuation.
-			if err := l.discardEventIDIndexesAtCutover(ctx, name); err != nil {
+			if err := l.withBackupHistoryRecordJournal(ctx, cut, artifactDigest, "index", controlRecord,
+				func(journalCtx context.Context) error {
+					return l.discardEventIDIndexesAtCutover(journalCtx, name)
+				}); err != nil {
 				return err
 			}
 
@@ -808,43 +961,15 @@ func (l *Log) restoreBackupHistory(
 						)
 					}
 					for sequence := record.Sequence; sequence <= record.GapThrough; sequence++ {
-						if sequence <= head {
-							raw, err := stream.GetMsg(ctx, sequence)
-							if errors.Is(err, jetstream.ErrMsgNotFound) {
-								continue
-							}
-							if err != nil {
-								return fmt.Errorf("events: inspect restored backup gap %d: %w", sequence, err)
-							}
-							if !isBackupGapMarker(raw, sequence) {
-								return fmt.Errorf(
-									"%w: backup expects gap at sequence %d but target has a live message",
-									ErrBackupHistoryPrefixMismatch, sequence,
-								)
-							}
-							if !restoreBound {
-								return fmt.Errorf(
-									"%w: completed markerless target retains a live gap marker at sequence %d",
-									ErrBackupHistoryPrefixMismatch, sequence,
-								)
-							}
-							if err := stream.SecureDeleteMsg(ctx, sequence); err != nil {
-								return fmt.Errorf("events: finish secure-delete backup gap %d: %w", sequence, err)
-							}
-							continue
-						}
-						if sequence != head+1 {
-							return fmt.Errorf(
-								"events: backup gap sequence %d does not continue target head %d",
-								sequence, head,
-							)
-						}
-						if err := l.restoreBackupGap(
-							ctx, name, stream, sequence, artifactDigest,
-						); err != nil {
+						journalRecord := BackupHistoryRecord{Sequence: sequence, GapThrough: sequence,
+							Subject: backupGapSubject, MessageID: backupGapMessageID(sequence)}
+						if err := l.withBackupHistoryRecordJournal(ctx, cut, artifactDigest, "gap", journalRecord,
+							func(journalCtx context.Context) error {
+								return l.restoreBackupGapAtSequence(journalCtx, name, stream,
+									sequence, artifactDigest, restoreBound, &head)
+							}); err != nil {
 							return err
 						}
-						head = sequence
 					}
 					covered = record.GapThrough
 					return nil
@@ -858,59 +983,69 @@ func (l *Log) restoreBackupHistory(
 				if err := validateBackupLiveRecord(record); err != nil {
 					return err
 				}
-				if record.Sequence <= head {
-					raw, err := stream.GetMsg(ctx, record.Sequence)
-					if errors.Is(err, jetstream.ErrMsgNotFound) {
-						return fmt.Errorf(
-							"%w: backup expects a live message at sequence %d but target has a gap",
-							ErrBackupHistoryPrefixMismatch, record.Sequence,
+				return l.withBackupHistoryRecordJournal(ctx, cut, artifactDigest, "live", record,
+					func(journalCtx context.Context) error {
+						if record.Sequence <= head {
+							raw, err := stream.GetMsg(journalCtx, record.Sequence)
+							if errors.Is(err, jetstream.ErrMsgNotFound) {
+								return fmt.Errorf(
+									"%w: backup expects a live message at sequence %d but target has a gap",
+									ErrBackupHistoryPrefixMismatch, record.Sequence,
+								)
+							}
+							if err != nil {
+								return fmt.Errorf("events: inspect restored backup seq %d: %w", record.Sequence, err)
+							}
+							if err := matchBackupLiveRecord(raw, record); err != nil {
+								return err
+							}
+							covered = record.Sequence
+							restored++
+							return nil
+						}
+						if record.Sequence != head+1 {
+							return fmt.Errorf(
+								"events: backup event sequence %d does not continue target head %d",
+								record.Sequence, head,
+							)
+						}
+						restoreSubject, err := backupRestorePublishSubject(
+							artifactDigest, record.Subject,
 						)
-					}
-					if err != nil {
-						return fmt.Errorf("events: inspect restored backup seq %d: %w", record.Sequence, err)
-					}
-					if err := matchBackupLiveRecord(raw, record); err != nil {
-						return err
-					}
-					covered = record.Sequence
-					restored++
-					return nil
-				}
-				if record.Sequence != head+1 {
-					return fmt.Errorf(
-						"events: backup event sequence %d does not continue target head %d",
-						record.Sequence, head,
-					)
-				}
-				restoreSubject, err := backupRestorePublishSubject(
-					artifactDigest, record.Subject,
-				)
-				if err != nil {
-					return fmt.Errorf("events: route backup restore seq %d: %w", record.Sequence, err)
-				}
-				ack, err := l.js.PublishMsg(
-					ctx,
-					&nats.Msg{
-						Subject: restoreSubject,
-						Data:    append([]byte(nil), record.Stored...),
-					},
-					jetstream.WithMsgID(record.MessageID),
-					jetstream.WithExpectStream(name),
-					jetstream.WithExpectLastSequence(covered),
-				)
-				if err != nil {
-					return fmt.Errorf("events: restore backup seq %d: %w", record.Sequence, err)
-				}
-				if ack.Duplicate || ack.Stream != name || ack.Sequence != record.Sequence {
-					return fmt.Errorf(
-						"events: restore backup seq %d acknowledged stream=%s sequence=%d duplicate=%t",
-						record.Sequence, ack.Stream, ack.Sequence, ack.Duplicate,
-					)
-				}
-				covered = record.Sequence
-				head = record.Sequence
-				restored++
-				return nil
+						if err != nil {
+							return fmt.Errorf("events: route backup restore seq %d: %w", record.Sequence, err)
+						}
+						ack, err := l.js.PublishMsg(
+							journalCtx,
+							&nats.Msg{
+								Subject: restoreSubject,
+								Data:    append([]byte(nil), record.Stored...),
+							},
+							jetstream.WithMsgID(record.MessageID),
+							jetstream.WithExpectStream(name),
+							jetstream.WithExpectLastSequence(covered),
+						)
+						if err != nil {
+							return fmt.Errorf("events: restore backup seq %d: %w", record.Sequence, err)
+						}
+						if ack.Duplicate || ack.Stream != name || ack.Sequence != record.Sequence {
+							return fmt.Errorf(
+								"events: restore backup seq %d acknowledged stream=%s sequence=%d duplicate=%t",
+								record.Sequence, ack.Stream, ack.Sequence, ack.Duplicate,
+							)
+						}
+						raw, err := stream.GetMsg(journalCtx, record.Sequence)
+						if err != nil {
+							return fmt.Errorf("events: read back restored backup seq %d: %w", record.Sequence, err)
+						}
+						if err := matchBackupLiveRecord(raw, record); err != nil {
+							return err
+						}
+						covered = record.Sequence
+						head = record.Sequence
+						restored++
+						return nil
+					})
 			})
 			if err != nil {
 				return err
@@ -931,14 +1066,27 @@ func (l *Log) restoreBackupHistory(
 					finalInfo.State.LastSeq, cut,
 				)
 			}
-			if restoreBound {
-				if err := l.clearBackupRestoreIdentity(
-					ctx, name, stream, artifactDigest, cut,
-				); err != nil {
-					return err
-				}
-			}
-			return nil
+			return l.withBackupHistoryRecordJournal(ctx, cut, artifactDigest, "unbind", controlRecord,
+				func(journalCtx context.Context) error {
+					if restoreBound {
+						if err := l.clearBackupRestoreIdentity(
+							journalCtx, name, stream, artifactDigest, cut); err != nil {
+							return err
+						}
+					}
+					_, current, err := l.resolveActiveStream(journalCtx)
+					if err != nil {
+						return err
+					}
+					readback, err := l.infoForStream(journalCtx, current)
+					if err != nil {
+						return err
+					}
+					if backupRestoreMetadataPending(readback.Config.Metadata) {
+						return ErrBackupRestoreIncomplete
+					}
+					return nil
+				})
 		})
 	})
 	return restored, err
@@ -952,6 +1100,9 @@ func (l *Log) bindBackupRestoreIdentity(
 	cut uint64,
 	artifactDigest string,
 ) (jetstream.Stream, bool, error) {
+	if err := l.requireBackupHistoryOwner(ctx, cut, artifactDigest); err != nil {
+		return nil, false, err
+	}
 	metadata := info.Config.Metadata
 	boundDigest := metadata[backupRestoreMetadataDigest]
 	boundCut := metadata[backupRestoreMetadataCut]
@@ -1048,6 +1199,9 @@ func (l *Log) clearBackupRestoreIdentity(
 	artifactDigest string,
 	cut uint64,
 ) error {
+	if err := l.requireBackupHistoryOwner(ctx, cut, artifactDigest); err != nil {
+		return err
+	}
 	info, err := l.infoForStream(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("events: read completed backup restore metadata: %w", err)
@@ -1153,6 +1307,50 @@ func isBackupGapMarker(raw *jetstream.RawStreamMsg, sequence uint64) bool {
 	return len(messageIDs) == 1 && messageIDs[0] == backupGapMessageID(sequence)
 }
 
+func (l *Log) restoreBackupGapAtSequence(ctx context.Context, streamName string,
+	stream jetstream.Stream, sequence uint64, artifactDigest string,
+	restoreBound bool, head *uint64,
+) error {
+	if err := l.requireCurrentBackupHistoryOwner(ctx, artifactDigest); err != nil {
+		return err
+	}
+	if sequence <= *head {
+		raw, err := stream.GetMsg(ctx, sequence)
+		if errors.Is(err, jetstream.ErrMsgNotFound) {
+			return nil // exact same-artifact retry of an already deleted gap
+		}
+		if err != nil {
+			return fmt.Errorf("events: inspect restored backup gap %d: %w", sequence, err)
+		}
+		if !isBackupGapMarker(raw, sequence) {
+			return fmt.Errorf("%w: backup expects gap at sequence %d but target has a live message",
+				ErrBackupHistoryPrefixMismatch, sequence)
+		}
+		if !restoreBound {
+			return fmt.Errorf("%w: completed markerless target retains a live gap marker at sequence %d",
+				ErrBackupHistoryPrefixMismatch, sequence)
+		}
+		if err := stream.SecureDeleteMsg(ctx, sequence); err != nil {
+			return fmt.Errorf("events: finish secure-delete backup gap %d: %w", sequence, err)
+		}
+	} else {
+		if sequence != *head+1 {
+			return fmt.Errorf("events: backup gap sequence %d does not continue target head %d", sequence, *head)
+		}
+		if err := l.restoreBackupGap(ctx, streamName, stream, sequence, artifactDigest); err != nil {
+			return err
+		}
+		*head = sequence
+	}
+	if _, err := stream.GetMsg(ctx, sequence); !errors.Is(err, jetstream.ErrMsgNotFound) {
+		if err == nil {
+			return fmt.Errorf("events: backup gap %d remains live after secure deletion", sequence)
+		}
+		return fmt.Errorf("events: verify deleted backup gap %d: %w", sequence, err)
+	}
+	return nil
+}
+
 func (l *Log) restoreBackupGap(
 	ctx context.Context,
 	streamName string,
@@ -1160,6 +1358,9 @@ func (l *Log) restoreBackupGap(
 	sequence uint64,
 	artifactDigest string,
 ) error {
+	if err := l.requireCurrentBackupHistoryOwner(ctx, artifactDigest); err != nil {
+		return err
+	}
 	restoreSubject, err := backupRestorePublishSubject(artifactDigest, backupGapSubject)
 	if err != nil {
 		return fmt.Errorf("events: route backup gap %d: %w", sequence, err)

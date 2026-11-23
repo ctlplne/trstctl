@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -1163,7 +1164,7 @@ func testApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t *test
 	s := newStore(t)
 	resetOrchestratorOperationApprovals(t, s)
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		events.WithHistoryRewriteContinuityVerifier(func(context.Context, events.TenantDataContinuityEvidence) error { return nil }))
 	if err != nil {
 		t.Fatalf("open rewrite-ready event log: %v", err)
@@ -1460,7 +1461,22 @@ func TestCodeSigningColdRebuildKeepsConflictingApprovalUnconsumed(t *testing.T) 
 	resetOrchestratorOperationApprovals(t, s)
 	ctx := context.Background()
 	const duplicateWindow = 100 * time.Millisecond
-	log := openLogWithOptions(t, events.WithDuplicateWindowForTesting(duplicateWindow))
+	var admittedCodeSigning [][]byte
+	log := openLogWithOptions(t, events.WithDuplicateWindowForTesting(duplicateWindow),
+		events.WithAppendAdmission(func(ctx context.Context, event events.Event,
+			publish func(context.Context) (events.Event, error),
+		) (events.Event, error) {
+			if event.Type == projections.EventCodeSigningCommanded {
+				known := false
+				for _, exact := range admittedCodeSigning {
+					known = known || bytes.Equal(event.Data, exact)
+				}
+				if event.TenantID != tenantA || !known {
+					return events.Event{}, errors.New("unexpected sealed code-signing fixture event")
+				}
+			}
+			return publish(ctx)
+		}))
 	projector := projections.New(s)
 	tenantEvent, err := log.Append(ctx, events.Event{
 		Type: projections.EventTenantRegistered, TenantID: tenantA,
@@ -1510,6 +1526,7 @@ func TestCodeSigningColdRebuildKeepsConflictingApprovalUnconsumed(t *testing.T) 
 		OperationID: operationID, IdempotencyKey: idempotencyKey,
 		Mode: "key", RequestHash: requestHashA, SealedCommand: []byte("sealed-command-a"), Approval: &useA,
 	})
+	admittedCodeSigning = append(admittedCodeSigning, payloadA)
 	eventA, err := log.Append(ctx, events.Event{
 		ID: eventID, Type: projections.EventCodeSigningCommanded, TenantID: tenantA,
 		Time: time.Now().UTC(), SchemaVersion: projections.CodeSigningApprovalEventSchemaVersion, Data: payloadA,
@@ -1530,6 +1547,7 @@ func TestCodeSigningColdRebuildKeepsConflictingApprovalUnconsumed(t *testing.T) 
 		OperationID: operationID, IdempotencyKey: idempotencyKey,
 		Mode: "keyless", RequestHash: requestHashB, SealedCommand: []byte("sealed-command-b"), Approval: &useB,
 	})
+	admittedCodeSigning = append(admittedCodeSigning, payloadB)
 	// Cross JetStream's real finite Msg-Id memory. The second conflicting event
 	// deliberately reuses the only legal deterministic event ID, proving cold
 	// rebuild correctness does not come from the broker suppressing it forever.

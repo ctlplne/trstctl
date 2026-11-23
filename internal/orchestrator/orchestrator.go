@@ -263,7 +263,7 @@ func WithTenantDataRewriteOptions(options ...events.TenantDataRewriteOption) Orc
 // the same logic a rebuild uses.
 func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox, options ...OrchestratorOption) *Orchestrator {
 	orch := &Orchestrator{
-		log: log, store: st, outbox: ob, proj: projections.New(st),
+		log: log, store: st, outbox: ob, proj: projections.New(st, projections.WithCanonicalEventSource(log)),
 		durableIdem: NewIdempotency(st),
 	}
 	for _, option := range options {

@@ -38,7 +38,7 @@ func TestPingFailsWhenObservedReplicasBelowDesired(t *testing.T) {
 	defer srv.Shutdown()
 
 	ctx := context.Background()
-	log, err := Open(ctx, config.NATS{
+	log, err := openFixture(ctx, config.NATS{
 		Mode:               config.NATSExternal,
 		URL:                srv.ClientURL(),
 		Replicas:           1,

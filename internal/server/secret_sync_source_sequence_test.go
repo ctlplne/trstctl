@@ -8,6 +8,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -19,7 +20,7 @@ func TestSecretSyncWorkerExactSourceSurvivesColdRestartAndRefusesProjectionDrift
 	const tenant = "11111111-1111-4111-8111-111111111178"
 	ctx := context.Background()
 	dir := filepath.Join(t.TempDir(), "nats")
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func TestSecretSyncWorkerExactSourceSurvivesColdRestartAndRefusesProjectionDrift
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir})
+	reopened, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}

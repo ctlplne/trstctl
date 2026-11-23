@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/google/uuid"
 
@@ -42,7 +43,7 @@ func TestServedMemberOffboardDeniesBearerDuringProjectionGap(t *testing.T) {
 	}
 	admin := seedServedAPIToken(t, ctx, st, tenantID, "qa-offboard-admin", adminScopes)
 	memberToken := seedServedAPIToken(t, ctx, st, tenantID, subject, []string{"access:read"})
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}

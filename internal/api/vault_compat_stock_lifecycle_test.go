@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	configpkg "trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -21,7 +22,7 @@ import (
 func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 	ctx := context.Background()
 	storeDir := t.TempDir()
-	log, err := events.Open(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: storeDir, SyncAlways: true}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: storeDir, SyncAlways: true}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 		if err := log.Close(); err != nil {
 			t.Fatal(err)
 		}
-		log, err = events.Open(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: storeDir, SyncAlways: true}, events.WithRequiredPrivacyEventPolicies())
+		log, err = eventstest.OpenFixture(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: storeDir, SyncAlways: true}, events.WithRequiredPrivacyEventPolicies())
 		if err != nil {
 			t.Fatal(err)
 		}

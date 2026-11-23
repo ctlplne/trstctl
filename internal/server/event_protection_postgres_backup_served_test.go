@@ -119,7 +119,13 @@ func eventProtectionPostgresBackupFixture(t *testing.T, retention time.Duration,
 	if err := st.Migrate(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if vh85SourceStoreHook != nil {
+		st = vh85SourceStoreHook(t, st, sourceDSN)
+	}
 	cfg := eventProtectionRuntimeConfigFixture(t)
+	if vh85PrepareHook != nil {
+		vh85PrepareHook(t, cfg)
+	}
 	custodyDirectory := cfg.Privacy.EventProtection.KeyDirectory
 	if !enabled {
 		cfg.Privacy.EventProtection.KeyDirectory = ""
@@ -145,7 +151,7 @@ func eventProtectionPostgresBackupFixture(t *testing.T, retention time.Duration,
 	if err != nil {
 		t.Fatal(err)
 	}
-	kek.Destroy()
+	t.Cleanup(kek.Destroy)
 	signer, key, err := openAuditSigningRuntime(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +166,11 @@ func eventProtectionPostgresBackupFixture(t *testing.T, retention time.Duration,
 	if err := provisioner.provisionCA(t.Context(), signer.signer.Client(), "Protected artifact fixture", cfg.CA.CertFile, cfg.CA.PublicCertFile); err != nil {
 		t.Fatal(err)
 	}
-	log, runtime, err := openConfiguredEventSource(t.Context(), cfg, st, key, true, nil)
+	core, err := newRunTenantCustodyCore(cfg, st, kek, signer.signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, runtime, err := openConfiguredEventSourceWithCustody(t.Context(), cfg, st, key, true, nil, core)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,6 +216,9 @@ func eventProtectionPostgresBackupFixture(t *testing.T, retention time.Duration,
 	}
 	if _, err := srv.orch.CreateOwner(t.Context(), tenant, "team", "Protected owner", "protected-artifact@example.invalid"); err != nil {
 		t.Fatal(err)
+	}
+	if vh85SeedHook != nil {
+		vh85SeedHook(t, cfg, st, log, key, tenant, runtime.projectionOptions())
 	}
 	// Independent receiver fixtures: no live bearer credentials are minted.
 	for _, row := range []struct{ tenant, id, subject, hash string }{
@@ -282,7 +295,7 @@ func eventProtectionErasedSQLRestore(t *testing.T, legacy bool) (*config.Config,
 			signer.Close()
 		}
 	}()
-	log, runtime, err := openConfiguredEventSource(t.Context(), cfg, st, key, true, nil)
+	log, runtime, err := openConfiguredEventSourceFixture(t, cfg, st, key, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

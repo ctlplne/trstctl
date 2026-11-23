@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -67,58 +68,81 @@ func (s *Store) RewriteTenantKeyDomainCiphertextStage(
 	}
 
 	var changed int64
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if err := s.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
-			return err
-		}
-		rows, err := tx.Query(ctx, selectSQL, tenantID)
-		if err != nil {
-			return fmt.Errorf("store: select tenant ciphertext stage %s: %w", stage, err)
-		}
-		type candidate struct {
-			rowID  string
-			before []byte
-		}
-		candidates := make([]candidate, 0)
-		for rows.Next() {
-			var item candidate
-			if err := rows.Scan(&item.rowID, &item.before); err != nil {
-				rows.Close()
-				return fmt.Errorf("store: scan tenant ciphertext stage %s: %w", stage, err)
-			}
-			candidates = append(candidates, item)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return fmt.Errorf("store: iterate tenant ciphertext stage %s: %w", stage, err)
-		}
-		rows.Close()
-
-		for _, item := range candidates {
-			after, rewrite, err := transform(append([]byte(nil), item.before...))
-			if err != nil {
-				return fmt.Errorf("store: transform tenant ciphertext stage %s: %w", stage, err)
-			}
-			if !rewrite {
-				if !bytes.Equal(after, item.before) {
-					return fmt.Errorf("store: unchanged tenant ciphertext stage %s returned different bytes", stage)
+	work := func(workCtx context.Context) error {
+		return s.WithGlobalKeyStateAdmission(workCtx, KeyStateExclusive, func(admitted context.Context) error {
+			return s.WithTenant(admitted, tenantID, func(tx pgx.Tx) error {
+				if err := s.LockGlobalKeyStateCommitTx(admitted, tx, KeyStateExclusive); err != nil {
+					return err
 				}
-				continue
-			}
-			if len(after) == 0 || bytes.Equal(after, item.before) {
-				return fmt.Errorf("store: changed tenant ciphertext stage %s returned invalid bytes", stage)
-			}
-			command, err := tx.Exec(ctx, updateSQL, after, tenantID, item.rowID, item.before)
-			if err != nil {
-				return fmt.Errorf("store: update tenant ciphertext stage %s: %w", stage, err)
-			}
-			if command.RowsAffected() != 1 {
-				return fmt.Errorf("store: tenant ciphertext stage %s changed while fenced", stage)
-			}
-			changed++
-		}
-		return nil
-	})
+				if err := s.LockTenantKeyDomainExclusiveTx(admitted, tx, tenantID); err != nil {
+					return err
+				}
+				rows, err := tx.Query(ctx, selectSQL, tenantID)
+				if err != nil {
+					return fmt.Errorf("store: select tenant ciphertext stage %s: %w", stage, err)
+				}
+				type candidate struct {
+					rowID  string
+					before []byte
+				}
+				candidates := make([]candidate, 0)
+				for rows.Next() {
+					var item candidate
+					if err := rows.Scan(&item.rowID, &item.before); err != nil {
+						rows.Close()
+						return fmt.Errorf("store: scan tenant ciphertext stage %s: %w", stage, err)
+					}
+					candidates = append(candidates, item)
+				}
+				if err := rows.Err(); err != nil {
+					rows.Close()
+					return fmt.Errorf("store: iterate tenant ciphertext stage %s: %w", stage, err)
+				}
+				rows.Close()
+
+				for _, item := range candidates {
+					after, rewrite, err := transform(append([]byte(nil), item.before...))
+					if err != nil {
+						return fmt.Errorf("store: transform tenant ciphertext stage %s: %w", stage, err)
+					}
+					if !rewrite {
+						if !bytes.Equal(after, item.before) {
+							return fmt.Errorf("store: unchanged tenant ciphertext stage %s returned different bytes", stage)
+						}
+						continue
+					}
+					if len(after) == 0 || bytes.Equal(after, item.before) {
+						return fmt.Errorf("store: changed tenant ciphertext stage %s returned invalid bytes", stage)
+					}
+					command, err := tx.Exec(ctx, updateSQL, after, tenantID, item.rowID, item.before)
+					if err != nil {
+						return fmt.Errorf("store: update tenant ciphertext stage %s: %w", stage, err)
+					}
+					if command.RowsAffected() != 1 {
+						return fmt.Errorf("store: tenant ciphertext stage %s changed while fenced", stage)
+					}
+					changed++
+				}
+				return nil
+			})
+		})
+	}
+	// The coordinator already owns a durable restore activity spanning every
+	// stage. A direct library call needs its own activity before key-state A.
+	// Borrow only the live, exact tenant or deployment coordinator token.
+	token, _ := ctx.Value(restoreActivityTokenContextKey{}).(*restoreActivityToken)
+	borrowTenant := token != nil && token.tenantID == tenantID &&
+		(token.lane == "tenant-domain-migrate" || token.lane == "tenant-domain-rotate")
+	borrowDeployment := token != nil && token.tenantID == RestoreControlTenantID &&
+		(token.lane == "deployment-kek-begin" || token.lane == "deployment-kek-step")
+	var err error
+	if token != nil && token.origin == s && token.lease != nil && token.lease.active.Load() &&
+		token.active.Load() && token.kind == "maintenance" && (borrowTenant || borrowDeployment) {
+		err = work(ctx)
+	} else {
+		err = s.WithRestoreActivity(ctx, tenantID, uuid.NewString(), "maintenance",
+			"tenant-domain-ciphertext-stage", work)
+	}
 	return changed, err
 }
 

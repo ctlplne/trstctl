@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
 
@@ -97,7 +98,7 @@ func TestBackupHistoryReadRetainsCheckpointedSourceBeforePinningExport(t *testin
 		tenantA = "11111111-1111-1111-1111-111111111111"
 		tenantB = "22222222-2222-2222-2222-222222222222"
 	)
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	})
 	if err != nil {
@@ -191,7 +192,7 @@ func TestBackupHistoryReadRetainsCheckpointedSourceBeforePinningExport(t *testin
 func TestBackupHistoryReadFailsClosedOnCheckpointBeyondEventHead(t *testing.T) {
 	ctx := context.Background()
 	const tenantID = "11111111-1111-1111-1111-111111111111"
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	})
 	if err != nil {
@@ -233,7 +234,7 @@ func TestBackupHistoryReadFailsClosedOnCheckpointBeyondEventHead(t *testing.T) {
 func TestBackupHistoryReadRejectsLegacyCheckpointedPruneWithoutDeletingMore(t *testing.T) {
 	ctx := context.Background()
 	const tenantID = "11111111-1111-1111-1111-111111111111"
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	})
 	if err != nil {
@@ -289,7 +290,7 @@ func TestBackupHistoryReadRejectsLegacyCheckpointedPruneWithoutDeletingMore(t *t
 func TestBackupHistoryReadAcceptsRetainedLegacyProviderArchiveScope(t *testing.T) {
 	ctx := context.Background()
 	const scope = "provider-control-plane"
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
 	})
 	if err != nil {
@@ -740,7 +741,7 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 		t.Fatalf("seed break-glass ledger: %v", err)
 	}
 
-	sourceLog, err := events.Open(ctx, cfg.NATS)
+	sourceLog, err := eventstest.OpenFixture(ctx, cfg.NATS)
 	if err != nil {
 		t.Fatalf("open source event log: %v", err)
 	}
@@ -794,7 +795,7 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	sourceLog, err = events.Open(ctx, cfg.NATS)
+	sourceLog, err = eventstest.OpenFixture(ctx, cfg.NATS)
 	if err != nil {
 		t.Fatalf("reopen source event log: %v", err)
 	}

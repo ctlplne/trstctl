@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
@@ -332,7 +333,7 @@ func TestBreakglassReconcileColdEventLogReplaySkipsSignedBundle(t *testing.T) {
 	storeDir := filepath.Join(t.TempDir(), "nats")
 	openLog := func() *events.Log {
 		t.Helper()
-		log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir})
+		log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir})
 		if err != nil {
 			t.Fatalf("open persisted event log: %v", err)
 		}

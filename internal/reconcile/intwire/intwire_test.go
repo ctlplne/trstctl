@@ -18,6 +18,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
@@ -539,7 +540,7 @@ func (h *harness) completionRecords(t *testing.T, planes []planeState) []quarant
 
 func (h *harness) openEventLog(t *testing.T) {
 	t.Helper()
-	log, err := events.Open(h.ctx, config.NATS{
+	log, err := eventstest.OpenFixture(h.ctx, config.NATS{
 		Mode:       config.NATSEmbedded,
 		StoreDir:   h.natsDir,
 		SyncAlways: true,

@@ -62,7 +62,7 @@ func TestCertificateMetadataCommandsFenceBeforeAppend(t *testing.T) {
 				until := time.Now().Add(5 * time.Second)
 				for time.Now().Before(until) {
 					//trstctl:system-query — inspect only the owned fixture session's lock state; no tenant data is selected (AN-1 exemption).
-					if err := s.SystemPool().QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name='metadata_append_peer' AND wait_event_type='Lock' AND wait_event='advisory')`).Scan(&waiting); err != nil {
+					if err := s.SystemPool().QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND wait_event='advisory' AND query LIKE '%lock_certificate_metadata_order%')`).Scan(&waiting); err != nil {
 						return err
 					}
 					if waiting {

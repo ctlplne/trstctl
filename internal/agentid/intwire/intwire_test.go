@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
@@ -397,7 +398,7 @@ func newHarness(t *testing.T, tenant string) *harness {
 		t.Fatalf("migrate store: %v", err)
 	}
 
-	log, err := events.Open(ctx, config.NATS{
+	log, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode:       config.NATSEmbedded,
 		StoreDir:   filepath.Join(t.TempDir(), "nats"),
 		SyncAlways: true,

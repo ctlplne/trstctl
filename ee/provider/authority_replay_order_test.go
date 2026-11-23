@@ -5,6 +5,7 @@ package provider
 import (
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -15,7 +16,7 @@ func authorityReplayFixture(t *testing.T, options ...events.OpenOption) (*corest
 	t.Helper()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, options...)
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, options...)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -95,7 +96,7 @@ func newSchedulerResumeFixture(t *testing.T, secretDetail string) schedulerResum
 		}
 		return nil
 	}
-	log, err := events.Open(
+	log, err := eventstest.OpenFixture(
 		ctx,
 		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		events.WithHistoryRewriteContinuityVerifier(verifier),

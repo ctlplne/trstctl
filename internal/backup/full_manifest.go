@@ -79,6 +79,7 @@ func NewFullManifest(artifacts []Artifact) FullManifest {
 			string(ClassLogRebuild):     append([]string(nil), RecoveredByLogRebuild...),
 			string(ClassPostgresBackup): append([]string(nil), RecoveredFromPostgresBackup...),
 			string(ClassEphemeral):      append([]string(nil), Ephemeral...),
+			string(ClassTargetLocal):    append([]string(nil), TargetLocal...),
 		},
 	}
 }

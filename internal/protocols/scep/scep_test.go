@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -166,7 +167,7 @@ func TestSCEPVerifiedChallengeSelectsEnrollmentProfile(t *testing.T) {
 // itself. This is deliberately a real PKIOperation: a helper appending a fixture
 // would prove the consumer while leaving the production writer unreachable.
 func TestSCEPEmitsCorrelatableImmutableAttemptEvidence(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +216,7 @@ func TestSCEPEmitsCorrelatableImmutableAttemptEvidence(t *testing.T) {
 }
 
 func TestSCEPChallengeFailureRetainsPreIssuanceAttemptEvidence(t *testing.T) {
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

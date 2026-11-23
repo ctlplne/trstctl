@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/storetest"
 )
 
 var sourceTreeSignerAuthSecret = filepath.Join("data", "signer", "sign-auth.bin")
@@ -214,12 +215,19 @@ func TestServerTestResetClearsExternalObservers(t *testing.T) {
 	}
 }
 
+func newServerRewrapStore(t *testing.T) *store.Store {
+	t.Helper()
+	return storetest.OpenRewrapCutoverStore(t, newServerTestStore(t), serverTestPostgresDSN(t))
+}
+
 func resetServerTestStore(t *testing.T, st *store.Store) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if _, err := st.SystemPool().Exec(ctx,
-		`TRUNCATE tenants, browser_sessions, idempotency_keys, outbox, external_observers, external_observations, rate_limits, deployment_kek_domain,
+		`TRUNCATE trstctl_recovery.event_ingress_journal,
+		          trstctl_recovery.restore_activity_tokens, trstctl_recovery.restore_markers,
+		          tenants, browser_sessions, idempotency_keys, outbox, external_observers, external_observations, rate_limits, deployment_kek_domain,
 		          windows_local_account_scans, windows_local_account_rotations,
 		          owners, issuers, identities, identity_transitions, deployment_target_revisions, deployment_targets,
 		          agents, agent_certificate_bindings, agent_cert_revocations, agent_role_grants, kmip_clients, agent_removal_commands, agent_bootstrap_tokens, kubernetes_controller_posture, ssh_trust_fleet_hosts, ssh_trust_fleet_rollouts, kubernetes_trust_rollout_clusters, kubernetes_trust_rollouts, audit_anchors, tsa_certificates, policy_bindings, tenant_members, attestations, api_tokens, api_token_revocation_commands, oidc_session_locators, oidc_logout_receipts, certificates, acme_upstream_ari, certificate_metadata_watermarks, certificate_metadata_receipts,
@@ -288,5 +296,28 @@ func TestServerFixtureResetsCAReprotectionNameCursor(t *testing.T) {
 	}
 	if checkedThrough != nil {
 		t.Fatalf("fresh event stream retained CA re-protection name cursor %d", *checkedThrough)
+	}
+}
+
+// CR-045: each served integration starts with no prior target-local ingress
+// attempt, including a failed attempt left by another test on the shared PG.
+func TestServerFixtureResetsEventIngressJournalCR045(t *testing.T) {
+	st := newServerTestStore(t)
+	const tenant = "49900000-0000-4000-8000-0000000000d1"
+	const operation = "49900000-0000-4000-8000-0000000000d2"
+	if _, err := st.SystemPool().Exec(t.Context(), `INSERT INTO trstctl_recovery.event_ingress_journal
+		(tenant_id,operation_id,event_id,event_type,producer_tenant_scope,producer_key_id,producer_mac,explicit_time)
+		VALUES ($1,$2,'plain-reset-event','tenant.registered',$3,'plain-v1',repeat('a',32)::bytea,false)`,
+		tenant, operation, tenant); err != nil {
+		t.Fatal(err)
+	}
+	resetServerTestStore(t, st)
+	var count int
+	if err := st.SystemPool().QueryRow(t.Context(), `SELECT count(*) FROM trstctl_recovery.event_ingress_journal
+		WHERE tenant_id=$1 AND operation_id=$2`, tenant, operation).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("shared server fixture retained %d ingress journal rows", count)
 	}
 }

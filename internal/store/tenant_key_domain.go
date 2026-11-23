@@ -93,6 +93,9 @@ type TenantKeyDomain struct {
 // snapshot. The event sequence is a monotonic guard: a lagging durable projector
 // cannot overwrite a newer inline projection with an older lifecycle state.
 func (s *Store) ApplyTenantKeyDomainSnapshotTx(ctx context.Context, tx pgx.Tx, domain TenantKeyDomain) error {
+	if err := s.RequireKeyStateOwnerTx(ctx, tx, domain.TenantID, KeyStateExclusive); err != nil {
+		return err
+	}
 	evidenceRefs := domain.LastTransitionEvidenceRefs
 	if evidenceRefs == nil {
 		evidenceRefs = []string{}

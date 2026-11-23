@@ -8,6 +8,7 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	"trstctl.com/trstctl/internal/config"
@@ -78,7 +79,7 @@ func TestCertificateRecordingLegacyRegistrationCannotRecoverErasedLifetime(t *te
 	ctx := t.Context()
 	st := newStore(t)
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(ctx, cfg)
+	log, err := eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +121,7 @@ func TestCertificateRecordingLegacyRegistrationCannotRecoverErasedLifetime(t *te
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(ctx, cfg)
+	log, err = eventstest.OpenFixture(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

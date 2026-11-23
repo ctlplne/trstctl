@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -356,7 +357,7 @@ func (p *tenantLifecycleRegressionProjection) ApplyTx(
 func TestTenantOffboardErasedReceiverRecoveryAndLifecycleProjectionFence(t *testing.T) {
 	st := newStore(t)
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := events.Open(t.Context(), cfg)
+	log, err := eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +401,7 @@ func TestTenantOffboardErasedReceiverRecoveryAndLifecycleProjectionFence(t *test
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = events.Open(t.Context(), cfg)
+	log, err = eventstest.OpenFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -45,7 +45,7 @@ func TestMetadataUUIDScopeRebuildsLegacyCaseSensitiveIndex(t *testing.T) {
 	tenant := "d59b4292-1adc-4d43-a405-781f95b1779c"
 	spelling := strings.ToUpper(tenant)
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")}
-	log, err := Open(t.Context(), cfg)
+	log, err := openFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestMetadataUUIDScopeRebuildsLegacyCaseSensitiveIndex(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = Open(t.Context(), cfg)
+	log, err = openFixture(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

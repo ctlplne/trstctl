@@ -13,6 +13,7 @@ func TestApplicationSecretMutationReceiptsUseIndependentPostgresRecovery(t *test
 		"application_secret_mutation_fences",
 		"application_secret_tenant_epochs",
 		"application_secret_mutation_receipts",
+		"application_secret_rewrap_gates",
 	} {
 		if containsRecoveryTable(ReadModelTables, table) {
 			t.Errorf("%s is in ReadModelTables; rebuild must preserve sealed-mutation recovery state", table)

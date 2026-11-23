@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	xacme "golang.org/x/crypto/acme"
 
@@ -52,7 +53,7 @@ func (c *interruptedOrderCA) Issue(ctx context.Context, req ca.IssueRequest) (ca
 
 func TestACMEOrderIssuanceIdentitySurvivesInterruptedFinalizeAndRestart(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}

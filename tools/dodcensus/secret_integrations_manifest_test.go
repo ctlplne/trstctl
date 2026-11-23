@@ -92,10 +92,10 @@ func TestSecretResidualManifestPinsNativeSyncAssemblyAndRuntime(t *testing.T) {
 		if entry.Inventory == nil || !*entry.Inventory {
 			t.Errorf("%s inventory=%v, want explicit true because this residual is also an advertised native sync target", entry.ID, entry.Inventory)
 		}
-		if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDeps" ||
+		if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDepsWithCustody" ||
 			entry.Assembly.Binding != "returned-field" || entry.Assembly.Field != "TenantSecretSyncTargets" ||
 			!slices.Contains(entry.Assembly.Calls, expected.call) {
-			t.Errorf("%s assembly=%+v, want buildRunDeps returned TenantSecretSyncTargets calling %s",
+			t.Errorf("%s assembly=%+v, want buildRunDepsWithCustody returned TenantSecretSyncTargets calling %s",
 				entry.ID, entry.Assembly, expected.call)
 		}
 		if entry.Runtime.Package != "./internal/server" || entry.Runtime.Test != "TestDODSecretSyncProductionAssembly" ||

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
@@ -172,7 +173,7 @@ func TestRestoredEventsMustMatchTheBackupRecordForRecord(t *testing.T) {
 	if k, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile); err == nil {
 		k.Destroy()
 	}
-	log, err := events.Open(ctx, cfg.NATS)
+	log, err := eventstest.OpenFixture(ctx, cfg.NATS)
 	if err != nil {
 		t.Fatal(err)
 	}

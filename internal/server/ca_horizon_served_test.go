@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -117,7 +118,7 @@ func TestServedCAHorizonBrokerFailureCannotCommitAlertStampOrOutbox(t *testing.T
 	ctx := t.Context()
 	ca := seedCAAuthority(t, ctx, h.store, h.tenant, "broker failure root", "root", "ca-horizon-broker-failure",
 		time.Now().UTC().Add(30*30*24*time.Hour))
-	failedLog, err := events.Open(ctx, config.NATS{
+	failedLog, err := eventstest.OpenFixture(ctx, config.NATS{
 		Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "closed-nats"),
 	})
 	if err != nil {

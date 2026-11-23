@@ -5,6 +5,7 @@ package events_test
 import (
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -18,7 +19,7 @@ import (
 func TestTenantAuditStreamSourcesOnlyTheTenantLaneA94(t *testing.T) {
 	tenancy.SetRouter(nil)
 	t.Cleanup(func() { tenancy.SetRouter(nil) })
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

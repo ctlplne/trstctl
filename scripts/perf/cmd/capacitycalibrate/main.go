@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventstest"
 	"trstctl.com/trstctl/internal/perf"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -288,7 +289,7 @@ func measureJetStream(ctx context.Context, samples int) (jetStreamMeasurement, e
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir, SyncAlways: true})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir, SyncAlways: true})
 	if err != nil {
 		return jetStreamMeasurement{}, err
 	}

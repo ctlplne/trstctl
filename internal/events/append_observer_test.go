@@ -16,7 +16,7 @@ import (
 func TestAppendObserverTimesEachAppend(t *testing.T) {
 	var mu sync.Mutex
 	var heard []time.Duration
-	log, err := Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+	log, err := openFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
 		WithAppendObserver(func(d time.Duration) {
 			mu.Lock()
 			defer mu.Unlock()

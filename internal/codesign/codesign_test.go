@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/audit"
@@ -118,7 +119,7 @@ func TestCodesignUnapprovedRefused(t *testing.T) {
 func TestCodesignKeylessFulcioBound(t *testing.T) {
 	eph, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer eph.Destroy()
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	log, err := eventstest.OpenFixture(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}

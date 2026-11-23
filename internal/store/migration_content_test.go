@@ -1139,6 +1139,7 @@ const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
 	500: true, // TestMigrationDataContentBackfills/0500_api_token_minter_starts_unattributed
+	502: true, // TestMigration0502KeepsV1ReceiptsUnverifiedUntilAuthenticatedBackfill (new gate writes no legacy rows)
 	472: true, // TestMigration0472KeepsScopedSyncsOnTheDefaultInterval
 	473: true, // TestMigration0473KeepsCertificatesWithNoEnrollmentPath
 	454: true, // TestMigration0454KeepsPilotsAndRequiresNoObservedTraffic
@@ -5253,8 +5254,11 @@ func TestMigration0071HistoricalLifecycleCompositePKContent(t *testing.T) {
 // backfilling from existing rows or default-filling columns on an already-existing
 // table changes live values and needs a migration-content subtest like the two
 // above.
+// A migration can contain many statements. Do not join an ALTER TABLE
+// constraint with a later CREATE TABLE default and infer a live-row backfill.
+var valueChangingMigrationPattern = regexp.MustCompile(`(?is)\binsert\s+into\b[^;]+\bselect\b|\balter\s+table\b[^;]+\badd\s+column\b[^;]+\bdefault\b`)
+
 func TestFutureValueChangingMigrationsRequireContentHarness(t *testing.T) {
-	valueChanging := regexp.MustCompile(`(?is)\binsert\s+into\b.+\bselect\b|\balter\s+table\b.+\badd\s+column\b.+\bdefault\b`)
 	for _, m := range orderedMigrationFiles(t) {
 		if m.version <= 51 {
 			continue
@@ -5262,9 +5266,26 @@ func TestFutureValueChangingMigrationsRequireContentHarness(t *testing.T) {
 		if valueChangingMigrationContentHarnesses[m.version] {
 			continue
 		}
-		if valueChanging.MatchString(stripSQLLineComments(m.body)) {
+		if valueChangingMigrationPattern.MatchString(stripSQLLineComments(m.body)) {
 			t.Errorf("%s looks like it writes live values; add an exact N-1 -> N case to TestMigrationDataContentBackfills or classify why it is shape-only", m.name)
 		}
+	}
+}
+
+func TestValueChangingMigrationContentClassifierKeepsStatementBoundary(t *testing.T) {
+	for _, test := range []struct {
+		name, sql string
+		want      bool
+	}{
+		{"new table default after constraint", `ALTER TABLE tenants ADD CONSTRAINT tenant_check CHECK (tenant_id <> 'zero'); CREATE TABLE marker (created_at TIMESTAMPTZ DEFAULT now());`, false},
+		{"existing column default", `ALTER TABLE tenant_state ADD COLUMN status TEXT DEFAULT 'ready';`, true},
+		{"backfill from existing rows", `INSERT INTO tenant_state_archive SELECT * FROM tenant_state;`, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := valueChangingMigrationPattern.MatchString(test.sql); got != test.want {
+				t.Errorf("value-changing migration classification = %t, want %t", got, test.want)
+			}
+		})
 	}
 }
 

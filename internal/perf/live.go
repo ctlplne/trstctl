@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventstest"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
@@ -249,7 +250,7 @@ func startLiveEvalStack(ctx context.Context, options ...func(*server.Deps)) (*li
 	}
 	// The production constructor runs the background identity indexer; so does
 	// this stack, which measures it.
-	stack.log, err = events.Open(ctx, cfg.NATS, events.WithBackgroundEventIDIndexer(),
+	stack.log, err = eventstest.OpenFixture(ctx, cfg.NATS, events.WithBackgroundEventIDIndexer(),
 		events.WithAppendObserver(func(d time.Duration) { stack.breakdown.add(kindJetStreamAppend, d) }))
 	if err != nil {
 		return nil, err

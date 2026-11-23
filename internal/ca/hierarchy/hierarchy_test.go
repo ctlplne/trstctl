@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
@@ -20,7 +21,6 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 	"trstctl.com/trstctl/internal/crypto/jose"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -83,7 +83,7 @@ func newHierarchyHarness(t *testing.T) (*Manager, *store.Store) {
 	}
 	t.Cleanup(func() { s.Close() })
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestApprovalWithoutEventEvidenceCannotReachQuorum(t *testing.T) {
 		t.Fatalf("CreateRoot with unevidenced approval = %v, want ErrQuorumNotMet", err)
 	}
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("events.Open retry log: %v", err)
 	}
