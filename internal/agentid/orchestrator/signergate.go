@@ -57,21 +57,6 @@ func NewSignerIssuanceGateWithRevocationProof(transport editionseam.IssuanceGate
 // Compile-time proof the adapter is a valid in-signer gate for the precondition.
 var _ signing.IssuanceGate = (*signerIssuanceGate)(nil)
 
-// NewSignerIssuanceGate builds the control-plane adapter that drives a gated issuance over
-// the signer transport. It returns a nil signing.IssuanceGate when transport is nil (no
-// out-of-process signer configured), so the brokerstore precondition fails closed
-// (ErrNoSignerGate) rather than minting an unverified chain-bound credential — the operator
-// who licenses AGID before a signer is wired gets a refusal, never a forged credential
-// (INV-A1). alg names the agent-credential key algorithm the signer generates inside the
-// boundary on an approved issuance; the empty algorithm lets the signer's key op pick its
-// default.
-func NewSignerIssuanceGate(transport editionseam.IssuanceGate, alg crypto.Algorithm) signing.IssuanceGate {
-	if transport == nil {
-		return nil
-	}
-	return &signerIssuanceGate{transport: transport, alg: alg}
-}
-
 // VerifyIssuancePreconditions drives the gated issuance over the signer transport. It hands
 // the opaque preconditions to the signer's GatedIssue RPC (which runs the attached AGID-04
 // gate BEFORE any key op and mints inside the boundary on approval) and returns the decision

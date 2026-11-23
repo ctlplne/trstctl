@@ -173,7 +173,7 @@ var Inventory = []Constructor{
 
 	// ---- orchestrator (licensed-outbox worker: the production caller) ------------
 	{Pkg: "internal/agentid/orchestrator", Name: "NewLicensedOutboxFactory", File: "internal/agentid/orchestrator/orchestrator.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (FeatureAgentDelegation outbox attach)"},
-	{Pkg: "internal/agentid/orchestrator", Name: "NewSignerIssuanceGate", File: "internal/agentid/orchestrator/signergate.go", Tier: TierRequired, SeededVia: "orchestrator issuance worker (control-plane signer GatedIssue adapter, AGID-INT-WIRE)"},
+	{Pkg: "internal/agentid/orchestrator", Name: "NewSignerIssuanceGateWithRevocationProof", File: "internal/agentid/orchestrator/signergate.go", Tier: TierRequired, SeededVia: "orchestrator issuance worker (signer GatedIssue adapter with tenant non-revocation proof, CR-053)"},
 
 	// ---- delegation (AGID-01/03/04): registry, binding, signer gate, verifier ----
 	{Pkg: "internal/agentid/delegation", Name: "NewToolRegistry", File: "internal/agentid/delegation/authority.go", Tier: TierRequired, SeededVia: "orchestrator issuance worker (tool canonicalization)"},
@@ -186,6 +186,7 @@ var Inventory = []Constructor{
 	{Pkg: "internal/agentid/delegation", Name: "NewTenantTrustStore", File: "internal/agentid/delegation/verifier.go", Tier: TierRequired, SeededVia: "delegation.NewSignerGate (builds tenant-scoped root-anchor trust)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewDurableAnchorStore", File: "internal/agentid/delegation/anchorstore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach + api.NewAPIOptionsFactory (durable signer root-anchor floor)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewDurableReachabilityTrustStore", File: "internal/agentid/delegation/reachtruststore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach + orchestrator.NewLicensedOutboxFactory (durable signer reachability-verdict trust floor)"},
+	{Pkg: "internal/agentid/delegation", Name: "NewDurableProofConsumer", File: "internal/agentid/delegation/revocation_proof_store.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer attach_families (durable one-use non-revocation proof replay floor, CR-053)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewDurableAttestationTrustStore", File: "internal/agentid/delegation/attestorstore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer attach_families (durable signer attestor trust: operator floor, tenant floor provisioned over the signer transport, spent-evidence floor)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewBrokerTaskEnvelopeGate", File: "internal/agentid/delegation/brokertaskgate.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (broker task-envelope verification seam)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewDurableTaskEnvelopeTrustStore", File: "internal/agentid/delegation/brokertaskgate.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (operator-provisioned requester trust floor)"},
