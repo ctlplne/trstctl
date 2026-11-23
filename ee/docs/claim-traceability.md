@@ -23,7 +23,7 @@ it cannot drift from the code it describes.
 | VDEC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 | XREC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 
-Citations parsed: **985 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **979 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
@@ -48,7 +48,7 @@ Citations parsed: **985 qualified**, **0 bare** (bare citations infer their fami
 | 17 | `internal/agentid/api/api.go`, `internal/agentid/revoke/cascade.go`, `internal/agentid/revoke/directive.go` | `internal/agentid/revoke/cascade_test.go` | _[counsel]_ |
 | 18 | `internal/agentid/orchestrator/revocation.go`, `internal/agentid/revoke/aggregate.go`, `internal/agentid/revoke/terminal.go` | `internal/agentid/revoke/aggregate_internal_test.go`, `internal/agentid/revoke/terminal_test.go` | _[counsel]_ |
 | 19 | `internal/agentid/api/api.go`, `internal/agentid/revoke/cascade.go`, `internal/agentid/revoke/directive.go` _(+2 more)_ | `internal/agentid/revoke/cascade_test.go` | _[counsel]_ |
-| 20 | `internal/agentid/delegation/store/store.go`, `internal/agentid/orchestrator/issuance.go`, `internal/agentid/revoke/refuse_active.go` | `internal/agentid/revoke/refuse_active_test.go` | _[counsel]_ |
+| 20 | `internal/agentid/delegation/store/store.go` | `internal/agentid/revoke/refuse_active_test.go` | _[counsel]_ |
 | 21 | `internal/agentid/delegation/store/store.go`, `internal/agentid/orchestrator/revocation.go`, `internal/agentid/revoke/directive.go` _(+3 more)_ | `internal/agentid/revoke/execution_test.go`, `internal/agentid/revoke/main_test.go` | _[counsel]_ |
 | 22 | `internal/agentid/delegation/store/store.go`, `internal/agentid/revoke/query.go` | `internal/agentid/revoke/terminal_test.go` | _[counsel]_ |
 | 23 | `internal/agentid/delegation/store/store.go`, `internal/agentid/orchestrator/revocation.go`, `internal/agentid/revoke/interval.go` | `internal/agentid/revoke/terminal_test.go` | _[counsel]_ |
