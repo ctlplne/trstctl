@@ -65,6 +65,14 @@ def slice_census(names, index, count):
     return names[index::count]
 
 
+def partition_selected(selected, index, slices):
+    """Use the third process only for the CI slice that exceeded its fixed wall."""
+    if slices < 1 or not 0 <= index < slices:
+        raise ValueError("--slice must be in [0, --slices)")
+    parts = 3 if slices == 6 and index == 3 else 2
+    return [group for group in (selected[offset::parts] for offset in range(parts)) if group]
+
+
 def verify_slices(paths):
     """Check that slice results ran one census completely, each name in exactly one slice."""
     records = [json.loads(Path(p).read_text()) for p in paths]
@@ -282,7 +290,7 @@ def run(args):
     scratch = Path(tempfile.mkdtemp(prefix="trstctl-tests-", dir="/tmp")).resolve()
     commands = []
     children = []
-    record = {"wall_seconds": args.seconds, "workers": 3, "package": args.package, "parts": [], "temporary_root": str(scratch),
+    record = {"wall_seconds": args.seconds, "workers": 0, "package": args.package, "parts": [], "temporary_root": str(scratch),
               "slice": args.slice, "slices": args.slices}
     listing, part_command, workdir, overrides, binary_digest = test_commands(args)
     record["test_binary_sha256"] = binary_digest
@@ -299,10 +307,9 @@ def run(args):
             raise RuntimeError("test census compilation failed: " + str(census))
         names = selected_tests(read_events(census), args.skip)
         selected = slice_census(names, args.slice, args.slices)
-        # The growing served census exceeded the unchanged 22-minute wall in
-        # CI 45108722871. A third isolated process reduces the longest part
-        # without relaxing that wall or dropping a test.
-        groups = [group for group in (selected[::3], selected[1::3], selected[2::3]) if group]
+        # CI 45108722871 exhausted the unchanged 22-minute wall in slice 3.
+        # Other slices retain their two-process order and isolation.
+        groups = partition_selected(selected, args.slice, args.slices)
         record.update(census_seconds=time.monotonic() - began, census=names, selected=selected, partitions=groups,
                       workers=len(groups), census_sha256=census_digest(names))
         print(f">> server census: {len(names)} selected tests; slice index {args.slice} of {args.slices}: {len(selected)} tests "

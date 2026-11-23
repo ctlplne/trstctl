@@ -223,7 +223,7 @@ class ProcessTests(unittest.TestCase):
             # Each part ran its own link to the binary, in its own private directory, so a sibling one part builds or
             # removes next to its executable is never another part's.
             parts = Path(str(binary) + '.parts').read_text().split()
-            self.assertEqual(record['workers'], 3, 'the fixed wall must split the growing server census across three isolated parts')
+            self.assertEqual(record['workers'], 2, 'untimed-out slices retain their proven process ordering')
             self.assertEqual(len(parts), record['workers'])
             self.assertEqual(len({str(Path(p).parent) for p in parts}), len(parts))
             self.assertTrue(all(Path(p).name == 'server.test' and Path(p).parent.name == 'bin' for p in parts), parts)
@@ -295,10 +295,18 @@ class ProcessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(record['success'])
         self.assertEqual(len(record['census']), 4)
-        self.assertEqual(len({row['tmp'] for row in metadata}), 3)
+        self.assertEqual(len({row['tmp'] for row in metadata}), 2)
         self.assertEqual(profile.count('mode: atomic'), 1)
-        self.assertEqual(profile.count('internal/test.go'), 3)
+        self.assertEqual(profile.count('internal/test.go'), 2)
         self.assertNotIn('stale', profile)
+
+    def test_only_timed_out_ci_slice_uses_three_complete_isolated_parts(self):
+        selected = [f'TestCase{index}' for index in range(9)]
+        for index in range(6):
+            groups = runner.partition_selected(selected, index, 6)
+            self.assertEqual(len(groups), 3 if index == 3 else 2)
+            self.assertEqual(sorted(name for group in groups for name in group), selected)
+            self.assertEqual(len({name for group in groups for name in group}), len(selected))
 
     def test_environment_skip_is_retained_without_disappearing_from_census(self):
         result, record, _, _, _ = self.run_gate('skip')
