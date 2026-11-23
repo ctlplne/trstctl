@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	507: true, // TestMigrationDataContentBackfills/0507_recording_headers_start_empty
 	506: true, // TestMigrationDataContentBackfills/0506_switching_private_watch_starts_unattributed
 	505: true, // TestMigrationDataContentBackfills/0505_notification_channels_start_unattributed
 	504: true, // TestMigrationDataContentBackfills/0504_ticket_intake_source_starts_unattributed
@@ -2385,6 +2386,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0507_recording_headers_start_empty", testMigration0507RecordingHeadersStartEmpty)
 	t.Run("0506_switching_private_watch_starts_unattributed", testMigration0506SwitchingPrivateWatchStartsUnattributed)
 	t.Run("0505_notification_channels_start_unattributed", testMigration0505NotificationChannelsStartUnattributed)
 	t.Run("0504_ticket_intake_source_starts_unattributed", testMigration0504TicketIntakeSourceStartsUnattributed)
@@ -3426,6 +3428,42 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
 	t.Run("0136_fleet_reissuance_cursor_defaults", testMigration0136FleetReissuanceCursorDefaults)
 	t.Run("0137_relay_external_pollers", testMigration0137RelayExternalPollers)
+}
+
+func testMigration0507RecordingHeadersStartEmpty(t *testing.T) {
+	const stable = `SELECT tenant_id::text, session_id::text, ord::text, attempt::text,
+		seq::text, object_ref, sha256, sealed_sha256, chain, size::text,
+		stored_at::text FROM pam_session_recording_chunks ORDER BY tenant_id, session_id, ord`
+	runPopulatedDefaultMigrationHarness(t, 507, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for i, tenantID := range []string{tenantA, tenantB} {
+				_, err := pool.Exec(ctx, `INSERT INTO pam_session_recording_chunks
+					(tenant_id, session_id, ord, attempt, seq, object_ref, sha256,
+					 sealed_sha256, chain, size, stored_at)
+					VALUES ($1,$2,0,1,0,$3,$4,$5,$6,17,'2026-10-01T00:00:00Z')`,
+					tenantID, fmt.Sprintf("50700000-0000-4000-8000-%012d", i+1),
+					fmt.Sprintf("recordings/pre-0507/%d", i), strings.Repeat("a", 64),
+					strings.Repeat("b", 64), strings.Repeat("c", 64))
+				if err != nil {
+					t.Fatalf("seed pre-0507 recording chunk for %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var empty, zero bool
+			if err := pool.QueryRow(ctx, `SELECT count(*),
+				bool_and(octet_length(rewrap_header) = 0),
+				bool_and(rewrap_event_sequence = 0)
+				FROM pam_session_recording_chunks WHERE tenant_id IN ($1,$2)`, tenantA, tenantB).
+				Scan(&rows, &empty, &zero); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !empty || !zero {
+				t.Fatalf("0507 historical wraps changed: rows=%d want=%d empty=%t sequence_zero=%t",
+					rows, want, empty, zero)
+			}
+		})
 }
 
 func testMigration0506SwitchingPrivateWatchStartsUnattributed(t *testing.T) {

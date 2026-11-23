@@ -89,6 +89,9 @@ func (l *Lifecycle) rotateAdmitted(
 		if err != nil {
 			return err
 		}
+		if err := CheckRecordingUploadsSettled(operationCtx, l.store, l.recordingObjects, tenantID); err != nil {
+			return store.RestoreActivityNoEffect(err)
+		}
 		if err := backfillMutationReceipts(operationCtx, l.store, l.log, access, tenantID); err != nil {
 			return err
 		}
@@ -107,11 +110,17 @@ func (l *Lifecycle) rotateAdmitted(
 		if err != nil {
 			return l.failRotation(operationCtx, domain, "rewrapper_unavailable", "tenant ciphertext rewrapper is unavailable", err)
 		}
+		if domain.OperationID == nil {
+			return l.failRotation(operationCtx, domain, "recording_rewrap_operation_missing", "tenant key operation ID is missing", ErrLifecycleConflict)
+		}
+		applyRecording := func(eventCtx context.Context, c store.PAMRecordingChunk, header []byte) error {
+			return appendRecordingRewrap(eventCtx, l.store, l.log, l.projector, *domain.OperationID, rewrapOperationID, c, header)
+		}
 
 		stages := store.TenantKeyDomainCiphertextMigrationStages()
 		// A rotation a previous release started resumes over this release's
 		// inventory, which may have grown.
-		domain.ProgressTotal = int64(len(stages) + 1)
+		domain.ProgressTotal = int64(len(stages) + 2)
 		for index, stage := range stages {
 			if _, err := l.store.RewriteTenantKeyDomainCiphertextStage(
 				operationCtx, tenantID, stage,
@@ -131,6 +140,14 @@ func (l *Lifecycle) rotateAdmitted(
 				return err
 			}
 		}
+		if _, _, err := RewrapRecordingObjects(operationCtx, l.store, l.recordingObjects, tenantID, rewriter.Transform, applyRecording); err != nil {
+			return l.failRotation(operationCtx, domain, "recording_objects_rewrap_failed", "recording object rewrap failed", err)
+		}
+		domain.ProgressCompleted = int64(len(stages) + 1)
+		domain.ProgressCursor, domain.MigrationStage = "recording_objects", "recording_objects"
+		if err := l.appendSnapshot(operationCtx, tenantID, projections.EventTenantKeyDomainRotationProgressed, domain); err != nil {
+			return err
+		}
 
 		historyOptions := append(
 			[]events.TenantDataRewriteOption{
@@ -143,6 +160,12 @@ func (l *Lifecycle) rotateAdmitted(
 		)
 		if err != nil {
 			return l.failRotation(operationCtx, domain, "hot_history_rewrite_failed", "tenant hot-history rewrite failed", err)
+		}
+		if stragglers, _, err := RewrapRecordingObjects(operationCtx, l.store, l.recordingObjects, tenantID, rewriter.Transform, applyRecording); err != nil || stragglers != 0 {
+			if err == nil {
+				err = fmt.Errorf("%d recording objects changed during verification", stragglers)
+			}
+			return l.failRotation(operationCtx, domain, "recording_objects_verify_failed", "recording objects did not verify under the next generation", err)
 		}
 
 		retired := domain.Generation
@@ -301,7 +324,7 @@ func (l *Lifecycle) beginOrResumeRotation(
 			domain.OperationStatus = store.TenantKeyOperationRunning
 			domain.MigrationStage = "created"
 			domain.ProgressCompleted = 0
-			domain.ProgressTotal = int64(len(store.TenantKeyDomainCiphertextMigrationStages()) + 1)
+			domain.ProgressTotal = int64(len(store.TenantKeyDomainCiphertextMigrationStages()) + 2)
 			domain.ProgressCursor = ""
 			domain.Retryable = true
 			domain.LastErrorCode, domain.LastError = "", ""

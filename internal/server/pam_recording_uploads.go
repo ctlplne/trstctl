@@ -328,6 +328,30 @@ func (s *pamService) lowestRecordingUpload(ctx context.Context, tenantID, sessio
 // (an existing one must carry this chunk's sealed digest), the stored event's
 // ID and payload derive from the staged row, and the delete is idempotent.
 func (s *pamService) storeStagedRecordingChunk(ctx context.Context, up store.PAMRecordingUpload) error {
+	// A key-domain operation takes the exclusive global admission. Hold its
+	// shared counterpart across the object write and projection, and reload the
+	// staged bytes after entering it so a queued uploader cannot write a stale
+	// pre-rewrap container after the old key has retired.
+	return s.store.WithGlobalKeyStateAdmission(ctx, store.KeyStateShared, func(admitted context.Context) error {
+		gate, found, err := s.store.GetTenantApplicationSecretRewrapGate(admitted, up.TenantID)
+		if err != nil {
+			return err
+		}
+		if found && gate.InProgress {
+			return orchestrator.DeferDeliveryUntil(store.ErrApplicationSecretRewrapInProgress, time.Now().Add(5*time.Second))
+		}
+		fresh, err := s.store.GetPAMRecordingUpload(admitted, up.TenantID, up.SessionID, up.Attempt, up.Seq)
+		if errors.Is(err, store.ErrPAMRecordingUploadNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return s.storeStagedRecordingChunkAdmitted(admitted, fresh)
+	})
+}
+
+func (s *pamService) storeStagedRecordingChunkAdmitted(ctx context.Context, up store.PAMRecordingUpload) error {
 	view, err := objectstore.ForTenant(ctx, s.recordings.objects, up.TenantID)
 	if err != nil {
 		return err

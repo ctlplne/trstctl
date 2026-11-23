@@ -363,6 +363,7 @@ const (
 	EventPAMSessionRevocationFailed     = "pam.session.revocation_failed"
 	EventPAMSessionRevoked              = "pam.session.revoked"
 	EventPAMRecordingChunkStored        = "pam.session.recording_chunk_stored"
+	EventPAMRecordingChunkRewrapped     = "pam.session.recording_chunk_rewrapped"
 	EventPAMRecordingSealed             = "pam.session.recording_sealed"
 	EventPAMSessionGatewayEnded         = "pam.session.gateway_ended"
 	// A273-O4: the rotation a web console session's end queued for its
@@ -4935,6 +4936,16 @@ type PAMRecordingChunkStored struct {
 	StoredAt       time.Time `json:"stored_at"`
 }
 
+// PAMRecordingChunkRewrapped changes only the envelope header of an immutable
+// signed object. The original object digest binds this event to the index.
+type PAMRecordingChunkRewrapped struct {
+	ID           string `json:"id"`
+	Ord          int    `json:"ord"`
+	ObjectSHA256 string `json:"object_sha256"`
+	HeaderHex    string `json:"header_hex"`
+	OperationID  string `json:"operation_id"`
+}
+
 // PAMRecordingSealed closes a recording with its signed manifest.
 type PAMRecordingSealed struct {
 	ID                string    `json:"id"`
@@ -6054,6 +6065,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMTargetRegistered:                      {1: true},
 	EventPAMTargetDisabled:                        {1: true},
 	EventPAMRecordingChunkStored:                  {1: true},
+	EventPAMRecordingChunkRewrapped:               {1: true},
 	EventPAMRecordingSealed:                       {1: true},
 	EventPAMSessionGatewayEnded:                   {1: true},
 	EventPAMSessionAccountRotationQueued:          {1: true},
@@ -9640,6 +9652,21 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, SessionID: pl.ID, Ord: pl.Ord, Attempt: pl.Attempt, Seq: pl.Seq, ObjectRef: pl.ObjectRef,
 			SHA256: pl.SHA256, SealedSHA256: pl.SealedSHA256, Chain: pl.Chain, Size: pl.Size, StoredAt: pl.StoredAt,
 		}, pl.GatewayAgentID, pl.Final)
+	case EventPAMRecordingChunkRewrapped:
+		var pl PAMRecordingChunkRewrapped
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		header, hexErr := hex.DecodeString(pl.HeaderHex)
+		if _, err := uuid.Parse(pl.ID); err != nil || pl.Ord < 0 || len(pl.ObjectSHA256) != 64 ||
+			hexErr != nil || len(header) == 0 || len(header) > 131326 {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		if _, err := uuid.Parse(pl.OperationID); err != nil {
+			return fmt.Errorf("projections: incomplete %s operation", e.Type)
+		}
+		return p.store.ApplyPAMRecordingChunkRewrappedTx(ctx, tx, e.TenantID, pl.ID, pl.Ord,
+			pl.ObjectSHA256, header, e.Sequence)
 	case EventPAMRecordingSealed:
 		var pl PAMRecordingSealed
 		if err := decode(e, &pl); err != nil {

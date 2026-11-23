@@ -89,6 +89,36 @@ func (s *Store) ListPAMRecordingUploadsTx(ctx context.Context, tx pgx.Tx, tenant
 	return out, rows.Err()
 }
 
+// ListPAMRecordingUploadsForRewrap pages staged object metadata so a key
+// operation can refuse an object written before its stored event was projected.
+func (s *Store) ListPAMRecordingUploadsForRewrap(ctx context.Context, tenantID, afterSession string, afterOrd, limit int) ([]PAMRecordingUpload, error) {
+	if afterSession == "" {
+		afterSession = "00000000-0000-0000-0000-000000000000"
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	var out []PAMRecordingUpload
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+pamRecordingUploadMeta+` FROM pam_recording_uploads
+		    WHERE tenant_id = $1::uuid AND (session_id, ord) > ($2::uuid, $3)
+		    ORDER BY session_id, ord LIMIT $4`, tenantID, afterSession, afterOrd, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			u, err := scanPAMRecordingUploadMeta(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, u)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // PAMRecordingStagedBytesTx is how many sealed bytes wait for the object
 // store, for one session and for its whole tenant.
 func (s *Store) PAMRecordingStagedBytesTx(ctx context.Context, tx pgx.Tx, tenantID, sessionID string) (session, tenant int64, err error) {

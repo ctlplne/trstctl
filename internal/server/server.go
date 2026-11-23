@@ -1195,6 +1195,12 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		return nil, fmt.Errorf("server: drift roots: %w", err)
 	}
 	d.DriftRoots = approvedRoots
+	if lifecycle, ok := d.TenantKeyDomains.(*tenantseal.Lifecycle); ok {
+		lifecycle.BindRecordingObjects(d.ArchiveObjectStore)
+	}
+	if d.DeploymentKEK != nil {
+		d.DeploymentKEK.BindRecordingObjects(d.ArchiveObjectStore)
+	}
 	d.Store.BindCanonicalEventSource(d.Log)
 	if err := d.Store.BootstrapRestoreAdmission(ctx); err != nil {
 		return nil, fmt.Errorf("server: bootstrap restore admission: %w", err)

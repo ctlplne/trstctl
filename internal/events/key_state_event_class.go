@@ -7,6 +7,7 @@ package events
 func RequiresExclusiveKeyStateAdmission(eventType string) bool {
 	switch eventType {
 	case "tenant.offboarded",
+		"pam.session.recording_chunk_rewrapped",
 		"tenant.key_domain.migration_started", "tenant.key_domain.migration_progressed",
 		"tenant.key_domain.migration_completed", "tenant.key_domain.migration_failed",
 		"tenant.key_domain.seal_requested", "tenant.key_domain.seal_failed",

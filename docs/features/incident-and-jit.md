@@ -983,7 +983,14 @@ sixteen times that a tenant); past the bound an upload is refused as retryable, 
 keeps the chunk in its spool and retries, and only that session's traffic waits. Nothing is
 dropped: a staged chunk is retried until it is stored, the recording seals only once no chunk
 waits, and `GET /api/v1/access/sessions/{id}/recording` reports `pending_chunks` (the console's
-session detail shows "N waiting for storage"). `pam.recording_retention`
+session detail shows "N waiting for storage").
+During a tenant or deployment key change, the uploader waits behind the key-state
+fence and reloads staged bytes after the change. The signed chunk object is never
+overwritten; a new event-backed envelope header lets playback and verification
+use the new key while checking the original manifest digest. An object already
+uploaded but not yet projected must finish its normal outbox delivery before
+the key change starts.
+`pam.recording_retention`
 deletes sealed recordings unless a legal hold keeps them. On a bucket that keeps versions
 (S3 versioning, or S3 Object Lock, which turns it on) a recording's chunks and manifest go
 with every version and the delete markers earlier deletes left, as report retention removes

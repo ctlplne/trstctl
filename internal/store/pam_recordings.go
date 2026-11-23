@@ -40,6 +40,9 @@ type PAMRecordingChunk struct {
 	SHA256, SealedSHA256, Chain string
 	Size                        int
 	StoredAt                    time.Time
+	// RewrapHeader is the current key-domain envelope header. The signed
+	// object and its original sealed digest remain immutable.
+	RewrapHeader []byte
 }
 
 // ApplyPAMRecordingChunkStoredTx projects pam.session.recording_chunk_stored:
@@ -114,7 +117,7 @@ func (s *Store) ListPAMRecordingChunks(ctx context.Context, tenantID, sessionID 
 	var out []PAMRecordingChunk
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT tenant_id::text, session_id::text, ord, attempt, seq, object_ref, sha256,
-		        sealed_sha256, chain, size, stored_at
+		        sealed_sha256, chain, size, stored_at, rewrap_header
 		   FROM pam_session_recording_chunks
 		  WHERE tenant_id = $1::uuid AND session_id = $2::uuid AND ord >= $3
 		  ORDER BY ord LIMIT $4`, tenantID, sessionID, fromOrd, limit)
@@ -125,7 +128,7 @@ func (s *Store) ListPAMRecordingChunks(ctx context.Context, tenantID, sessionID 
 		for rows.Next() {
 			var c PAMRecordingChunk
 			if err := rows.Scan(&c.TenantID, &c.SessionID, &c.Ord, &c.Attempt, &c.Seq, &c.ObjectRef, &c.SHA256,
-				&c.SealedSHA256, &c.Chain, &c.Size, &c.StoredAt); err != nil {
+				&c.SealedSHA256, &c.Chain, &c.Size, &c.StoredAt, &c.RewrapHeader); err != nil {
 				return err
 			}
 			out = append(out, c)
@@ -133,6 +136,72 @@ func (s *Store) ListPAMRecordingChunks(ctx context.Context, tenantID, sessionID 
 		return rows.Err()
 	})
 	return out, err
+}
+
+// ListPAMRecordingChunksForRewrap pages every object-backed chunk in one
+// tenant. The cursor is stable because the recording index is append only.
+func (s *Store) ListPAMRecordingChunksForRewrap(ctx context.Context, tenantID, afterSession string, afterOrd, limit int) ([]PAMRecordingChunk, error) {
+	if afterSession == "" {
+		afterSession = "00000000-0000-0000-0000-000000000000"
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	var out []PAMRecordingChunk
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT c.tenant_id::text, c.session_id::text, c.ord, c.attempt, c.seq, c.object_ref, c.sha256,
+		        c.sealed_sha256, c.chain, c.size, c.stored_at, c.rewrap_header
+		   FROM pam_session_recording_chunks c
+		   LEFT JOIN pam_session_recordings r ON r.tenant_id = c.tenant_id AND r.session_id = c.session_id
+		  WHERE c.tenant_id = $1::uuid AND r.deleted_at IS NULL
+		    AND (c.session_id, c.ord) > ($2::uuid, $3)
+		  ORDER BY c.session_id, c.ord LIMIT $4`, tenantID, afterSession, afterOrd, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c PAMRecordingChunk
+			if err := rows.Scan(&c.TenantID, &c.SessionID, &c.Ord, &c.Attempt, &c.Seq, &c.ObjectRef, &c.SHA256,
+				&c.SealedSHA256, &c.Chain, &c.Size, &c.StoredAt, &c.RewrapHeader); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ApplyPAMRecordingChunkRewrappedTx projects an immutable key-wrap event.
+// Sequence fencing prevents a delayed old event from restoring an old wrap.
+func (s *Store) ApplyPAMRecordingChunkRewrappedTx(ctx context.Context, tx pgx.Tx,
+	tenantID, sessionID string, ord int, originalDigest string, header []byte, sequence uint64) error {
+	if len(header) == 0 || len(header) > 131326 || sequence == 0 {
+		return errors.New("store: invalid PAM recording rewrap header")
+	}
+	tag, err := tx.Exec(ctx, `UPDATE pam_session_recording_chunks
+	    SET rewrap_header = $1, rewrap_event_sequence = $2
+	  WHERE tenant_id = $3::uuid AND session_id = $4::uuid AND ord = $5
+	    AND sealed_sha256 = $6 AND rewrap_event_sequence < $2`,
+		header, sequence, tenantID, sessionID, ord, originalDigest)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	var recordedDigest string
+	var recordedSequence uint64
+	if err := tx.QueryRow(ctx, `SELECT sealed_sha256, rewrap_event_sequence FROM pam_session_recording_chunks
+	    WHERE tenant_id = $1::uuid AND session_id = $2::uuid AND ord = $3`, tenantID, sessionID, ord).
+		Scan(&recordedDigest, &recordedSequence); err != nil {
+		return err
+	}
+	if recordedDigest != originalDigest || recordedSequence < sequence {
+		return errors.New("store: PAM recording rewrap event does not match the signed object index")
+	}
+	return nil
 }
 
 // ListOpenPAMRecordings lists recordings still open whose last chunk is

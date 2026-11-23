@@ -19,6 +19,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -58,15 +59,24 @@ const (
 // keep being served throughout, and a restarted or new leader resumes from
 // the recorded step.
 type DeploymentRotation struct {
-	store          *store.Store
-	log            *events.Log
-	projector      *projections.Projector
-	keyring        *DeploymentKeyring
-	registry       DomainKEKManager
-	settle         time.Duration
-	files          []string
-	rewriteOptions []events.TenantDataRewriteOption
-	now            func() time.Time
+	store            *store.Store
+	log              *events.Log
+	projector        *projections.Projector
+	keyring          *DeploymentKeyring
+	registry         DomainKEKManager
+	recordingObjects objectstore.Store
+	settle           time.Duration
+	files            []string
+	rewriteOptions   []events.TenantDataRewriteOption
+	now              func() time.Time
+}
+
+// BindRecordingObjects supplies PAM's immutable recording store before the
+// rotation worker starts. A missing store with indexed objects fails closed.
+func (r *DeploymentRotation) BindRecordingObjects(objects objectstore.Store) {
+	if r != nil {
+		r.recordingObjects = objects
+	}
 }
 
 // DeploymentRotationOption configures a DeploymentRotation.
@@ -203,6 +213,9 @@ func (r *DeploymentRotation) beginAdmitted(ctx context.Context, operatorTenantID
 		}
 		ids := make([]string, 0, len(tenants))
 		for _, tenant := range tenants {
+			if err := CheckRecordingUploadsSettled(operationCtx, r.store, r.recordingObjects, tenant.TenantID); err != nil {
+				return store.RestoreActivityNoEffect(err)
+			}
 			if _, err := r.store.ApplicationSecretTenantEpoch(operationCtx, tenant.TenantID); err != nil {
 				return err
 			}
@@ -368,6 +381,9 @@ func (r *DeploymentRotation) stepHotState(ctx context.Context, current store.Dep
 	}
 	var changed int64
 	for _, tenantID := range batch {
+		if err := CheckRecordingUploadsSettled(ctx, r.store, r.recordingObjects, tenantID); err != nil {
+			return r.stepFailure(ctx, current, "recording_upload_in_progress", "a recording object upload must finish before key rewrap", err)
+		}
 		for _, stage := range store.TenantKeyDomainCiphertextMigrationStages() {
 			n, err := r.store.RewriteTenantKeyDomainCiphertextStage(ctx, tenantID, stage,
 				func(before []byte) ([]byte, bool, error) {
@@ -378,6 +394,14 @@ func (r *DeploymentRotation) stepHotState(ctx context.Context, current store.Dep
 			}
 			changed += n
 		}
+		applyRecording := func(eventCtx context.Context, c store.PAMRecordingChunk, header []byte) error {
+			return appendRecordingRewrap(eventCtx, r.store, r.log, r.projector, current.OperationID, current.OperationID, c, header)
+		}
+		n, _, err := RewrapRecordingObjects(ctx, r.store, r.recordingObjects, tenantID, rewriter.Transform, applyRecording)
+		if err != nil {
+			return r.stepFailure(ctx, current, "recording_objects_rewrap_failed", "a tenant's recording data keys could not be re-wrapped", err)
+		}
+		changed += n
 	}
 	containers, _ := rewriter.DeploymentCounts()
 	next := current

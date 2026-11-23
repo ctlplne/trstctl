@@ -57,6 +57,45 @@ func TestWrappedGenerationRoutesByLengthThenTag(t *testing.T) {
 	}
 }
 
+func TestRecordingRewrapHeaderKeepsImmutablePayload(t *testing.T) {
+	old := testKEK(t, 0x51)
+	next := testKEK(t, 0x52)
+	aad := []byte("tenant/session/zero")
+	plain := bytes.Repeat([]byte("frame\n"), 1024)
+	original, err := Seal(old, plain, aad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	domain := []byte("tenant:recording:generation:1")
+	rewrapped, err := RewrapDomain(old, next, original, domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	header, err := ContainerHeader(rewrapped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(header) >= len(plain)/8 {
+		t.Fatalf("rewrap header stored too much payload: %d", len(header))
+	}
+	rebuilt, err := ApplyContainerHeader(original, header)
+	if err != nil || !bytes.Equal(rebuilt, rewrapped) {
+		t.Fatalf("reconstructed container differs from authenticated rewrap: %v", err)
+	}
+	opened, err := OpenDomain(next, rebuilt, aad, domain)
+	if err != nil || !bytes.Equal(opened, plain) {
+		t.Fatalf("rewrapped recording does not open: %v", err)
+	}
+	if _, err := Open(next, original, aad); err == nil {
+		t.Fatal("old immutable object unexpectedly opens under the new key")
+	}
+	bad := append([]byte(nil), header...)
+	bad[len(bad)-1] ^= 1 // nonce change cannot be joined to the original payload
+	if _, err := ApplyContainerHeader(original, bad); !errors.Is(err, ErrFormat) {
+		t.Fatalf("tampered header accepted: %v", err)
+	}
+}
+
 // generationWrapper wraps under one LocalKEK and tags the result, as a later
 // deployment generation does.
 type generationWrapper struct {

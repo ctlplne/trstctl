@@ -316,11 +316,35 @@ func (s *pamService) verifyRecording(ctx context.Context, tenantID, sessionID st
 		problem("the signed recording scope does not match this session")
 		return out, nil
 	}
+	indexed := make([]store.PAMRecordingChunk, 0, len(manifest.Chunks))
+	for from := 0; len(indexed) <= len(manifest.Chunks); {
+		page, err := s.store.ListPAMRecordingChunks(ctx, tenantID, sessionID, from, 1000)
+		if err != nil {
+			return RecordingVerification{}, err
+		}
+		if len(page) == 0 {
+			break
+		}
+		indexed = append(indexed, page...)
+		if page[len(page)-1].Ord < from {
+			problem("the recording index order is invalid")
+			break
+		}
+		from = page[len(page)-1].Ord + 1
+	}
+	if len(indexed) != len(manifest.Chunks) {
+		problem("the recording index differs from the signed manifest")
+	}
 
 	chain := ""
 	for i, c := range manifest.Chunks {
 		if c.Ord != i {
 			problem("chunk %d is out of place in the manifest", i)
+			continue
+		}
+		if i >= len(indexed) || indexed[i].Ord != c.Ord || indexed[i].ObjectRef != c.ObjectRef ||
+			indexed[i].SHA256 != c.SHA256 || indexed[i].SealedSHA256 != c.SealedSHA256 {
+			problem("chunk %d index differs from the signed manifest", i)
 			continue
 		}
 		var sealed bytes.Buffer
@@ -336,8 +360,7 @@ func (s *pamService) verifyRecording(ctx context.Context, tenantID, sessionID st
 			problem("chunk %d was modified", i)
 			continue
 		}
-		plain, err := openTenantValue(ctx, s.recordings.access, s.recordings.legacy, tenantID, sealed.Bytes(), recordingAAD(tenantID, sessionID, c.Ord, c.SHA256))
-		if err != nil || hex.EncodeToString(crypto.SHA256Sum(plain)) != c.SHA256 {
+		if _, err := s.openRecordingChunk(ctx, tenantID, sessionID, indexed[i], sealed.Bytes()); err != nil {
 			problem("chunk %d does not open in its place", i)
 			continue
 		}
@@ -361,6 +384,49 @@ func recordingRel(view objectstore.Tenant, ref string) string {
 		return ref[len(p):]
 	}
 	return ref
+}
+
+// recordingCurrentContainer keeps the signed object immutable. The index's
+// small header carries only the current key wrap; the original object digest
+// must match before its encrypted payload is combined with that header.
+func recordingCurrentContainer(c store.PAMRecordingChunk, original []byte) ([]byte, error) {
+	if crypto.SHA256Hex(original) != c.SealedSHA256 {
+		return nil, objectstore.ErrDigest
+	}
+	if len(c.RewrapHeader) == 0 {
+		return original, nil
+	}
+	return seal.ApplyContainerHeader(original, c.RewrapHeader)
+}
+
+func (s *pamService) openRecordingChunk(ctx context.Context, tenantID, sessionID string,
+	c store.PAMRecordingChunk, original []byte) ([]byte, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		current, err := recordingCurrentContainer(c, original)
+		if err != nil {
+			return nil, err
+		}
+		plain, err := openTenantValue(ctx, s.recordings.access, s.recordings.legacy, tenantID,
+			current, recordingAAD(tenantID, sessionID, c.Ord, c.SHA256))
+		if err == nil && crypto.SHA256Hex(plain) == c.SHA256 {
+			return plain, nil
+		}
+		clear(plain)
+		if attempt == 0 {
+			// A key rotation may have committed between the index read and
+			// the cipher lease. Retry only when the same signed object has a
+			// newer wrap header; a changed digest/place stays a hard failure.
+			fresh, readErr := s.store.ListPAMRecordingChunks(ctx, tenantID, sessionID, c.Ord, 1)
+			if readErr == nil && len(fresh) == 1 && fresh[0].Ord == c.Ord &&
+				fresh[0].ObjectRef == c.ObjectRef && fresh[0].SealedSHA256 == c.SealedSHA256 &&
+				fresh[0].SHA256 == c.SHA256 && !bytes.Equal(fresh[0].RewrapHeader, c.RewrapHeader) {
+				c = fresh[0]
+				continue
+			}
+		}
+		return nil, errors.New("recording chunk does not open in its signed place")
+	}
+	return nil, errors.New("recording chunk does not open in its signed place")
 }
 
 // appendDeterministic appends an event with a derived ID and projects it; a
@@ -516,8 +582,8 @@ func (s *pamService) recordingFrames(ctx context.Context, tenantID, sessionID st
 		if _, err := view.Get(ctx, recordingRel(view, c.ObjectRef), &sealed, recordingMaxChunk*2); err != nil {
 			return nil, next, fmt.Errorf("recording chunk %d cannot be read: %w", c.Ord, err)
 		}
-		plain, err := openTenantValue(ctx, s.recordings.access, s.recordings.legacy, tenantID, sealed.Bytes(), recordingAAD(tenantID, sessionID, c.Ord, c.SHA256))
-		if err != nil || hex.EncodeToString(crypto.SHA256Sum(plain)) != c.SHA256 {
+		plain, err := s.openRecordingChunk(ctx, tenantID, sessionID, c, sealed.Bytes())
+		if err != nil {
 			return nil, next, fmt.Errorf("recording chunk %d does not open in its place", c.Ord)
 		}
 		for _, line := range bytes.Split(plain, []byte("\n")) {

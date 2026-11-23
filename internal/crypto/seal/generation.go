@@ -73,6 +73,39 @@ func ContainerWrappedDEK(sealed []byte) (wrapped []byte, labeled bool, err error
 	return append([]byte(nil), parts.wrapped...), version == version2, nil
 }
 
+// ContainerHeader returns only the envelope metadata preceding the encrypted
+// payload. A recording keeps its original signed object and stores this small
+// header after a key-domain rewrap; the payload bytes stay in the object.
+func ContainerHeader(sealed []byte) ([]byte, error) {
+	_, parts, err := parseContainer(sealed)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(nil), sealed[:len(sealed)-len(parts.ciphertext)]...), nil
+}
+
+// ApplyContainerHeader combines a signed original object's encrypted payload
+// with a rewrapped header. The caller must authenticate the original object's
+// digest first; opening the result authenticates its domain and payload AAD.
+func ApplyContainerHeader(original, header []byte) ([]byte, error) {
+	_, originalParts, err := parseContainer(original)
+	if err != nil {
+		return nil, err
+	}
+	if len(header) == 0 || len(header) > 2*maxUint16Value+256 {
+		return nil, ErrFormat
+	}
+	out := make([]byte, 0, len(header)+len(originalParts.ciphertext))
+	out = append(out, header...)
+	out = append(out, originalParts.ciphertext...)
+	_, parts, err := parseContainer(out)
+	if err != nil || subtle.ConstantTimeCompare(parts.nonce, originalParts.nonce) != 1 ||
+		subtle.ConstantTimeCompare(parts.ciphertext, originalParts.ciphertext) != 1 {
+		return nil, ErrFormat
+	}
+	return out, nil
+}
+
 // RewrapContainerDEK replaces a v1 or v2 container's wrapped data key with the
 // one rewrap returns, or keeps the container when rewrap reports no change.
 // Every other byte (version, domain label and tag, nonce, ciphertext) is

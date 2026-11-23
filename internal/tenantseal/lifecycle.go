@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -40,7 +41,8 @@ func tenantRewrapSnapshotAllowed(kind, eventType string) bool {
 		case projections.EventTenantKeyDomainMigrationStarted,
 			projections.EventTenantKeyDomainMigrationProgressed,
 			projections.EventTenantKeyDomainMigrationCompleted,
-			projections.EventTenantKeyDomainMigrationFailed:
+			projections.EventTenantKeyDomainMigrationFailed,
+			projections.EventPAMRecordingChunkRewrapped:
 			return true
 		}
 	case store.TenantKeyOperationRotate:
@@ -48,7 +50,8 @@ func tenantRewrapSnapshotAllowed(kind, eventType string) bool {
 		case projections.EventTenantKeyDomainRotationStarted,
 			projections.EventTenantKeyDomainRotationProgressed,
 			projections.EventTenantKeyDomainRotationCompleted,
-			projections.EventTenantKeyDomainRotationFailed:
+			projections.EventTenantKeyDomainRotationFailed,
+			projections.EventPAMRecordingChunkRewrapped:
 			return true
 		}
 	}
@@ -71,12 +74,21 @@ type DomainKEKManager interface {
 // Lifecycle coordinates one tenant's independently wrapped key domain across
 // PostgreSQL hot state and the canonical JetStream event generation.
 type Lifecycle struct {
-	store          *store.Store
-	log            *events.Log
-	projector      *projections.Projector
-	deployment     seal.KeyWrapper
-	manager        DomainKEKManager
-	rewriteOptions []events.TenantDataRewriteOption
+	store            *store.Store
+	log              *events.Log
+	projector        *projections.Projector
+	deployment       seal.KeyWrapper
+	manager          DomainKEKManager
+	recordingObjects objectstore.Store
+	rewriteOptions   []events.TenantDataRewriteOption
+}
+
+// BindRecordingObjects supplies the same store used by PAM playback. Call it
+// during assembly, before serving or running a key-domain operation.
+func (l *Lifecycle) BindRecordingObjects(objects objectstore.Store) {
+	if l != nil {
+		l.recordingObjects = objects
+	}
 }
 
 // NewLifecycle builds the CORE local-custody lifecycle. It does not open any
@@ -166,6 +178,9 @@ func (l *Lifecycle) migrateAdmitted(
 		if err != nil {
 			return err
 		}
+		if err := CheckRecordingUploadsSettled(operationCtx, l.store, l.recordingObjects, tenantID); err != nil {
+			return store.RestoreActivityNoEffect(err)
+		}
 		if err := backfillMutationReceipts(operationCtx, l.store, l.log, access, tenantID); err != nil {
 			return err
 		}
@@ -188,11 +203,17 @@ func (l *Lifecycle) migrateAdmitted(
 		if err != nil {
 			return l.failMigration(operationCtx, domain, "rewrapper_unavailable", "tenant ciphertext rewrapper is unavailable", err)
 		}
+		if domain.OperationID == nil {
+			return l.failMigration(operationCtx, domain, "recording_rewrap_operation_missing", "tenant key operation ID is missing", ErrLifecycleConflict)
+		}
+		applyRecording := func(eventCtx context.Context, c store.PAMRecordingChunk, header []byte) error {
+			return appendRecordingRewrap(eventCtx, l.store, l.log, l.projector, *domain.OperationID, rewrapOperationID, c, header)
+		}
 
 		stages := store.TenantKeyDomainCiphertextMigrationStages()
 		// A migration a previous release started resumes over this release's
 		// inventory, which may have grown.
-		domain.ProgressTotal = int64(len(stages) + 1)
+		domain.ProgressTotal = int64(len(stages) + 2)
 		for index, stage := range stages {
 			if _, err := l.store.RewriteTenantKeyDomainCiphertextStage(
 				operationCtx, tenantID, stage,
@@ -213,6 +234,14 @@ func (l *Lifecycle) migrateAdmitted(
 				return err
 			}
 		}
+		if _, _, err := RewrapRecordingObjects(operationCtx, l.store, l.recordingObjects, tenantID, rewriter.Transform, applyRecording); err != nil {
+			return l.failMigration(operationCtx, domain, "recording_objects_rewrap_failed", "recording object rewrap failed", err)
+		}
+		domain.ProgressCompleted = int64(len(stages) + 1)
+		domain.ProgressCursor, domain.MigrationStage = "recording_objects", "recording_objects"
+		if err := l.appendSnapshot(operationCtx, tenantID, projections.EventTenantKeyDomainMigrationProgressed, domain); err != nil {
+			return err
+		}
 
 		historyOptions := append(
 			[]events.TenantDataRewriteOption{
@@ -225,6 +254,12 @@ func (l *Lifecycle) migrateAdmitted(
 		)
 		if err != nil {
 			return l.failMigration(operationCtx, domain, "hot_history_rewrite_failed", "tenant hot-history rewrite failed", err)
+		}
+		if stragglers, _, err := RewrapRecordingObjects(operationCtx, l.store, l.recordingObjects, tenantID, rewriter.Transform, applyRecording); err != nil || stragglers != 0 {
+			if err == nil {
+				err = fmt.Errorf("%d recording objects changed during verification", stragglers)
+			}
+			return l.failMigration(operationCtx, domain, "recording_objects_verify_failed", "recording objects did not verify under the new domain", err)
 		}
 		domain.ProgressCompleted = domain.ProgressTotal
 		domain.ProgressCursor = tenantKeyDomainHistoryStage
@@ -608,7 +643,7 @@ func (l *Lifecycle) beginOrResumeMigration(
 					OperationID: &operationID, OperationKind: store.TenantKeyOperationMigrate,
 					OperationStatus: store.TenantKeyOperationRunning,
 					MigrationStage:  "created", ProgressCompleted: 0,
-					ProgressTotal:         int64(len(store.TenantKeyDomainCiphertextMigrationStages()) + 1),
+					ProgressTotal:         int64(len(store.TenantKeyDomainCiphertextMigrationStages()) + 2),
 					Retryable:             true,
 					LegacyHistoryExposure: store.TenantKeyLegacyHotHistoryPending,
 					CreatedAt:             time.Now().UTC(),

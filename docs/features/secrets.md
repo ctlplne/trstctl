@@ -63,13 +63,25 @@ readable until the switch). Rotation re-wraps DEKs, not payloads, so backups,
 archives, and exports taken before it still open with the previous generation
 through its wrapper. See [configuration](../configuration.md#rotating-a-tenant-domain-key).
 
+The hot-state pass also re-wraps pending provider-revocation credentials, Slack
+bot tokens, and staged recording chunks before the old key can retire.
+Recording chunks keep their original immutable object and signed manifest during
+a key-domain change. The migration reads and checks each object digest, records
+the new envelope header as a tenant event, and verifies a second pass before it
+retires the old key. Playback combines that header with the unchanged encrypted
+payload. A database projection rebuild restores headers from those events. If
+the object store is unavailable, an object digest differs, or an already-written
+staged upload has not yet been projected, the key change stops with the old key
+live; finish the upload or restore the object store, then retry.
+
 The deployment KEK itself rotates as well. The operator tenant
 (`secrets.kek_operator_tenant_id`) moves it from the local key file to a key under
 an operator wrapper file or an HSM key the signer holds, from the console's
 deployment key panel or with `trstctl-cli platform deployment-kek rotate`. New
 data is wrapped under the new generation at once; a background pass re-wraps every
 stored data key, the history of tenants that have not moved to their own domain,
-and the deployment's sealed files, then reads them all back before the previous
+the deployment's sealed files, and recording envelope headers, then reads them
+all back before the previous
 generation is retired. Credentials stay readable throughout, and afterwards only
 through the wrapper. See [configuration](../configuration.md#rotating-the-deployment-kek).
 

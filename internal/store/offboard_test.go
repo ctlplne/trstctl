@@ -94,6 +94,7 @@ func newStore(t *testing.T) *store.Store {
 		          application_secret_tenant_epochs, application_secret_mutation_receipts, application_secret_rewrap_gates,
 		          privacy_subject_erasures, privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
+		          slack_installs, pam_recording_uploads, pam_session_recording_chunks, pam_session_recordings,
 		          secret_rotation_schedule_ticks, secret_static_rotation_commands,
 		          tenants, tenant_key_domains, deployment_kek_domain, idempotency_keys, outbox, rate_limits,
 		          enrollment_diagnostic_observations, enrollment_diagnostics, migration_runs,

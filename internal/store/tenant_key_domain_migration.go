@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // tenantKeyDomainCiphertextStages is the fixed, ordered hot-state inventory for
@@ -23,8 +25,11 @@ var tenantKeyDomainCiphertextStages = []string{
 	"secret_store_tombstone_versions.sealed",
 	"secret_shares.sealed",
 	"vault_cubbyhole.sealed",
+	"slack_installs.sealed_bot_token",
+	"pam_recording_uploads.sealed",
 	"dynamic_secret_leases.sealed_preparation",
 	"dynamic_secret_leases.sealed_credential",
+	"dynamic_secret_leases.revocation_sealed_credential",
 	"secret_static_rotation_commands.sealed_new",
 	"secret_static_rotation_commands.sealed_old",
 	"secret_static_rotation_commands.sealed_preparation",
@@ -114,7 +119,13 @@ func (s *Store) RewriteTenantKeyDomainCiphertextStage(
 					if len(after) == 0 || bytes.Equal(after, item.before) {
 						return fmt.Errorf("store: changed tenant ciphertext stage %s returned invalid bytes", stage)
 					}
-					command, err := tx.Exec(ctx, updateSQL, after, tenantID, item.rowID, item.before)
+					args := []any{after, tenantID, item.rowID, item.before}
+					if stage == "pam_recording_uploads.sealed" {
+						// The uploader checks this exact ciphertext digest before it
+						// stores a staged chunk. Keep it in the same fenced SQL write.
+						args = append(args, crypto.SHA256Hex(after))
+					}
+					command, err := tx.Exec(ctx, updateSQL, args...)
 					if err != nil {
 						return fmt.Errorf("store: update tenant ciphertext stage %s: %w", stage, err)
 					}
@@ -166,12 +177,21 @@ func tenantKeyDomainCiphertextStageSQL(stage string) (selectSQL, updateSQL strin
 	case "vault_cubbyhole.sealed":
 		return `SELECT ctid::text, sealed FROM vault_cubbyhole WHERE tenant_id = $1 AND octet_length(sealed) > 0 FOR UPDATE`,
 			`UPDATE vault_cubbyhole SET sealed = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed = $4`, true
+	case "slack_installs.sealed_bot_token":
+		return `SELECT ctid::text, sealed_bot_token FROM slack_installs WHERE tenant_id = $1 AND octet_length(sealed_bot_token) > 0 FOR UPDATE`,
+			`UPDATE slack_installs SET sealed_bot_token = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_bot_token = $4`, true
+	case "pam_recording_uploads.sealed":
+		return `SELECT ctid::text, sealed FROM pam_recording_uploads WHERE tenant_id = $1 AND octet_length(sealed) > 0 FOR UPDATE`,
+			`UPDATE pam_recording_uploads SET sealed = $1, sealed_sha256 = $5 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed = $4`, true
 	case "dynamic_secret_leases.sealed_preparation":
 		return `SELECT ctid::text, sealed_preparation FROM dynamic_secret_leases WHERE tenant_id = $1 AND octet_length(sealed_preparation) > 0 FOR UPDATE`,
 			`UPDATE dynamic_secret_leases SET sealed_preparation = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_preparation = $4`, true
 	case "dynamic_secret_leases.sealed_credential":
 		return `SELECT ctid::text, sealed_credential FROM dynamic_secret_leases WHERE tenant_id = $1 AND octet_length(sealed_credential) > 0 FOR UPDATE`,
 			`UPDATE dynamic_secret_leases SET sealed_credential = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_credential = $4`, true
+	case "dynamic_secret_leases.revocation_sealed_credential":
+		return `SELECT ctid::text, revocation_sealed_credential FROM dynamic_secret_leases WHERE tenant_id = $1 AND octet_length(revocation_sealed_credential) > 0 FOR UPDATE`,
+			`UPDATE dynamic_secret_leases SET revocation_sealed_credential = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND revocation_sealed_credential = $4`, true
 	case "secret_static_rotation_commands.sealed_new":
 		return `SELECT ctid::text, sealed_new FROM secret_static_rotation_commands WHERE tenant_id = $1 AND octet_length(sealed_new) > 0 FOR UPDATE`,
 			`UPDATE secret_static_rotation_commands SET sealed_new = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_new = $4`, true
