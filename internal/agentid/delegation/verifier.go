@@ -33,7 +33,7 @@ import (
 // refusal naming the failed hop+check>} with ZERO key ops; the caller appends an
 // agent.refusal.recorded event. On success it returns Approved:true with BindingMaterial
 // = the chain-head digest + agent-stack representation binding, and records the
-// root-anchor phishing-resistant auth reference for the issuance event (AGID-claim-13). The
+// signer-held root-anchor enrollment reference for the issuance event. The
 // real key op (agent keygen/certify) runs in the keyOp closure the signer supplies AFTER
 // approval (see bind.go MintCredential); INV-A1 ordering is enforced by the core seam
 // (issuancegate.go gatedIssue) which consults this gate BEFORE any key op.
@@ -69,17 +69,16 @@ import (
 // is an unimplemented alternative recorded here rather than left implied.
 
 // RootAnchor is one root anchor the signer holds in its trust store: the delegator
-// public key DER that a valid chain's root hop must be signed by, plus a
-// phishing-resistant auth reference recorded with the issuance event (AGID-claim-13). The
-// AuthRef is an opaque handle to the phishing-resistant authenticator (a FIDO2/WebAuthn
-// credential id, a hardware-token serial, ...) that bound the root principal; it is
-// non-secret and recorded, never a password.
+// public key DER that a valid chain's root hop must be signed by, plus an
+// operator-provisioned enrollment reference recorded with the issuance event.
+// AuthRef is an opaque, non-secret label. Matching the signer floor proves the
+// reviewed tuple was installed; it does not prove any authenticator ceremony.
 type RootAnchor struct {
 	// PublicDER is the PKIX/DER SubjectPublicKeyInfo of the root delegator key. A
 	// chain's root hop signature must verify against this key for the chain to anchor.
 	PublicDER []byte
-	// AuthRef is the phishing-resistant auth reference for the root principal, recorded
-	// with the issuance event (AGID-claim-13). Non-secret.
+	// AuthRef is the operator-provisioned root reference, recorded with issuance.
+	// It is not independent authentication evidence.
 	AuthRef string
 }
 

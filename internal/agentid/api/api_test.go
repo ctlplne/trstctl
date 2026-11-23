@@ -48,9 +48,9 @@ func TestRoutes_Surface(t *testing.T) {
 		success  string
 		perm     authz.Permission
 	}{
-		{"POST /api/v1/agent-delegation/root-anchors", true, "200", authz.AgentsWrite},
+		{"POST /api/v1/agent-delegation/root-anchors", true, "200", authz.AgentsTrustManage},
 		{"GET /api/v1/agent-delegation/root-anchors", false, "200", authz.AgentsRead},
-		{"POST /api/v1/agent-delegation/attestors", true, "200", authz.AgentsWrite},
+		{"POST /api/v1/agent-delegation/attestors", true, "200", authz.AgentsTrustManage},
 		{"GET /api/v1/agent-delegation/attestors", false, "200", authz.AgentsRead},
 		{"POST /api/v1/agent-delegation/issuances", true, "202", authz.AgentsWrite},
 		{"GET /api/v1/agent-delegation/issuance", false, "200", authz.AgentsRead},

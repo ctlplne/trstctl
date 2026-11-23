@@ -35,13 +35,16 @@ const (
 	// AuditArchiveRead downloads the tenant's own archived audit segments
 	// (A234). It is separate from audit:read: of the built-in roles only admin
 	// and auditor hold it; a custom role or a scoped token can grant it.
-	AuditArchiveRead   Permission = "audit:archive.read"
-	PrivacyRead        Permission = "privacy:read"
-	PrivacyWrite       Permission = "privacy:write"
-	GraphRead          Permission = "graph:read"
-	RiskRead           Permission = "risk:read"
-	AgentsRead         Permission = "agents:read"
-	AgentsWrite        Permission = "agents:write"
+	AuditArchiveRead Permission = "audit:archive.read"
+	PrivacyRead      Permission = "privacy:read"
+	PrivacyWrite     Permission = "privacy:write"
+	GraphRead        Permission = "graph:read"
+	RiskRead         Permission = "risk:read"
+	AgentsRead       Permission = "agents:read"
+	AgentsWrite      Permission = "agents:write"
+	// AgentsTrustManage registers signer-provisioned AGID roots and attestors.
+	// Trust placement must not come with routine fleet enrollment authority.
+	AgentsTrustManage  Permission = "agents:trust.manage"
 	AgentsHeartbeat    Permission = "agents:heartbeat"
 	AgentsJobPoll      Permission = "agents:job.poll"
 	AgentsJobComplete  Permission = "agents:job.complete"
@@ -181,7 +184,7 @@ func allResourcePermissions() []Permission {
 		OwnersRead, OwnersWrite, IssuersRead, IssuersWrite,
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
 		AuditWrite, PrivacyRead, PrivacyWrite,
-		GraphRead, RiskRead, AgentsRead, AgentsWrite, AgentsGrantRelay,
+		GraphRead, RiskRead, AgentsRead, AgentsWrite, AgentsGrantRelay, AgentsTrustManage,
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
@@ -232,16 +235,16 @@ func BuiltinRoles() map[string]Role {
 	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, CapabilitiesRead, AccessRead, ProfilesRead, CertsRequest, KeysRead}
 	// The CLI machine role is broad but not sovereign. AccessRoleAssign is withheld
 	// because a CLI token that can hand out roles can hand itself more. A2's
-	// AgentsGrantRelay is withheld on the same reasoning: it authorizes placing an
-	// agent that will hold appliance credentials, and that is a decision an
-	// operator should make deliberately in the console rather than one a CLI token
-	// carries by default. Enrolling host agents is still in. Reading other
+	// AgentsGrantRelay and AgentsTrustManage are withheld on the same reasoning:
+	// they authorize placing an appliance-credential relay or an AGID trust root.
+	// An operator should make either decision deliberately rather than a CLI token
+	// carrying it by default. Enrolling host agents is still in. Reading other
 	// principals' session recordings and ending their sessions (A255) are
 	// withheld the same way: they belong to an operator or auditor, not to a
 	// machine token. AccessSessionsOpen (A257) is not listed: the role's
 	// AccessWrite includes it. DecoyEventsReport (Q6-O2) belongs to a cluster's
 	// audit webhook token, not to a person's CLI.
-	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AccessTargetsWrite, AgentsGrantRelay,
+	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AccessTargetsWrite, AgentsGrantRelay, AgentsTrustManage,
 		AccessTerminate, AccessSessionsOpen, RecordingsRead, RecordingsExport, DecoyEventsReport), AuditRead)
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},

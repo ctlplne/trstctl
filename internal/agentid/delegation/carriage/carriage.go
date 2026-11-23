@@ -74,7 +74,8 @@ type BoundValues struct {
 	AttestationDigest []byte `json:"attestation_digest,omitempty"`
 	// ComparatorVersion pins the exact decision semantics a relying party reproduces.
 	ComparatorVersion string `json:"comparator_version"`
-	// RootAnchorAuthRef is the root-anchor phishing-resistant auth reference.
+	// RootAnchorAuthRef is the signer-held operator enrollment label, not proof
+	// of an authentication ceremony.
 	RootAnchorAuthRef string `json:"root_anchor_auth_ref,omitempty"`
 	// TaskEnvelopeDigest is the AGID-05 task-envelope digest bound alongside the chain
 	// head + agent-stack repr (empty when no record references a task envelope).

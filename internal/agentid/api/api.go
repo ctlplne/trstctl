@@ -186,8 +186,10 @@ type RevocationEvidenceResponse struct {
 // RootAnchorRequest registers one tenant-scoped AGID root anchor. Its key ID binds
 // the first public key and auth reference; a changed binding needs a new key ID. public_der
 // is base64 in JSON (Go's []byte encoding); public_pem is accepted as the operator-friendly
-// form. Exactly one public-key form is required. auth_ref is non-secret phishing-resistant
-// enrollment evidence (for example a FIDO2 credential id or hardware-token reference).
+// form. Exactly one public-key form is required. auth_ref is a non-secret
+// operator-supplied enrollment reference, not proof of a FIDO2/WebAuthn ceremony.
+// The signer checks it against the independently installed root binding, but
+// neither the API nor signer validates authentication by that device.
 type RootAnchorRequest struct {
 	KeyID     string `json:"key_id"`
 	PublicDER []byte `json:"public_der,omitempty"`
@@ -304,7 +306,7 @@ func Routes(svc Service) []api.LicensedRoute {
 			Summary:       "Register a tenant-scoped AGID root after signer-local operator provisioning (idempotent)",
 			Handler:       func(a *api.API) http.HandlerFunc { return registerRootAnchorHandler(a, svc) },
 			RequestSchema: "AGIDRootAnchorRequest", ResponseSchema: "AGIDRootAnchor",
-			SuccessCode: "200", Mutation: true, Permission: authz.AgentsWrite,
+			SuccessCode: "200", Mutation: true, Permission: authz.AgentsTrustManage,
 		},
 		{
 			Method: "GET", Path: "/api/v1/agent-delegation/root-anchors", OperationID: "listAgentDelegationRootAnchors",
@@ -317,7 +319,7 @@ func Routes(svc Service) []api.LicensedRoute {
 			Summary:       "Register a tenant attestor after signer-local operator provisioning (idempotent)",
 			Handler:       func(a *api.API) http.HandlerFunc { return registerAttestorHandler(a, svc) },
 			RequestSchema: "AGIDAttestorRequest", ResponseSchema: "AGIDAttestor",
-			SuccessCode: "200", Mutation: true, Permission: authz.AgentsWrite,
+			SuccessCode: "200", Mutation: true, Permission: authz.AgentsTrustManage,
 		},
 		{
 			Method: "GET", Path: "/api/v1/agent-delegation/attestors", OperationID: "listAgentDelegationAttestors",

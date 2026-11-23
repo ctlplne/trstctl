@@ -67,7 +67,7 @@ var (
 // party recover the prompt+tool+model digests with the agentstack package), the
 // designated authority class, the attestation-evidence digest (empty when no attestation
 // was required), the comparator version so a verifier reproduces the decision
-// deterministically, and the root-anchor phishing-resistant auth reference (AGID-claim-13). At
+// deterministically, and the operator-provisioned root-anchor reference. At
 // least one of ChainHeadDigest / AgentStackDigest is present (enforced by
 // NewBindingMaterial); a credential that binds neither is never minted.
 type BindingMaterial struct {

@@ -216,11 +216,10 @@ func TestRefusal_SignedArtifactRecorded(t *testing.T) {
 	_ = eventspec.DefaultSchemaVersion // ensure eventspec import used meaningfully
 }
 
-// TestRootAnchor_PhishingResistantRefRecorded proves the root-anchor phishing-resistant
-// auth reference is verified and recorded with the issuance (AGID-claim-13): the approved
-// decision's binding carries the root anchor's AuthRef, which the caller records in the
-// issuance event.
-func TestRootAnchor_PhishingResistantRefRecorded(t *testing.T) {
+// TestRootAnchorAuthRefRecorded proves the approved decision
+// binds the signer-held root's operator enrollment label into the credential.
+// It does not claim that the label proves a FIDO2/WebAuthn ceremony.
+func TestRootAnchorAuthRefRecorded(t *testing.T) {
 	reg := (*ToolRegistry)(nil)
 	const authRef = "webauthn:cred-id-9f3a-phishing-resistant"
 	envs, anchors, _ := singleAnchorChain(t, reg, "t1", authRef)
@@ -240,5 +239,5 @@ func TestRootAnchor_PhishingResistantRefRecorded(t *testing.T) {
 		t.Fatalf("recorded root-anchor auth ref = %q, want %q (AGID-claim-13)", bm.RootAnchorAuthRef, authRef)
 	}
 	// A chain whose root key is NOT a held anchor records no issuance (already covered by
-	// TestRefusal), so the recorded ref is only ever a VERIFIED anchor's ref.
+	// TestRefusal), so the recorded ref is only ever a signer-held anchor's ref.
 }

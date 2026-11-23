@@ -142,8 +142,8 @@ type RevocationJob struct {
 
 // RootAnchor is a tenant-registered AGID delegation root. PublicDER is public
 // key material (PKIX SubjectPublicKeyInfo DER), and AuthRef is the non-secret
-// phishing-resistant enrollment/authentication reference recorded with issued
-// credentials rooted at this anchor.
+// operator-provisioned label recorded with issued credentials rooted here.
+// It is not independent proof of an authentication ceremony.
 type RootAnchor struct {
 	KeyID     string
 	PublicDER []byte

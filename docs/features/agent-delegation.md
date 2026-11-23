@@ -84,13 +84,22 @@ markers are written before an attested key
 operation completes, so replayed attestation evidence stays refused across a
 signer restart.
 
+Root and attestor registration requires `agents:trust.manage`, which the
+operator role holds and the routine `agents:write` fleet and built-in `cli`
+roles do not. A custom role may hold this permission for the people who run
+the signer-local ceremony. Registration still requires exact signer readback.
+`auth_ref` is an operator-supplied, non-secret enrollment label bound into the
+credential for audit correlation. Matching it to the signer floor does **not**
+verify a WebAuthn/FIDO2 assertion or authenticate the root principal. Do not
+use `root_anchor_auth_ref` in a credential as proof of such a ceremony.
+
 ## Use it
 
 Before tenant registration, install each exact public trust binding on the
 signer host. Example operator input for a root anchor:
 
 ```json
-{"kind":"root_anchor","tenant_id":"<tenant UUID>","key_id":"root-key-1","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n","auth_ref":"webauthn:root-principal-credential"}
+{"kind":"root_anchor","tenant_id":"<tenant UUID>","key_id":"root-key-1","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n","auth_ref":"operator:root-approval-1"}
 ```
 
 Run `trstctl-signer --keystore <signer key store dir> --agid-provision-trust <binding.json>`
@@ -124,7 +133,7 @@ Content-Type: application/json
 {
   "key_id": "root-key-1",
   "public_pem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n",
-  "auth_ref": "webauthn:root-principal-credential"
+  "auth_ref": "operator:root-approval-1"
 }
 ```
 

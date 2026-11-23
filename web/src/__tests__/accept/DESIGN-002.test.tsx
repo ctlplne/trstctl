@@ -110,7 +110,7 @@ const explorerSpec = {
         requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/AGIDRootAnchorRequest" } } } },
         responses: { "200": { description: "Exact signer readback" } },
         security: [{ BearerAuth: [] }, { SessionCookie: [] }],
-        "x-trstctl-permission": "agents:write",
+        "x-trstctl-permission": "agents:trust.manage",
       },
     },
     "/api/v1/identities/{id}": {

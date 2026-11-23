@@ -28,6 +28,31 @@ func TestRoleAllows(t *testing.T) {
 	}
 }
 
+func TestCR151TrustManagementIsSeparateFromFleetWrites(t *testing.T) {
+	roles := authz.BuiltinRoles()
+	for _, name := range []string{"admin", "operator"} {
+		if !roles[name].Allows(authz.AgentsTrustManage) {
+			t.Errorf("%s cannot register independently provisioned AGID trust", name)
+		}
+	}
+	for _, name := range []string{"cli", "agent", "mcp", "viewer"} {
+		if roles[name].Allows(authz.AgentsTrustManage) {
+			t.Errorf("%s inherited trust-placement authority", name)
+		}
+	}
+	fleet := authz.Role{Name: "fleet", Permissions: []authz.Permission{authz.AgentsWrite}}
+	if !fleet.Allows(authz.AgentsWrite) || fleet.Allows(authz.AgentsTrustManage) {
+		t.Fatal("routine fleet enrollment grants AGID trust placement")
+	}
+	var grantable bool
+	for _, p := range authz.CustomRoleVocabulary() {
+		grantable = grantable || p == authz.AgentsTrustManage
+	}
+	if !grantable {
+		t.Fatal("a custodian cannot receive explicit AGID trust authority")
+	}
+}
+
 func TestScopeCoverage(t *testing.T) {
 	tenantWide := authz.Scope{TenantID: "t1"}
 	project := authz.Scope{TenantID: "t1", Project: "alpha"}
