@@ -282,7 +282,7 @@ def run(args):
     scratch = Path(tempfile.mkdtemp(prefix="trstctl-tests-", dir="/tmp")).resolve()
     commands = []
     children = []
-    record = {"wall_seconds": args.seconds, "workers": 2, "package": args.package, "parts": [], "temporary_root": str(scratch),
+    record = {"wall_seconds": args.seconds, "workers": 3, "package": args.package, "parts": [], "temporary_root": str(scratch),
               "slice": args.slice, "slices": args.slices}
     listing, part_command, workdir, overrides, binary_digest = test_commands(args)
     record["test_binary_sha256"] = binary_digest
@@ -299,7 +299,10 @@ def run(args):
             raise RuntimeError("test census compilation failed: " + str(census))
         names = selected_tests(read_events(census), args.skip)
         selected = slice_census(names, args.slice, args.slices)
-        groups = [group for group in (selected[::2], selected[1::2]) if group]
+        # The growing served census exceeded the unchanged 22-minute wall in
+        # CI 45108722871. A third isolated process reduces the longest part
+        # without relaxing that wall or dropping a test.
+        groups = [group for group in (selected[::3], selected[1::3], selected[2::3]) if group]
         record.update(census_seconds=time.monotonic() - began, census=names, selected=selected, partitions=groups,
                       workers=len(groups), census_sha256=census_digest(names))
         print(f">> server census: {len(names)} selected tests; slice index {args.slice} of {args.slices}: {len(selected)} tests "
