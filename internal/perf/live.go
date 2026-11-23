@@ -30,13 +30,13 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/eventstest"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -248,9 +248,26 @@ func startLiveEvalStack(ctx context.Context, options ...func(*server.Deps)) (*li
 	if err != nil {
 		return nil, err
 	}
-	// The production constructor runs the background identity indexer; so does
-	// this stack, which measures it.
-	stack.log, err = eventstest.OpenFixture(ctx, cfg.NATS, events.WithBackgroundEventIDIndexer(),
+	stack.kek, err = kek.LoadOrCreate(cfg.Secrets.KEKFile)
+	if err != nil {
+		return nil, err
+	}
+	registry, err := tenantseal.NewLocalWrapperRegistry(nil)
+	if err != nil {
+		return nil, err
+	}
+	access, err := tenantseal.NewAccess(stack.store, stack.kek, registry)
+	if err != nil {
+		return nil, err
+	}
+	if err := stack.store.BootstrapRestoreAdmission(ctx); err != nil {
+		return nil, err
+	}
+	// The live harness takes the same store-backed custody admission as the
+	// served constructor. Its secret writes must be authenticated before NATS
+	// accepts them; a permissive fixture source would hide a production error.
+	stack.log, err = events.Open(ctx, cfg.NATS, events.WithRequiredAppendAdmission(),
+		server.CustodyValidatedEventIngressOption(stack.store, access), events.WithBackgroundEventIDIndexer(),
 		events.WithAppendObserver(func(d time.Duration) { stack.breakdown.add(kindJetStreamAppend, d) }))
 	if err != nil {
 		return nil, err
@@ -264,10 +281,6 @@ func startLiveEvalStack(ctx context.Context, options ...func(*server.Deps)) (*li
 	}
 	stack.projector = projections.New(stack.store)
 
-	stack.kek, err = kek.LoadOrCreate(cfg.Secrets.KEKFile)
-	if err != nil {
-		return nil, err
-	}
 	authSecret := filepath.Join(dir, "signer-auth.bin")
 	authzProvider, err := signing.LoadOrCreateAuthorizer(authSecret)
 	if err != nil {

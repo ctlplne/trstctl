@@ -15,7 +15,7 @@ import (
 // to the AN-2 log (the event is then queryable via the read side, proving the
 // audit trail is a projection of it), and a successful append returns nil.
 func TestNewAuditorAppendsToTheLog(t *testing.T) {
-	log := openLog(t)
+	log := openLogWithUnsealedVersionFacts(t)
 	a := audit.NewAuditor(log)
 
 	if err := a.Audit(context.Background(), "secret.version.written", tenantA, []byte(`{"path":"app/db","version":1}`)); err != nil {

@@ -6,10 +6,8 @@ import (
 	"bytes"
 	"context"
 	"testing"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/auditsink"
-	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -219,16 +217,13 @@ func TestKMIPAttributeOperations(t *testing.T) {
 // and no event carries it in the clear.
 func TestKMIPDurableKeyPairReplays(t *testing.T) {
 	ctx := context.Background()
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
-	if err != nil {
-		t.Fatalf("open event log: %v", err)
-	}
-	t.Cleanup(func() { _ = log.Close() })
+	var wrapper *seal.LocalKEK
+	log := openKMIPValidatedFixture(t, func() seal.KeyWrapper { return wrapper })
 	kekBytes, err := seal.GenerateKEK()
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrapper, err := seal.NewLocalKEK(kekBytes)
+	wrapper, err = seal.NewLocalKEK(kekBytes)
 	secret.Wipe(kekBytes)
 	if err != nil {
 		t.Fatal(err)

@@ -155,7 +155,7 @@ func TestAuditToolScopeRetainsSharedLifecycleMembershipAfterRetention(t *testing
 }
 
 func TestAuditToolScopeUsesCanonicalNamespacesNotActorWords(t *testing.T) {
-	log := openLog(t)
+	log := openLogWithUnsealedVersionFacts(t)
 	cases := []struct{ tool, event string }{
 		{"discover", "discovery.scan.completed"}, {"certificates", "certificate.recorded"},
 		{"workloads_machines", "attestation.verified"}, {"secrets", "secret.version.written"},

@@ -8,10 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	configpkg "trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -170,9 +170,31 @@ func applicationSecretRecoveryPayload(requester string) projections.ApplicationS
 
 func openApplicationSecretRecoveryLog(t *testing.T) *events.Log {
 	t.Helper()
-	log, err := eventstest.OpenFixture(context.Background(), configpkg.NATS{
+	// These recovery tests deliberately use opaque synthetic ciphertext. Admit
+	// only their exact tenant/name/schema and the two declared test values;
+	// production custody admission is covered by served tests.
+	return openApplicationSecretRecoveryLogWithAdmission(t, func(ctx context.Context, event events.Event,
+		publish func(context.Context) (events.Event, error),
+	) (events.Event, error) {
+		var mutation projections.ApplicationSecretMutation
+		if event.Type != projections.EventApplicationSecretRotated ||
+			event.TenantID != "11111111-1111-1111-1111-111111111111" ||
+			event.SchemaVersion != projections.ApplicationSecretMutationSchemaVersion ||
+			json.Unmarshal(event.Data, &mutation) != nil || mutation.Name != "durable/window" ||
+			(!bytes.Equal(mutation.Sealed, []byte("sealed-canonical-v2")) &&
+				!bytes.Equal(mutation.Sealed, []byte("sealed-poison-v2"))) {
+			return events.Event{}, fmt.Errorf("api test: undeclared synthetic sealed event")
+		}
+		return publish(ctx)
+	})
+}
+
+func openApplicationSecretRecoveryLogWithAdmission(t *testing.T, admit events.AppendAdmission) *events.Log {
+	t.Helper()
+	log, err := events.Open(context.Background(), configpkg.NATS{
 		Mode: configpkg.NATSEmbedded, StoreDir: t.TempDir(),
-	}, events.WithDuplicateWindowForTesting(100*time.Millisecond))
+	}, events.WithDuplicateWindowForTesting(100*time.Millisecond),
+		events.WithRequiredAppendAdmission(), events.WithAppendAdmission(admit))
 	if err != nil {
 		t.Fatal(err)
 	}

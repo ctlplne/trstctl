@@ -105,6 +105,13 @@ func validateSealedIngressCandidate(ctx context.Context, access tenantseal.Acces
 		if state.ID == "" || state.Version < 1 {
 			return fmt.Errorf("server: KMIP sealed state identity is incomplete")
 		}
+		if state.ObjectType == "public_key" {
+			if event.Type != "kmip.state.object.created" || len(state.SealedKey) != 0 ||
+				len(state.PublicKey) == 0 || state.Link == "" {
+				return fmt.Errorf("server: KMIP public state is incomplete")
+			}
+			return nil
+		}
 		return check(state.SealedKey,
 			[]byte("trstctl.kmip.state.v1|"+event.TenantID+"|"+state.ID+"|"+strconv.Itoa(state.Version)))
 	case projections.EventApplicationSecretBatchVersioned:
@@ -368,6 +375,13 @@ func validateSealedIngressCandidate(ctx context.Context, access tenantseal.Acces
 		}
 		return nil
 	}
+}
+
+// ValidateSealedIngressCandidate exposes the served ingress check to isolated
+// protocol fixtures that hold real sealed containers but no PostgreSQL event
+// journal. They still authenticate each container under its exact tenant/AAD.
+func ValidateSealedIngressCandidate(ctx context.Context, access tenantseal.Access, event events.Event) error {
+	return validateSealedIngressCandidate(ctx, access, event)
 }
 
 func decodeSealedIngressPayload(data []byte, out any) error {

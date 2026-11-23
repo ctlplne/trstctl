@@ -13,7 +13,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
@@ -83,16 +82,13 @@ func TestKMIPListenerServesEachTenantsEnrolledClients(t *testing.T) {
 	}}
 	poolSet := bulkhead.NewSet(bulkhead.Config{Name: bulkhead.SubsystemKMIP, Workers: 4, Queue: 8})
 	t.Cleanup(poolSet.Close)
-	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = log.Close() })
+	var wrapper *seal.LocalKEK
+	log := openKMIPValidatedFixture(t, func() seal.KeyWrapper { return wrapper })
 	kekBytes, err := seal.GenerateKEK()
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrapper, err := seal.NewLocalKEK(kekBytes)
+	wrapper, err = seal.NewLocalKEK(kekBytes)
 	secret.Wipe(kekBytes)
 	if err != nil {
 		t.Fatal(err)

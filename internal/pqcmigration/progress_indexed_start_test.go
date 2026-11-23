@@ -8,7 +8,6 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -20,7 +19,7 @@ import (
 func TestProgressReadsExactStartAcrossColdRestart(t *testing.T) {
 	ctx := context.Background()
 	dir := filepath.Join(t.TempDir(), "nats")
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir})
+	log, err := openPQCIndexedFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +50,7 @@ func TestProgressReadsExactStartAcrossColdRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir})
+	reopened, err := openPQCIndexedFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +85,7 @@ func TestProgressReadsExactStartAcrossColdRestart(t *testing.T) {
 
 func TestProgressRejectsConflictingStartIdentity(t *testing.T) {
 	ctx := context.Background()
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openPQCIndexedFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +106,7 @@ func TestProgressRejectsConflictingStartIdentity(t *testing.T) {
 
 func TestProgressRejectsProjectionThatDiffersFromRetainedStart(t *testing.T) {
 	ctx := context.Background()
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := openPQCIndexedFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

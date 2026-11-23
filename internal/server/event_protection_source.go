@@ -165,6 +165,13 @@ func restoreEventIngressOptionWithCustody(st *store.Store, access func() tenants
 	return events.WithAppendAdmission(restoreEventIngressAdmissionWithCustody(st, access))
 }
 
+// CustodyValidatedEventIngressOption lets an isolated local harness use the
+// production store-backed append admission with its own tenant custody. The
+// caller must bootstrap the store's restore admission before opening the log.
+func CustodyValidatedEventIngressOption(st *store.Store, access tenantseal.Access) events.OpenOption {
+	return restoreEventIngressOptionWithCustody(st, func() tenantseal.Access { return access })
+}
+
 func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tenantseal.Access) events.AppendAdmission {
 	return func(admitCtx context.Context, event events.Event,
 		publish func(context.Context) (events.Event, error),

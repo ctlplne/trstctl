@@ -1843,14 +1843,14 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"ProjectionCheckpoint(ctx)",
 		"AdvanceProjectionCheckpoint(readCtx, last)",
 		"func (p *Projector) Rebuild(",
-		"RebuildReadModelTx(readCtx",
+		"RebuildReadModelWithKeyStateContextTx(readCtx",
 		"ResetProjectionCheckpointTx",
 		"SetProjectionCheckpointTx",
 		"func (p *Projector) Snapshot(",
 		"WriteTenantSnapshot",
 		"func (p *Projector) RestoreFromSnapshot(",
 		"LatestSnapshotOffset",
-		"RestoreReadModelTx",
+		"RestoreReadModelWithKeyStateContextTx",
 		"RestoreSnapshotsTx",
 		"return p.rebuildWithPrivacyBarrier(ctx, log)",
 	} {
@@ -1864,7 +1864,7 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"func (s *Store) RebuildReadModelTx(",
 		"TRUNCATE `+strings.Join(ReadModelTables",
 		"func (s *Store) RestoreReadModelTx(",
-		"tx.Commit(ctx)",
+		"tx.Commit(rebuildCtx)",
 	} {
 		if !strings.Contains(storeProjection, want) {
 			t.Errorf("RESIL-102: store/projection.go no longer contains %q; atomic read-model transaction evidence weakened", want)
@@ -2971,8 +2971,8 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 	secretBuffer := read(t, "../internal/crypto/secret/buffer.go")
 	for _, want := range []string{
 		"Buffer holds secret material in locked, non-dumpable, zeroizable memory",
-		"region []byte",
-		"data   []byte",
+		"region  []byte",
+		"data    []byte",
 		"func NewFrom(src []byte)",
 		"func (b *Buffer) Destroy()",
 		"Wipe(b.region)",
@@ -3160,7 +3160,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 		"func (p *Projector) Rebuild(",
 		"func (p *Projector) Snapshot(",
 		"func (p *Projector) RestoreFromSnapshot(",
-		"p.store.RestoreReadModelTx(readCtx, func(tx pgx.Tx) error",
+		"p.store.RestoreReadModelWithKeyStateContextTx(readCtx, func(replayCtx context.Context, tx pgx.Tx) error",
 	} {
 		if !strings.Contains(projectionsGo, want) {
 			t.Errorf("SPINE-102: projections.go no longer contains %q; checkpoint/snapshot projection proof weakened", want)

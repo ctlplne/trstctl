@@ -14,7 +14,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
@@ -39,16 +38,13 @@ func TestKMIPOASIS14QueryOverMTLSListener(t *testing.T) {
 	// protocol, so this fixture supplies the kmip lane the contract demands.
 	poolSet := bulkhead.NewSet(bulkhead.Config{Name: bulkhead.SubsystemKMIP, Workers: 1, Queue: 2})
 	t.Cleanup(poolSet.Close)
-	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
-	if err != nil {
-		t.Fatalf("open KMIP event log: %v", err)
-	}
-	t.Cleanup(func() { _ = log.Close() })
+	var wrapper *seal.LocalKEK
+	log := openKMIPValidatedFixture(t, func() seal.KeyWrapper { return wrapper })
 	kekBytes, err := seal.GenerateKEK()
 	if err != nil {
 		t.Fatalf("generate KMIP KEK: %v", err)
 	}
-	wrapper, err := seal.NewLocalKEK(kekBytes)
+	wrapper, err = seal.NewLocalKEK(kekBytes)
 	secret.Wipe(kekBytes)
 	if err != nil {
 		t.Fatalf("construct KMIP KEK: %v", err)

@@ -267,11 +267,15 @@ func sourceCopyFromHistory(ctx context.Context, log *events.Log, target events.E
 		case "create", "rotate", "recover":
 			current, currentVersion = prior.Sealed, prior.ResultVersion
 			if prior.ResultVersion == mutation.SourceVersion {
-				candidate, candidateTime = prior.Sealed, event.Time
+				// PostgreSQL timestamptz stores microseconds. The source event
+				// retains nanoseconds, while SourceWrittenAt was read back from
+				// the projected version row before the rewrap. Compare the exact
+				// database representation, not the lost sub-microsecond tail.
+				candidate, candidateTime = prior.Sealed, time.UnixMicro(event.Time.UnixMicro())
 			}
 		case "delete":
 			if currentVersion == prior.ExpectedVersion {
-				tombstone, tombstoneTime = current, event.Time
+				tombstone, tombstoneTime = current, time.UnixMicro(event.Time.UnixMicro())
 				tombstoneVersionCopy, tombstoneVersionTime = candidate, candidateTime
 			}
 			candidate, current = nil, nil

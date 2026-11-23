@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
@@ -17,7 +16,8 @@ import (
 func TestTLSReceiptWorkerIndexedRecoveryAcrossColdRestart(t *testing.T) {
 	ctx := t.Context()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
-	log, err := eventstest.OpenFixture(ctx, cfg)
+	key := testIntegrityKey(t)
+	log, err := openPQCIndexedFixture(ctx, cfg, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestTLSReceiptWorkerIndexedRecoveryAcrossColdRestart(t *testing.T) {
 	}
 
 	intent := testTLSIntent()
-	sealed := sealTestIntent(t, testIntegrityKey(t), intent)
+	sealed := sealTestIntent(t, key, intent)
 	previous := connector.TLSPosture{MinimumVersion: "TLSv1.0",
 		CipherSuites: []string{"TLS_RSA_WITH_AES_128_CBC_SHA"}, KeyExchangeGroups: []string{"secp256r1"}}
 	prepared := TLSFindingPrepared{RunID: intent.RunID, AssetID: intent.AssetID,
@@ -57,7 +57,14 @@ func TestTLSReceiptWorkerIndexedRecoveryAcrossColdRestart(t *testing.T) {
 	appendFact(sealedTestTenant, "unrelated.event", map[string]string{"noise": "before"})
 	start := appendFact(sealedTestTenant, projections.EventLicensedCryptoMigrationStarted,
 		projections.LicensedCryptoMigrationStarted{RunID: intent.RunID})
-	appendFact("other-tenant", EventTLSFindingCompleted, completed)
+	otherSealed, err := sealTLSPostureOutbox(key, "other-tenant", licensedCryptoMigrationTLSPostureDestination,
+		sealedTestKey, intent.RunID, intent.AssetID, intent.TargetRevision, intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherCompleted := completed
+	otherCompleted.Intent.SealedOutboxPayload = otherSealed
+	appendFact("other-tenant", EventTLSFindingCompleted, otherCompleted)
 	appendFact(sealedTestTenant, EventTLSFindingPrepared, prepared)
 	appendFact(sealedTestTenant, "unrelated.event", map[string]string{"noise": "between"})
 	appendFact(sealedTestTenant, EventTLSFindingCompleted, completed)
@@ -85,7 +92,7 @@ func TestTLSReceiptWorkerIndexedRecoveryAcrossColdRestart(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	log, err = eventstest.OpenFixture(ctx, cfg)
+	log, err = openPQCIndexedFixture(ctx, cfg, key)
 	if err != nil {
 		t.Fatal(err)
 	}

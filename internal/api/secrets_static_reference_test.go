@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -41,7 +42,6 @@ func TestUnsupportedLegacyNativeTerminalChecksTheFrozenReference(t *testing.T) {
 }
 
 func TestGuardedStaticStageValidatesStableCiphertextAcrossKeyRewrap(t *testing.T) {
-	log := openApplicationSecretRecoveryLog(t)
 	ctx := t.Context()
 	original, err := seal.NewLocalKEK(bytes.Repeat([]byte{1}, 32))
 	if err != nil {
@@ -53,6 +53,23 @@ func TestGuardedStaticStageValidatesStableCiphertextAcrossKeyRewrap(t *testing.T
 		t.Fatal(err)
 	}
 	defer current.Destroy()
+	log := openApplicationSecretRecoveryLogWithAdmission(t, func(ctx context.Context, event events.Event,
+		publish func(context.Context) (events.Event, error),
+	) (events.Event, error) {
+		var stage projections.SecretStaticRotationHostedStaged
+		if event.Type != projections.EventSecretStaticRotationAdvanced ||
+			event.SchemaVersion != projections.SecretStaticRotationHostedStageSchemaVersion ||
+			json.Unmarshal(event.Data, &stage) != nil || stage.ID != "fixture-command" {
+			return events.Event{}, errors.New("static-stage test: unexpected sealed event")
+		}
+		plain, err := seal.Open(original, stage.SealedNew,
+			staticRotationAAD(event.TenantID, stage.ID, "new"))
+		if err != nil {
+			return events.Event{}, err
+		}
+		secret.Wipe(plain)
+		return publish(ctx)
+	})
 	command := store.SecretStaticRotationCommand{
 		TenantID: "11111111-1111-4111-8111-111111111171", ID: "fixture-command", TenantEpoch: "fixture-epoch",
 		Provider: "fixture-hosted", ProviderType: "openrouter", Key: "fixture/rotation", NewRef: "unlimited/fixture-id",

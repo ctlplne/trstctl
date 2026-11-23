@@ -3,9 +3,11 @@
 package audit_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"trstctl.com/trstctl/internal/eventstest"
@@ -27,6 +29,32 @@ func openLog(t *testing.T) *events.Log {
 	log, err := eventstest.OpenFixture(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	return log
+}
+
+// These audit tests use unsealed metadata under a type that production also
+// uses for sealed secret versions. Admit only the exact declared metadata
+// payloads; the production validator remains responsible for ciphertext.
+func openLogWithUnsealedVersionFacts(t *testing.T) *events.Log {
+	t.Helper()
+	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		events.WithRequiredAppendAdmission(), events.WithAppendAdmission(func(ctx context.Context, event events.Event,
+			publish func(context.Context) (events.Event, error),
+		) (events.Event, error) {
+			if event.Type == "secret.version.written" {
+				if !bytes.Equal(event.Data, []byte(`{"path":"app/db","version":1}`)) &&
+					!bytes.Equal(event.Data, []byte(`{"subject":"ssh certificate secret login signing incident discovery"}`)) {
+					return events.Event{}, fmt.Errorf("audit test: undeclared secret-version metadata")
+				}
+			} else if events.SealedBearingEvent(event) {
+				return events.Event{}, fmt.Errorf("audit test: undeclared sealed event")
+			}
+			return publish(ctx)
+		}))
+	if err != nil {
+		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
 	return log

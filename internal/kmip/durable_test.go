@@ -8,10 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/auditsink"
-	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -31,7 +29,7 @@ func (a *switchableKMIPTenantAccess) WithTenant(_ context.Context, tenantID stri
 	if a.blocked {
 		return errors.New("test KMIP tenant sealed")
 	}
-	return fn(a.cipher)
+	return fn(verifiedKMIPFixtureCipher{Cipher: a.cipher})
 }
 
 type kmipDomainCipher struct {
@@ -49,16 +47,13 @@ func (c kmipDomainCipher) Open(container, aad []byte) ([]byte, error) {
 
 func TestKMIPDurableStateReplaysSealedKeysAndLifecycle(t *testing.T) {
 	ctx := context.Background()
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
-	if err != nil {
-		t.Fatalf("open event log: %v", err)
-	}
-	t.Cleanup(func() { _ = log.Close() })
+	var wrapper *seal.LocalKEK
+	log := openKMIPValidatedFixture(t, func() seal.KeyWrapper { return wrapper })
 	kekBytes, err := seal.GenerateKEK()
 	if err != nil {
 		t.Fatalf("generate KEK: %v", err)
 	}
-	wrapper, err := seal.NewLocalKEK(kekBytes)
+	wrapper, err = seal.NewLocalKEK(kekBytes)
 	secret.Wipe(kekBytes)
 	if err != nil {
 		t.Fatalf("construct KEK: %v", err)
@@ -143,11 +138,8 @@ func TestKMIPDurableStateReplaysSealedKeysAndLifecycle(t *testing.T) {
 
 func TestKMIPDurableReplayKeepsTenantDomainCiphertextAndSealBlocksWholeFrame(t *testing.T) {
 	ctx := context.Background()
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = log.Close() })
+	var access *switchableKMIPTenantAccess
+	log := openKMIPValidatedFixtureWithAccess(t, func() tenantseal.Access { return access })
 	deployment, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x51}, 32))
 	if err != nil {
 		t.Fatal(err)
@@ -173,12 +165,12 @@ func TestKMIPDurableReplayKeepsTenantDomainCiphertextAndSealBlocksWholeFrame(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := log.Append(ctx, events.Event{Type: kmipStateCreatedEventType, TenantID: tenantID, Data: data}); err != nil {
-		t.Fatal(err)
-	}
-	access := &switchableKMIPTenantAccess{
+	access = &switchableKMIPTenantAccess{
 		tenantID: tenantID,
 		cipher:   kmipDomainCipher{key: domainKey, binding: binding},
+	}
+	if _, err := log.Append(ctx, events.Event{Type: kmipStateCreatedEventType, TenantID: tenantID, Data: data}); err != nil {
+		t.Fatal(err)
 	}
 	service, err := NewDurable(ctx, tenantID, certAuth{}, &auditsink.Recorder{}, log, deployment, access)
 	if err != nil {

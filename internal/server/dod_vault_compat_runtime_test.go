@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/authz"
@@ -24,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
@@ -52,17 +52,28 @@ func TestDODVaultCompatProductionAssembly(t *testing.T) {
 	}
 
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
+	runSecrets, err := loadRunSecrets(cfg)
+	if err != nil {
+		t.Fatalf("load run secrets: %v", err)
+	}
+	defer runSecrets.Close()
+	registry, err := tenantseal.NewLocalWrapperRegistry(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := tenantseal.NewAccess(st, runSecrets.kek, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+		t.Fatal(err)
+	}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")},
+		events.WithRequiredAppendAdmission(), CustodyValidatedEventIngressOption(st, access))
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
 	dodRegisterVaultCompatTenant(t, ctx, log, st)
-	runSecrets, err := loadRunSecrets(cfg)
-	if err != nil {
-		_ = log.Close()
-		t.Fatalf("load run secrets: %v", err)
-	}
-	defer runSecrets.Close()
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		_ = log.Close()
