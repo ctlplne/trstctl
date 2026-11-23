@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -23,8 +24,16 @@ func TestIngressJournalKeyIsExplicitVersionedCustodyCR045(t *testing.T) {
 		if err := journalkey.Provision(path); err != nil {
 			t.Fatal(err)
 		}
-		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
-			t.Fatalf("journal key file mode=%v err=%v", info, err)
+		private, err := secretfile.IsPrivate(path)
+		if err != nil || !private {
+			t.Fatalf("journal key custody private=%v err=%v", private, err)
+		}
+		// POSIX mode bits are an additional check where they describe file
+		// authority. Windows custody is enforced by the protected NTFS DACL.
+		if runtime.GOOS != "windows" {
+			if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+				t.Fatalf("journal key file mode=%v err=%v", info, err)
+			}
 		}
 		if err := journalkey.Provision(path); err == nil {
 			t.Fatal("provision replaced an existing journal key")
