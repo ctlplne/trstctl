@@ -149,6 +149,45 @@ stop_server() {
 	SERVER_PID=""
 }
 
+provision_rehearsal_verdict_trust() { # $1 = instance dir, $2 = config, $3 = log
+	local dir="$1" cfg="$2" log="$3"
+	local public="$dir/signer-keys/agid-control-plane/reachability-verdict-v1.pub"
+	local binding="$dir/agentid-verdict-trust.json"
+	local floor="$dir/signer-keys/agid-reach-verdict-keys/agentid-reach-verdict.der"
+	# The first control-plane start exports only the public half, then fails
+	# closed because its signer has no locally installed verdict trust. Keep
+	# that refusal in the rehearsal; do not teach the RPC to install trust.
+	if [ ! -s "$public" ] || [ ! -s "$floor" ]; then
+		start_server "$cfg" "$log"
+		for _ in $(seq 1 120); do
+			if [ -s "$public" ] && ! kill -0 "$SERVER_PID" 2>/dev/null; then break; fi
+			if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+				tail -40 "$log" >&2 || true
+				fail "control plane exited without exporting the AGID verdict public key"
+			fi
+			sleep 1
+		done
+		if ! grep -q 'AGID verdict key must be provisioned locally' "$log"; then
+			tail -40 "$log" >&2 || true
+			fail "first boot did not fail closed on missing signer-local verdict trust"
+		fi
+		stop_server
+	fi
+	[ -s "$public" ] || fail "control plane did not export the AGID verdict public key"
+	python3 - "$public" "$binding" <<'PY'
+import json, pathlib, sys
+public = pathlib.Path(sys.argv[1]).read_text()
+path = pathlib.Path(sys.argv[2])
+path.write_text(json.dumps({"kind": "reachability_key", "key_id": "agentid-reach-verdict", "public_key_pem": public}) + "\n")
+path.chmod(0o600)
+PY
+	"$BIN_DIR/trstctl-signer" --keystore "$dir/signer-keys" --agid-provision-trust "$binding" \
+		|| fail "signer-local AGID verdict trust ceremony failed"
+	# The binding contains only reviewed public material, but it is no longer
+	# needed after the signer has read it into its local first-writer floor.
+	rm -f "$binding"
+}
+
 post() { # $1 = base, $2 = token, $3 = idem key, $4 = path, $5 = body
 	# A refused call fails with its problem detail on stderr (not a bare status
 	# code, nor lost in a jq pipe). 503 is the control plane's bounded
@@ -197,6 +236,7 @@ TOKEN="$(run_bin "$A_CFG" token create --tenant "$TENANT" --tenant-name "DR rehe
 [ -n "$TOKEN" ] || fail "token create produced nothing"
 
 say "instance A: boot + seed (owner -> issuer -> identity -> issued cert)"
+provision_rehearsal_verdict_trust "$ROOT/a" "$A_CFG" "$ROOT/a-first-boot.log"
 start_server "$A_CFG" "$ROOT/a.log"
 wait_ready "$A_URL" "$ROOT/a.log"
 
@@ -241,6 +281,7 @@ run_bin "$B_CFG" --full-restore-dir "$BACKUP" --backup-encryption-key-file "$KEY
 	|| fail "--full-restore-dir failed on a GOOD backup"
 
 say "instance B: boot + verify restored data + NEW issuance"
+provision_rehearsal_verdict_trust "$ROOT/b" "$B_CFG" "$ROOT/b-first-boot.log"
 start_server "$B_CFG" "$ROOT/b.log"
 wait_ready "$B_URL" "$ROOT/b.log"
 curl -fsS -H "Authorization: Bearer $TOKEN" "$B_URL/api/v1/owners/$OWNER" >/dev/null \

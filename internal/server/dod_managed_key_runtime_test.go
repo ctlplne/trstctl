@@ -29,8 +29,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	agidorch "trstctl.com/trstctl/internal/agentid/orchestrator"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/signing"
@@ -827,6 +829,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 		runtime.installTPMForeignOperationCollision()
 	}
 	runtime.bootstrapToken()
+	runtime.provisionVerdictTrust()
 	control.Start(runtime.dir, runtime.env)
 	runtime.waitControlPlane()
 
@@ -1444,6 +1447,53 @@ func (r *dodManagedKeyRuntime) startSigner() {
 	)
 	dodRunCommand(r.t, "start separate managed-key signer", "docker", args...)
 	r.waitSigner()
+}
+
+// provisionVerdictTrust models the signer operator's one-shot ceremony. The
+// control-plane key remains sealed under its own KEK and path; only its public
+// half crosses to the separate signer container's first-writer trust floor.
+func (r *dodManagedKeyRuntime) provisionVerdictTrust() {
+	r.t.Helper()
+	floor := filepath.Join(r.dir, "control-signer-keys")
+	if err := os.MkdirAll(floor, 0o700); err != nil {
+		r.t.Fatal(err)
+	}
+	wrapper, err := kek.LoadOrCreate(filepath.Join(r.dir, "control-kek.bin"))
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	_, public, err := agidorch.PrepareReachabilityVerdictKey(floor, wrapper)
+	wrapper.Destroy()
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	binding := filepath.Join(r.dir, "agid-verdict-trust.json")
+	raw, err := json.Marshal(map[string]string{
+		"kind": "reachability_key", "key_id": "agentid-reach-verdict",
+		"public_key_pem": string(crypto.MarshalPublicKeyPEM(public.DER)),
+	})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	if err := os.WriteFile(binding, raw, 0o600); err != nil {
+		r.t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(binding) }()
+	uid, gid := os.Getuid(), os.Getgid()
+	signerFloor := filepath.Join(r.dir, "keystore")
+	if err := os.MkdirAll(signerFloor, 0o700); err != nil {
+		r.t.Fatal(err)
+	}
+	floorMount := proof.DockerHostMountSource(r.t, signerFloor)
+	bindingMount := proof.DockerHostMountSource(r.t, binding)
+	args := []string{"run", "--rm", "--platform", r.artifacts.platform,
+		"--user", strconv.Itoa(uid) + ":" + strconv.Itoa(gid),
+		"--security-opt", "no-new-privileges", "--cap-drop", "ALL", "--network", "none",
+		"--mount", "type=bind,src=" + floorMount + ",dst=/runtime/keystore",
+		"--mount", "type=bind,src=" + bindingMount + ",dst=/runtime/agid-verdict-trust.json,readonly",
+		"--entrypoint", "/usr/local/bin/trstctl-signer-hsm", r.artifacts.runtimeImage,
+		"--keystore", "/runtime/keystore", "--agid-provision-trust", "/runtime/agid-verdict-trust.json"}
+	dodRunCommand(r.t, "provision signer-local AGID verdict trust", "docker", args...)
 }
 
 func dodManagedKeySignerNSS(t *testing.T, dir string, uid, gid int) (string, string) {
