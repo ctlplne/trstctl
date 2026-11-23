@@ -1705,7 +1705,8 @@ func (r *dodManagedKeyRuntime) approveManagedKeyAction(keyID, action string) {
 	denied := dodManagedKeyRequest(r, http.MethodPost, path, action, map[string]string{"key_id": keyID})
 	deniedBody := r.readManagedKeyResponse(denied)
 	if denied.StatusCode != http.StatusForbidden || !bytes.Contains(deniedBody, []byte("dual control")) {
-		r.t.Fatalf("unapproved managed-key %s status=%d body=%s, want 403 dual-control denial", action, denied.StatusCode, deniedBody)
+		r.t.Fatalf("unapproved managed-key %s status=%d body=%s, want 403 dual-control denial; approval_storage_log=%q",
+			action, denied.StatusCode, deniedBody, r.approvalStorageDiagnostic())
 	}
 	var pending struct {
 		Code              string `json:"code"`
