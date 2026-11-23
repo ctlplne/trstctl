@@ -576,7 +576,9 @@ func TestApplyDesiredTrustBundleRetriesAnUpdateConflict(t *testing.T) {
 	inner := f.api.handler()
 	var puts atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/trustbundles/") && puts.Add(1) == 1 {
+		// The watch worker may also PUT /status for this object. Inject the
+		// conflict only into the rollout update whose retry we assert below.
+		if r.Method == http.MethodPut && r.URL.Path == trustBundleCollectionPath()+"/platform-roots" && puts.Add(1) == 1 {
 			w.WriteHeader(http.StatusConflict)
 			_, _ = w.Write([]byte(`{"kind":"Status","code":409}`))
 			return
