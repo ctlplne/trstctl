@@ -108,6 +108,16 @@ func (v LDAPVerifier) Verify(ctx context.Context, username string, password []by
 			return auth.Claims{}, fmt.Errorf("auth: LDAP service rebind for group lookup: %w", err)
 		}
 	}
+	if strings.TrimSpace(v.UserDNTemplate) != "" {
+		// A successful simple bind proves the password, but not the spelling
+		// of the DN the caller supplied. LDAP can bind ALICE to alice while
+		// our member, offboarding and dual-control fences compare subjects
+		// exactly. Read the bound entry and use the directory's DN everywhere.
+		userDN, email, err = v.lookupCanonicalUser(conn, userDN)
+		if err != nil {
+			return auth.Claims{}, err
+		}
+	}
 	if email == "" {
 		email = v.lookupUserEmail(conn, userDN)
 	}
@@ -121,6 +131,18 @@ func (v LDAPVerifier) Verify(ctx context.Context, username string, password []by
 		Issuer:  "ldap:" + v.URL,
 		Groups:  groups,
 	}, nil
+}
+
+func (v LDAPVerifier) lookupCanonicalUser(conn *ldap.Conn, boundDN string) (string, string, error) {
+	req := ldap.NewSearchRequest(boundDN, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 1, 5, false,
+		"(objectClass=*)", uniqueNonEmpty("dn", v.EmailAttribute), nil)
+	req.EnforceSizeLimit = true
+	res, err := conn.Search(req)
+	if err != nil || len(res.Entries) != 1 || strings.TrimSpace(res.Entries[0].DN) == "" {
+		return "", "", errors.New("auth: LDAP bound entry could not be resolved to a directory identity")
+	}
+	entry := res.Entries[0]
+	return entry.DN, entry.GetAttributeValue(v.EmailAttribute), nil
 }
 
 func (v LDAPVerifier) resolveUser(conn *ldap.Conn, username string) (dn string, email string, err error) {

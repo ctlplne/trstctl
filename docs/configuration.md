@@ -2215,13 +2215,20 @@ dropping a user into the wrong tenant.
 | `TRSTCTL_AUTH_SAML_DEFAULT_ROLES` | unset | Roles for a SAML session whose tenant mapping names none; member roles replace them as for OIDC. |
 | `TRSTCTL_AUTH_LDAP_ENABLED` | `false` | Enables served LDAP / Active Directory login at `POST /auth/ldap/login`. |
 | `TRSTCTL_AUTH_LDAP_URL` | unset | Directory URL. Use `ldaps://` for production; `ldap://` is accepted only on loopback. |
-| `TRSTCTL_AUTH_LDAP_USER_DN_TEMPLATE` | unset | Direct-bind DN template such as `uid={username},ou=people,dc=example,dc=org`. |
-| `TRSTCTL_AUTH_LDAP_BIND_DN` / `TRSTCTL_AUTH_LDAP_BIND_PASSWORD_FILE` | unset | Optional read-only service bind for user and group searches. |
+| `TRSTCTL_AUTH_LDAP_USER_DN_TEMPLATE` | unset | Direct-bind DN template such as `uid={username},ou=people,dc=example,dc=org`. After binding, the server reads the directory entry at that DN and uses its returned DN as the subject. The entry must be readable by the bound user or the configured service account; login fails closed if it cannot be read. |
+| `TRSTCTL_AUTH_LDAP_BIND_DN` / `TRSTCTL_AUTH_LDAP_BIND_PASSWORD_FILE` | unset | Optional read-only service bind for user and group searches, including the post-bind identity lookup in direct-bind mode. |
 | `TRSTCTL_AUTH_LDAP_USER_SEARCH_BASE_DN` / `TRSTCTL_AUTH_LDAP_USER_FILTER` | unset | User lookup when no direct-bind template is used. |
 | `TRSTCTL_AUTH_LDAP_GROUP_SEARCH_BASE_DN` / `TRSTCTL_AUTH_LDAP_GROUP_FILTER` | unset | Group lookup; `{user_dn}` and `{username}` are escaped before search. |
 | `TRSTCTL_AUTH_LDAP_GROUP_NAME_ATTRIBUTE` | unset | Group attribute mapped to `tenant_mappings[].group`, usually `cn`. |
 | `TRSTCTL_AUTH_LDAP_SESSION_SECRET_FILE` | unset | HMAC secret file used to sign browser sessions. |
 | `TRSTCTL_AUTH_LDAP_DEFAULT_ROLES` | unset | Roles for an LDAP session whose tenant mapping names none; member roles replace them as for OIDC. |
+
+When upgrading from a build that used the typed DN as an LDAP session subject,
+replace the LDAP session signing secret on every node as part of the rollout.
+This invalidates sessions issued under the old case-sensitive subject spelling;
+otherwise those sessions remain usable until their configured session TTL ends.
+Keep the replacement secret identical across nodes and use the deployment's
+normal secret-rotation procedure.
 
 An OIDC login started from a protected console page returns to that page after
 sign-in, including its query filters and fragment. This also works when opening
@@ -2363,8 +2370,9 @@ in `externalId`. SCIM defines `externalId` as a client-issued identifier; it is
 email address. Only a trusted deployment configuration selects the attribute.
 The console's **People and roles → SSO groups and role bindings** panel shows
 the current session's exact sign-in subject. Use it to check the IdP's SCIM
-attribute mapping before the first provision. For LDAP, that subject can be the
-full directory DN rather than the short login name.
+attribute mapping before the first provision. For LDAP, that subject is the
+directory-returned DN rather than the typed short login name, so case variants
+of one account share the same member and offboarding fences.
 
 Both `userName` and `externalId` are retained and returned. The selected attribute
 becomes the stable SCIM resource `id` and tenant-member subject. It cannot change
