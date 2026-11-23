@@ -39,6 +39,17 @@ type storageProtectionAdmission struct {
 	active map[string]eventprotect.KeyRef
 }
 
+type busyAfterEntryAdmission struct{ attempts int }
+
+func (a *busyAfterEntryAdmission) WithTenantEventProtection(ctx context.Context, _ string, fn func(context.Context) error) error {
+	a.attempts++
+	return fn(ctx)
+}
+
+func (*busyAfterEntryAdmission) EventProtectionFor(context.Context, Event) (EventProtectionDecision, error) {
+	return EventProtectionDecision{}, eventprotect.ErrTenantAdmissionInUse
+}
+
 func (a *storageProtectionAdmission) WithTenantEventProtection(ctx context.Context, _ string, fn func(context.Context) error) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -82,6 +93,27 @@ func protectedStorageFixture(t *testing.T) (*Log, EventProtection, *storageProte
 	}
 	t.Cleanup(func() { _ = log.Close() })
 	return log, protection, admission
+}
+
+func TestProtectedAppendDoesNotRetryAfterAdmissionCallbackEntered(t *testing.T) {
+	log, _, _ := protectedStorageFixture(t)
+	admission := &busyAfterEntryAdmission{}
+	log.eventProtection.Admission = admission
+	const eventID = "3dfe64a9-f706-4936-a558-c671c7fbd378"
+	_, err := log.Append(t.Context(), Event{ID: eventID, Type: protectedStorageTestType,
+		TenantID: "d59b4292-1adc-4d43-a405-781f95b1779c", Data: []byte(`{"email":"a@example.invalid"}`)})
+	if !errors.Is(err, eventprotect.ErrTenantAdmissionInUse) || admission.attempts != 1 {
+		t.Fatalf("entered callback retried or lost error: attempts=%d err=%v", admission.attempts, err)
+	}
+	count := 0
+	if err := log.Replay(t.Context(), 0, func(ev Event) error {
+		if ev.ID == eventID {
+			count++
+		}
+		return nil
+	}); err != nil || count != 0 {
+		t.Fatalf("refused append left %d source events: %v", count, err)
+	}
 }
 
 func TestProtectedAppendKeepsReadableViewsAndExactCiphertextSource(t *testing.T) {

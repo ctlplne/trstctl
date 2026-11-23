@@ -61,6 +61,8 @@ const (
 	dodTagRequestMessage           uint32 = 0x420078
 	dodTagRequestPayload           uint32 = 0x420079
 	dodTagResponseMessage          uint32 = 0x42007b
+	dodTagResultMessage            uint32 = 0x42007d
+	dodTagResultReason             uint32 = 0x42007e
 	dodTagResultStatus             uint32 = 0x42007f
 	dodTagSymmetricKey             uint32 = 0x42008f
 	dodTagTemplateAttribute        uint32 = 0x420091
@@ -273,8 +275,28 @@ func dodKMIPExchange(t *testing.T, conn net.Conn, operation int32, payload []byt
 func dodKMIPRequireSuccess(t *testing.T, frame []byte, operation int32) dodKMIPNode {
 	t.Helper()
 	root := dodKMIPParse(t, frame)
-	if root.tag != dodTagResponseMessage || dodKMIPStatusNode(t, root, operation) != 0 {
-		t.Fatalf("KMIP operation %#x did not succeed", operation)
+	if root.tag != dodTagResponseMessage {
+		t.Fatalf("KMIP operation %#x returned root tag %#x, want response", operation, root.tag)
+	}
+	if status := dodKMIPStatusNode(t, root, operation); status != 0 {
+		var reason int32
+		var message string
+		for _, item := range root.children {
+			if item.tag != dodTagBatchItem {
+				continue
+			}
+			if op, ok := dodKMIPDirectEnum(item, dodTagOperation); !ok || op != operation {
+				continue
+			}
+			reason, _ = dodKMIPDirectEnum(item, dodTagResultReason)
+			for _, child := range item.children {
+				if child.tag == dodTagResultMessage && child.kind == dodTTLVText {
+					message = string(child.value)
+				}
+			}
+			break
+		}
+		t.Fatalf("KMIP operation %#x failed: status=%#x reason=%#x message=%q", operation, status, reason, message)
 	}
 	return root
 }

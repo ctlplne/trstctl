@@ -66,7 +66,7 @@ func (s *Store) WithTenantEventProtection(ctx context.Context, tenantID string, 
 		return err
 	}
 	if !acquired {
-		return fmt.Errorf("%w: tenant event protection is in use", ErrDatastoreBusy)
+		return fmt.Errorf("%w: %w", ErrDatastoreBusy, eventprotect.ErrTenantAdmissionInUse)
 	}
 	grant := &eventProtectionGuard{store: s, tenant: tenant.String(), conn: conn}
 	grant.active.Store(true)

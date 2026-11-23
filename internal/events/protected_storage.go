@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -91,67 +93,88 @@ func (l *Log) appendWithEventProtection(ctx context.Context, e Event, explicitTi
 	if l.eventProtection == nil {
 		return l.publishPreparedEvent(ctx, e)
 	}
-	var result Event
-	err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
-		return l.eventProtection.Admission.WithTenantEventProtection(readCtx, e.TenantID, func(guardCtx context.Context) error {
-			decision, err := l.eventProtection.Admission.EventProtectionFor(guardCtx, e)
-			if err != nil {
-				return err
-			}
-			if decision.Mode > EventProtectionPublicControl {
-				return eventprotect.ErrContext
-			}
-			ref := decision.Ref
-			canonical, found, err := l.rawEventByID(guardCtx, e.ID)
-			if err != nil {
-				return err
-			}
-			if found && (decision.Mode != EventProtectionLegacy || canonical.Protection != nil) {
-				if normalizedTenantScope(canonical.TenantID) != normalizedTenantScope(e.TenantID) || canonical.Type != e.Type || canonical.SchemaVersion != e.SchemaVersion {
-					return ErrConflictingEventIdentity
-				}
-				canonical, err = l.openProtectedEvent(guardCtx, canonical)
+	// A projector can briefly hold the same tenant fence. Retry only when
+	// admission refused BEFORE its callback ran. Once it begins, an error can
+	// follow a published event, so replaying the mutation would be ambiguous.
+	var deadline time.Time
+	for {
+		var result Event
+		entered := false
+		err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
+			return l.eventProtection.Admission.WithTenantEventProtection(readCtx, e.TenantID, func(guardCtx context.Context) error {
+				entered = true
+				decision, err := l.eventProtection.Admission.EventProtectionFor(guardCtx, e)
 				if err != nil {
 					return err
 				}
-				if canonical.SensitiveErased || !bytes.Equal(canonical.Data, e.Data) || !sameProtectedActorEncoding(canonical.Actor, e.Actor) ||
-					(explicitTime && !canonical.Time.Equal(e.Time)) {
-					return ErrConflictingEventIdentity
+				if decision.Mode > EventProtectionPublicControl {
+					return eventprotect.ErrContext
 				}
-				result = canonical
-				return nil
-			}
-			if decision.Mode != EventProtectionSensitive {
+				ref := decision.Ref
+				canonical, found, err := l.rawEventByID(guardCtx, e.ID)
+				if err != nil {
+					return err
+				}
+				if found && (decision.Mode != EventProtectionLegacy || canonical.Protection != nil) {
+					if normalizedTenantScope(canonical.TenantID) != normalizedTenantScope(e.TenantID) || canonical.Type != e.Type || canonical.SchemaVersion != e.SchemaVersion {
+						return ErrConflictingEventIdentity
+					}
+					canonical, err = l.openProtectedEvent(guardCtx, canonical)
+					if err != nil {
+						return err
+					}
+					if canonical.SensitiveErased || !bytes.Equal(canonical.Data, e.Data) || !sameProtectedActorEncoding(canonical.Actor, e.Actor) ||
+						(explicitTime && !canonical.Time.Equal(e.Time)) {
+						return ErrConflictingEventIdentity
+					}
+					result = canonical
+					return nil
+				}
+				if decision.Mode != EventProtectionSensitive {
+					result, err = l.publishPreparedEvent(guardCtx, e)
+					return err
+				}
+				tenant, err := uuid.Parse(e.TenantID)
+				if err != nil || tenant == uuid.Nil || ref.TenantID != tenant.String() {
+					return eventprotect.ErrContext
+				}
+				// The retained safety floor must remain inspectable without opening
+				// keys. New production writes already use the closed v2 schema.
+				if e.Type == schedulerhistory.EventType && e.SchemaVersion <= schedulerhistory.LegacySchemaVersion {
+					return schedulerhistory.ErrSanitationRequired
+				}
+				digest, err := PrivacyEventPolicyDigest(e.Type, e.SchemaVersion)
+				if err != nil {
+					return err
+				}
+				var envelope eventprotect.Envelope
+				if err := l.eventProtection.Keys.WithKey(guardCtx, ref, func(key seal.KeyWrapper) error {
+					var err error
+					envelope, err = eventprotect.Protect(key, protectionContext(e), ref.ID, digest, eventprotect.Payload{Data: e.Data, Actor: e.Actor})
+					return err
+				}); err != nil {
+					return err
+				}
+				e.Protection = &envelope
 				result, err = l.publishPreparedEvent(guardCtx, e)
 				return err
-			}
-			tenant, err := uuid.Parse(e.TenantID)
-			if err != nil || tenant == uuid.Nil || ref.TenantID != tenant.String() {
-				return eventprotect.ErrContext
-			}
-			// The retained safety floor must remain inspectable without opening
-			// keys. New production writes already use the closed v2 schema.
-			if e.Type == schedulerhistory.EventType && e.SchemaVersion <= schedulerhistory.LegacySchemaVersion {
-				return schedulerhistory.ErrSanitationRequired
-			}
-			digest, err := PrivacyEventPolicyDigest(e.Type, e.SchemaVersion)
-			if err != nil {
-				return err
-			}
-			var envelope eventprotect.Envelope
-			if err := l.eventProtection.Keys.WithKey(guardCtx, ref, func(key seal.KeyWrapper) error {
-				var err error
-				envelope, err = eventprotect.Protect(key, protectionContext(e), ref.ID, digest, eventprotect.Payload{Data: e.Data, Actor: e.Actor})
-				return err
-			}); err != nil {
-				return err
-			}
-			e.Protection = &envelope
-			result, err = l.publishPreparedEvent(guardCtx, e)
-			return err
+			})
 		})
-	})
-	return result, err
+		if err == nil || entered || !errors.Is(err, eventprotect.ErrTenantAdmissionInUse) {
+			return result, err
+		}
+		if deadline.IsZero() {
+			deadline = time.Now().Add(5 * time.Second)
+		}
+		if time.Now().After(deadline) {
+			return Event{}, fmt.Errorf("events: tenant admission stayed busy for 5s: %w", err)
+		}
+		select {
+		case <-ctx.Done():
+			return Event{}, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 func sameProtectedActorEncoding(left, right *Actor) bool {
