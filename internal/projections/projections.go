@@ -8842,16 +8842,22 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		configuredByRef := ""
+		if e.Actor.Subject != "" {
+			configuredByRef = privacyref.SubjectRef(e.TenantID, e.Actor.Subject)
+		}
 		return p.store.ApplyNotificationChannelUpsertedTx(ctx, tx, store.NotificationChannel{
-			TenantID:      e.TenantID,
-			ID:            pl.ID,
-			ChannelType:   pl.ChannelType,
-			Label:         pl.Label,
-			EndpointURL:   pl.EndpointURL,
-			CredentialRef: pl.CredentialRef,
-			Enabled:       pl.Enabled,
-			CreatedAt:     e.Time,
-			UpdatedAt:     e.Time,
+			TenantID:        e.TenantID,
+			ID:              pl.ID,
+			ChannelType:     pl.ChannelType,
+			Label:           pl.Label,
+			EndpointURL:     pl.EndpointURL,
+			CredentialRef:   pl.CredentialRef,
+			ConfiguredBy:    e.Actor.Subject,
+			ConfiguredByRef: configuredByRef,
+			Enabled:         pl.Enabled,
+			CreatedAt:       e.Time,
+			UpdatedAt:       e.Time,
 		})
 	case EventNotificationChannelDeleted:
 		var pl NotificationChannelDeleted

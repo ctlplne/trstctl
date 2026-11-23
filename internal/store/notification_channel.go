@@ -14,15 +14,17 @@ import (
 // configuration. It stores only endpoint metadata and credential references,
 // never credential values.
 type NotificationChannel struct {
-	TenantID      string
-	ID            string
-	ChannelType   string
-	Label         string
-	EndpointURL   string
-	CredentialRef string
-	Enabled       bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	TenantID        string
+	ID              string
+	ChannelType     string
+	Label           string
+	EndpointURL     string
+	CredentialRef   string
+	ConfiguredBy    string
+	ConfiguredByRef string
+	Enabled         bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // ListNotificationChannels returns one tenant's authored notification channels.
@@ -31,7 +33,7 @@ func (s *Store) ListNotificationChannels(ctx context.Context, tenantID string) (
 	var out []NotificationChannel
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT tenant_id::text, id, channel_type, label, endpoint_url, credential_ref, enabled, created_at, updated_at
+			`SELECT tenant_id::text, id, channel_type, label, endpoint_url, credential_ref, configured_by, configured_by_ref, enabled, created_at, updated_at
 			   FROM notification_channels
 			  WHERE tenant_id = $1
 			  ORDER BY label, id`,
@@ -57,7 +59,7 @@ func (s *Store) GetNotificationChannel(ctx context.Context, tenantID, id string)
 	var out NotificationChannel
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanNotificationChannel(tx.QueryRow(ctx,
-			`SELECT tenant_id::text, id, channel_type, label, endpoint_url, credential_ref, enabled, created_at, updated_at
+			`SELECT tenant_id::text, id, channel_type, label, endpoint_url, credential_ref, configured_by, configured_by_ref, enabled, created_at, updated_at
 			   FROM notification_channels
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id), &out)
@@ -79,17 +81,19 @@ func (s *Store) ApplyNotificationChannelUpsertedTx(ctx context.Context, tx pgx.T
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO notification_channels (
-		     tenant_id, id, channel_type, label, endpoint_url, credential_ref, enabled, created_at, updated_at
+		     tenant_id, id, channel_type, label, endpoint_url, credential_ref, configured_by, configured_by_ref, enabled, created_at, updated_at
 		 )
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		      SET channel_type = EXCLUDED.channel_type,
 		          label = EXCLUDED.label,
 		          endpoint_url = EXCLUDED.endpoint_url,
 		          credential_ref = EXCLUDED.credential_ref,
+		          configured_by = EXCLUDED.configured_by,
+		          configured_by_ref = EXCLUDED.configured_by_ref,
 		          enabled = EXCLUDED.enabled,
 		          updated_at = EXCLUDED.updated_at`,
-		ch.TenantID, ch.ID, ch.ChannelType, ch.Label, ch.EndpointURL, ch.CredentialRef, ch.Enabled, ch.CreatedAt.UTC(), ch.UpdatedAt.UTC())
+		ch.TenantID, ch.ID, ch.ChannelType, ch.Label, ch.EndpointURL, ch.CredentialRef, ch.ConfiguredBy, ch.ConfiguredByRef, ch.Enabled, ch.CreatedAt.UTC(), ch.UpdatedAt.UTC())
 	return err
 }
 
@@ -114,6 +118,8 @@ func scanNotificationChannel(row rowScanner, ch *NotificationChannel) error {
 		&ch.Label,
 		&ch.EndpointURL,
 		&ch.CredentialRef,
+		&ch.ConfiguredBy,
+		&ch.ConfiguredByRef,
 		&ch.Enabled,
 		&ch.CreatedAt,
 		&ch.UpdatedAt,

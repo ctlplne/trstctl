@@ -603,7 +603,11 @@ value, which a change set never carries.
 - `notification_channels` are the tenant's channels by `channel_type`, with `endpoint_url`,
   `label`, `enabled` and a `credential_ref` that names a stored secret (`secret://…`) the author
   may read; the endpoint follows the tenant's own rules (public HTTPS, or a private range the
-  operator granted).
+  operator granted). Before each delivery, trstctl checks that the channel's last configurer
+  still holds `secrets:read` and, for a restricted environment, membership with read access.
+  If either grant ends, delivery fails with a reauthorization reason. An authorized member
+  can restore it by saving the channel again. Channels saved before configurer tracking was
+  added also need an authorized member to save them again before their stored credential is used.
 - `report_schedules` are scheduled compliance reports by `key` (`name`, `framework`,
   `report_type`, `interval_seconds`, `enabled`, and a `dispatch` naming channels and a ticket
   whose `token_ref` names a stored secret). What would stop the apply stops the plan: an

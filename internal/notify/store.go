@@ -93,7 +93,7 @@ type StoreChannelResolver struct {
 // secret:// name in the tenant's own secret store) into locked memory for one
 // delivery (A98). The caller owns the buffer.
 type CredentialResolver interface {
-	ResolveNotificationCredential(ctx context.Context, tenantID, ref string) (*secret.Buffer, error)
+	ResolveNotificationCredential(ctx context.Context, tenantID, ref, configuredBy string) (*secret.Buffer, error)
 }
 
 // EphemeralNotifier is a per-delivery notifier that holds credential material
@@ -213,8 +213,11 @@ func (r *StoreChannelResolver) build(ctx context.Context, tenantID, id string, c
 		if r.credentials == nil {
 			return failingChannel{id: id, reason: "a credential reference is set but no credential resolver is configured"}
 		}
-		buf, err := r.credentials.ResolveNotificationCredential(ctx, tenantID, ref)
+		buf, err := r.credentials.ResolveNotificationCredential(ctx, tenantID, ref, ch.ConfiguredBy)
 		if err != nil {
+			if errors.Is(err, credref.ErrReadAuthorityRevoked) {
+				return failingChannel{id: id, reason: "the credential's configuring principal no longer has read access; re-save this channel as an authorized principal"}
+			}
 			return failingChannel{id: id, reason: "the credential reference could not be resolved from the tenant secret store"}
 		}
 		credential = buf

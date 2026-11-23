@@ -150,7 +150,10 @@ func (r integrationCredentialResolver) resolveBounded(ctx context.Context, tenan
 
 // ResolveNotificationCredential opens a tenant notification channel's
 // credential reference for one delivery (A98, notify.CredentialResolver).
-func (r integrationCredentialResolver) ResolveNotificationCredential(ctx context.Context, tenantID, ref string) (*secret.Buffer, error) {
+func (r integrationCredentialResolver) ResolveNotificationCredential(ctx context.Context, tenantID, ref, configuredBy string) (*secret.Buffer, error) {
+	if err := r.requireCurrentSecretReferenceRead(ctx, tenantID, ref, configuredBy); err != nil {
+		return nil, err
+	}
 	return r.resolve(ctx, tenantID, ref)
 }
 

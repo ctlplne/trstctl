@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	505: true, // TestMigrationDataContentBackfills/0505_notification_channels_start_unattributed
 	504: true, // TestMigrationDataContentBackfills/0504_ticket_intake_source_starts_unattributed
 	500: true, // TestMigrationDataContentBackfills/0500_api_token_minter_starts_unattributed
 	502: true, // TestMigration0502KeepsV1ReceiptsUnverifiedUntilAuthenticatedBackfill (new gate writes no legacy rows)
@@ -2383,6 +2384,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0505_notification_channels_start_unattributed", testMigration0505NotificationChannelsStartUnattributed)
 	t.Run("0504_ticket_intake_source_starts_unattributed", testMigration0504TicketIntakeSourceStartsUnattributed)
 	t.Run("0500_api_token_minter_starts_unattributed", testMigration0500APITokenMinterStartsUnattributed)
 	t.Run("0286_ca_release_schema_preserves_v2", testMigration0286RetainsCACeremonyEffectSchema)
@@ -3448,6 +3450,39 @@ func testMigration0504TicketIntakeSourceStartsUnattributed(t *testing.T) {
 			}
 			if rows != want || !unknown {
 				t.Fatalf("0504 invented historical ticket sources: rows=%d want=%d unknown=%t", rows, want, unknown)
+			}
+		})
+}
+
+func testMigration0505NotificationChannelsStartUnattributed(t *testing.T) {
+	const stable = `SELECT tenant_id::text, id, channel_type, label, endpoint_url,
+		credential_ref, enabled::text, created_at::text, updated_at::text
+		FROM notification_channels ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 505, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for i, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `INSERT INTO notification_channels
+					(tenant_id, id, channel_type, label, endpoint_url, credential_ref,
+					 enabled, created_at, updated_at)
+					VALUES ($1,'webhook','webhook',$2,$3,$4,true,
+					 '2026-10-01T00:00:00Z'::timestamptz,
+					 '2026-10-01T00:00:00Z'::timestamptz)`,
+					tenantID, fmt.Sprintf("legacy webhook %d", i),
+					fmt.Sprintf("https://notify%d.example.test/hook", i),
+					fmt.Sprintf("secret://legacy/channel/%d", i)); err != nil {
+					t.Fatalf("seed pre-0505 channel for %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var unknown bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(configured_by = '' AND configured_by_ref = '')
+				FROM notification_channels WHERE tenant_id IN ($1,$2)`, tenantA, tenantB).Scan(&rows, &unknown); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !unknown {
+				t.Fatalf("0505 invented historical channel configurers: rows=%d want=%d unknown=%t", rows, want, unknown)
 			}
 		})
 }
