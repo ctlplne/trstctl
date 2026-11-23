@@ -3081,8 +3081,10 @@ jobs:
           done
       - name: Bring up the served eval stack
         run: |
+          bash scripts/ci/provision-compose-agid-verdict_selftest.sh
           # --build so we exercise THIS commit's image, not a stale pulled :latest.
           docker compose -f deploy/docker/docker-compose.yml up -d --build
+          bash scripts/ci/provision-compose-agid-verdict.sh deploy/docker/docker-compose.yml
           # Fail loud: poll /readyz and, if the control plane never serves within the
           # budget, dump the stack logs and FAIL the job (do not silently proceed to a
           # curl that connection-refuses). The control plane self-heals a first-boot
@@ -3660,7 +3662,12 @@ jobs:
 
       - name: Start the seeded demo stack
         working-directory: .
-        run: docker compose -f deploy/demo/docker-compose.yml up -d --build
+        run: |
+          # Start the control plane and its dependencies first. The seed waits
+          # for health, which cannot arrive before signer-local trust is installed.
+          docker compose -f deploy/demo/docker-compose.yml up -d --build trstctl
+          bash scripts/ci/provision-compose-agid-verdict.sh deploy/demo/docker-compose.yml
+          docker compose -f deploy/demo/docker-compose.yml up -d --build
 
       - name: Wait for the control plane
         working-directory: .
