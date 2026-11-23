@@ -172,6 +172,23 @@ func (a *API) requireCollectAllowed(ctx context.Context, tenantID, kind string, 
 }
 
 func (a *API) requireConnectionAllowed(ctx context.Context, tenantID, kind string, connection any) error {
+	var tokenRef, usernameRef string
+	switch c := connection.(type) {
+	case *secretscan.AnnotationConfig:
+		tokenRef, usernameRef = c.TokenRef, c.UsernameRef
+	case *secretscan.CollectConfig:
+		tokenRef, usernameRef = c.TokenRef, c.UsernameRef
+	}
+	if tokenRef != "" {
+		if err := requireOutboundEnvCredentialRefShape(tokenRef, "token_ref"); err != nil {
+			return err
+		}
+	}
+	if usernameRef != "" {
+		if err := requireOutboundEnvCredentialRefShape(usernameRef, "username_ref"); err != nil {
+			return err
+		}
+	}
 	raw, err := json.Marshal(connection)
 	if err != nil {
 		return err

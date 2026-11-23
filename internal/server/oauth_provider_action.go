@@ -39,6 +39,9 @@ func (d *issuanceDispatcher) handleOAuthProviderAction(ctx context.Context, m or
 	if err != nil {
 		return fail("the discovery source that found the grant is gone")
 	}
+	if source.Kind != oauthgrant.SourceKind {
+		return fail("the discovery source does not own an OAuth grant admin connection")
+	}
 	conn, found, err := oauthgrant.Connection(source.Config, in.Provider)
 	if err != nil || !found {
 		return fail("the discovery source no longer has an admin connection for " + in.Provider)

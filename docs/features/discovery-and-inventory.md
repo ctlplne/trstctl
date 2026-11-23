@@ -939,6 +939,9 @@ A171):
 ]
 ```
 
+Provider actions use only a finding from an `oauth_grant` source. The outbox
+worker checks that source kind again when it performs a queued action.
+
 From a grant finding, **Revoke grant at provider** (or `trstctl-cli discovery findings
 revoke-oauth-grant ID`) removes every grant and refresh token that user gave the
 application, and **Block app at provider** (`... block-oauth-app ID`) deactivates the
@@ -968,6 +971,10 @@ connection:
 ```json
 "annotation": {"base_url": "https://slack.com", "token_ref": "env:SLACK_BOT_TOKEN"}
 ```
+
+`annotation` and native `collect` credential fields (`token_ref` and optional
+`username_ref`) require operator-bound `env:NAME` references. Raw values are
+refused before a discovery source or run is queued.
 
 For a CI log add `system` (`github` or `gitlab`), `repo` and `commit_sha`; for an image,
 `repository` and `digest`; Jira may add `username_ref` for basic authentication, and so may
@@ -1022,7 +1029,11 @@ Source JSON uses the exact lower-case field names shown here. The API rejects un
 mis-cased or duplicate provider fields before checking credential-reference approval
 and private-egress permission. For example, use `token_ref` and
 `allow_private_endpoint`; `Token_Ref` and `Allow_Private_Endpoint` are invalid.
-The worker applies the same check to stored sources before opening a connection.
+Credential reference fields anywhere in a source config must contain a canonical
+`secret://` or operator-bound `env:NAME` reference. Raw values are refused before
+the source is written to the event log.
+The cloud-secret worker applies the exact-case check to stored sources before
+opening a connection.
 
 Two more providers cover the code hosts' CI/CD secret stores (A173), each with a
 `token_ref` and an optional `endpoint` for a self-hosted server:

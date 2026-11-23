@@ -459,6 +459,18 @@ func copySchemaMap(in map[string]*Schema) map[string]*Schema {
 	return out
 }
 
+// requireOutboundEnvCredentialRefShape rejects a raw value before a tenant
+// request can persist it in an event under a reference-shaped field name.
+func requireOutboundEnvCredentialRefShape(ref, label string) error {
+	if !strings.HasPrefix(ref, "env:") {
+		return errStatus(http.StatusBadRequest, label+" must be an operator-approved env:NAME credential reference")
+	}
+	if _, ok := outboundcred.NormalizeRef(ref); !ok {
+		return errStatus(http.StatusBadRequest, label+" must be an env:NAME credential reference")
+	}
+	return nil
+}
+
 // requireOutboundEnvCredentialRefBound admits an env:NAME credential reference only
 // when the operator bound it to this tenant, this integration kind and the origin
 // of every destination the request will send it to (CR-008). Another tenant's

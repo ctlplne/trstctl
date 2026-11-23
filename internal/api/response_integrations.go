@@ -141,8 +141,8 @@ func (a *API) responseIntegrationDestinationCommand(ctx context.Context, tenantI
 		if dst.TokenRef == "" {
 			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "splunk token_ref is required")
 		}
-		if !strings.HasPrefix(dst.TokenRef, "env:") {
-			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "splunk token_ref must be an operator-approved env:NAME credential reference")
+		if err := requireOutboundEnvCredentialRefShape(dst.TokenRef, "splunk token_ref"); err != nil {
+			return orchestrator.ResponseIntegrationDestination{}, err
 		}
 		if err := a.requireOutboundEnvCredentialRefBound(tenantID, outboundcred.IntegrationResponseIntegration, dst.TokenRef, "splunk token_ref", dst.EndpointURL); err != nil {
 			return orchestrator.ResponseIntegrationDestination{}, err
@@ -162,8 +162,8 @@ func (a *API) responseIntegrationDestinationCommand(ctx context.Context, tenantI
 		if dst.TokenRef == "" {
 			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "jira token_ref is required")
 		}
-		if !strings.HasPrefix(dst.TokenRef, "env:") {
-			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "jira token_ref must be an operator-approved env:NAME credential reference")
+		if err := requireOutboundEnvCredentialRefShape(dst.TokenRef, "jira token_ref"); err != nil {
+			return orchestrator.ResponseIntegrationDestination{}, err
 		}
 		if err := a.requireOutboundEnvCredentialRefBound(tenantID, outboundcred.IntegrationResponseIntegration, dst.TokenRef, "jira token_ref", dst.EndpointURL); err != nil {
 			return orchestrator.ResponseIntegrationDestination{}, err

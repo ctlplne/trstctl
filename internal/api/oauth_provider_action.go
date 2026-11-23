@@ -168,6 +168,9 @@ func (a *API) oauthProviderActionIntent(ctx context.Context, tenantID, findingID
 	if err != nil {
 		return orchestrator.OAuthProviderActionIntent{}, errStatus(http.StatusConflict, "the discovery source that found this grant is gone")
 	}
+	if source.Kind != oauthgrant.SourceKind {
+		return orchestrator.OAuthProviderActionIntent{}, errStatus(http.StatusConflict, "only an OAuth grant discovery source can authorize a provider action")
+	}
 	if _, found, err := oauthgrant.Connection(source.Config, provider); err != nil || !found {
 		return orchestrator.OAuthProviderActionIntent{}, errStatus(http.StatusConflict,
 			"the source that found this grant has no admin connection for "+provider+"; add one under providers[] with a token reference")

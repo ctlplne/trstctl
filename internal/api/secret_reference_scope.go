@@ -60,6 +60,23 @@ func normalizeStoredReferenceObject(raw json.RawMessage, field string) (json.Raw
 // reference field before the generic
 // inline-secret heuristic treats its key as harmless.
 func validateStoredReferenceFieldsIn(raw json.RawMessage, field string) error {
+	return validateCredentialReferenceFieldsIn(raw, field, false, false)
+}
+
+// Config documents can carry either a tenant secret or an operator-bound env
+// reference. Their other keys remain metadata, even when nested in lists.
+func validateStoredOrEnvReferenceFieldsIn(raw json.RawMessage, field string) error {
+	return validateCredentialReferenceFieldsIn(raw, field, true, false)
+}
+
+// The discovery observation, signal and finding arrays carry public identifiers
+// called credential_ref; their values are never redeemed. Provider connections
+// alongside those arrays still require a real credential reference.
+func validateDiscoveryReferenceFieldsIn(raw json.RawMessage, field string) error {
+	return validateCredentialReferenceFieldsIn(raw, field, true, true)
+}
+
+func validateCredentialReferenceFieldsIn(raw json.RawMessage, field string, allowEnv, skipEvidence bool) error {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -72,11 +89,23 @@ func validateStoredReferenceFieldsIn(raw json.RawMessage, field string) error {
 		switch current := value.(type) {
 		case map[string]any:
 			for key, child := range current {
+				// Discovery observations, signals and findings are public
+				// evidence. Their credential_ref is an observed identifier,
+				// such as github:user/name/pat, never a value to redeem.
+				if skipEvidence && (key == "observations" || key == "signals" || key == "findings") {
+					continue
+				}
 				next := path + "." + key
 				if credentialReferenceField(key) {
 					ref, ok := child.(string)
 					if !ok {
-						return errStatus(http.StatusBadRequest, next+" must be a secret:// reference string")
+						return errStatus(http.StatusBadRequest, next+" must be a credential reference string")
+					}
+					if allowEnv && strings.HasPrefix(ref, "env:") {
+						if err := requireOutboundEnvCredentialRefShape(ref, next); err != nil {
+							return err
+						}
+						continue
 					}
 					if err := requireCanonicalStoredReference(ref, next); err != nil {
 						return err
@@ -101,7 +130,7 @@ func validateStoredReferenceFieldsIn(raw json.RawMessage, field string) error {
 
 func credentialReferenceField(key string) bool {
 	key = strings.ToLower(strings.ReplaceAll(key, "-", "_"))
-	if !strings.Contains(key, "ref") {
+	if !strings.HasSuffix(key, "ref") && !strings.HasSuffix(key, "reference") {
 		return false
 	}
 	for _, credentialPart := range []string{"token", "secret", "password", "passphrase", "credential", "key", "username", "bearer", "auth"} {
@@ -225,6 +254,9 @@ func (a *API) requireSecretReferencesRead(ctx context.Context, tenantID, field s
 // object).
 func (a *API) requireSecretReferencesReadIn(ctx context.Context, tenantID, field string, docs ...json.RawMessage) error {
 	for _, doc := range docs {
+		if err := validateStoredOrEnvReferenceFieldsIn(doc, field); err != nil {
+			return err
+		}
 		if err := a.requireSecretReferencesRead(ctx, tenantID, field, secretReferencesIn(doc)...); err != nil {
 			return err
 		}

@@ -41,6 +41,13 @@ func TestServedCR394AndCR399RejectRawCredentialReferenceValues(t *testing.T) {
 	if status != http.StatusBadRequest {
 		t.Errorf("raw DNS config reference alias = %d %s, want 400", status, body)
 	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", issuer, map[string]any{
+		"name": "raw-dns-nested-reference", "provider": "cloudflare",
+		"config": map[string]any{"observations": []any{map[string]string{"api_token_ref": "not-a-secret-reference"}}}, // #nosec G101 -- fabricated invalid reference fixture, no credential value (CWE-798)
+	})
+	if status != http.StatusBadRequest {
+		t.Errorf("raw DNS nested reference = %d %s, want 400", status, body)
+	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/preview", issuer, map[string]any{
 		"name": "raw-anchor", "provider": "intune", "scep_profile": "fleet", "scep_endpoint": "/scep",

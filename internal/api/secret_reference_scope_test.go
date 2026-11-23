@@ -22,6 +22,14 @@ func TestSecretReferenceScopeRejectsNoncanonicalStoredScheme(t *testing.T) {
 	}
 }
 
+func TestNestedCredentialReferenceFieldsRejectRawValues(t *testing.T) {
+	a := &API{}
+	raw := json.RawMessage(`{"providers":[{"api_token_ref":"raw-reference-fixture"}]}`) // #nosec G101 -- fabricated invalid reference fixture, no credential value (CWE-798)
+	if err := a.requireSecretReferencesReadIn(context.Background(), "", "config", raw); err == nil {
+		t.Fatal("nested credential reference field accepted an arbitrary value")
+	}
+}
+
 // A235-L2: authorization checks the identity every redeemer uses. An invalid
 // legacy alias preserves the existing environment denial and cannot redeem.
 func TestStoredSecretRefNamesCoverEveryRedeemerSpellingA235L2(t *testing.T) {

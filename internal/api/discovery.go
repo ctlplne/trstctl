@@ -949,7 +949,7 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 		}
 		// A235-L2: an SSH collection key or an AD CS bind password the relay
 		// redeems by name; a caller may name only secrets it could read.
-		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "config", cfg); err != nil {
+		if err := a.requireSecretReferencesRead(ctx, tenantID, "config", secretReferencesIn(cfg)...); err != nil {
 			return 0, nil, err
 		}
 		kind := strings.TrimSpace(req.Kind)
@@ -1546,6 +1546,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(cfg, &obj); err != nil || obj == nil {
 		return nil, errStatus(http.StatusBadRequest, "config must be a JSON object")
+	}
+	if err := validateDiscoveryReferenceFieldsIn(cfg, "config"); err != nil {
+		return nil, err
 	}
 	secretGuardObject := obj
 	if req.Kind == assessment.SourceKind {
