@@ -5299,6 +5299,11 @@ modules whose detached Ed25519 signature verifies against the configured trusted
 CA plugins become external CA entries of type `wasm-ca`; DNS-provider plugins become a
 served ACME DNS-01 provider that tenant provider configs can select; connector plugins
 handle matching deployment work from the outbox.
+Each CA module also requires a deployment-owned `[plugins.ca_bindings."module-name"]`
+section with `tenant_id`, `authority_id`, and `dns_suffixes`. The authority must
+already exist as an active managed CA in that tenant; its persistent key stays in
+the isolated signer. Startup refuses an unbound CA module or overlapping tenant DNS
+namespaces. These bindings are set in the config file, not by a tenant API.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

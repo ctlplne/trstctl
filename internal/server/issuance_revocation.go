@@ -236,7 +236,37 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 		}
 		var origin certificateRevocationOrigin
 		if externalID := projections.AuthenticatedExternalIssuer(event, fact); externalID != "" {
-			origin.ExternalID = externalID
+			// A signed WASM module is an external *selector* for a managed CA,
+			// not a second issuing key. The retained mint event and this
+			// external response must carry the same exact leaf.
+			if retained, ok := origins[cert.Fingerprint]; ok && retained.CAID != "" {
+				// The first managed-CA mint event is stronger than the current
+				// plugin config. Keep it even if the operator later removes or
+				// repoints that module; old leaves still revoke on their own CA.
+				origin = retained
+			} else if d.externalCAs != nil {
+				if entry, ok := d.externalCAs.byID[externalID]; ok {
+					if plugin, ok := entry.revocationCA.(*wasmCA); ok {
+						if plugin.binding.TenantID != tenantID {
+							return errors.New("server: plugin CA revocation tenant differs from its binding")
+						}
+						resolved, found, err := hierarchyOrigin(ctx, cert, plugin.binding.AuthorityID)
+						if err != nil {
+							return err
+						}
+						if !found {
+							return errors.New("server: plugin CA revocation has no exact managed authority")
+						}
+						origin = resolved
+					} else {
+						origin.ExternalID = externalID
+					}
+				} else {
+					origin.ExternalID = externalID
+				}
+			} else {
+				origin.ExternalID = externalID
+			}
 		} else if fact.Source == "issued" && fact.CAID == IssuingCAID() {
 			issuer, err := certinfo.LeafDER(d.chainPEM)
 			if err != nil || crypto.VerifyLeafSignedByCA(cert.CertificateDER, issuer) != nil {

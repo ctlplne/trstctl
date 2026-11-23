@@ -5,9 +5,11 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -16,8 +18,11 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/bulkhead"
 	capkg "trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
-	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
@@ -36,9 +41,10 @@ const (
 // PluginManager is the served WASM-plugin surface (ARCH-007): it loads operator-
 // supplied connector plugins from a directory, each only after its provenance is
 // verified against the trust policy (SUPPLY-004), and runs them capability-
-// sandboxed on the plugin host's bounded pool (AN-7). It holds NO database pool
-// and NO signer handle — a plugin fault is contained to its own wazero runtime
-// (the containment the host guarantees). It is wired into the served outbox
+// sandboxed on the plugin host's bounded pool (AN-7). The host exposes NO
+// database pool or signer handle to guest code; the control-plane CA adapter
+// calls only the separate signer process after tenant and name checks. It is
+// wired into the served outbox
 // handler so a served `connector.deploy` whose connector names a loaded plugin is
 // pushed through the sandbox; missing or declining plugins leave the row pending.
 //
@@ -58,7 +64,8 @@ type PluginManager struct {
 	caPlugins      map[string]*pluginhost.Plugin
 	dnsPlugins     map[string]*pluginhost.Plugin
 	caAdapters     map[string]*wasmCA
-	caAuthorities  map[string]*cryptoca.Authority
+	caBindings     map[string]config.PluginCABinding
+	caIssuer       *Server
 }
 
 // PluginConfig configures the served plugin surface. It is fail-closed: enabling
@@ -72,6 +79,11 @@ type PluginConfig struct {
 	// CADir is scanned for signed CA plugins. Each `<name>.wasm` becomes an
 	// ExternalCA entry with id `<name>` and type `wasm-ca`.
 	CADir string
+	// CABindings are operator-owned tenant and DNS grants keyed by module name.
+	CABindings map[string]config.PluginCABinding
+	// CAIssuer is the assembled server's managed-CA hierarchy. It is
+	// attached only by Build, never supplied by the plugin or tenant.
+	CAIssuer *Server
 	// DNSDir is scanned for signed DNS-provider plugins. Each `<name>.wasm`
 	// becomes a served ACME DNS-01 provider entry selectable by tenant configs.
 	DNSDir string
@@ -115,6 +127,14 @@ func NewPluginManager(ctx context.Context, cfg PluginConfig, log *events.Log) (*
 		connectorDir = strings.TrimSpace(cfg.Dir)
 	}
 	caDir := strings.TrimSpace(cfg.CADir)
+	if caDir != "" && (cfg.CAIssuer == nil || cfg.CAIssuer.signer == nil || cfg.CAIssuer.caHierarchy == nil) {
+		return nil, fmt.Errorf("server: CA plugins require tenant bindings and a signer-backed issuing authority")
+	}
+	if caDir != "" {
+		if err := validatePluginCABindings(cfg.CABindings); err != nil {
+			return nil, err
+		}
+	}
 	dnsDir := strings.TrimSpace(cfg.DNSDir)
 	if connectorDir == "" && caDir == "" && dnsDir == "" && len(cfg.TrustedKeyPEMs) == 0 {
 		return nil, nil // not configured: served plugin surface stays off
@@ -153,7 +173,8 @@ func NewPluginManager(ctx context.Context, cfg PluginConfig, log *events.Log) (*
 		caPlugins:      map[string]*pluginhost.Plugin{},
 		dnsPlugins:     map[string]*pluginhost.Plugin{},
 		caAdapters:     map[string]*wasmCA{},
-		caAuthorities:  map[string]*cryptoca.Authority{},
+		caBindings:     cfg.CABindings,
+		caIssuer:       cfg.CAIssuer,
 	}
 	if connectorDir != "" {
 		if err := pm.loadDir(ctx, connectorDir, connectorGrant, pm.addConnectorPlugin); err != nil {
@@ -165,6 +186,12 @@ func NewPluginManager(ctx context.Context, cfg PluginConfig, log *events.Log) (*
 		if err := pm.loadDir(ctx, caDir, caGrant, pm.addCAPlugin); err != nil {
 			_ = pm.Close(ctx)
 			return nil, err
+		}
+		for name := range cfg.CABindings {
+			if !pm.HasCA(name) {
+				_ = pm.Close(ctx)
+				return nil, fmt.Errorf("server: CA plugin binding %q has no signed module", name)
+			}
 		}
 	}
 	if dnsDir != "" {
@@ -223,17 +250,23 @@ func (pm *PluginManager) addConnectorPlugin(_ context.Context, name string, p *p
 	return nil
 }
 
-func (pm *PluginManager) addCAPlugin(_ context.Context, name string, p *pluginhost.Plugin) error {
+func (pm *PluginManager) addCAPlugin(ctx context.Context, name string, p *pluginhost.Plugin) error {
 	if !p.HasExport("issue") {
 		return fmt.Errorf("server: CA plugin %q has no exported issue() function", name)
 	}
-	authority, err := cryptoca.NewAuthority(name)
-	if err != nil {
-		return fmt.Errorf("server: create reference CA authority for plugin %q: %w", name, err)
+	binding, ok := pm.caBindings[name]
+	if !ok || validatePluginCABinding(binding) != nil {
+		return fmt.Errorf("server: CA plugin %q requires a tenant, exact managed authority, and DNS namespace binding", name)
+	}
+	authority, err := pm.caIssuer.caHierarchy.store.GetCAAuthority(ctx, binding.TenantID, binding.AuthorityID)
+	if err != nil || authority.Status != "active" || authority.SignerHandle == "" || authority.CertificatePEM == "" {
+		return fmt.Errorf("server: CA plugin %q requires an active signer-held managed authority in its tenant: %v", name, err)
+	}
+	if _, err := pm.caIssuer.caHierarchy.signerForAuthority(ctx, authority); err != nil {
+		return fmt.Errorf("server: CA plugin %q managed authority signer is unavailable: %w", name, err)
 	}
 	pm.caPlugins[name] = p
-	pm.caAuthorities[name] = authority
-	pm.caAdapters[name] = &wasmCA{name: name, host: pm.host, plugin: p, authority: authority, log: pm.log}
+	pm.caAdapters[name] = &wasmCA{name: name, host: pm.host, plugin: p, binding: binding, issuer: pm.caIssuer, log: pm.log}
 	return nil
 }
 
@@ -333,30 +366,118 @@ func (pm *PluginManager) ExternalCAs() []ExternalCA {
 	sort.Strings(names)
 	out := make([]ExternalCA, 0, len(names))
 	for _, name := range names {
-		out = append(out, ExternalCA{ID: name, Type: "wasm-ca", CA: pm.caAdapters[name]})
+		out = append(out, ExternalCA{ID: name, Type: "wasm-ca", TenantID: pm.caAdapters[name].binding.TenantID, CA: pm.caAdapters[name]})
 	}
 	return out
 }
 
 type wasmCA struct {
-	name      string
-	host      *pluginhost.Host
-	plugin    *pluginhost.Plugin
-	authority *cryptoca.Authority
-	log       *events.Log
+	name    string
+	host    *pluginhost.Host
+	plugin  *pluginhost.Plugin
+	binding config.PluginCABinding
+	issuer  *Server
+	log     *events.Log
+}
+
+func validatePluginCABinding(binding config.PluginCABinding) error {
+	if strings.TrimSpace(binding.TenantID) == "" || strings.TrimSpace(binding.AuthorityID) == "" || len(binding.DNSSuffixes) == 0 {
+		return fmt.Errorf("tenant, exact authority, and DNS namespace are required")
+	}
+	for _, suffix := range binding.DNSSuffixes {
+		if !validPluginDNSName(suffix) {
+			return fmt.Errorf("invalid DNS namespace %q", suffix)
+		}
+	}
+	return nil
+}
+
+func validatePluginCABindings(bindings map[string]config.PluginCABinding) error {
+	for name, binding := range bindings {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("server: CA plugin binding has no module name")
+		}
+		if err := validatePluginCABinding(binding); err != nil {
+			return fmt.Errorf("server: CA plugin %q tenant binding: %w", name, err)
+		}
+		for otherName, other := range bindings {
+			if otherName >= name || other.TenantID == binding.TenantID {
+				continue
+			}
+			for _, suffix := range binding.DNSSuffixes {
+				for _, otherSuffix := range other.DNSSuffixes {
+					if dnsSuffixWithin(suffix, otherSuffix) || dnsSuffixWithin(otherSuffix, suffix) {
+						return fmt.Errorf("server: CA plugin tenant DNS namespaces overlap between %q and %q", name, otherName)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func validPluginDNSName(name string) bool {
+	if name == "" || name != strings.ToLower(strings.TrimSpace(name)) || len(name) > 253 {
+		return false
+	}
+	labels := strings.Split(name, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, ch := range label {
+			if (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func pluginDNSNames(names []string) []string {
+	out := make([]string, len(names))
+	for i, name := range names {
+		out[i] = strings.ToLower(strings.TrimSpace(name))
+	}
+	sort.Strings(out)
+	return out
 }
 
 var _ capkg.CA = (*wasmCA)(nil)
 
 func (c *wasmCA) Name() string { return c.name }
 
-// Issue invokes the signed WASM CA plugin's issue() entrypoint under its
-// capability grant, then uses an in-boundary reference authority to produce a
-// real certificate for the served external-CA API. The runtime plugin is not a
-// crypto provider and cannot register/select algorithms; crypto-agility remains
-// compile-time Go interfaces + dependency injection, the same prior-art shape as
-// crypto.Signer, Java JCA, OpenSSL ENGINE, and PKCS#11.
+// Issue invokes signed WASM code, then signs only tenant-owned DNS names with
+// the persistent CA key held by the isolated signer. Plugin code never handles
+// that key and cannot widen the deployment-owned tenant namespace.
 func (c *wasmCA) Issue(ctx context.Context, req capkg.IssueRequest) (capkg.Certificate, error) {
+	if req.TenantID != c.binding.TenantID {
+		return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q is not bound to tenant", c.name)
+	}
+	if c.issuer == nil || c.issuer.caHierarchy == nil {
+		return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q signer-backed authority is unavailable", c.name)
+	}
+	info, err := crypto.InspectCSR(req.CSR)
+	if err != nil {
+		return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q CSR: %w", c.name, err)
+	}
+	csrNames := pluginDNSNames(info.DNSNames)
+	if len(csrNames) == 0 || !slices.Equal(csrNames, pluginDNSNames(req.DNSNames)) ||
+		len(info.IPAddresses) != 0 || len(info.EmailAddresses) != 0 || len(info.URIs) != 0 {
+		return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q requires matching DNS-only CSR names", c.name)
+	}
+	if info.CommonName != "" && !slices.Contains(csrNames, strings.ToLower(info.CommonName)) {
+		return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q CSR common name is not an authorized DNS SAN", c.name)
+	}
+	for _, name := range csrNames {
+		if !validPluginDNSName(name) || strings.Contains(name, "*") ||
+			!slices.ContainsFunc(c.binding.DNSSuffixes, func(suffix string) bool { return dnsSuffixWithin(name, suffix) }) {
+			return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q DNS name is outside its tenant namespace", c.name)
+		}
+	}
 	before := c.plugin.Stats()
 	rc, err := c.host.Invoke(ctx, c.plugin, "issue")
 	after := c.plugin.Stats()
@@ -376,13 +497,27 @@ func (c *wasmCA) Issue(ctx context.Context, req capkg.IssueRequest) (capkg.Certi
 	if ttl <= 0 {
 		ttl = 90 * 24 * time.Hour
 	}
-	issued, err := c.authority.IssueFromCSR(req.CSR, ttl)
+	profile := c.issuer.leafProfile
+	profile.PermittedDNSSuffixes = append([]string(nil), c.binding.DNSSuffixes...)
+	profile.PermittedIPCIDRs = nil
+	profile.PermittedEmailDomains = nil
+	profile.PermittedURIPrefixes = nil
+	profile.RefuseTimeStamping = true
+	profile.ClampTTLToIssuer = true
+	issued, issuerPEM, exactID, err := c.issuer.caHierarchy.issueLeafForExactAuthority(
+		ctx, req.TenantID, c.binding.AuthorityID, req.CSR, ttl, profile, custody.OriginRequester, exactAuthorityLeafOptions{})
 	if err != nil {
 		c.emit(ctx, req.TenantID, "ca.plugin_failed", err.Error())
 		return capkg.Certificate{}, err
 	}
+	metadata, err := certinfo.Inspect(issued.DER)
+	if err != nil {
+		return capkg.Certificate{}, err
+	}
+	chain := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issued.DER})
+	chain = append(chain, issuerPEM...)
 	c.emit(ctx, req.TenantID, "ca.plugin_issued", "")
-	return capkg.Certificate{CertificatePEM: issued.CertificatePEM, Serial: issued.Serial, NotAfter: issued.NotAfter, Issuer: c.name}, nil
+	return capkg.Certificate{CertificatePEM: chain, Serial: metadata.SerialNumber, NotAfter: metadata.NotAfter, Issuer: exactID}, nil
 }
 
 func (c *wasmCA) emit(ctx context.Context, tenantID, evType, detail string) {
@@ -510,14 +645,10 @@ func (pm *PluginManager) Close(ctx context.Context) error {
 	for _, p := range pm.dnsPlugins {
 		_ = p.Close(ctx)
 	}
-	for _, a := range pm.caAuthorities {
-		a.Destroy()
-	}
 	pm.plugins = map[string]*pluginhost.Plugin{}
 	pm.caPlugins = map[string]*pluginhost.Plugin{}
 	pm.dnsPlugins = map[string]*pluginhost.Plugin{}
 	pm.caAdapters = map[string]*wasmCA{}
-	pm.caAuthorities = map[string]*cryptoca.Authority{}
 	return pm.host.Close(ctx)
 }
 

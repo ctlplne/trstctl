@@ -3,8 +3,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,9 +19,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
+	capkg "trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -208,17 +215,41 @@ func TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy(t *testing.T) {
 	caDir := writePluginDir(t, "reference-ca", caWASMFor(workdir), sign)
 	connectorDir := writePluginDir(t, "reference-connector", connectorWASMFor(workdir), sign)
 
+	var restart Deps
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
-		d.Plugins = PluginConfig{
-			CADir:           caDir,
-			ConnectorDir:    connectorDir,
-			TrustedKeyPEMs:  [][]byte{keyPEM},
-			CAGrant:         grant,
-			ConnectorGrant:  grant,
-			ReferenceCAName: "reference-ca",
-		}
+		restart = *d
 	})
+	operator := seedServedAPIToken(t, ctx, h.store, h.tenant, "plugin-ca-operator", []string{"issuers:write", "issuers:read", "certs:issue"})
+	approver := seedServedAPIToken(t, ctx, h.store, h.tenant, "plugin-ca-approver", []string{"issuers:write", "issuers:read"})
+	spec := map[string]any{
+		"common_name": "plugin tenant authority", "max_path_len": 1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"served.test"},
+		"extended_key_usages":   []string{"serverAuth"}, "signature_algorithm": "ecdsa-p256",
+	}
+	ceremony := createCACeremony(t, h, operator, "create_root", "", spec, 1, "plugin-ca-ceremony")
+	approveCACeremony(t, h, approver, ceremony.ID, 1, "plugin-ca-approval")
+	authority := createRootCA(t, h, operator, ceremony.ID, spec, "plugin-ca-root")
+	restart.Plugins = PluginConfig{
+		CADir:          caDir,
+		ConnectorDir:   connectorDir,
+		TrustedKeyPEMs: [][]byte{keyPEM},
+		CAGrant:        grant,
+		CABindings: map[string]config.PluginCABinding{
+			"reference-ca": {TenantID: servedTestTenant, AuthorityID: authority.ID, DNSSuffixes: []string{"served.test"}},
+		},
+		ConnectorGrant:  grant,
+		ReferenceCAName: "reference-ca",
+	}
+	pluginServer, err := Build(ctx, restart)
+	if err != nil {
+		t.Fatalf("restart with tenant-bound managed CA plugin: %v", err)
+	}
+	cleanupServedServer(t, pluginServer)
+	h.srv = pluginServer
+	h.ts = httptest.NewServer(pluginServer.Handler())
+	t.Cleanup(h.ts.Close)
 
 	var listed struct {
 		Items []externalCAListItem `json:"items"`
@@ -235,7 +266,46 @@ func TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy(t *testing.T) {
 	}
 
 	cert := issueExternalCA(t, h, "reference-ca", "plugin-ca.served.test", "plugin-01-ca")
-	assertServedCert(t, cert, "reference-ca", "plugin-ca.served.test")
+	assertServedCert(t, cert, authority.ID, "plugin-ca.served.test")
+	_, rest := pem.Decode([]byte(cert.CertificatePEM))
+	issuerBlock, _ := pem.Decode(rest)
+	managedIssuer, _ := pem.Decode([]byte(authority.CertificatePEM))
+	if issuerBlock == nil || managedIssuer == nil || !bytes.Equal(issuerBlock.Bytes, managedIssuer.Bytes) {
+		t.Fatal("WASM CA leaf did not chain to its exact signer-held managed authority")
+	}
+	const neighbor = "9a140000-0000-4000-8000-000000000014"
+	registerServedTenantID(t, h, neighbor, "WASM CA neighbour")
+	if code, body := pluginCARequestAsTenant(t, h, neighbor, http.MethodGet,
+		"/api/v1/external-cas", "", nil); code != http.StatusOK || bytes.Contains(body, []byte("reference-ca")) {
+		t.Fatalf("neighbour saw tenant-bound plugin CA: status=%d body=%s", code, body)
+	}
+	if code, body := pluginCARequestAsTenant(t, h, neighbor, http.MethodPost,
+		"/api/v1/external-cas/reference-ca/issue", "plugin-neighbour-issue",
+		externalCAIssueRequestBody(t, "plugin-ca.served.test")); code != http.StatusNotFound {
+		t.Fatalf("neighbour issued through tenant-bound plugin CA: status=%d body=%s", code, body)
+	}
+	if code, body := doExternalCARequest(t, h, http.MethodPost,
+		"/api/v1/external-cas/reference-ca/issue", "plugin-outside-name",
+		externalCAIssueRequestBody(t, "payments.other.test")); code == http.StatusCreated {
+		t.Fatalf("plugin signed outside its deployment-owned DNS namespace: %s", body)
+	}
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "plugin-ca.served.test", DNSNames: []string{"plugin-ca.served.test"},
+		URIs: []string{"spiffe://neighbor.test/ns/payments/sa/api"},
+	}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.srv.plugins.caAdapters["reference-ca"].Issue(ctx, capkg.IssueRequest{
+		TenantID: h.tenant, CSR: csr, DNSNames: []string{"plugin-ca.served.test"}, TTL: time.Hour,
+	}); err == nil {
+		t.Fatal("plugin CA signed a neighboring SPIFFE URI beside an allowed DNS name")
+	}
 	if !replayHasEvent(t, h.log, h.tenant, "ca.plugin_issued") {
 		t.Fatal("the signed reference CA plugin issued without ca.plugin_issued evidence on the served log")
 	}
@@ -265,6 +335,83 @@ func TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy(t *testing.T) {
 			t.Fatal("served connector.deploy never ran signed reference connector plugin")
 		}
 	}
+	leaf, err := certinfo.Inspect([]byte(cert.CertificatePEM))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventoried, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, leaf.SHA256Fingerprint)
+	if err != nil {
+		t.Fatalf("plugin leaf is absent from inventory: %v", err)
+	}
+	dispatcher := h.srv.obHandler.(*issuanceDispatcher)
+	origins, err := dispatcher.certificateRevocationOrigins(ctx, h.tenant, []store.Certificate{inventoried})
+	if err != nil || origins[leaf.SHA256Fingerprint] != (certificateRevocationOrigin{CAID: authority.ID}) {
+		t.Fatalf("plugin leaf revocation resolved a different issuer: %+v, %v", origins, err)
+	}
+	historical := *dispatcher
+	historical.externalCAs = nil // module removed after issuance; retained CA proof still revokes the old leaf
+	origins, err = historical.certificateRevocationOrigins(ctx, h.tenant, []store.Certificate{inventoried})
+	if err != nil || origins[leaf.SHA256Fingerprint] != (certificateRevocationOrigin{CAID: authority.ID}) {
+		t.Fatalf("plugin removal changed the retained leaf's revocation CA: %+v, %v", origins, err)
+	}
+	code, body = pluginCARequestAsTenant(t, h, h.tenant, http.MethodPost,
+		"/api/v1/certificates/bulk-revoke", "plugin-ca-revoke",
+		map[string]any{"certificate_ids": []string{inventoried.ID}, "reason": "keyCompromise"})
+	if code != http.StatusOK || !bytes.Contains(body, []byte(`"total_revoked":1`)) {
+		t.Fatalf("plugin leaf exact-authority revoke = HTTP %d %s", code, body)
+	}
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("publish plugin CA revocation: %v", err)
+	}
+	response, err := http.Get(h.ts.URL + "/crl/" + h.tenant + "/authorities/" + authority.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	crlDER, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	_ = response.Body.Close()
+	if readErr != nil || response.StatusCode != http.StatusOK {
+		t.Fatalf("plugin CA CRL = HTTP %d read %v", response.StatusCode, readErr)
+	}
+	managedIssuer, _ = pem.Decode([]byte(authority.CertificatePEM))
+	crl, err := crypto.ParseCRL(crlDER, managedIssuer.Bytes)
+	if err != nil || !protoContains(crl.RevokedSerials, cert.Serial) {
+		t.Fatalf("plugin CA CRL omitted exact serial %s: %+v, %v", cert.Serial, crl, err)
+	}
+}
+
+func pluginCARequestAsTenant(t *testing.T, h *servedHarness, tenantID, method, path, idem string, body any) (int, []byte) {
+	t.Helper()
+	var reader io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequest(method, h.ts.URL+path, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Tenant-ID", tenantID)
+	req.Header.Set("X-Roles", "admin")
+	req.Header.Set("X-Subject", "plugin-neighbour-admin")
+	if idem != "" {
+		req.Header.Set("Idempotency-Key", idem)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp.StatusCode, raw
 }
 
 // TestServedPluginRefusesUnsigned is the SUPPLY-004 served assertion: an UNSIGNED

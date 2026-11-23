@@ -121,10 +121,25 @@ connector_dir = "/etc/trstctl/plugins/connectors"
 dns_dir = "/etc/trstctl/plugins/dns"
 trusted_key_files = ["/etc/trstctl/plugin-signing.pub.pem"]
 capabilities = ["fs.write"]
+
+[plugins.ca_bindings."reference-ca"]
+tenant_id = "11111111-1111-1111-1111-111111111111"
+authority_id = "22222222-2222-4222-8222-222222222222"
+dns_suffixes = ["apps.example.test"]
 ```
 
 CA plugins loaded from `ca_dir` appear in `GET /api/v1/external-cas` with type
 `wasm-ca`, and issuance goes through `POST /api/v1/external-cas/{id}/issue`.
+Each CA module needs a deployment-owned `ca_bindings` entry keyed by its file
+name without `.wasm`. Create the managed CA authority in the bound tenant first,
+then set its exact `authority_id` in deployment config. Startup refuses a missing
+binding, overlapping DNS suffixes across tenants, or an inactive or missing
+signer-held authority. The plugin can issue only for its bound
+tenant and DNS suffixes; the requested names must match the signed CSR, and URI,
+IP and email SANs are refused. Its leaf chains to the exact managed authority
+whose key remains in the isolated signer. The operator must assign only DNS
+suffixes that tenant owns. Existing unbound CA plugin configurations must add
+this mapping before upgrade.
 Connector plugins loaded from `connector_dir` handle matching `connector.deploy`
 work from the served outbox. The legacy `plugins.dir` key remains a connector-plugin
 directory alias for older deployments. DNS provider plugins loaded from `dns_dir`

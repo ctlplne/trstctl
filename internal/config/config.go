@@ -392,6 +392,9 @@ type Plugins struct {
 	// CADir is scanned for signed CA plugins. Each module becomes a
 	// `/api/v1/external-cas/{name}/issue` authority of type `wasm-ca`.
 	CADir string `json:"ca_dir,omitempty"`
+	// CABindings are deployment-owned tenant and DNS namespace grants for CA
+	// modules. A signed module without one cannot issue certificates.
+	CABindings map[string]PluginCABinding `json:"ca_bindings,omitempty"`
 	// DNSDir is scanned for signed DNS-provider plugins. Each module becomes a
 	// served ACME DNS-01 provider that can be selected by tenant provider configs.
 	DNSDir string `json:"dns_dir,omitempty"`
@@ -412,6 +415,12 @@ type Plugins struct {
 	// (defense-in-depth alongside the capability grant). Empty means the granted
 	// filesystem capability is unconstrained by prefix.
 	PathPrefixes []string `json:"path_prefixes,omitempty"`
+}
+
+type PluginCABinding struct {
+	TenantID    string   `json:"tenant_id"`
+	AuthorityID string   `json:"authority_id"`
+	DNSSuffixes []string `json:"dns_suffixes"`
 }
 
 // Auth configures interactive authentication for the served control plane. It
@@ -6457,6 +6466,17 @@ func (p Plugins) validate() []error {
 	}
 	if len(p.TrustedKeyFiles) == 0 {
 		errs = append(errs, errors.New("plugins.trusted_key_files requires at least one Ed25519 public key when plugins.enabled is true (SUPPLY-004: a plugin must be provenance-verified)"))
+	}
+	if strings.TrimSpace(p.CADir) != "" && len(p.CABindings) == 0 {
+		errs = append(errs, errors.New("plugins.ca_bindings requires a tenant and DNS namespace grant for every CA module"))
+	}
+	if strings.TrimSpace(p.CADir) == "" && len(p.CABindings) != 0 {
+		errs = append(errs, errors.New("plugins.ca_bindings requires plugins.ca_dir"))
+	}
+	for name, binding := range p.CABindings {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(binding.TenantID) == "" || strings.TrimSpace(binding.AuthorityID) == "" || len(binding.DNSSuffixes) == 0 {
+			errs = append(errs, fmt.Errorf("plugins.ca_bindings.%s requires tenant_id, authority_id, and dns_suffixes", name))
+		}
 	}
 	known := map[string]bool{"fs.read": true, "fs.write": true, "net.dial": true, "process.exec": true}
 	for _, c := range p.Capabilities {

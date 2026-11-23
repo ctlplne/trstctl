@@ -1938,6 +1938,7 @@ func buildPluginConfig(p config.Plugins) (PluginConfig, error) {
 	return PluginConfig{
 		Dir:              p.Dir,
 		CADir:            p.CADir,
+		CABindings:       p.CABindings,
 		DNSDir:           p.DNSDir,
 		ConnectorDir:     p.ConnectorDir,
 		TrustedKeyPEMs:   keys,

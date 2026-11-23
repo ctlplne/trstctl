@@ -6506,7 +6506,13 @@ This is a deliberate, documented trust boundary, not an accident.
   connector plugins from `plugins.connector_dir` (or the legacy connector
   alias `plugins.dir`). A signed CA plugin is listed under
   `GET /api/v1/external-cas` and issues through
-  `POST /api/v1/external-cas/{id}/issue`; a signed connector plugin routes
+  `POST /api/v1/external-cas/{id}/issue` only for its deployment-bound tenant
+  and DNS namespace. CA plugin leaves use the configured managed authority's
+  persistent key in the separate signer process; a missing, inactive, or
+  unbound authority refuses startup. The platform issuer used by other
+  paths remains shared until the tenant PKI partition is completed (CR-042).
+  A signed
+  connector plugin routes
   served `connector.deploy` work through the plugin's capability sandbox (the
   same capability-grant model the connector SDK uses) — tenant-scoped under
   per-tenant database isolation, recorded as immutable events, on the

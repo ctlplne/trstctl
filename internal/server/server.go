@@ -1325,6 +1325,9 @@ func buildAdmitted(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err := s.configureAgentEnrollment(ctx, d); err != nil {
 		return nil, err
 	}
+	// Signed CA modules need the exact managed authority before plugin loading.
+	// Build this once: API and plugin issuance must share the same signer map.
+	s.caHierarchy, _ = s.buildCAHierarchyService(d).(*caHierarchyService)
 	if err := s.configurePluginSurface(ctx, d); err != nil {
 		return nil, err
 	}
@@ -1771,10 +1774,10 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	// Construct the managed-CA service before attaching PCAS routes so their
 	// exact-authority leaf bridge is available during route composition. Keep
 	// the public CA API option in its existing position below.
-	hierarchySvc := s.buildCAHierarchyService(d)
+	var hierarchySvc api.CAHierarchyService
 	var pcasLeafIssuer editionseam.PCASLeafIssuer
-	if hierarchySvc != nil {
-		s.caHierarchy, _ = hierarchySvc.(*caHierarchyService)
+	if s.caHierarchy != nil {
+		hierarchySvc = s.caHierarchy
 		pcasLeafIssuer = s.caHierarchy
 	}
 	// Remediation is part of Core; authentication, RBAC and policy still apply.
@@ -2658,7 +2661,11 @@ func (s *Server) configureProtocolSurfaces(ctx context.Context, d Deps) error {
 }
 
 func (s *Server) configurePluginSurface(ctx context.Context, d Deps) error {
-	plugins, err := NewPluginManager(ctx, d.Plugins, d.Log)
+	pluginConfig := d.Plugins
+	if strings.TrimSpace(pluginConfig.CADir) != "" && d.Signer != nil && d.Signer.Client() != nil {
+		pluginConfig.CAIssuer = s
+	}
+	plugins, err := NewPluginManager(ctx, pluginConfig, d.Log)
 	if err != nil {
 		return fmt.Errorf("server: load plugins: %w", err)
 	}

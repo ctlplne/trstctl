@@ -130,6 +130,12 @@ Operators place CA modules in `plugins.ca_dir`, connector modules in
 exact-artifact allowlist. An unsigned module, a signature from the wrong key, a
 byte-tampered module, or a signed module outside the pinned digest list fails
 closed before the WASM runtime is created.
+For a CA module, add `[plugins.ca_bindings."module-name"]` to the operator's
+config with one `tenant_id`, the exact managed `authority_id`, and a nonempty
+`dns_suffixes` list. The module name
+is its `.wasm` filename without the extension. Its `issue()` function authorizes
+the operation; the isolated signer holds that authority's key and signs only CSR DNS names
+inside that deployment-owned tenant namespace.
 
 DNS provider plugins must export `run()`, `present_txt()`, and `cleanup_txt()`.
 The served ACME DNS-01 path rejects a signed module that lacks those entrypoints,
