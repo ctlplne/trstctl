@@ -90,7 +90,7 @@ func TestDODKMIPProductionAssembly(t *testing.T) {
 	first := proof.BuildShippedProcess(t, "secrets_residuals.kmip_wrapping_profile_negotiation", trustedPublicKey)
 	second := proof.BuildShippedProcess(t, "secrets_residuals.kmip_wrapping_profile_negotiation", trustedPublicKey)
 	postgresPort := dodFreePort(t)
-	st, closeStore, err := server.DODOpenBundledStore(context.Background(), filepath.Join(root, "postgres"), postgresPort)
+	st, postgresDSN, closeStore, err := server.DODOpenBundledStore(context.Background(), filepath.Join(root, "postgres"), postgresPort)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestDODKMIPProductionAssembly(t *testing.T) {
 	cfg.Server.TLS.Mode = config.TLSDisabled
 	cfg.Server.TLS.AllowPlaintextDev = true
 	cfg.Postgres.Mode = config.PostgresExternal
-	cfg.Postgres.DSN = fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/postgres", postgresPort)
+	cfg.Postgres.DSN = postgresDSN
 	cfg.NATS.Mode = config.NATSEmbedded
 	cfg.NATS.StoreDir = filepath.Join(root, "nats")
 	cfg.License.File = licenseFile

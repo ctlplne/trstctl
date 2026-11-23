@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -91,7 +90,7 @@ func dodStartPQCRuntime(t *testing.T, id string, configure func(*config.Config, 
 	licenseFile, trustedPublicKey := dodRightSizeLicense(t, root)
 	control := proof.BuildShippedProcess(t, id, trustedPublicKey)
 	postgresPort := dodFreePort(t)
-	st, closeStore, err := server.DODOpenBundledStore(context.Background(), filepath.Join(root, "postgres"), postgresPort)
+	st, postgresDSN, closeStore, err := server.DODOpenBundledStore(context.Background(), filepath.Join(root, "postgres"), postgresPort)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +103,7 @@ func dodStartPQCRuntime(t *testing.T, id string, configure func(*config.Config, 
 	cfg.Server.TLS.Mode = config.TLSDisabled
 	cfg.Server.TLS.AllowPlaintextDev = true
 	cfg.Postgres.Mode = config.PostgresExternal
-	cfg.Postgres.DSN = fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/postgres", postgresPort)
+	cfg.Postgres.DSN = postgresDSN
 	cfg.NATS.Mode = config.NATSEmbedded
 	cfg.NATS.StoreDir = filepath.Join(root, "nats")
 	cfg.License.File = licenseFile

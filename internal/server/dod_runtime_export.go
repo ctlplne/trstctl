@@ -19,30 +19,31 @@ const (
 )
 
 // DODOpenBundledStore starts the same bundled PostgreSQL implementation used by
-// single-node production, applies core migrations, and returns a bounded cleanup.
-func DODOpenBundledStore(ctx context.Context, dataDir string, port int) (*store.Store, func(), error) {
+// single-node production, applies core migrations, and returns the exact
+// private socket DSN for the independently launched product binary plus cleanup.
+func DODOpenBundledStore(ctx context.Context, dataDir string, port int) (*store.Store, string, func(), error) {
 	dataDir, removeDataDir, err := dodPostgresDataDir(dataDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 	dsn, stop, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: dataDir, Port: port})
 	if err != nil {
 		removeDataDir()
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 	st, err := store.Open(ctx, dsn)
 	if err != nil {
 		_ = stop()
 		removeDataDir()
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 	if err := st.Migrate(ctx); err != nil {
 		st.Close()
 		_ = stop()
 		removeDataDir()
-		return nil, nil, fmt.Errorf("migrate DOD bundled store: %w", err)
+		return nil, "", nil, fmt.Errorf("migrate DOD bundled store: %w", err)
 	}
-	return st, func() {
+	return st, dsn, func() {
 		st.Close()
 		_ = stop()
 		removeDataDir()
