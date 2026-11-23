@@ -71,7 +71,7 @@ func (s *Store) ListTenants(ctx context.Context) ([]Tenant, error) {
 // value of two means at least two tenants exist.
 func (s *Store) TenantCountUpToTwo(ctx context.Context) (int, error) {
 	var count int
-	//trstctl:system-query — CA trust policy must know whether its signer is shared before it can admit a workload identity; this bounded read returns a count only, never tenant data.
+	//trstctl:system-query — this cross-tenant system read tells the issuer whether its CA spans tenants before admitting a CSR; LIMIT 2 returns only a count, never tenant_id or tenant data.
 	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM (SELECT tenant_id FROM tenants LIMIT 2) AS sample`).Scan(&count)
 	return count, err
 }
