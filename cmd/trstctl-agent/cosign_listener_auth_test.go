@@ -203,7 +203,11 @@ func testCoSignApprovalF261(t *testing.T) (string, string) {
 	if err := os.WriteFile(path, publicPEM, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return path, dir
+	stateDir := filepath.Join(dir, "approval-state")
+	if err := os.Mkdir(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path, stateDir
 }
 
 // F261: the co-sign service signs with the workload's predecessor key. A caller
