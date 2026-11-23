@@ -18,7 +18,10 @@ import (
 func TestEventWriteSourceCensus(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	allowedEventsCalls := map[string]map[string]int{
-		"internal/eventstest/fixture.go":     {"Open": 1, "WithFixtureAppendAdmission": 1},
+		"internal/eventstest/fixture.go": {"Open": 1, "WithFixtureAppendAdmission": 1},
+		// Live performance work writes real sealed secrets. It uses required
+		// store-backed custody admission, never the permissive fixture source.
+		"internal/perf/live.go":              {"Open": 1, "WithRequiredAppendAdmission": 1},
 		"internal/server/history_rewrite.go": {"Open": 1},
 		"internal/server/event_protection_source.go": {"WithAppendAdmission": 2,
 			"WithBackupHistoryAdmission": 1, "WithBackupHistoryJournal": 1,

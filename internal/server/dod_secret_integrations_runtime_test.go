@@ -25,7 +25,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"trstctl.com/trstctl/internal/eventstest"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
@@ -41,6 +40,7 @@ import (
 	"trstctl.com/trstctl/internal/redisacl"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
@@ -83,6 +83,35 @@ func TestDODPostgresDataDirPreservesCallerPathOutsideRunner(t *testing.T) {
 }
 
 const dodSecretIntegrationTenant = "d0d00000-0000-4000-8000-000000000301"
+
+// The shipped secret paths append sealed-bearing events. A DoD fixture must
+// authenticate those writes with the same store-backed custody rule as a
+// running control plane; an unauthenticated fixture log now refuses them.
+func dodOpenSecretIntegrationLog(t *testing.T, ctx context.Context, cfg *config.Config, st *store.Store) (*events.Log, runSecrets) {
+	t.Helper()
+	runSecrets, err := loadRunSecrets(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runSecrets.Close)
+	registry, err := tenantseal.NewLocalWrapperRegistry(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := tenantseal.NewAccess(st, runSecrets.kek, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+		t.Fatal(err)
+	}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
+		events.WithRequiredAppendAdmission(), CustodyValidatedEventIngressOption(st, access))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return log, runSecrets
+}
 
 type dodSecretIntegrationTarget struct {
 	entryID string
@@ -284,17 +313,8 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
-	if err != nil {
-		t.Fatal(err)
-	}
+	log, runSecrets := dodOpenSecretIntegrationLog(t, ctx, cfg, st)
 	dodRegisterSecretIntegrationTenant(t, ctx, log, st)
-	runSecrets, err := loadRunSecrets(cfg)
-	if err != nil {
-		_ = log.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(runSecrets.Close)
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		_ = log.Close()
@@ -409,17 +429,8 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
-	if err != nil {
-		t.Fatal(err)
-	}
+	log, runSecrets := dodOpenSecretIntegrationLog(t, ctx, cfg, st)
 	dodRegisterSecretIntegrationTenant(t, ctx, log, st)
-	runSecrets, err := loadRunSecrets(cfg)
-	if err != nil {
-		_ = log.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(runSecrets.Close)
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		_ = log.Close()
@@ -535,17 +546,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
-	if err != nil {
-		t.Fatal(err)
-	}
+	log, runSecrets := dodOpenSecretIntegrationLog(t, ctx, cfg, st)
 	dodRegisterSecretIntegrationTenant(t, ctx, log, st)
-	runSecrets, err := loadRunSecrets(cfg)
-	if err != nil {
-		_ = log.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(runSecrets.Close)
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		_ = log.Close()
@@ -664,17 +666,8 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
-	if err != nil {
-		t.Fatal(err)
-	}
+	log, runSecrets := dodOpenSecretIntegrationLog(t, ctx, cfg, st)
 	dodRegisterSecretIntegrationTenant(t, ctx, log, st)
-	runSecrets, err := loadRunSecrets(cfg)
-	if err != nil {
-		_ = log.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(runSecrets.Close)
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		_ = log.Close()
