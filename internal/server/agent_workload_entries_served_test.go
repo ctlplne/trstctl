@@ -56,14 +56,14 @@ func TestServedHostAgentObtainsAConfiguredWorkloadSVIDB8D1(t *testing.T) {
 	if len(chain) == 0 {
 		t.Fatal("the SVID carries no certificate")
 	}
-	if err := crypto.VerifyLeafSignedByCA(chain[0], caCertDER(t, h.caPEM)); err != nil {
-		t.Fatalf("the SVID does not chain to the served CA: %v", err)
+	if len(resp.Bundle) == 0 {
+		t.Fatal("the response carries no trust bundle")
+	}
+	if err := crypto.VerifyLeafSignedByCA(chain[0], resp.Bundle[0]); err != nil {
+		t.Fatalf("the SVID does not chain to its tenant bundle: %v", err)
 	}
 	if pub, err := crypto.PublicKeyDERFromCert(chain[0]); err != nil || !slices.Equal(pub, key.Public().DER) {
 		t.Fatalf("the SVID certifies another key (%v): the agent's key never left the host", err)
-	}
-	if len(resp.Bundle) == 0 {
-		t.Error("the response carries no trust bundle")
 	}
 
 	_, err = h.client.FetchWorkloadSVID(ctx, &transport.FetchWorkloadSVIDRequest{

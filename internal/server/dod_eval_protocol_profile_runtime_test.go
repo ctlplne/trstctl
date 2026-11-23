@@ -173,7 +173,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	artifacts["ssh"] = sshArtifact
 	tsaArtifact, _ := dodEvalTimestamp(t, first.Client(), first.BaseURL(), "first-eval-timestamp")
 	artifacts["tsa"] = tsaArtifact
-	spiffeArtifact, _ := dodEvalFetchSPIFFE(t, cfg.Protocols.SPIFFE.SocketPath, caDER)
+	spiffeArtifact, _ := dodEvalFetchSPIFFE(t, cfg.Protocols.SPIFFE.SocketPath)
 	artifacts["spiffe"] = spiffeArtifact
 
 	firstSCEPCA := dodEvalGetBody(t, first.Client(), first.BaseURL()+"/scep?operation=GetCACert", http.StatusOK)
@@ -236,7 +236,10 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	restartReadbacks["ssh"] = crypto.SHA256Hex(restartSSHCA)
 	_, restartTSA := dodEvalTimestamp(t, second.Client(), second.BaseURL(), "restart-eval-timestamp")
 	restartReadbacks["tsa"] = crypto.SHA256Hex(restartTSA)
-	_, restartSPIFFE := dodEvalFetchSPIFFE(t, cfg.Protocols.SPIFFE.SocketPath, caDER)
+	restartSPIFFEArtifact, restartSPIFFE := dodEvalFetchSPIFFE(t, cfg.Protocols.SPIFFE.SocketPath)
+	if !bytes.Equal(spiffeArtifact["bundle_der"].([]byte), restartSPIFFEArtifact["bundle_der"].([]byte)) {
+		t.Fatal("tenant SPIFFE trust bundle changed across restart")
+	}
 	restartReadbacks["spiffe"] = crypto.SHA256Hex(restartSPIFFE)
 
 	eventCounts := dodEvalTenantEventCounts(t, restartedLog, dodEvalProtocolTenant)
@@ -965,7 +968,7 @@ func dodEvalTimestamp(t *testing.T, client *http.Client, baseURL, label string) 
 	return map[string]any{"request_der": requestDER, "response_der": responseDER}, responseDER
 }
 
-func dodEvalFetchSPIFFE(t *testing.T, socket string, caDER []byte) (map[string]any, []byte) {
+func dodEvalFetchSPIFFE(t *testing.T, socket string) (map[string]any, []byte) {
 	t.Helper()
 	connection, err := grpc.NewClient("unix://"+socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -988,8 +991,8 @@ func dodEvalFetchSPIFFE(t *testing.T, socket string, caDER []byte) (map[string]a
 	if svid.GetSpiffeId() != "spiffe://"+config.DefaultEvalSPIFFETrustDomain+"/workload" || len(svid.GetX509SvidKey()) == 0 || len(svid.GetBundle()) == 0 {
 		t.Fatalf("SPIFFE SVID response is incomplete: id=%q key=%d bundle=%d", svid.GetSpiffeId(), len(svid.GetX509SvidKey()), len(svid.GetBundle()))
 	}
-	if err := crypto.VerifyLeafSignedByCA(svid.GetX509Svid(), caDER); err != nil {
-		t.Fatalf("SPIFFE SVID does not chain to served CA: %v", err)
+	if err := crypto.VerifyLeafSignedByCA(svid.GetX509Svid(), svid.GetBundle()); err != nil {
+		t.Fatalf("SPIFFE SVID does not chain to its tenant bundle: %v", err)
 	}
 	identity, err := crypto.SPIFFEIDFromCert(svid.GetX509Svid())
 	if err != nil || identity != svid.GetSpiffeId() {

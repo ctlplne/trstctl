@@ -340,6 +340,16 @@ JWT-SVIDs use the signer-backed JWT handle and validate against the served JWT b
 The Workload-API gRPC/protobuf contract is vendored verbatim from go-spiffe, so the
 wire format is byte-identical.
 
+Each enabled Workload API tenant has its own X.509 CA key in the isolated signer.
+The socket publishes that tenant's CA certificate as its X.509 trust bundle, so
+a certificate minted by another tenant through the platform issuing CA cannot
+verify as this tenant's SVID. The public CA certificate is persisted beside
+`TRSTCTL_CA_CERT_FILE` as `<ca-cert-file>.spiffe-<tenant-id>` and must be backed up
+and restored with signer custody on every node that serves that tenant. Startup
+refuses a missing or mismatched half of this key/certificate pair rather than
+silently replacing the trust anchor. Workloads should take the bundle from the
+Workload API; the platform issuing CA certificate is not their SVID trust root.
+
 The control-plane socket defaults to `/run/trstctl-spiffe/workload.sock`. Its
 directory is owned by the control-plane uid with mode `0700`, so another local
 user cannot replace the socket while it is being bound. An operator-supplied

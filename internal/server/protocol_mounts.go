@@ -1132,16 +1132,20 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 	if c == nil {
 		return nil, fmt.Errorf("server: signer unavailable for SPIFFE")
 	}
+	tenant := firstNonEmpty(cfg.TenantID, tenantFallback)
+	caSigner, caCertDER, err := s.provisionTenantSPIFFECA(ctx, c, tenant)
+	if err != nil {
+		return nil, err
+	}
 	jwtAlgorithm := spiffeJWTKeyAlgorithm(cfg)
 	jwtSigner, err := s.spiffeJWTSigner(ctx, c, jwtAlgorithm)
 	if err != nil {
 		return nil, err
 	}
-	tenant := firstNonEmpty(cfg.TenantID, tenantFallback)
 	td := cfg.TrustDomain
 	issuer := &spiffe.CAIssuer{
-		CACertDER: s.caCertDER,
-		CASigner:  s.caSigner, // signer-backed (AN-4)
+		CACertDER: caCertDER,
+		CASigner:  caSigner, // tenant-specific signer-held root (AN-1/AN-4)
 		JWTSigner: jwtSigner,
 		JWTKeyID:  projections.WorkloadJWTKeyID(1),
 	}
@@ -1212,7 +1216,7 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		if s.licensedSPIFFESVIDFactory == nil {
 			return nil, errors.New("server: hybrid SPIFFE SVIDs requested but the additional issuer is unavailable")
 		}
-		additional, err := s.licensedSPIFFESVIDFactory(s.caCertDER, s.caSigner)
+		additional, err := s.licensedSPIFFESVIDFactory(caCertDER, caSigner)
 		if err != nil {
 			return nil, fmt.Errorf("server: build licensed SPIFFE X509-SVID issuer: %w", err)
 		}

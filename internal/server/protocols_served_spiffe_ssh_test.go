@@ -29,6 +29,22 @@ import (
 	"trstctl.com/trstctl/internal/protocols/spiffe/workloadpb"
 )
 
+// The socket guard rejects symlink ancestors. macOS exposes /var as a symlink
+// to /private/var, so resolve the temporary directory before serving the UDS.
+func canonicalServedSPIFFESocketDir(t *testing.T, pattern string) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", pattern)
+	if err != nil {
+		t.Fatalf("spiffe socket dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	canonical, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("canonical spiffe socket dir: %v", err)
+	}
+	return canonical
+}
+
 // TestServedSPIFFEWorkloadAPIEndToEnd is the EXC-WIRE-02 / INTEROP-004 acceptance
 // proof for the SPIFFE Workload API: a real gRPC client speaking the SPIFFE Workload
 // API wire protocol (the vendored go-spiffe proto + the mandatory
@@ -38,11 +54,7 @@ import (
 // verify. It MUST fail on the pre-wiring tree (no UDS server existed — the spiffe
 // package exposed only Go methods) and PASS after, race-clean.
 func TestServedSPIFFEWorkloadAPIEndToEnd(t *testing.T) {
-	socketDir, err := os.MkdirTemp("", "trstctl-spiffe-")
-	if err != nil {
-		t.Fatalf("spiffe socket dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socketDir := canonicalServedSPIFFESocketDir(t, "trstctl-spiffe-")
 	socket := filepath.Join(socketDir, "s.sock")
 	h := newOperatingServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
@@ -117,9 +129,9 @@ func TestServedSPIFFEWorkloadAPIEndToEnd(t *testing.T) {
 	if id != "spiffe://served.test/workload" {
 		t.Errorf("SVID cert URI SAN = %q, want spiffe://served.test/workload", id)
 	}
-	// The SVID must chain to the served issuing CA (signer-backed, AN-4).
-	if err := crypto.VerifyLeafSignedByCA(svid.GetX509Svid(), caCertDER(t, h.caPEM)); err != nil {
-		t.Fatalf("SVID does not verify against the served CA: %v", err)
+	// The Workload API publishes this tenant's signer-held CA in its bundle.
+	if err := crypto.VerifyLeafSignedByCA(svid.GetX509Svid(), svid.GetBundle()); err != nil {
+		t.Fatalf("SVID does not verify against its tenant bundle: %v", err)
 	}
 
 	// AN-2: the SVID issuance was audited.
@@ -141,11 +153,7 @@ func TestServedSPIFFEWorkloadAPIEndToEnd(t *testing.T) {
 // go-spiffe workloadapi client fetches an X.509-SVID from the served UDS, validates
 // the SPIFFE ID and trust bundle, and proves the leaf chains to the served CA.
 func TestServedSPIFFEGoSpiffeClient(t *testing.T) {
-	socketDir, err := os.MkdirTemp("", "trstctl-spiffe-gospiffe-")
-	if err != nil {
-		t.Fatalf("spiffe socket dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socketDir := canonicalServedSPIFFESocketDir(t, "trstctl-spiffe-gospiffe-")
 	socket := filepath.Join(socketDir, "s.sock")
 	h := newOperatingServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
@@ -178,8 +186,8 @@ func TestServedSPIFFEGoSpiffeClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("go-spiffe client returned non-base64 certificate DER: %v", err)
 	}
-	if err := crypto.VerifyLeafSignedByCA(leafDER, caCertDER(t, h.caPEM)); err != nil {
-		t.Fatalf("go-spiffe SVID does not verify against served CA: %v", err)
+	if err := crypto.VerifyLeafSignedByCA(leafDER, servedReadPEMCert(t, h.caFile+".spiffe-"+servedTestTenant)); err != nil {
+		t.Fatalf("go-spiffe SVID does not verify against the tenant CA: %v", err)
 	}
 	if result.BundleAuthorities == 0 {
 		t.Fatal("go-spiffe context did not include the served.test trust bundle")
@@ -218,11 +226,7 @@ func TestServedSPIFFEGoSpiffeClient(t *testing.T) {
 // contract, not only X.509-SVIDs. The client fetches a JWT-SVID, fetches JWT bundles,
 // and validates the token through ValidateJWTSVID against the same served socket.
 func TestServedSPIFFEGoSpiffeJWTClient(t *testing.T) {
-	socketDir, err := os.MkdirTemp("", "trstctl-spiffe-gospiffe-jwt-")
-	if err != nil {
-		t.Fatalf("spiffe socket dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socketDir := canonicalServedSPIFFESocketDir(t, "trstctl-spiffe-gospiffe-jwt-")
 	socket := filepath.Join(socketDir, "s.sock")
 	h := newOperatingServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
@@ -274,11 +278,7 @@ func TestServedSPIFFESpiffeHelperWritesSVID(t *testing.T) {
 		t.Skip("spiffe-helper not on PATH; set TRSTCTL_REQUIRE_SPIFFE_HELPER=1 in CI to make the stock helper mandatory")
 	}
 
-	socketDir, err := os.MkdirTemp("", "trstctl-spiffe-helper-")
-	if err != nil {
-		t.Fatalf("spiffe socket dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socketDir := canonicalServedSPIFFESocketDir(t, "trstctl-spiffe-helper-")
 	socket := filepath.Join(socketDir, "s.sock")
 	h := newOperatingServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
@@ -347,8 +347,8 @@ jwt_svid_file_mode = 0600
 	if id != "spiffe://served.test/workload" {
 		t.Fatalf("spiffe-helper SVID ID = %q, want spiffe://served.test/workload", id)
 	}
-	if err := crypto.VerifyLeafSignedByCA(leafDER, caCertDER(t, h.caPEM)); err != nil {
-		t.Fatalf("spiffe-helper SVID does not verify against served CA: %v", err)
+	if err := crypto.VerifyLeafSignedByCA(leafDER, servedReadPEMCert(t, bundlePath)); err != nil {
+		t.Fatalf("spiffe-helper SVID does not verify against its tenant bundle: %v", err)
 	}
 	if !h.hasEvent(t, "spiffe.svid.issued") {
 		t.Error("no spiffe.svid.issued event after spiffe-helper fetch")

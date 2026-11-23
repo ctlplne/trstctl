@@ -849,6 +849,7 @@ type Server struct {
 	signerTopology string
 	caSigner       crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
 	caCertDER      []byte
+	caCertFile     string // persisted platform CA file; tenant SPIFFE CA files use this operator-owned directory
 	// pkiSecretRecoveryDone is set once a sweep recovered every historical
 	// PKI-secret leaf it could verify (A111).
 	pkiSecretRecoveryDone atomic.Bool
@@ -1243,6 +1244,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		outboxWake:                make(chan struct{}, 1),
 		signer:                    d.Signer,
 		signerTopology:            d.SignerMode,
+		caCertFile:                d.CACertFile,
 		signAuthz:                 resolveSignTokenProvider(d),
 		signTO:                    d.SignTimeout,
 		obHandler:                 d.OutboxHandler,
