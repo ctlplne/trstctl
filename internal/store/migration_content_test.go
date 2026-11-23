@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	506: true, // TestMigrationDataContentBackfills/0506_switching_private_watch_starts_unattributed
 	505: true, // TestMigrationDataContentBackfills/0505_notification_channels_start_unattributed
 	504: true, // TestMigrationDataContentBackfills/0504_ticket_intake_source_starts_unattributed
 	500: true, // TestMigrationDataContentBackfills/0500_api_token_minter_starts_unattributed
@@ -2384,6 +2385,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0506_switching_private_watch_starts_unattributed", testMigration0506SwitchingPrivateWatchStartsUnattributed)
 	t.Run("0505_notification_channels_start_unattributed", testMigration0505NotificationChannelsStartUnattributed)
 	t.Run("0504_ticket_intake_source_starts_unattributed", testMigration0504TicketIntakeSourceStartsUnattributed)
 	t.Run("0500_api_token_minter_starts_unattributed", testMigration0500APITokenMinterStartsUnattributed)
@@ -3424,6 +3426,52 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
 	t.Run("0136_fleet_reissuance_cursor_defaults", testMigration0136FleetReissuanceCursorDefaults)
 	t.Run("0137_relay_external_pollers", testMigration0137RelayExternalPollers)
+}
+
+func testMigration0506SwitchingPrivateWatchStartsUnattributed(t *testing.T) {
+	const stable = `SELECT tenant_id::text, id::text, name, format, preview_digest,
+		rows_total::text, counts::text, gap_counts::text, rows_recorded::text,
+		rows_applied::text, status, created_by, created_at::text,
+		COALESCE(completed_at::text, ''), watch_round::text, watch_pending::text,
+		watch_allow_private::text, watch_private_cidrs::text,
+		COALESCE(watch_requested_at::text, ''), watch_requested_by,
+		event_sequence::text FROM switching_imports ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 506, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for i, tenantID := range []string{tenantA, tenantB} {
+				private := i == 0
+				requester := "legacy-operator"
+				cidrs := []string{}
+				if private {
+					requester = "scheduler"
+					cidrs = []string{"10.24.0.0/16"}
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO switching_imports
+					(tenant_id, id, name, format, preview_digest, rows_total,
+					 status, created_by, created_at, watch_round, watch_pending,
+					 watch_allow_private, watch_private_cidrs, watch_requested_at,
+					 watch_requested_by, event_sequence)
+					VALUES ($1,$2,$3,'csv','sha256:owned',2,'completed',
+					 'legacy-operator','2026-10-01T00:00:00Z'::timestamptz,
+					 3,1,$4,$5,'2026-10-02T00:00:00Z'::timestamptz,$6,42)`,
+					tenantID, fmt.Sprintf("50600000-0000-4000-8000-%012d", i+1),
+					fmt.Sprintf("legacy import %d", i), private, cidrs, requester); err != nil {
+					t.Fatalf("seed pre-0506 watch for %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var unknown bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(watch_grant_by = '')
+				FROM switching_imports WHERE tenant_id IN ($1,$2)`, tenantA, tenantB).
+				Scan(&rows, &unknown); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !unknown {
+				t.Fatalf("0506 attributed historical private watch grants: rows=%d want=%d unknown=%t", rows, want, unknown)
+			}
+		})
 }
 
 func testMigration0504TicketIntakeSourceStartsUnattributed(t *testing.T) {
