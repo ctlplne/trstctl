@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -23,6 +24,9 @@ import (
 func (o *Orchestrator) RecordCertificateSCTWithEventID(ctx context.Context, tenantID, eventID string,
 	sct projections.CertificateSCTRecorded) error {
 	if err := projections.ValidateCertificateSCTRecorded(sct); err != nil {
+		return fmt.Errorf("orchestrator: %w", err)
+	}
+	if err := projections.ValidateCertificateSCTTimestampAt(sct.SCTTimestampMillis, time.Now()); err != nil {
 		return fmt.Errorf("orchestrator: %w", err)
 	}
 	return o.recordExactEvent(ctx, tenantID, eventID, projections.EventCertificateSCTRecorded, sct)

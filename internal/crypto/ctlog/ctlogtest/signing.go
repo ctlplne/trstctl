@@ -34,16 +34,23 @@ func WithCorruptSCTs() SigningOption { return func(l *signingLog) { l.corrupt = 
 // the entries the log accepted, so no audit path leads to it.
 func WithForkedTreeHeads() SigningOption { return func(l *signingLog) { l.forked = true } }
 
+// WithSCTTimestampMillis makes a signed SCT with an operator-hostile clock
+// value, so served tests can prove admission before the event append.
+func WithSCTTimestampMillis(timestamp uint64) SigningOption {
+	return func(l *signingLog) { l.sctTimestamp = timestamp }
+}
+
 // signingLog is the RFC 6962 state of a signing Server: its key, its Merkle
 // tree of accepted entries and the entries waiting to be merged.
 type signingLog struct {
-	mu         sync.Mutex
-	key        *ecdsa.PrivateKey
-	leaves     [][]byte // MerkleTreeLeaf bytes, in tree order
-	pending    [][]byte
-	delayMerge bool
-	corrupt    bool
-	forked     bool
+	mu           sync.Mutex
+	key          *ecdsa.PrivateKey
+	leaves       [][]byte // MerkleTreeLeaf bytes, in tree order
+	pending      [][]byte
+	delayMerge   bool
+	corrupt      bool
+	forked       bool
+	sctTimestamp uint64
 	// headAge dates tree heads later than now, as a log's heads would be
 	// once time passes.
 	headAge time.Duration
@@ -116,6 +123,9 @@ func (l *signingLog) sign(chain [][]byte, precert bool) (map[string]any, error) 
 		entry = asn1Cert(chain[0])
 	}
 	timestamp := timestampMillis()
+	if l.sctTimestamp != 0 {
+		timestamp = l.sctTimestamp
+	}
 	var signed []byte
 	signed = append(signed, 0, 0) // version v1, certificate_timestamp
 	signed = append(signed, u64(timestamp)...)

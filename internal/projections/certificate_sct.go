@@ -19,6 +19,10 @@ import (
 const (
 	EventCertificateSCTRecorded  = "ct.sct.recorded"
 	EventCertificateSCTInclusion = "ct.inclusion.recorded"
+	// A fixed limit keeps event replay independent of the wall clock and far
+	// inside PostgreSQL's timestamptz range. It is the last millisecond of 9999.
+	maxSCTTimestampMillis uint64 = 253402300799999
+	maxSCTClockSkew              = 5 * time.Minute
 )
 
 // CertificateSCTRecorded is one log's SCT for one submission.
@@ -50,7 +54,8 @@ type CertificateSCTInclusion struct {
 // ValidateCertificateSCTRecorded checks an SCT record's closed vocabulary.
 func ValidateCertificateSCTRecorded(pl CertificateSCTRecorded) error {
 	if !canonicalUUID(pl.SubmissionID) || !lowerSHA256.MatchString(pl.LeafFingerprint) || pl.LogURL == "" ||
-		(pl.EntryType != "certificate" && pl.EntryType != "precertificate") || pl.SCTTimestampMillis == 0 {
+		(pl.EntryType != "certificate" && pl.EntryType != "precertificate") ||
+		pl.SCTTimestampMillis == 0 || pl.SCTTimestampMillis > maxSCTTimestampMillis {
 		return errors.New("an SCT record names its submission, certificate, log, entry type and time")
 	}
 	switch pl.SCTStatus {
@@ -64,6 +69,18 @@ func ValidateCertificateSCTRecorded(pl CertificateSCTRecorded) error {
 		}
 	default:
 		return errors.New("an SCT record has an unknown status")
+	}
+	return nil
+}
+
+// ValidateCertificateSCTTimestampAt is the live admission check. A CT log may
+// be a few minutes ahead of the control plane, but a far-future answer cannot
+// enter the append-only log. Replay uses the fixed bound above, not this clock.
+func ValidateCertificateSCTTimestampAt(timestamp uint64, now time.Time) error {
+	latest := now.Add(maxSCTClockSkew).UnixMilli()
+	if latest <= 0 || timestamp == 0 || timestamp > maxSCTTimestampMillis ||
+		timestamp > uint64(latest) { // #nosec G115 -- latest is positive above (CWE-190)
+		return errors.New("an SCT timestamp is outside the allowed clock window")
 	}
 	return nil
 }

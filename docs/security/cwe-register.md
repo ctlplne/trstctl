@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3608 annotated sites across 35 rules. Each row is
+3609 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1134,7 +1134,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (562 sites)
+### G115 — CWE-190 Integer overflow or wraparound (563 sites)
 
 | Location | Reason |
 |---|---|
@@ -1279,7 +1279,7 @@ not this file.
 | `internal/crypto/bcfks/bcfks.go:343` | one byte of the bounded message length (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:333` | test-support package compiled only into test binaries (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:350` | test-support package compiled only into test binaries (CWE-190) |
-| `internal/crypto/ctlog/ctlogtest/signing.go:184` | a positive test clock offset (CWE-190) |
+| `internal/crypto/ctlog/ctlogtest/signing.go:194` | a positive test clock offset (CWE-190) |
 | `internal/crypto/ctlog/merkle.go:58` | non-negative checked above (CWE-190) |
 | `internal/crypto/ctlog/merkle.go:95` | non-negative checked above (CWE-190) |
 | `internal/crypto/ctlog/sct.go:263` | RFC 6962 16-bit fields; callers bound v (CWE-190) |
@@ -1415,7 +1415,8 @@ not this file.
 | `internal/projections/application_secret_rebuild_test.go:150` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/application_secret_rebuild_test.go:176` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
-| `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
+| `internal/projections/certificate_sct.go:82` | latest is positive above (CWE-190) |
+| `internal/projections/certificate_sct.go:105` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/projections.go:8017` | checked against MaxInt64 above. |
@@ -1796,7 +1797,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:278` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2624` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2628` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |

@@ -1060,6 +1060,9 @@ merges it; not included once a tree head signed 24 hours after the SCT still lac
 or a failed proof). A log without a key keeps its SCT unverified, and a log that serves
 only the static CT API is not checked for inclusion. The certificate detail
 (`GET /api/v1/certificates/{id}`, `transparency`) shows each log's answer.
+An SCT timestamp more than five minutes ahead of the control-plane clock, or
+outside the supported database time range, fails the CT delivery before an SCT
+event is appended. Check the log clock and the delivery's retry status.
 
 Rogue and non-compliant certificate posture is served at
 `GET /api/v1/revocation/rogue-certificates` / `trstctl-cli revocation

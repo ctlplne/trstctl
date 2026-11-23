@@ -446,7 +446,11 @@ func validateCTSCTResponse(body []byte) (uint64, error) {
 	if out.ID == "" || out.Timestamp <= 0 || out.Signature == "" {
 		return 0, errors.New("missing SCT id, timestamp, or signature")
 	}
-	return uint64(out.Timestamp), nil // #nosec G115 -- positive checked above (CWE-190)
+	timestamp := uint64(out.Timestamp) // #nosec G115 -- positive checked above (CWE-190)
+	if err := projections.ValidateCertificateSCTTimestampAt(timestamp, time.Now()); err != nil {
+		return 0, err
+	}
+	return timestamp, nil
 }
 
 // ctSCTRecord is what trstctl keeps of the SCT a log returned (A213): checked
