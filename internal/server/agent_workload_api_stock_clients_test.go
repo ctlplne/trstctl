@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -65,7 +66,19 @@ func startHostAgentWorkloadAPI(t *testing.T, agentName string) (*agentChannelHar
 
 // The stock go-spiffe client receives the entry's X.509-SVID, with its private
 // key and the trust bundle, from the host agent's socket; the certificate chains
-// to the served CA and the issuance went up the agent channel.
+// to this tenant's SPIFFE CA and the issuance went up the agent channel.
+func hostAgentSPIFFECA(t *testing.T, h *agentChannelHarness) []byte {
+	t.Helper()
+	bundle, err := h.srv.protocols.spiffe.wl.FetchX509Bundle(t.Context())
+	if err != nil || len(bundle) != 1 {
+		t.Fatalf("served tenant SPIFFE bundle has %d authorities: %v", len(bundle), err)
+	}
+	if bytes.Equal(bundle[0], caCertDER(t, h.caPEM)) {
+		t.Fatal("tenant SPIFFE authority reused the platform CA")
+	}
+	return bundle[0]
+}
+
 func TestServedGoSpiffeClientFetchesFromAHostAgentSocketB8L2(t *testing.T) {
 	h, socket := startHostAgentWorkloadAPI(t, "job-agent-spiffe-go")
 	result := runServedGoSpiffeClient(t, "unix://"+socket)
@@ -79,8 +92,8 @@ func TestServedGoSpiffeClientFetchesFromAHostAgentSocketB8L2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the client returned non-base64 certificate DER: %v", err)
 	}
-	if err := crypto.VerifyLeafSignedByCA(leafDER, caCertDER(t, h.caPEM)); err != nil {
-		t.Fatalf("the SVID from the host agent's socket does not chain to the served CA: %v", err)
+	if err := crypto.VerifyLeafSignedByCA(leafDER, hostAgentSPIFFECA(t, h)); err != nil {
+		t.Fatalf("the SVID from the host agent's socket does not chain to the tenant SPIFFE CA: %v", err)
 	}
 	if !h.hasEvent(t, "spiffe.workload.svid_issued_via_agent") {
 		t.Error("no spiffe.workload.svid_issued_via_agent event: the SVID did not come up the agent channel")
@@ -133,8 +146,12 @@ key_file_mode = 0600
 	if id, err := crypto.SPIFFEIDFromCert(leafDER); err != nil || id != hostAgentWorkloadID {
 		t.Fatalf("spiffe-helper's SVID names %q (%v), want %q", id, err, hostAgentWorkloadID)
 	}
-	if err := crypto.VerifyLeafSignedByCA(leafDER, caCertDER(t, h.caPEM)); err != nil {
-		t.Fatalf("spiffe-helper's SVID does not chain to the served CA: %v", err)
+	tenantCA := hostAgentSPIFFECA(t, h)
+	if !bytes.Equal(servedReadPEMCert(t, filepath.Join(certDir, "svid_bundle.pem")), tenantCA) {
+		t.Fatal("spiffe-helper received a bundle different from the served tenant SPIFFE CA")
+	}
+	if err := crypto.VerifyLeafSignedByCA(leafDER, tenantCA); err != nil {
+		t.Fatalf("spiffe-helper's SVID does not chain to the tenant SPIFFE CA: %v", err)
 	}
 	if !h.hasEvent(t, "spiffe.workload.svid_issued_via_agent") {
 		t.Error("no spiffe.workload.svid_issued_via_agent event: the SVID did not come up the agent channel")
