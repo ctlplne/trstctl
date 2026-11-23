@@ -1191,8 +1191,16 @@ func TestExactlyThirteenManifestRuntimeProofFilesUseDedicatedBuildConstraint(t *
 			}
 		}
 	}
-	if len(tagged) != 13 {
-		t.Fatalf("manifest proof-package files carrying reserved proof tag = %d, want exactly 13: %v", len(tagged), tagged)
+	// CR-040's bundled private-socket test uses the same proof-only build
+	// constraint but is an infrastructure gate, not a manifest capability.
+	const bundledSocketProof = "internal/server/dod_runtime_export_test.go"
+	if !tagged[bundledSocketProof] || len(tagged) != len(seen)+1 {
+		t.Fatalf("reserved proof-tag files must be the 13 manifest files plus %s: %v", bundledSocketProof, tagged)
+	}
+	for name := range tagged {
+		if !seen[name] && name != bundledSocketProof {
+			t.Fatalf("unlisted proof-only file %s; add its exact role to this gate", name)
+		}
 	}
 
 	ordinary := build.Default
@@ -1217,10 +1225,12 @@ func TestExactlyThirteenManifestRuntimeProofFilesUseDedicatedBuildConstraint(t *
 			t.Errorf("reserved proof-tag compilation excludes manifest file %s", name)
 		}
 	}
-	for name := range tagged {
-		if !seen[name] {
-			t.Errorf("reserved proof tag is used by non-manifest runtime file %s", name)
-		}
+	dir, base := filepath.Split(filepath.Join(repo, filepath.FromSlash(bundledSocketProof)))
+	if matched, err := ordinary.MatchFile(dir, base); err != nil || matched {
+		t.Errorf("ordinary build must exclude bundled socket proof: matched=%t err=%v", matched, err)
+	}
+	if matched, err := proofBuild.MatchFile(dir, base); err != nil || !matched {
+		t.Errorf("reserved proof build must include bundled socket proof: matched=%t err=%v", matched, err)
 	}
 }
 

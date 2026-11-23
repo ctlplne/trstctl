@@ -188,7 +188,7 @@ func TestServedAgentlessSSHCollectsOpenSSHThroughVaultedRelayJob(t *testing.T) {
 	if _, err := h.srv.orch.UpsertDiscoverySegment(ctx, h.tenant, store.DiscoverySegment{Name: "a227-owned", Ranges: []string{"127.0.0.1"}, StalenessHours: 24}); err != nil {
 		t.Fatal(err)
 	}
-	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read")
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read", "secrets:read")
 	sourceInput := map[string]any{"name": "a227-no-host-agent", "kind": sshcollection.SourceKind, "config": sshcollection.Config{Enabled: true, Segment: "a227-owned", RelayAgentID: agentRowID(h.tenant, h.agent), AllowLoopback: true, Hosts: []sshcollection.Host{{Address: address, Username: "trstctl_observe", HostKeyFingerprint: pin, CredentialRef: ref}}}}
 	code, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", token, "a227-source", sourceInput)
 	if code != 201 {

@@ -985,6 +985,7 @@ func dodSeedConnectorToken(t *testing.T, st *store.Store) string {
 			string(authz.IdentitiesRead), string(authz.IdentitiesWrite),
 			string(authz.CertsRead), string(authz.CertsIssue),
 			string(authz.ConnectorsRead), string(authz.ConnectorsWrite),
+			string(authz.SecretsRead),
 		},
 	}); err != nil {
 		secret.Wipe(raw)

@@ -360,7 +360,7 @@ not this file.
 | `internal/custody/custody.go:98` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/decommission/reprotect/credential_test.go:16` | NewCredentialID is public fixture metadata, not credential material (CWE-798). |
 | `internal/discovery/adcs/endpoint_probe_test.go:15` | public logical reference fixture, never a credential value (CWE-798). |
-| `internal/discovery/adcs/source_test.go:86` | public secret:// reference fixture; contains no credential value (CWE-798). |
+| `internal/discovery/adcs/source_test.go:106` | public secret:// reference fixture; contains no credential value (CWE-798). |
 | `internal/discovery/apikey/apikey_test.go:13` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
@@ -3857,7 +3857,7 @@ not this file.
 | `tools/dodcensus/main_test.go:644` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/main_test.go:667` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/main_test.go:721` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/main_test.go:1482` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/main_test.go:1492` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:226` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:306` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:443` | test path inside its own tempdir/checkout (CWE-22) |

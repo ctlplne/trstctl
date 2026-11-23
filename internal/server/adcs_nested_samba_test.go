@@ -64,19 +64,32 @@ func TestServedADCSNestedEnrollmentAgainstSamba(t *testing.T) {
 	}
 	const name = "adcs/a228-samba-reader"         // #nosec G101 -- public logical fixture reference (CWE-798).
 	const ref = "secret://adcs/a228-samba-reader" // #nosec G101 -- public reference, never a credential value (CWE-798).
+	const caName = "adcs/a228-samba-ca"
+	const caRef = "secret://adcs/a228-samba-ca"
 	sealed, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, name, password)
 	if err != nil {
 		t.Fatal(err)
 	}
 	seedApplicationSecretFixture(t, h.store, h.tenant, name, sealed)
-	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read")
+	caPEM, err := os.ReadFile(os.Getenv("TRSTCTL_ADCS_SAMBA_CA_FILE")) // #nosec G304,G703,G122 -- exact owned public CA fixture path (CWE-22).
+	if err != nil || len(caPEM) == 0 {
+		t.Fatalf("set TRSTCTL_ADCS_SAMBA_CA_FILE to the owned directory CA PEM: %v", err)
+	}
+	caServerName := os.Getenv("TRSTCTL_ADCS_SAMBA_TLS_SERVER_NAME")
+	if caServerName == "" {
+		t.Fatal("set TRSTCTL_ADCS_SAMBA_TLS_SERVER_NAME to the certificate's exact name")
+	}
+	sealedCA, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, caName, caPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedApplicationSecretFixture(t, h.store, h.tenant, caName, sealedCA)
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read", "secrets:read")
 	endpoint := os.Getenv("TRSTCTL_ADCS_SAMBA_URL")
 	if endpoint == "" {
 		t.Fatal("set TRSTCTL_ADCS_SAMBA_URL to the owned LDAP authority")
 	}
-	// The retained Samba lab has no public trust anchor. Its explicit lab-only
-	// override is visible as DirectoryVerified=false; it proves no production TLS.
-	input := map[string]any{"name": "a228-nested-samba", "kind": adcs.SourceKind, "config": map[string]any{"url": endpoint, "configuration_dn": fixture.ConfigurationDN, "bind_dn": fixture.BindDN, "password_ref": ref, "relay_agent_id": agentRowID(h.tenant, h.agent), "nested_groups_enabled": true, "membership_domain_dn": fixture.DomainDN, "insecure_skip_verify": true}}
+	input := map[string]any{"name": "a228-nested-samba", "kind": adcs.SourceKind, "config": map[string]any{"url": endpoint, "configuration_dn": fixture.ConfigurationDN, "bind_dn": fixture.BindDN, "password_ref": ref, "tls_ca_ref": caRef, "tls_server_name": caServerName, "relay_agent_id": agentRowID(h.tenant, h.agent), "nested_groups_enabled": true, "membership_domain_dn": fixture.DomainDN}}
 	code, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", token, "a228-source", input)
 	if code != 201 {
 		t.Fatalf("source=%d %s", code, body)
@@ -111,7 +124,7 @@ func TestServedADCSNestedEnrollmentAgainstSamba(t *testing.T) {
 	if err := json.Unmarshal(reportJSON, &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.Status != "succeeded" || report.DirectoryVerified {
+	if report.Status != "succeeded" || !report.DirectoryVerified {
 		t.Fatalf("Samba read=%s/%s, directory verified=%t", report.Status, report.ErrorCode, report.DirectoryVerified)
 	}
 	var nested *adcs.EnrollmentMembership

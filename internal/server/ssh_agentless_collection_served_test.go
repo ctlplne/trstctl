@@ -23,7 +23,7 @@ func TestServedAgentlessSSHTrustSourceIsExplicitReferenceOnlyAndEffectFree(t *te
 	if _, err := h.srv.orch.UpsertDiscoverySegment(t.Context(), h.tenant, store.DiscoverySegment{Name: "a227-owned", Ranges: []string{"127.0.0.1"}, StalenessHours: 24}); err != nil {
 		t.Fatal(err)
 	}
-	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "secrets:read")
 	input := map[string]any{"name": "owned-agentless-ssh", "kind": "ssh_trust", "config": map[string]any{"enabled": true, "segment": "a227-owned", "relay_agent_id": agentRowID(h.tenant, h.agent), "allow_loopback": true, "hosts": []map[string]any{{"address": "127.0.0.1:2222", "username": "trstctl_observe", "host_key_fingerprint": "SHA256:" + strings.Repeat("A", 43), "credential_ref": "secret://ssh/owned-read-only"}}}} // #nosec G101 -- public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798).
 	code, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", token, "a227-explicit-source", input)
 	if code != http.StatusCreated {

@@ -1389,6 +1389,8 @@ describe("discovery control-plane surface", () => {
     await user.type(form.getByLabelText("Configuration naming context"), "CN=Configuration,DC=corp,DC=example");
     await user.type(form.getByLabelText("Bind identity"), "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example");
     await user.type(form.getByLabelText("Password reference"), "secret://adcs/domain-reader");
+    await user.type(form.getByLabelText("Directory CA reference"), "secret://adcs/directory-ca");
+    await user.type(form.getByLabelText("Expected directory name"), "dc01.corp.example");
     await user.type(form.getByLabelText("Network relay"), "11111111-1111-4111-8111-111111111111");
     await user.click(form.getByRole("checkbox", { name: /Read nested enrollment groups/ }));
     await user.type(form.getByLabelText("Membership domain naming context"), "DC=corp,DC=example");
@@ -1409,6 +1411,8 @@ describe("discovery control-plane surface", () => {
         configuration_dn: "CN=Configuration,DC=corp,DC=example",
         bind_dn: "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example",
         password_ref: "secret://adcs/domain-reader",
+        tls_ca_ref: "secret://adcs/directory-ca",
+        tls_server_name: "dc01.corp.example",
         relay_agent_id: "11111111-1111-4111-8111-111111111111",
         enrollment_endpoints: [
           {

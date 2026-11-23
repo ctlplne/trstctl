@@ -6,14 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
 
-	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/ldapbind"
 	"trstctl.com/trstctl/internal/revocationhealth"
 )
 
@@ -51,35 +50,30 @@ type ldapCRLDirectory struct {
 	conn *ldap.Conn
 }
 
-func dialCRLDirectory(binding revocationhealth.LDAPBinding, password []byte) (crlDirectory, error) {
-	tlsConfig := mtls.DirectoryClientTLSConfig(binding.InsecureSkipVerify)
-	conn, err := ldap.DialURL(binding.URL,
-		ldap.DialWithDialer(&net.Dialer{Timeout: adcsDialTimeout, Control: egressControl(nil)}),
-		ldap.DialWithTLSConfig(tlsConfig))
+func dialCRLDirectory(binding revocationhealth.LDAPBinding, password, caPEM []byte) (crlDirectory, error) {
+	if binding.InsecureSkipVerify {
+		return nil, fmt.Errorf("%w (unverified credentialed directory TLS is forbidden)", errLDAPTLS)
+	}
+	// The crypto boundary handles the encrypted bind with a mutable byte
+	// buffer. go-ldap's Bind API requires an immutable password string.
+	wire, err := ldapbind.DialVerifiedDirectoryCRL(context.Background(), binding.URL, binding.BindDN,
+		password, caPEM, binding.TLSServerName, egressControl(nil))
 	if err != nil {
-		if reason := tlsFailureReason(err); reason != "" {
-			// ldaps:// handshakes inside the dial.
-			return nil, fmt.Errorf("%w (%s)", errLDAPTLS, reason)
-		}
-		return nil, fmt.Errorf("%w: %s", errLDAPConnect, summarizeTransportError(err))
-	}
-	if strings.HasPrefix(strings.ToLower(binding.URL), "ldap://") {
-		// The CRL is public; the bind credential is not. A plain connection
-		// is upgraded or the bind does not happen.
-		if err := conn.StartTLS(tlsConfig); err != nil {
-			_ = conn.Close()
-			reason := tlsFailureReason(err)
-			if reason == "" {
-				reason = "the directory did not complete StartTLS"
+		switch {
+		case errors.Is(err, ldapbind.ErrDirectoryConnect):
+			return nil, fmt.Errorf("%w: %s", errLDAPConnect, summarizeTransportError(err))
+		case errors.Is(err, ldapbind.ErrTLS):
+			if reason := tlsFailureReason(err); reason != "" {
+				return nil, fmt.Errorf("%w (%s)", errLDAPTLS, reason)
 			}
-			return nil, fmt.Errorf("%w (%s)", errLDAPTLS, reason)
+			return nil, fmt.Errorf("%w (the directory did not complete verified TLS)", errLDAPTLS)
+		default:
+			return nil, errLDAPBind
 		}
 	}
-	if err := conn.Bind(binding.BindDN, string(password)); err != nil {
-		_ = conn.Close()
-		return nil, errLDAPBind
-	}
+	conn := ldap.NewConn(wire, true)
 	conn.SetTimeout(revocationFetchTimeout)
+	conn.Start()
 	return &ldapCRLDirectory{conn: conn}, nil
 }
 

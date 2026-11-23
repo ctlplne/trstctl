@@ -424,6 +424,21 @@
           "description": "Reference to the bind password; the value is never sent in this configuration."
         },
         {
+          "path": "tls_ca_ref",
+          "label": "Directory CA reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "description": "Optional secret:// reference containing a PEM CA certificate; set with tls_server_name to verify a private directory CA."
+        },
+        {
+          "path": "tls_server_name",
+          "label": "Expected directory name",
+          "type": "string",
+          "required": false,
+          "description": "Exact DNS name or IP address the pinned directory certificate must cover."
+        },
+        {
           "path": "relay_agent_id",
           "label": "Network relay",
           "type": "agent_ref",

@@ -575,7 +575,7 @@ func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testi
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write",
 		"identities:read", "identities:write",
-		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read",
 	)
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
 		"name": acmARN, "connector": "aws-acm", "enabled": true,
@@ -970,7 +970,7 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write",
 		"identities:read", "identities:write",
-		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read",
 	)
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{

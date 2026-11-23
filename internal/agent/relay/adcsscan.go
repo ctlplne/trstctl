@@ -156,10 +156,20 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	if !ok || len(password) == 0 {
 		return ADCSReport{}, errors.New("relay: the directory bind credential was not redeemed for this attempt")
 	}
+	defer secret.Wipe(password)
+	if intent.InsecureSkipVerify {
+		return ADCSReport{}, errors.New("relay: credentialed directory bind refuses unverified TLS")
+	}
+	var caPEM []byte
+	if intent.TLSCARef != "" {
+		caPEM = material[intent.TLSCARef]
+		if len(caPEM) == 0 {
+			return ADCSReport{}, errors.New("relay: the directory TLS CA reference was not redeemed for this attempt")
+		}
+	}
 
 	// Authenticate once through AN-3 without creating an immutable password
 	// string. Release the borrowed bytes before reading public directory data.
-	defer secret.Wipe(password)
 	budget := 60 * time.Second
 	if intent.EndpointProbe != nil {
 		budget = 90 * time.Second
@@ -168,7 +178,7 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	defer cancel()
 	directoryCtx, directoryCancel := context.WithTimeout(bounded, 60*time.Second)
 	defer directoryCancel()
-	wire, err := ldapbind.Dial(directoryCtx, url, intent.BindDN, password, intent.InsecureSkipVerify, egressControl(nil))
+	wire, err := ldapbind.DialVerifiedDirectory(directoryCtx, url, intent.BindDN, password, caPEM, intent.TLSServerName, egressControl(nil))
 	secret.Wipe(password)
 	if err != nil {
 		return ADCSReport{}, fmt.Errorf("relay: directory authentication failed: %w", err)
@@ -215,7 +225,7 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 		Status:            "succeeded",
 		Inventory:         inventory,
 		Findings:          adcs.Findings(inventory),
-		DirectoryVerified: !intent.InsecureSkipVerify,
+		DirectoryVerified: true,
 	}
 	if err := adcs.ValidateInventoryReport(intent, report); err != nil {
 		return ADCSReport{}, err

@@ -207,7 +207,8 @@ func (s *Server) groupLDAPRevocationTargets(ctx context.Context, tenantID string
 		}
 		candidates = append(candidates, ldapRevocationGroup{agentID: resolved.RequiredAgentID, binding: revocationhealth.LDAPBinding{
 			SourceID: source.ID, URL: resolved.URL, ConfigurationDN: resolved.ConfigurationDN,
-			BindDN: resolved.BindDN, PasswordRef: resolved.PasswordRef, InsecureSkipVerify: resolved.InsecureSkipVerify,
+			BindDN: resolved.BindDN, PasswordRef: resolved.PasswordRef,
+			TLSCARef: resolved.TLSCARef, TLSServerName: resolved.TLSServerName,
 		}})
 	}
 	for _, target := range ldapTargets {

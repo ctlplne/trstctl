@@ -36,6 +36,8 @@ export function ADCSSourceFields({
   configurationDN,
   bindDN,
   passwordRef,
+  tlsCARef,
+  tlsServerName,
   relayAgentID,
   enrollmentEndpoints,
   allowPrivateEndpoint,
@@ -44,6 +46,8 @@ export function ADCSSourceFields({
   onConfigurationDN,
   onBindDN,
   onPasswordRef,
+  onTLSCARef,
+  onTLSServerName,
   onRelayAgentID,
   onEnrollmentEndpoints,
   onAllowPrivateEndpoint,
@@ -53,6 +57,8 @@ export function ADCSSourceFields({
   configurationDN: string;
   bindDN: string;
   passwordRef: string;
+  tlsCARef: string;
+  tlsServerName: string;
   relayAgentID: string;
   enrollmentEndpoints: string;
   allowPrivateEndpoint: boolean;
@@ -61,6 +67,8 @@ export function ADCSSourceFields({
   onConfigurationDN: (value: string) => void;
   onBindDN: (value: string) => void;
   onPasswordRef: (value: string) => void;
+  onTLSCARef: (value: string) => void;
+  onTLSServerName: (value: string) => void;
   onRelayAgentID: (value: string) => void;
   onEnrollmentEndpoints: (value: string) => void;
   onAllowPrivateEndpoint: (value: boolean) => void;
@@ -79,6 +87,20 @@ export function ADCSSourceFields({
       />
       <ADCSField label={translateNow("source.bind.56b9b63d28")} value={bindDN} onValue={onBindDN} />
       <ADCSField label={translateNow("notifications.routing.credentialRef")} value={passwordRef} onValue={onPasswordRef} />
+      <ADCSField
+        label={t("discovery.setup.adcsTLSCARef")}
+        value={tlsCARef}
+        onValue={onTLSCARef}
+        placeholder={t("discovery.setup.adcsTLSCAExample")}
+        required={false}
+      />
+      <ADCSField
+        label={t("discovery.setup.adcsTLSServerName")}
+        value={tlsServerName}
+        onValue={onTLSServerName}
+        placeholder={t("discovery.setup.adcsTLSNameExample")}
+        required={false}
+      />
       <ADCSField
         label={t("discovery.source.relayAgent")}
         value={relayAgentID}

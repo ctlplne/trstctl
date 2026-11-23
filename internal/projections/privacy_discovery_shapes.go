@@ -52,6 +52,16 @@ type privacyDiscoveryEndpointProbeQueued struct {
 	PreviousProbePage *adcsdiscovery.EndpointProbeCursor  `json:"previous_probe_page,omitempty"`
 }
 
+// Version 4 adds the reference to a private directory CA and the exact name
+// to verify. Earlier event shapes remain closed for replay and privacy checks.
+const DiscoveryDirectoryTLSQueuedSchemaVersion = 4
+
+type privacyDiscoveryDirectoryTLSQueued struct {
+	privacyDiscoveryEndpointProbeQueued
+	TLSCARef      string `json:"tls_ca_ref,omitempty"`
+	TLSServerName string `json:"tls_server_name,omitempty"`
+}
+
 func adcsServiceObservationID(version int, eventID string) string {
 	if version >= adcsdiscovery.InventoryEndpointProbeSchemaVersion {
 		return eventID

@@ -389,3 +389,23 @@ func DirectoryClientTLSConfig(insecureSkipVerify bool) *tls.Config {
 		InsecureSkipVerify: insecureSkipVerify,
 	}
 }
+
+// DirectoryClientTLSConfigPinned trusts only the supplied directory CA and
+// verifies the exact expected server name. With no pin, the caller must set
+// ServerName from the connection authority and the system roots are used.
+func DirectoryClientTLSConfigPinned(caPEM []byte, expectedServerName string) (*tls.Config, error) {
+	config := DirectoryClientTLSConfig(false)
+	if len(caPEM) == 0 && expectedServerName == "" {
+		return config, nil
+	}
+	if len(caPEM) == 0 || expectedServerName == "" || len(caPEM) > 64<<10 {
+		return nil, errors.New("mtls: directory CA and expected server name must be supplied together and bounded")
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(caPEM) {
+		return nil, errors.New("mtls: directory CA PEM contains no certificate")
+	}
+	config.RootCAs = roots
+	config.ServerName = expectedServerName
+	return config, nil
+}

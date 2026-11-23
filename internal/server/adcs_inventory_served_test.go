@@ -42,12 +42,20 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 		secretName = "adcs/domain-reader"          // #nosec G101 -- this is a logical fixture name, not secret material (CWE-798).
 		secretRef  = "secret://adcs/domain-reader" // #nosec G101 -- this is a non-secret reference, not secret material (CWE-798).
 		secretBody = "aud35-directory-bind-canary"
+		caName     = "adcs/directory-ca"
+		caRef      = "secret://adcs/directory-ca"
+		serverName = "dc01.corp.example"
 	)
 	sealed, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, secretName, []byte(secretBody))
 	if err != nil {
 		t.Fatalf("seal AD CS bind secret: %v", err)
 	}
 	seedApplicationSecretFixture(t, h.store, h.tenant, secretName, sealed)
+	sealedCA, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, caName, []byte("aud35-directory-ca-fixture"))
+	if err != nil {
+		t.Fatalf("seal AD CS directory CA fixture: %v", err)
+	}
+	seedApplicationSecretFixture(t, h.store, h.tenant, caName, sealedCA)
 	discoveryOnly := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "notifications:read")
 
 	sourceRequest := map[string]any{
@@ -58,6 +66,8 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 			"configuration_dn": "CN=Configuration,DC=corp,DC=example",
 			"bind_dn":          "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example",
 			"password_ref":     secretRef,
+			"tls_ca_ref":       caRef,
+			"tls_server_name":  serverName,
 			"relay_agent_id":   relayID,
 			"enrollment_endpoints": []map[string]any{
 				{"enrollment_service": "CORP-CA", "kind": "web_enrollment", "url": "https://ca01.corp.example/certsrv/"},
@@ -157,6 +167,8 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 		ConfigurationDN   string `json:"configuration_dn"`
 		BindDN            string `json:"bind_dn"`
 		PasswordRef       string `json:"password_ref"`
+		TLSCARef          string `json:"tls_ca_ref"`
+		TLSServerName     string `json:"tls_server_name"`
 		RequiredAgentRole string `json:"required_agent_role"`
 		RequiredAgentID   string `json:"required_agent_id"`
 	}
@@ -165,7 +177,8 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 	}
 	if destination != relay.KindADCSInventory || role != mtls.AgentRoleNetwork || requiredAgent != relayID ||
 		intent.ID != run.ID || intent.SourceID != source.ID || intent.URL == "" || intent.ConfigurationDN == "" ||
-		intent.BindDN == "" || intent.PasswordRef != secretRef || intent.RequiredAgentRole != role || intent.RequiredAgentID != relayID {
+		intent.BindDN == "" || intent.PasswordRef != secretRef || intent.TLSCARef != caRef || intent.TLSServerName != serverName ||
+		intent.RequiredAgentRole != role || intent.RequiredAgentID != relayID {
 		t.Fatalf("produced AD CS intent is incomplete: destination=%q role=%q agent=%q intent=%+v", destination, role, requiredAgent, intent)
 	}
 	if bytes.Contains(payload, []byte(secretBody)) {
@@ -215,9 +228,19 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 	}
 	assertADCSRunningLifecycleAUD35(t, h, token, run.ID, source.ID)
 	redeemed, err := h.client.RedeemJobCredential(ctx, &transport.RedeemJobCredentialRequest{JobID: job.JobID, Attempt: job.Attempt})
-	if err != nil || len(redeemed.Items) != 1 || redeemed.Items[0].Name != secretRef ||
-		!bytes.Equal(redeemed.Items[0].Value, []byte(secretBody)) {
-		t.Fatalf("single-use AD CS redemption = %+v err=%v", redeemed, err)
+	itemCount := 0
+	if redeemed != nil {
+		itemCount = len(redeemed.Items)
+	}
+	if err != nil || itemCount != 2 {
+		t.Fatalf("single-use AD CS redemption: item count %d, err=%v", itemCount, err)
+	}
+	got := make(map[string][]byte, len(redeemed.Items))
+	for _, item := range redeemed.Items {
+		got[item.Name] = item.Value
+	}
+	if !bytes.Equal(got[secretRef], []byte(secretBody)) || !bytes.Equal(got[caRef], []byte("aud35-directory-ca-fixture")) {
+		t.Fatal("AD CS redemption did not contain the exact bind and directory CA references")
 	}
 	if _, err := h.client.RedeemJobCredential(ctx, &transport.RedeemJobCredentialRequest{JobID: job.JobID, Attempt: job.Attempt}); err == nil {
 		t.Fatal("AD CS bind credential redeemed twice for one claim")

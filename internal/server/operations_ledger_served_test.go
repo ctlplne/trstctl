@@ -57,7 +57,7 @@ func TestServedOperationsLedgerNeedsConsumerEvidenceA245(t *testing.T) {
 		d.ConnectorRegistry = registry
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:read", "identities:write", "certs:read",
-		"certs:write", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read")
+		"certs:write", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read")
 	post := func(path, key string, body any) map[string]any {
 		t.Helper()
 		status, raw := secretsReqKey(t, h, http.MethodPost, path, tok, key, body)
@@ -255,7 +255,7 @@ func TestServedRevocationReportSeparatesTheFourFacetsA245(t *testing.T) {
 		acm.WithEndpoint(provider.URL())))
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.ConnectorRegistry = registry })
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:read", "identities:write", "certs:read",
-		"certs:write", "certs:issue", "certs:revoke", "connectors:read", "connectors:write", "lifecycle:read")
+		"certs:write", "certs:issue", "certs:revoke", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read")
 	post := func(path, key string, body any) map[string]any {
 		t.Helper()
 		status, raw := secretsReqKey(t, h, http.MethodPost, path, tok, key, body)
@@ -372,7 +372,7 @@ func TestServedOperationsAgreeAcrossARestartAndAPartialFailureA245(t *testing.T)
 		acm.WithEndpoint(provider.URL())))
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.ConnectorRegistry = registry })
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:read", "identities:write", "certs:read",
-		"certs:write", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read")
+		"certs:write", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read")
 	post := func(path, key string, body any) map[string]any {
 		t.Helper()
 		status, raw := secretsReqKey(t, h, http.MethodPost, path, tok, key, body)

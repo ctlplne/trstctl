@@ -37,6 +37,9 @@ func TestServedLDAPDistributionPointsAreProbedThroughTheADCSBinding(t *testing.T
 		secretName = "adcs/crl-reader"          // #nosec G101 -- a logical fixture name, not secret material (CWE-798).
 		secretRef  = "secret://adcs/crl-reader" // #nosec G101 -- a non-secret reference, not secret material (CWE-798).
 		secretBody = "a107-directory-bind-canary"
+		caName     = "adcs/crl-directory-ca"
+		caRef      = "secret://adcs/crl-directory-ca"
+		serverName = "dc01.corp.example"
 		corpConfig = "CN=Configuration,DC=corp,DC=example"
 	)
 	sealed, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, secretName, []byte(secretBody))
@@ -44,11 +47,17 @@ func TestServedLDAPDistributionPointsAreProbedThroughTheADCSBinding(t *testing.T
 		t.Fatal(err)
 	}
 	seedApplicationSecretFixture(t, h.store, h.tenant, secretName, sealed)
-	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	sealedCA, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, caName, []byte("a107-directory-ca-fixture"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedApplicationSecretFixture(t, h.store, h.tenant, caName, sealedCA)
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "secrets:read")
 	status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", token, "a107-source", map[string]any{
 		"name": "corp-adcs", "kind": "adcs",
 		"config": map[string]any{"url": "ldaps://dc01.corp.example:636", "configuration_dn": corpConfig,
-			"bind_dn": "CN=crl-reader,OU=Service Accounts,DC=corp,DC=example", "password_ref": secretRef, "relay_agent_id": relayID},
+			"bind_dn": "CN=crl-reader,OU=Service Accounts,DC=corp,DC=example", "password_ref": secretRef,
+			"tls_ca_ref": caRef, "tls_server_name": serverName, "relay_agent_id": relayID},
 	})
 	var source struct {
 		ID string `json:"id"`
@@ -138,6 +147,7 @@ func TestServedLDAPDistributionPointsAreProbedThroughTheADCSBinding(t *testing.T
 	}
 	if bound == nil || plain == nil || len(bound.Targets) != 1 || bound.Targets[0].Endpoint != corpCDP ||
 		bound.LDAPBinding.SourceID != source.ID || bound.LDAPBinding.PasswordRef != secretRef || bound.LDAPBinding.URL != "ldaps://dc01.corp.example:636" ||
+		bound.LDAPBinding.TLSCARef != caRef || bound.LDAPBinding.TLSServerName != serverName ||
 		len(plain.Targets) != 1 || plain.Targets[0].Endpoint != otherCDP {
 		t.Fatalf("revocation batches: bound=%+v plain=%+v", bound, plain)
 	}
@@ -163,8 +173,19 @@ func TestServedLDAPDistributionPointsAreProbedThroughTheADCSBinding(t *testing.T
 			}
 			continue
 		}
-		if err != nil || len(redeemed.Items) != 1 || redeemed.Items[0].Name != secretRef || !bytes.Equal(redeemed.Items[0].Value, []byte(secretBody)) {
-			t.Fatalf("bound batch redemption = %+v err=%v", redeemed, err)
+		itemCount := 0
+		if redeemed != nil {
+			itemCount = len(redeemed.Items)
+		}
+		if err != nil || itemCount != 2 {
+			t.Fatalf("bound batch redemption item count = %d, err=%v", itemCount, err)
+		}
+		got := make(map[string][]byte, itemCount)
+		for _, item := range redeemed.Items {
+			got[item.Name] = item.Value
+		}
+		if !bytes.Equal(got[secretRef], []byte(secretBody)) || !bytes.Equal(got[caRef], []byte("a107-directory-ca-fixture")) {
+			t.Fatal("bound batch did not redeem exact bind and directory CA references")
 		}
 		if _, err := h.client.RedeemJobCredential(ctx, &transport.RedeemJobCredentialRequest{JobID: job.JobID, Attempt: job.Attempt}); err == nil {
 			t.Fatal("bind credential redeemed twice for one claim")

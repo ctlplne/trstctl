@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/credref"
 )
 
 const (
@@ -65,9 +67,10 @@ type InventoryIntent struct {
 	ConfigurationDN     string                `json:"configuration_dn"`
 	BindDN              string                `json:"bind_dn"`
 	PasswordRef         string                `json:"password_ref"`
-	// InsecureSkipVerify is a lab-only escape hatch and remains visible in the
-	// command/report so unverified directory identity cannot masquerade as
-	// verified evidence.
+	TLSCARef            string                `json:"tls_ca_ref,omitempty"`
+	TLSServerName       string                `json:"tls_server_name,omitempty"`
+	// InsecureSkipVerify is retained only to reject legacy queued commands and
+	// source configurations before a credentialed directory bind.
 	InsecureSkipVerify   bool                       `json:"insecure_skip_verify,omitempty"`
 	RequiredAgentRole    string                     `json:"required_agent_role"`
 	RequiredAgentID      string                     `json:"required_agent_id,omitempty"`
@@ -84,6 +87,8 @@ type sourceConfig struct {
 	ConfigurationDN      string                     `json:"configuration_dn"`
 	BindDN               string                     `json:"bind_dn"`
 	PasswordRef          string                     `json:"password_ref"`
+	TLSCARef             string                     `json:"tls_ca_ref,omitempty"`
+	TLSServerName        string                     `json:"tls_server_name,omitempty"`
 	InsecureSkipVerify   bool                       `json:"insecure_skip_verify,omitempty"`
 	RelayAgentID         string                     `json:"relay_agent_id,omitempty"`
 	EnrollmentEndpoints  []EnrollmentEndpointTarget `json:"enrollment_endpoints,omitempty"`
@@ -128,6 +133,22 @@ func ResolveInventoryIntent(raw json.RawMessage) (InventoryIntent, error) {
 	if !strings.HasPrefix(passwordRef, "secret://") || strings.TrimPrefix(passwordRef, "secret://") == "" {
 		return InventoryIntent{}, errors.New("adcs: password_ref must be a secret:// credential reference")
 	}
+	if cfg.InsecureSkipVerify {
+		return InventoryIntent{}, errors.New("adcs: insecure_skip_verify cannot be used with a bind credential; configure tls_ca_ref and tls_server_name")
+	}
+	tlsCARef := strings.TrimSpace(cfg.TLSCARef)
+	tlsServerName := strings.TrimSpace(cfg.TLSServerName)
+	if (tlsCARef == "") != (tlsServerName == "") {
+		return InventoryIntent{}, errors.New("adcs: tls_ca_ref and tls_server_name must be set together")
+	}
+	if tlsCARef != "" {
+		if _, err := credref.Parse(tlsCARef); err != nil {
+			return InventoryIntent{}, errors.New("adcs: tls_ca_ref must be a canonical secret:// reference")
+		}
+		if len(tlsServerName) > 253 || strings.ContainsAny(tlsServerName, " */\\\t\r\n") {
+			return InventoryIntent{}, errors.New("adcs: tls_server_name must be one concrete DNS name or IP address")
+		}
+	}
 	relayAgentID := strings.TrimSpace(cfg.RelayAgentID)
 	if relayAgentID != "" {
 		if _, err := uuid.Parse(relayAgentID); err != nil {
@@ -170,7 +191,7 @@ func ResolveInventoryIntent(raw json.RawMessage) (InventoryIntent, error) {
 	return InventoryIntent{
 		EndpointProbe: probe, NestedGroupsEnabled: cfg.NestedGroupsEnabled, MembershipDomainDN: domainDN,
 		JobKind: jobKind, Execution: ExecutionRelay, URL: directoryURL, ConfigurationDN: configurationDN,
-		BindDN: bindDN, PasswordRef: passwordRef, InsecureSkipVerify: cfg.InsecureSkipVerify,
+		BindDN: bindDN, PasswordRef: passwordRef, TLSCARef: tlsCARef, TLSServerName: tlsServerName,
 		RequiredAgentRole: RequiredRoleNetwork, RequiredAgentID: relayAgentID,
 		EnrollmentEndpoints:  endpoints,
 		AllowPrivateEndpoint: cfg.AllowPrivateEndpoint, PrivateEgressCIDRs: privateCIDRs,

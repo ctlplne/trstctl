@@ -9,6 +9,26 @@ import (
 	"trstctl.com/trstctl/internal/discovery/adcs"
 )
 
+func TestCR134ADCSSourceRefusesUnverifiedCredentialedBind(t *testing.T) {
+	raw := json.RawMessage(`{"url":"ldaps://dc.example.test","configuration_dn":"CN=Configuration,DC=example,DC=test","bind_dn":"CN=reader,DC=example,DC=test","password_ref":"secret://adcs/bind","insecure_skip_verify":true}`)
+	if _, err := adcs.ResolveInventoryIntent(raw); err == nil {
+		t.Fatal("tenant-settable insecure_skip_verify accepted for a credentialed bind")
+	}
+	pinned := json.RawMessage(`{"url":"ldaps://10.1.2.3","configuration_dn":"CN=Configuration,DC=example,DC=test","bind_dn":"CN=reader,DC=example,DC=test","password_ref":"secret://adcs/bind","tls_ca_ref":"secret://adcs/directory-ca","tls_server_name":"dc.example.test"}`)
+	intent, err := adcs.ResolveInventoryIntent(pinned)
+	if err != nil || intent.TLSCARef != "secret://adcs/directory-ca" || intent.TLSServerName != "dc.example.test" {
+		t.Fatalf("verified private-directory pin lost: intent=%+v err=%v", intent, err)
+	}
+	for _, bad := range []json.RawMessage{
+		json.RawMessage(`{"url":"ldaps://dc.example.test","configuration_dn":"CN=Configuration,DC=example,DC=test","bind_dn":"CN=reader,DC=example,DC=test","password_ref":"secret://adcs/bind","tls_ca_ref":"secret://adcs/directory-ca"}`),
+		json.RawMessage(`{"url":"ldaps://dc.example.test","configuration_dn":"CN=Configuration,DC=example,DC=test","bind_dn":"CN=reader,DC=example,DC=test","password_ref":"secret://adcs/bind","tls_ca_ref":"file:/tmp/ca.pem","tls_server_name":"dc.example.test"}`),
+	} {
+		if _, err := adcs.ResolveInventoryIntent(bad); err == nil {
+			t.Fatalf("incomplete or operator-file directory trust accepted: %s", bad)
+		}
+	}
+}
+
 func TestEnrollmentEndpointIntentIsStrictAndCanonicalAUD37(t *testing.T) {
 	raw := json.RawMessage(`{
 		"url":"ldaps://dc.corp.example",

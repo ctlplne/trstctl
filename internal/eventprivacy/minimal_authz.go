@@ -40,6 +40,7 @@ var minimalAuthzPermissions = map[string]bool{
 	"agents:job.report":      true,
 	"agents:read":            true,
 	"agents:relay.grant":     true,
+	"agents:trust.manage":    true,
 	"agents:write":           true,
 	"approvals:review":       true,
 	"audit:archive.read":     true,

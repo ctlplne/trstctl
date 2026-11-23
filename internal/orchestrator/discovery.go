@@ -626,6 +626,9 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		if resolved.EndpointProbe != nil {
 			eventSchemaVersion = projections.DiscoveryEndpointProbeQueuedSchemaVersion
 		}
+		if resolved.TLSCARef != "" {
+			eventSchemaVersion = projections.DiscoveryDirectoryTLSQueuedSchemaVersion
+		}
 	}
 	commandPayload, err := json.Marshal(command)
 	if err != nil {

@@ -23,7 +23,7 @@ it cannot drift from the code it describes.
 | VDEC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 | XREC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 
-Citations parsed: **990 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **985 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
@@ -41,7 +41,7 @@ Citations parsed: **990 qualified**, **0 bare** (bare citations infer their fami
 | 10 | `internal/agentid/api/api.go`, `internal/agentid/delegation/attest.go`, `internal/agentid/delegation/brokerstore/precondition.go` _(+2 more)_ | `internal/agentid/delegation/attest_gate_test.go`, `internal/agentid/delegation/brokerstore/precondition_test.go` | _[counsel]_ |
 | 11 | `internal/agentid/agentstack/parse.go`, `internal/agentid/agentstack/representation.go`, `internal/agentid/verify/agentstack_repr.go` | `internal/agentid/agentstack/representation_test.go` | _[counsel]_ |
 | 12 | `internal/agentid/agentstack/manifest.go`, `internal/agentid/orchestrator/issuance.go` | `internal/agentid/agentstack/manifest_test.go` | _[counsel]_ |
-| 13 | `internal/agentid/delegation/bind.go`, `internal/agentid/delegation/verifier.go` | `internal/agentid/delegation/bind_test.go` | _[counsel]_ |
+| 13 | `internal/agentid/delegation/verifier.go` | `internal/agentid/delegation/bind_test.go` | _[counsel]_ |
 | 14 | `internal/agentid/delegation/brokerstore/precondition.go`, `internal/agentid/delegation/refusal.go`, `internal/agentid/orchestrator/issuance.go` | `internal/agentid/delegation/bind_test.go`, `internal/agentid/delegation/brokerstore/precondition_test.go` | _[counsel]_ |
 | 15 | `internal/agentid/delegation/attestbind.go`, `internal/agentid/delegation/brokerstore/precondition.go` | `internal/agentid/delegation/brokerstore/brokerpg_test.go`, `internal/agentid/delegation/brokerstore/precondition_test.go` | _[counsel]_ |
 | 16 | `internal/agentid/delegation/projection.go`, `internal/agentid/delegation/store/store.go`, `internal/agentid/revoke/cascade.go` _(+5 more)_ | `internal/agentid/delegation/store/store_test.go`, `internal/agentid/revoke/cascade_test.go`, `internal/agentid/revoke/execution_test.go` _(+1 more)_ | _[counsel]_ |

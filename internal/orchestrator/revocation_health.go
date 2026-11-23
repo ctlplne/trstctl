@@ -32,10 +32,14 @@ func (o *Orchestrator) QueueRevocationProbe(ctx context.Context, tenantID string
 	}
 	var ev events.Event
 	inserted := false
+	eventSchemaVersion := 1
+	if intent.LDAPBinding != nil && intent.LDAPBinding.TLSCARef != "" {
+		eventSchemaVersion = projections.RevocationDirectoryTLSQueuedSchemaVersion
+	}
 	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err = o.log.Append(ctx, events.Event{
 			ID: intent.ID, Type: projections.EventRevocationProbeQueued,
-			TenantID: tenantID, Data: payload,
+			TenantID: tenantID, SchemaVersion: eventSchemaVersion, Data: payload,
 		})
 		if err != nil {
 			return err

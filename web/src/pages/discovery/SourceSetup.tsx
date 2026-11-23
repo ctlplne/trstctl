@@ -130,6 +130,8 @@ export const sourceWizardFieldPaths: Record<PrimaryKind, readonly string[]> = {
     "configuration_dn",
     "bind_dn",
     "password_ref",
+    "tls_ca_ref",
+    "tls_server_name",
     "relay_agent_id",
     "enrollment_endpoints",
     "allow_private_endpoint",
@@ -239,6 +241,8 @@ const setupSchema = z
     configurationDN: z.string().trim(),
     bindDN: z.string().trim(),
     passwordRef: z.string().trim(),
+    adcsTLSCARef: z.string().trim(),
+    adcsTLSServerName: z.string().trim(),
     adcsEnrollmentEndpoints: z.string(),
     adcsEndpointProbe: z.boolean(),
     adcsProbeSuffixes: z.string(),
@@ -308,6 +312,9 @@ const setupSchema = z
       requireField(ctx, value.configurationDN, "configurationDN", translateNow("discovery.setup.validation.configurationDn"));
       requireField(ctx, value.bindDN, "bindDN", translateNow("discovery.setup.validation.bindDn"));
       requireField(ctx, value.passwordRef, "passwordRef", translateNow("discovery.setup.validation.passwordRef"));
+      if (Boolean(value.adcsTLSCARef) !== Boolean(value.adcsTLSServerName)) {
+        ctx.addIssue({ code: "custom", path: ["adcsTLSServerName"], message: translateNow("discovery.setup.adcsTLSBoth") });
+      }
       if (value.adcsNestedGroups) {
         requireField(ctx, value.membershipDomainDN, "membershipDomainDN", translateNow("discovery.setup.adcsMembership.domainRequired"));
         requireField(ctx, value.relayAgentID, "relayAgentID", translateNow("discovery.setup.adcsMembership.relayRequired"));
@@ -438,6 +445,8 @@ const defaults: SetupValues = {
   configurationDN: "",
   bindDN: "",
   passwordRef: "",
+  adcsTLSCARef: "",
+  adcsTLSServerName: "",
   adcsEnrollmentEndpoints: "",
   adcsEndpointProbe: false,
   adcsProbeSuffixes: "",
@@ -1247,6 +1256,8 @@ function buildConfig(values: SetupValues): Record<string, unknown> {
       configuration_dn: values.configurationDN,
       bind_dn: values.bindDN,
       password_ref: values.passwordRef,
+      tls_ca_ref: values.adcsTLSCARef,
+      tls_server_name: values.adcsTLSServerName,
       relay_agent_id: values.relayAgentID,
       enrollment_endpoints: parseADCSEndpoints(values.adcsEnrollmentEndpoints),
       allow_private_endpoint: values.allowPrivateEndpoint,

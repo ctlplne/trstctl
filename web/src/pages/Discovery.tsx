@@ -679,6 +679,8 @@ export function Discovery() {
   const [adcsConfigurationDN, setADCSConfigurationDN] = useState("");
   const [adcsBindDN, setADCSBindDN] = useState("");
   const [adcsPasswordRef, setADCSPasswordRef] = useState("");
+  const [adcsTLSCARef, setADCSTLSCARef] = useState("");
+  const [adcsTLSServerName, setADCSTLSServerName] = useState("");
   const [adcsEnrollmentEndpoints, setADCSEnrollmentEndpoints] = useState("");
   const [adcsAllowPrivateEndpoint, setADCSAllowPrivateEndpoint] = useState(false);
   const [adcsPrivateEgressCIDRs, setADCSPrivateEgressCIDRs] = useState("");
@@ -862,6 +864,9 @@ export function Discovery() {
     setBusy("source");
     setNotice(null);
     try {
+      if (sourceKind === "adcs" && Boolean(adcsTLSCARef.trim()) !== Boolean(adcsTLSServerName.trim())) {
+        throw new Error(t("discovery.setup.adcsTLSBoth"));
+      }
       const config =
         sourceKind === "adcs"
           ? {
@@ -869,6 +874,7 @@ export function Discovery() {
               configuration_dn: adcsConfigurationDN.trim(),
               bind_dn: adcsBindDN.trim(),
               password_ref: adcsPasswordRef.trim(),
+              ...(adcsTLSCARef.trim() ? { tls_ca_ref: adcsTLSCARef.trim(), tls_server_name: adcsTLSServerName.trim() } : {}),
               ...(adcsEnrollmentEndpoints.trim() ? { enrollment_endpoints: parseADCSEnrollmentEndpoints(adcsEnrollmentEndpoints) } : {}),
               ...(adcsAllowPrivateEndpoint ? { allow_private_endpoint: true, private_egress_cidrs: parseADCSPrivateEgressCIDRs(adcsPrivateEgressCIDRs) } : {}),
               ...(relayAgentID.trim() ? { relay_agent_id: relayAgentID.trim() } : {}),
@@ -1247,6 +1253,8 @@ export function Discovery() {
                 configurationDN={adcsConfigurationDN}
                 bindDN={adcsBindDN}
                 passwordRef={adcsPasswordRef}
+                tlsCARef={adcsTLSCARef}
+                tlsServerName={adcsTLSServerName}
                 relayAgentID={relayAgentID}
                 enrollmentEndpoints={adcsEnrollmentEndpoints}
                 allowPrivateEndpoint={adcsAllowPrivateEndpoint}
@@ -1255,6 +1263,8 @@ export function Discovery() {
                 onConfigurationDN={setADCSConfigurationDN}
                 onBindDN={setADCSBindDN}
                 onPasswordRef={setADCSPasswordRef}
+                onTLSCARef={setADCSTLSCARef}
+                onTLSServerName={setADCSTLSServerName}
                 onRelayAgentID={setRelayAgentID}
                 onEnrollmentEndpoints={setADCSEnrollmentEndpoints}
                 onAllowPrivateEndpoint={setADCSAllowPrivateEndpoint}

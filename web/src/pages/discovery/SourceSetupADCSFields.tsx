@@ -59,6 +59,16 @@ export function ADCSFields({ form, agents }: { form: UseFormReturn<SetupValues>;
           <Input {...control} {...form.register("passwordRef")} className="font-mono text-xs" placeholder={t("discovery.setup.adcsPasswordExample")} />
         )}
       </Field>
+      <Field label={t("discovery.setup.adcsTLSCARef")} description={t("discovery.setup.adcsTLSHelp")} error={form.formState.errors.adcsTLSCARef?.message}>
+        {(control) => (
+          <Input {...control} {...form.register("adcsTLSCARef")} className="font-mono text-xs" placeholder={t("discovery.setup.adcsTLSCAExample")} />
+        )}
+      </Field>
+      <Field label={t("discovery.setup.adcsTLSServerName")} error={form.formState.errors.adcsTLSServerName?.message}>
+        {(control) => (
+          <Input {...control} {...form.register("adcsTLSServerName")} className="font-mono text-xs" placeholder={t("discovery.setup.adcsTLSNameExample")} />
+        )}
+      </Field>
       <label htmlFor="source-setup-adcs-membership" className="flex items-start gap-3 text-sm lg:col-span-2">
         <Checkbox {...form.register("adcsNestedGroups")} id="source-setup-adcs-membership" className="mt-0.5" />
         <span>

@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/credref"
 )
 
 const (
@@ -128,6 +130,8 @@ type LDAPBinding struct {
 	ConfigurationDN    string `json:"configuration_dn"`
 	BindDN             string `json:"bind_dn"`
 	PasswordRef        string `json:"password_ref"`
+	TLSCARef           string `json:"tls_ca_ref,omitempty"`
+	TLSServerName      string `json:"tls_server_name,omitempty"`
 	InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
 }
 
@@ -185,6 +189,18 @@ func validateLDAPBinding(binding LDAPBinding) error {
 	}
 	if !strings.HasPrefix(binding.PasswordRef, "secret://") {
 		return errors.New("LDAP binding password_ref must be a secret:// credential reference")
+	}
+	if binding.InsecureSkipVerify {
+		return errors.New("LDAP binding refuses unverified TLS with a bind credential")
+	}
+	if (binding.TLSCARef == "") != (binding.TLSServerName == "") {
+		return errors.New("LDAP binding tls_ca_ref and tls_server_name must be set together")
+	}
+	if binding.TLSCARef != "" {
+		if _, err := credref.Parse(binding.TLSCARef); err != nil || len(binding.TLSServerName) > 253 ||
+			strings.ContainsAny(binding.TLSServerName, " */\\\t\r\n") {
+			return errors.New("LDAP binding TLS CA reference or expected server name is invalid")
+		}
 	}
 	return nil
 }

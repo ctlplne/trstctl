@@ -353,7 +353,7 @@ func TestServedLoadBalancerConnectorBreadthCAPDEP01(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = reg
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write", "secrets:read")
 
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/connectors/catalog", tok, nil)
 	if status != http.StatusOK {
@@ -455,7 +455,7 @@ func TestServedPublishedConnectorCatalogCAPDEP09(t *testing.T) {
 	})
 	h := role.servedHarness
 	hostID := registeredRoleAgentID(t, role)
-	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write", "secrets:read")
 
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/connectors/catalog", tok, nil)
 	if status != http.StatusOK {
@@ -579,7 +579,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 		d.AgentClaimableJobKinds = []string{"connector.deploy"}
 		d.ConnectorRegistry = reg
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:read", "connectors:write", "certs:issue")
+	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:read", "connectors:write", "certs:issue", "secrets:read")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
 		"kind": "workload",

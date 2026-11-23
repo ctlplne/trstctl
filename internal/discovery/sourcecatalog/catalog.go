@@ -110,6 +110,8 @@ var items = []Capability{
 			field("endpoint_probe.dns_suffixes", "Allowed endpoint DNS suffixes", "domain_list", false, false, true, "Required with probing: 1..32 explicit DNS suffixes. This grants no private network range."),
 			field("bind_dn", "Bind identity", "string", true, false, false, "A least-privilege directory reader."),
 			field("password_ref", "Password reference", "credential_ref", true, true, false, "Reference to the bind password; the value is never sent in this configuration."),
+			field("tls_ca_ref", "Directory CA reference", "credential_ref", false, true, false, "Optional secret:// reference containing a PEM CA certificate; set with tls_server_name to verify a private directory CA."),
+			field("tls_server_name", "Expected directory name", "string", false, false, false, "Exact DNS name or IP address the pinned directory certificate must cover."),
 			field("relay_agent_id", "Network relay", "agent_ref", false, false, false, "An enrolled network-role agent that can reach the directory."),
 			field("enrollment_endpoints", "Enrollment endpoints", "endpoint_list", false, false, true, "Optional bounded checks for enrollment web services."),
 			field("allow_private_endpoint", "Allow approved private endpoints", "boolean", false, false, true, "Requires private-egress authorization and explicit CIDRs."),

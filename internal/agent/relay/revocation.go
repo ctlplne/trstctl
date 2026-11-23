@@ -114,7 +114,9 @@ func ProbeRevocationWithDirectory(ctx context.Context, client *http.Client, inte
 	if intent.LDAPBinding != nil {
 		if password := material[strings.TrimSpace(intent.LDAPBinding.PasswordRef)]; len(password) == 0 {
 			dir.err = errLDAPCredential
-		} else if dir.directory, dir.err = openCRLDirectory(*intent.LDAPBinding, password); dir.directory != nil {
+		} else if intent.LDAPBinding.TLSCARef != "" && len(material[intent.LDAPBinding.TLSCARef]) == 0 {
+			dir.err = errLDAPCredential
+		} else if dir.directory, dir.err = openCRLDirectory(*intent.LDAPBinding, password, material[intent.LDAPBinding.TLSCARef]); dir.directory != nil {
 			defer func() { _ = dir.directory.Close() }()
 		}
 	}

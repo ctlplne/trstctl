@@ -182,23 +182,18 @@ type SignerServiceClient interface {
 	// requests a chain-bound issuance without ever obtaining private key material: it can
 	// request, but cannot forge.
 	GatedIssue(ctx context.Context, in *GatedIssueRequest, opts ...grpc.CallOption) (*GatedIssueResponse, error)
-	// ProvisionAgentRootAnchor stores a tenant-authorized, PUBLIC
-	// AGID delegation root inside the signer floor. The signer refuses a changed
-	// first-writer binding and returns its exact durable readback. This removes
-	// any need to expose the signer's private keystore to the control plane.
+	// ProvisionAgentRootAnchor confirms an exact PUBLIC root already installed
+	// through the signer-local operator ceremony. An RPC peer cannot add one.
 	ProvisionAgentRootAnchor(ctx context.Context, in *ProvisionAgentRootAnchorRequest, opts ...grpc.CallOption) (*ProvisionAgentRootAnchorResponse, error)
 	// GetAgentRootAnchor reads the exact signer-held public AGID root. Callers
 	// compare it with the tenant registry before reporting provisioned=true.
 	GetAgentRootAnchor(ctx context.Context, in *GetAgentRootAnchorRequest, opts ...grpc.CallOption) (*GetAgentRootAnchorResponse, error)
-	// Bind one public reachability-verdict signer in the isolated signer. The
-	// control plane retains its sealed private key; changed first writers refuse.
+	// Confirm one signer-local reachability-verdict public key. The control plane
+	// retains its sealed private key; an RPC peer cannot add or replace trust.
 	ProvisionAgentReachabilityKey(ctx context.Context, in *ProvisionAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*ProvisionAgentReachabilityKeyResponse, error)
 	GetAgentReachabilityKey(ctx context.Context, in *GetAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*GetAgentReachabilityKeyResponse, error)
-	// ProvisionAgentAttestor binds one tenant's PUBLIC attestation verifier key
-	// in the signer floor (A150), so a chain-bound mint can verify that tenant's
-	// attestation evidence without an operator writing the floor by hand. A
-	// changed first-writer binding is refused; the response is the exact durable
-	// readback.
+	// Confirm one tenant's PUBLIC attestation verifier key already installed in
+	// the signer floor by the operator. A changed binding is refused.
 	ProvisionAgentAttestor(ctx context.Context, in *ProvisionAgentAttestorRequest, opts ...grpc.CallOption) (*ProvisionAgentAttestorResponse, error)
 	// GetAgentAttestor reads the exact signer-held public attestor key.
 	GetAgentAttestor(ctx context.Context, in *GetAgentAttestorRequest, opts ...grpc.CallOption) (*GetAgentAttestorResponse, error)
@@ -744,23 +739,18 @@ type SignerServiceServer interface {
 	// requests a chain-bound issuance without ever obtaining private key material: it can
 	// request, but cannot forge.
 	GatedIssue(context.Context, *GatedIssueRequest) (*GatedIssueResponse, error)
-	// ProvisionAgentRootAnchor stores a tenant-authorized, PUBLIC
-	// AGID delegation root inside the signer floor. The signer refuses a changed
-	// first-writer binding and returns its exact durable readback. This removes
-	// any need to expose the signer's private keystore to the control plane.
+	// ProvisionAgentRootAnchor confirms an exact PUBLIC root already installed
+	// through the signer-local operator ceremony. An RPC peer cannot add one.
 	ProvisionAgentRootAnchor(context.Context, *ProvisionAgentRootAnchorRequest) (*ProvisionAgentRootAnchorResponse, error)
 	// GetAgentRootAnchor reads the exact signer-held public AGID root. Callers
 	// compare it with the tenant registry before reporting provisioned=true.
 	GetAgentRootAnchor(context.Context, *GetAgentRootAnchorRequest) (*GetAgentRootAnchorResponse, error)
-	// Bind one public reachability-verdict signer in the isolated signer. The
-	// control plane retains its sealed private key; changed first writers refuse.
+	// Confirm one signer-local reachability-verdict public key. The control plane
+	// retains its sealed private key; an RPC peer cannot add or replace trust.
 	ProvisionAgentReachabilityKey(context.Context, *ProvisionAgentReachabilityKeyRequest) (*ProvisionAgentReachabilityKeyResponse, error)
 	GetAgentReachabilityKey(context.Context, *GetAgentReachabilityKeyRequest) (*GetAgentReachabilityKeyResponse, error)
-	// ProvisionAgentAttestor binds one tenant's PUBLIC attestation verifier key
-	// in the signer floor (A150), so a chain-bound mint can verify that tenant's
-	// attestation evidence without an operator writing the floor by hand. A
-	// changed first-writer binding is refused; the response is the exact durable
-	// readback.
+	// Confirm one tenant's PUBLIC attestation verifier key already installed in
+	// the signer floor by the operator. A changed binding is refused.
 	ProvisionAgentAttestor(context.Context, *ProvisionAgentAttestorRequest) (*ProvisionAgentAttestorResponse, error)
 	// GetAgentAttestor reads the exact signer-held public attestor key.
 	GetAgentAttestor(context.Context, *GetAgentAttestorRequest) (*GetAgentAttestorResponse, error)

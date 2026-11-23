@@ -10,10 +10,15 @@ Windows AccessCheck or authorize certificate issuance.
 Use a least-privilege directory reader that can read the template DACL and the
 named membership attributes: `objectSid`, `objectClass`, `groupType`, `member`
 and `memberOf`. Keep its password in the secret vault and configure only its
-`secret://` reference. The relay must trust the directory’s TLS certificate.
-Plain LDAP is upgraded with StartTLS before any bind; a refusal stops the read.
-`insecure_skip_verify` is an explicit lab-only override and produces unverified
-directory evidence.
+`secret://` reference. The relay verifies the directory's TLS certificate before
+sending the bind password. Plain LDAP is upgraded with StartTLS before any bind;
+a refusal stops the read. For a private directory CA, save its **public PEM
+certificate** as a tenant `secret://` value and set both `tls_ca_ref` and
+`tls_server_name` on the source. The latter is the exact DNS name or IP address
+in the directory server certificate, even when the URL uses a different address.
+The source writer needs `secrets:read` on both references. With no pin, system
+trust verifies the URL hostname. `insecure_skip_verify` is refused for
+credentialed reads, including LDAP CRL checks.
 
 Upgrade the selected network-role relay and start it with `--relay-claim`.
 Enable `adcs.inventory.enrollment_groups` in the server’s
@@ -37,6 +42,8 @@ the same flow:
     "configuration_dn": "CN=Configuration,DC=corp,DC=example",
     "bind_dn": "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example",
     "password_ref": "secret://adcs/domain-reader",
+    "tls_ca_ref": "secret://adcs/directory-ca",
+    "tls_server_name": "dc01.corp.example",
     "relay_agent_id": "11111111-1111-4111-8111-111111111111",
     "nested_groups_enabled": true,
     "membership_domain_dn": "DC=corp,DC=example"

@@ -29,7 +29,7 @@ func TestEndpointDNS01EnrollmentSurvivesDurableReviewAndRechecksConsent(t *testi
 	if h.srv.AgentChannelServed() {
 		t.Fatal("control-plane cloud enrollment must be exercised without an agent channel")
 	}
-	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:write", "certs:issue", "issuers:write")
+	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:write", "certs:issue", "issuers:write", "secrets:read")
 	request := func(method, path, key string, payload any, want int) map[string]json.RawMessage {
 		t.Helper()
 		code, body := secretsReqKey(t, h, method, path, token, key, payload)

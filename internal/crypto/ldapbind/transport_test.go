@@ -4,6 +4,7 @@ package ldapbind
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	ber "github.com/go-asn1-ber/asn1-ber"
 	"io"
 	"net"
@@ -149,4 +150,39 @@ func TestDirectoryReadHasATotalByteBudget(t *testing.T) {
 	_ = client.Close()
 	_ = server.Close()
 	<-done
+}
+
+func TestCR134CRLReadAcceptsBoundedLargeFrameHeader(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		length uint32
+		accept bool
+	}{
+		{"supported 32 MiB CRL", 32 << 20, true},
+		{"oversized CRL reply", 34 << 20, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, server := net.Pipe()
+			defer func() { _ = client.Close(); _ = server.Close() }()
+			bounded := newCRLFramedConn(client)
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				var header [6]byte
+				header[0], header[1] = 0x30, 0x84
+				binary.BigEndian.PutUint32(header[2:], tc.length)
+				_, _ = server.Write(header[:])
+			}()
+			var header [8]byte
+			n, err := bounded.Read(header[:])
+			if tc.accept && (err != nil || n != 6) {
+				t.Fatalf("bounded CRL frame header: n=%d err=%v", n, err)
+			}
+			if !tc.accept && err == nil {
+				t.Fatal("oversized CRL frame was accepted")
+			}
+			_ = client.Close()
+			<-done
+		})
+	}
 }

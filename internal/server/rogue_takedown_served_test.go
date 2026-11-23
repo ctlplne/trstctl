@@ -26,7 +26,7 @@ import (
 func TestServedRogueTakedownQueuesApplianceObjectRemoval(t *testing.T) {
 	ctx := context.Background()
 	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, "connector.deploy", relay.KindConnectorTakedown)
-	token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "certs:read")
+	token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "certs:read", "secrets:read")
 	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/connectors/targets", token, map[string]any{
 		"name": "a43-bigip", "connector": "f5", "enabled": true,
 		"config": map[string]any{"endpoint": "https://bigip.example.test", "client_ssl_profile": "clientssl-a43", "username": "trstctl", "password_ref": "secret://connectors/a43"},

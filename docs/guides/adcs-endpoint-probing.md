@@ -10,6 +10,10 @@ proves reachability at that time; it does not prove enrollment or IIS hardening.
 Keep the normal AD CS directory reader and vaulted password reference. The
 principal saving the source needs `discovery:write` and `secrets:read` for that
 specific stored password; a relay's `discovery:write` grant alone cannot select it.
+For a private directory CA, store its public PEM certificate under `secret://`
+and set `tls_ca_ref` with the exact `tls_server_name`. The source writer also
+needs `secrets:read` on that CA reference. Credentialed LDAP and LDAP CRL reads
+refuse `insecure_skip_verify`; enrollment HTTP(S) probes still verify TLS.
 Upgrade the exact selected network-role relay, enable `--relay-claim`, and allow
 `adcs.inventory.endpoint_probe` in the server's
 `agent_channel.claimable_job_kinds`. Preflight requires its fresh authenticated
@@ -32,6 +36,8 @@ Example public source configuration:
     "configuration_dn": "CN=Configuration,DC=corp,DC=example",
     "bind_dn": "CN=reader,OU=Service Accounts,DC=corp,DC=example",
     "password_ref": "secret://adcs/domain-reader",
+    "tls_ca_ref": "secret://adcs/directory-ca",
+    "tls_server_name": "dc01.corp.example",
     "relay_agent_id": "11111111-1111-4111-8111-111111111111",
     "endpoint_probe": {"enabled": true, "dns_suffixes": ["corp.example"]},
     "allow_private_endpoint": true,
@@ -43,8 +49,8 @@ Example public source configuration:
 Replace the example relay UUID and CIDR with owned destinations. Private egress
 requires its existing permission, the source grant and the relay's local grant.
 The always-on address guard still refuses metadata, link-local and loopback.
-Directory data cannot grant destinations. The directory's lab-only
-`insecure_skip_verify` option never disables HTTPS verification for probes.
+Directory data cannot grant destinations. A directory TLS CA pin never weakens
+HTTPS verification for enrollment probes.
 
 Save the JSON as `adcs-source.json`. Use `trstctl-cli discovery sources create -f
 adcs-source.json`, then `trstctl-cli discovery sources preflight <source-id>`.

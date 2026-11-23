@@ -49,10 +49,10 @@ func TestLDAPDirectoryFailuresAreNamedApart(t *testing.T) {
 			_ = conn.Close()
 		}
 	}()
-	if _, err := dialCRLDirectory(revocationhealth.LDAPBinding{URL: "ldap://" + closedAddr, BindDN: "alice"}, []byte("x")); !errors.Is(err, errLDAPConnect) {
+	if _, err := dialCRLDirectory(revocationhealth.LDAPBinding{URL: "ldap://" + closedAddr, BindDN: "alice"}, []byte("x"), nil); !errors.Is(err, errLDAPConnect) {
 		t.Fatalf("closed port = %v, want a connection failure", err)
 	}
-	if _, err := dialCRLDirectory(revocationhealth.LDAPBinding{URL: "ldap://" + hangup.Addr().String(), BindDN: "alice"}, []byte("x")); !errors.Is(err, errLDAPTLS) {
+	if _, err := dialCRLDirectory(revocationhealth.LDAPBinding{URL: "ldap://" + hangup.Addr().String(), BindDN: "alice"}, []byte("x"), nil); !errors.Is(err, errLDAPTLS) {
 		t.Fatalf("StartTLS hang-up = %v, want a TLS failure", err)
 	}
 
@@ -74,7 +74,7 @@ func TestLDAPDirectoryFailuresAreNamedApart(t *testing.T) {
 		{errors.Join(errLDAPTLS, errors.New("tls: failed to parse certificate from server: x509: negative serial number")), "ldap_tls_failed"},
 		{errLDAPBind, "ldap_bind_failed"},
 	} {
-		openCRLDirectory = func(revocationhealth.LDAPBinding, []byte) (crlDirectory, error) { return nil, tc.err }
+		openCRLDirectory = func(revocationhealth.LDAPBinding, []byte, []byte) (crlDirectory, error) { return nil, tc.err }
 		report, err := ProbeRevocationWithDirectory(context.Background(), http.DefaultClient, intent, Material{"secret://adcs/bind": []byte("x")})
 		if err != nil {
 			t.Fatal(err)
@@ -96,5 +96,12 @@ func TestLDAPDirectoryFailuresAreNamedApart(t *testing.T) {
 		if err := revocationhealth.ValidateReport(intent, RevocationReport{Findings: []RevocationFinding{finding}}); err != nil {
 			t.Fatalf("the control plane's report contract refuses %s: %v", code, err)
 		}
+	}
+}
+
+func TestCR134LDAPCRLRefusesUnverifiedCredentialedBindBeforeDial(t *testing.T) {
+	binding := revocationhealth.LDAPBinding{URL: "ldaps://127.0.0.1:1", BindDN: "CN=reader", InsecureSkipVerify: true}
+	if _, err := dialCRLDirectory(binding, []byte("disposable"), nil); !errors.Is(err, errLDAPTLS) {
+		t.Fatalf("unverified CRL bind = %v, want a TLS-policy refusal before dialing", err)
 	}
 }

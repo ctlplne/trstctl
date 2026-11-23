@@ -148,7 +148,7 @@ func TestServedPurgeRemovesInstalledMaterialThroughTheEnrolledHost(t *testing.T)
 func TestServedPurgeRefusesTargetsWithoutAFileLayout(t *testing.T) {
 	ctx := context.Background()
 	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "connector.deploy", relay.KindEndpointPurge)
-	token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read")
+	token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "secrets:read")
 	agentID := agentRowID(h.tenant, h.agent)
 	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "test-1.0", Status: "active"}); err != nil {
 		t.Fatalf("heartbeat: %v", err)

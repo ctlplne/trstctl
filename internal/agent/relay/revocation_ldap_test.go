@@ -70,7 +70,7 @@ func TestLDAPCRLDistributionPointsAreReadThroughTheADCSBinding(t *testing.T) {
 	var openedWith string
 	restore := openCRLDirectory
 	t.Cleanup(func() { openCRLDirectory = restore })
-	openCRLDirectory = func(binding revocationhealth.LDAPBinding, password []byte) (crlDirectory, error) {
+	openCRLDirectory = func(binding revocationhealth.LDAPBinding, password, _ []byte) (crlDirectory, error) {
 		opened, openedWith = binding, string(password)
 		return stub, nil
 	}
@@ -118,7 +118,7 @@ func TestLDAPCRLDistributionPointsAreReadThroughTheADCSBinding(t *testing.T) {
 		t.Fatalf("probe without the bind credential = %+v (dialed %q)", f, opened.URL)
 	}
 	// A refused bind is reported, not mistaken for a stale CRL.
-	openCRLDirectory = func(revocationhealth.LDAPBinding, []byte) (crlDirectory, error) {
+	openCRLDirectory = func(revocationhealth.LDAPBinding, []byte, []byte) (crlDirectory, error) {
 		return nil, errors.New("the directory refused the bind")
 	}
 	report, err = ProbeRevocationWithDirectory(context.Background(), http.DefaultClient, intent, Material{"secret://adcs/bind": []byte("x")})
@@ -135,24 +135,25 @@ func TestLDAPCRLDistributionPointsAreReadThroughTheADCSBinding(t *testing.T) {
 func TestRevocationProbeRedeemsOnlyForAnLDAPBatch(t *testing.T) {
 	restore := openCRLDirectory
 	t.Cleanup(func() { openCRLDirectory = restore })
-	var password string
-	openCRLDirectory = func(_ revocationhealth.LDAPBinding, pw []byte) (crlDirectory, error) {
-		password = string(pw)
+	var password, trustedCA string
+	openCRLDirectory = func(_ revocationhealth.LDAPBinding, pw, ca []byte) (crlDirectory, error) {
+		password, trustedCA = string(pw), string(ca)
 		return &stubCRLDirectory{}, nil
 	}
 	bound := RevocationProbeIntent{ID: "8a0c2f43-1d5e-4f21-9b7c-0e9c2a1f3b45", Bucket: "b", BatchIndex: 1, BatchCount: 1,
 		Targets:           []revocationhealth.Target{ldapTestTarget(strings.Repeat("4", 64), "ldap:///CN=CA,CN=CDP,"+ldapTestConfigurationDN, []byte{1})},
 		RequiredAgentRole: revocationhealth.RequiredRoleNetwork,
 		LDAPBinding: &revocationhealth.LDAPBinding{SourceID: "6f1f8f84-3c3e-4f6f-9a43-1f4f3f0d0a10", URL: "ldaps://dc1.lab.test", // #nosec G101 -- a non-secret secret:// reference fixture, not secret material (CWE-798).
-			ConfigurationDN: ldapTestConfigurationDN, BindDN: "CN=svc", PasswordRef: "secret://adcs/bind"}}
+			ConfigurationDN: ldapTestConfigurationDN, BindDN: "CN=svc", PasswordRef: "secret://adcs/bind",
+			TLSCARef: "secret://adcs/ca", TLSServerName: "dc1.lab.test"}}
 	payload, err := json.Marshal(bound)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ch := &redeemRecordingChannel{material: map[string][]byte{"secret://adcs/bind": []byte("bind-pw")}}
+	ch := &redeemRecordingChannel{material: map[string][]byte{"secret://adcs/bind": []byte("bind-pw"), "secret://adcs/ca": []byte("public-ca")}}
 	runRevocationProbe(context.Background(), ch, http.DefaultClient, Job{JobID: 7, Attempt: 2, Kind: KindRevocationProbe, Payload: payload})
-	if ch.redeemed != 1 || password != "bind-pw" || len(ch.outcomes) != 1 {
-		t.Fatalf("bound batch: redeemed=%d password=%q outcomes=%v", ch.redeemed, password, ch.outcomes)
+	if ch.redeemed != 1 || password != "bind-pw" || trustedCA != "public-ca" || len(ch.outcomes) != 1 {
+		t.Fatalf("bound batch: redeemed=%d password=%q CA=%q outcomes=%v", ch.redeemed, password, trustedCA, ch.outcomes)
 	}
 	plain := bound
 	plain.LDAPBinding = nil

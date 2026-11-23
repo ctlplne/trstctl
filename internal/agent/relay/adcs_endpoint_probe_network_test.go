@@ -64,7 +64,15 @@ func TestADCSLDAPEndpointProbeRealNetworkStandin(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer secret.Wipe(password)
-		result, err := InventoryADCS(t.Context(), command, Material{command.PasswordRef: password})
+		material := Material{command.PasswordRef: password}
+		if command.TLSCARef != "" {
+			caPEM, err := os.ReadFile(os.Getenv("TRSTCTL_ADCS_PROBE_CA_FILE")) // #nosec G304,G703 -- exact owned public CA fixture path (CWE-22).
+			if err != nil || len(caPEM) == 0 {
+				t.Fatalf("set TRSTCTL_ADCS_PROBE_CA_FILE for the pinned directory: %v", err)
+			}
+			material[command.TLSCARef] = caPEM
+		}
+		result, err := InventoryADCS(t.Context(), command, material)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +85,7 @@ func TestADCSLDAPEndpointProbeRealNetworkStandin(t *testing.T) {
 	}
 	before := len(readAudit())
 	result := collect(intent)
-	if result.Status != "succeeded" || result.DirectoryVerified || result.Inventory.EndpointProbePage == nil || result.Inventory.EndpointProbePage.TotalTargets != 4 {
+	if result.Status != "succeeded" || !result.DirectoryVerified || result.Inventory.EndpointProbePage == nil || result.Inventory.EndpointProbePage.TotalTargets != 4 {
 		t.Fatalf("real collection status=%s directory_verified=%t page=%+v", result.Status, result.DirectoryVerified, result.Inventory.EndpointProbePage)
 	}
 	if intent.NestedGroupsEnabled {

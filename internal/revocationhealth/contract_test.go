@@ -93,10 +93,22 @@ func TestLDAPDistributionPointsAndBindings(t *testing.T) {
 	if err := ValidateIntent(intent); err != nil {
 		t.Fatalf("bound LDAP batch refused: %v", err)
 	}
+	pinned := intent
+	pinnedBinding := *intent.LDAPBinding
+	pinnedBinding.TLSCARef, pinnedBinding.TLSServerName = "secret://adcs/directory-ca", "dc1.lab.test"
+	pinned.LDAPBinding = &pinnedBinding
+	if err := ValidateIntent(pinned); err != nil {
+		t.Fatalf("pinned LDAP batch refused: %v", err)
+	}
 	for name, mutate := range map[string]func(*Intent){
 		"plain credential":    func(i *Intent) { i.LDAPBinding.PasswordRef = "hunter2" },
 		"https directory":     func(i *Intent) { i.LDAPBinding.URL = "https://dc1.lab.test" },
 		"directory with path": func(i *Intent) { i.LDAPBinding.URL = "ldaps://dc1.lab.test/CN=x" },
+		"unverified bind":     func(i *Intent) { i.LDAPBinding.InsecureSkipVerify = true },
+		"CA without name":     func(i *Intent) { i.LDAPBinding.TLSCARef = "secret://adcs/directory-ca" },
+		"invalid CA reference": func(i *Intent) {
+			i.LDAPBinding.TLSCARef, i.LDAPBinding.TLSServerName = "secret://adcs/../ca", "dc1.lab.test"
+		},
 		"target in another forest": func(i *Intent) {
 			i.LDAPBinding.ConfigurationDN = "CN=Configuration,DC=other,DC=test"
 		},

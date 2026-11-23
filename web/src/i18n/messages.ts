@@ -15463,8 +15463,21 @@ export const messages = {
   "discovery.setup.bindIdentity": { defaultMessage: "Bind identity", description: "AD CS bind-identity field." },
   "discovery.setup.passwordRef": { defaultMessage: "Password reference", description: "AD CS password-reference field." },
   "discovery.setup.passwordRefDescription": {
-    defaultMessage: "Use a stored reference such as env:NAME; never paste the password.",
+    defaultMessage: "Use a secret:// reference that you can read; never paste the password.",
     description: "AD CS password-reference explanation.",
+  },
+  "discovery.setup.adcsTLSCARef": { defaultMessage: "Directory CA reference", description: "AD CS private directory trust anchor." },
+  "discovery.setup.adcsTLSServerName": { defaultMessage: "Expected directory name", description: "AD CS TLS server identity." },
+  "discovery.setup.adcsTLSCAExample": { defaultMessage: "secret://adcs/directory-ca", description: "Example AD CS directory CA reference." },
+  "discovery.setup.adcsTLSNameExample": { defaultMessage: "dc01.corp.example", description: "Example expected AD CS directory name." },
+  "discovery.setup.adcsTLSHelp": {
+    defaultMessage:
+      "For a private CA, store its public PEM certificate as a secret:// value and set the expected server name. Both fields are required together.",
+    description: "AD CS private directory TLS setup.",
+  },
+  "discovery.setup.adcsTLSBoth": {
+    defaultMessage: "Set both the directory CA reference and expected name, or leave both empty to use system trust.",
+    description: "AD CS TLS pair validation.",
   },
   "discovery.setup.adcsAdvanced": { defaultMessage: "Enrollment endpoint boundary", description: "Advanced AD CS enrollment endpoint section." },
   "discovery.setup.adcsEndpoints": { defaultMessage: "Enrollment endpoints", description: "AD CS enrollment endpoint list field." },
