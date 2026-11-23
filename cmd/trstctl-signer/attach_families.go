@@ -160,9 +160,14 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 		fmt.Fprintf(os.Stderr, "trstctl-signer: %v\n", err)
 		os.Exit(1)
 	}
+	dualControlPub, err := signerwiring.LoadDualControlAuthority(floorDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: %v\n", err)
+		os.Exit(1)
+	}
 	m, err := signerwiring.NewProductionMinter(signerwiring.Config{
 		SignerID: "trstctl-signer", FloorDir: floorDir, JournalWrapper: wrapper, Delegation: delegationConstraint,
-		BreakGlassAuthorityPubDER: breakGlassPub,
+		BreakGlassAuthorityPubDER: breakGlassPub, DualControlAuthorityPubDER: dualControlPub,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: build PCAS minter: %v\n", err)

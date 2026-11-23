@@ -3,6 +3,7 @@
 package minter_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -250,6 +251,7 @@ func mintToken(t *testing.T, authority crypto.Signer, req signing.MintRequest, d
 	t.Helper()
 	tok := minter.AuthorizationToken{
 		IdentityID: req.IdentityID, TenantID: req.TenantID,
+		PredecessorCustody:       "signer",
 		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch, TargetAlgorithm: req.TargetAlgorithm,
 		ParamsDigest: digest, Nonce: nonce,
 	}
@@ -322,6 +324,28 @@ func TestDualControl_TokenBoundSingleUse(t *testing.T) {
 }
 
 // --- policy (PCAS-claim-23) -----------------------------------------------------
+
+func TestCR332ApprovalDigestBindsSignerRequestParameters(t *testing.T) {
+	base := baseReq()
+	want := minter.RequestParamsDigest(base)
+	for name, change := range map[string]func(*signing.MintRequest){
+		"predecessor handle": func(req *signing.MintRequest) { req.PredecessorHandle = "other-held-key" },
+		"delegation scope":   func(req *signing.MintRequest) { req.DelegationScope = "other-scope" },
+		"validity start":     func(req *signing.MintRequest) { req.NotBefore++ },
+		"validity end":       func(req *signing.MintRequest) { req.NotAfter++ },
+		"policy decision":    func(req *signing.MintRequest) { req.PolicyDecision = []byte(`{"decision":"other"}`) },
+		"break glass":        func(req *signing.MintRequest) { req.BreakGlass = []byte(`{"reason":"downgrade"}`) },
+		"attestation":        func(req *signing.MintRequest) { req.Attestation = []byte(`{"custody":"other"}`) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := base
+			change(&changed)
+			if bytes.Equal(minter.RequestParamsDigest(changed), want) {
+				t.Fatal("approval digest did not change with a signer-controlled request parameter")
+			}
+		})
+	}
+}
 
 func mintPolicy(t *testing.T, authority crypto.Signer, identity string, target crypto.Algorithm) []byte {
 	t.Helper()

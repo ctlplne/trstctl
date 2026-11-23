@@ -206,6 +206,13 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runPCASKEMEnvelope(rest[3:], stdout, stderr)
 	}
+	if len(rest) >= 3 && hasPrefix(rest, []string{"pcas", "succession", "approval"}) {
+		if commandHelpRequested(rest[3:]) {
+			pcasSuccessionApprovalUsage(stdout)
+			return 0
+		}
+		return runPCASSuccessionApproval(rest[3:], *tenant, stdout, stderr)
+	}
 	if len(rest) >= 4 && hasPrefix(rest, []string{"secrets", "scans", "pre-commit", "install"}) {
 		if commandHelpRequested(rest[4:]) {
 			secretScanPreCommitInstallUsage(stdout)

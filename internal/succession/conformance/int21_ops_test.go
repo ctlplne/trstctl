@@ -55,6 +55,7 @@ func TestINT21_PCASOpsSLOBackpressureAndCrash(t *testing.T) {
 			if _, err := st.svc.RequestSuccession(st.ctx, tenantID, succapi.RequestSuccessionRequest{
 				IdentityID: id, CredentialType: "x509", TargetAlgorithm: string(crypto.ECDSAP384),
 				PolicyRef: "policy:int21-load", DeploymentScope: "spiffe://int21.example",
+				Authorization: st.approveRequest(t, tenantID, id, "spiffe://int21.example", 0, crypto.ECDSAP384, "policy:int21-load"),
 			}); err != nil {
 				t.Fatalf("request succession %s: %v", id, err)
 			}
@@ -115,6 +116,7 @@ func (st *int20Stack) assertDuplicateRedeliveryDoesNotDoubleMint(t *testing.T) {
 		"target_algorithm": string(crypto.ECDSAP384),
 		"policy_ref":       "policy:int21-redelivery",
 		"deployment_scope": "spiffe://int21.example",
+		"authorization":    st.approveRequest(t, st.tenantID, id, "spiffe://int21.example", 0, crypto.ECDSAP384, "policy:int21-redelivery"),
 	})
 	if err != nil {
 		t.Fatal(err)

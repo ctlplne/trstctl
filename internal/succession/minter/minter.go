@@ -562,9 +562,16 @@ type paramsForDigest struct {
 	IdentityID               string
 	TenantID                 string
 	DeploymentScope          string
+	PredecessorHandle        string
 	AssertedPredecessorEpoch uint64
 	TargetAlgorithm          crypto.Algorithm
 	PolicyRef                string
+	DelegationScope          string
+	NotBefore                int64
+	NotAfter                 int64
+	PolicyDecisionDigest     []byte
+	BreakGlassDigest         []byte
+	AttestationDigest        []byte
 }
 
 // RequestParamsDigest is the digest of the committed request parameters that
@@ -575,11 +582,25 @@ func RequestParamsDigest(req signing.MintRequest) []byte {
 		IdentityID:               req.IdentityID,
 		TenantID:                 req.TenantID,
 		DeploymentScope:          req.DeploymentScope,
+		PredecessorHandle:        req.PredecessorHandle,
 		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch,
 		TargetAlgorithm:          req.TargetAlgorithm,
 		PolicyRef:                req.PolicyRef,
+		DelegationScope:          req.DelegationScope,
+		NotBefore:                req.NotBefore,
+		NotAfter:                 req.NotAfter,
+		PolicyDecisionDigest:     digestIfPresent(req.PolicyDecision),
+		BreakGlassDigest:         digestIfPresent(req.BreakGlass),
+		AttestationDigest:        digestIfPresent(req.Attestation),
 	})
 	return crypto.SHA256Sum(data)
+}
+
+func digestIfPresent(value []byte) []byte {
+	if len(value) == 0 {
+		return nil
+	}
+	return crypto.SHA256Sum(value)
 }
 
 // EncodeRecord / DecodeRecord serialize a succession record for transport as the
@@ -598,6 +619,16 @@ func DecodeRecord(b []byte) (succession.SuccessionRecord, error) {
 type signedEnvelope struct {
 	Payload json.RawMessage `json:"payload"`
 	Sig     []byte          `json:"sig"`
+}
+
+// Operator authority files carry Ed25519 public keys; older in-process callers
+// use ECDSA/RSA. VerifyMessage covers the latter, while Ed25519 signs the exact
+// payload bytes and must use its dedicated AN-3 boundary operation.
+func verifyAuthorityEnvelopeSignature(pubDER, payload, sig []byte) error {
+	if crypto.ValidateEd25519PublicKeyDER(pubDER) == nil {
+		return crypto.VerifyEd25519(pubDER, payload, sig)
+	}
+	return crypto.VerifyMessage(pubDER, payload, sig)
 }
 
 // PolicyDecision is the payload an approval/policy authority signs to authorize a
@@ -653,6 +684,7 @@ func (p SignedPolicyAuthorizer) Verify(decision []byte, req signing.MintRequest)
 type AuthorizationToken struct {
 	IdentityID               string           `json:"identity_id"`
 	TenantID                 string           `json:"tenant_id"`
+	PredecessorCustody       string           `json:"predecessor_custody"`
 	AssertedPredecessorEpoch uint64           `json:"asserted_predecessor_epoch"`
 	TargetAlgorithm          crypto.Algorithm `json:"target_algorithm"`
 	ParamsDigest             []byte           `json:"params_digest"`
@@ -664,23 +696,37 @@ type AuthorizationToken struct {
 type SignedTokenAuthorizer struct {
 	AuthorityPubDER []byte
 	spent           SpentStore
+	expectedCustody string
 }
 
 // NewSignedTokenAuthorizer builds an authorizer trusting authorityPubDER with an
 // in-memory single-use store (spent nonces do not survive a restart).
 func NewSignedTokenAuthorizer(authorityPubDER []byte) *SignedTokenAuthorizer {
-	return &SignedTokenAuthorizer{AuthorityPubDER: authorityPubDER, spent: NewMemSpentStore()}
+	return NewSignedTokenAuthorizerForCustody(authorityPubDER, succession.PredecessorCustodySigner)
+}
+
+// NewSignedTokenAuthorizerForCustody binds an approval verifier to the custody
+// path that will actually release the predecessor signature.
+func NewSignedTokenAuthorizerForCustody(authorityPubDER []byte, custody string) *SignedTokenAuthorizer {
+	return &SignedTokenAuthorizer{AuthorityPubDER: authorityPubDER, spent: NewMemSpentStore(), expectedCustody: custody}
 }
 
 // NewDurableSignedTokenAuthorizer builds a dual-control authorizer whose single-use
 // state is durable within the signer custody dir, so a consumed token replayed after
 // a signer restart is refused (INT-06, PCAS-claim-5).
 func NewDurableSignedTokenAuthorizer(authorityPubDER []byte, dir string) (*SignedTokenAuthorizer, error) {
+	return NewDurableSignedTokenAuthorizerForCustody(authorityPubDER, dir, succession.PredecessorCustodySigner)
+}
+
+func NewDurableSignedTokenAuthorizerForCustody(authorityPubDER []byte, dir, custody string) (*SignedTokenAuthorizer, error) {
+	if custody != succession.PredecessorCustodySigner && custody != succession.PredecessorCustodyWorkload {
+		return nil, errors.New("minter: invalid predecessor custody for approval authority")
+	}
 	s, err := NewDurableSpentStore(dir, "pcas-dualcontrol-spent")
 	if err != nil {
 		return nil, err
 	}
-	return &SignedTokenAuthorizer{AuthorityPubDER: authorityPubDER, spent: s}, nil
+	return &SignedTokenAuthorizer{AuthorityPubDER: authorityPubDER, spent: s, expectedCustody: custody}, nil
 }
 
 // VerifyAndConsume checks the authority signature, the binding to the request and
@@ -690,7 +736,7 @@ func (a *SignedTokenAuthorizer) VerifyAndConsume(token []byte, req signing.MintR
 	if err := json.Unmarshal(token, &env); err != nil {
 		return fmt.Errorf("token decode: %w", err)
 	}
-	if err := crypto.VerifyMessage(a.AuthorityPubDER, env.Payload, env.Sig); err != nil {
+	if err := verifyAuthorityEnvelopeSignature(a.AuthorityPubDER, env.Payload, env.Sig); err != nil {
 		return fmt.Errorf("token authority signature: %w", err)
 	}
 	var t AuthorizationToken
@@ -698,6 +744,7 @@ func (a *SignedTokenAuthorizer) VerifyAndConsume(token []byte, req signing.MintR
 		return err
 	}
 	if t.IdentityID != req.IdentityID || t.TenantID != req.TenantID ||
+		t.PredecessorCustody != a.expectedCustody ||
 		t.AssertedPredecessorEpoch != req.AssertedPredecessorEpoch ||
 		t.TargetAlgorithm != req.TargetAlgorithm || !bytes.Equal(t.ParamsDigest, paramsDigest) {
 		return errors.New("token binding mismatch")
@@ -765,7 +812,7 @@ func (a *SignedBreakGlassAuthorizer) VerifyAndConsume(token []byte, req signing.
 	if err := json.Unmarshal(token, &env); err != nil {
 		return fmt.Errorf("break-glass decode: %w", err)
 	}
-	if err := crypto.VerifyMessage(a.AuthorityPubDER, env.Payload, env.Sig); err != nil {
+	if err := verifyAuthorityEnvelopeSignature(a.AuthorityPubDER, env.Payload, env.Sig); err != nil {
 		return fmt.Errorf("break-glass authority signature: %w", err)
 	}
 	var t BreakGlassToken

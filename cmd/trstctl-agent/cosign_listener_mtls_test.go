@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -22,6 +23,36 @@ import (
 	"trstctl.com/trstctl/internal/succession/agent"
 	"trstctl.com/trstctl/internal/succession/agent/cosignpb"
 )
+
+func TestCR332WorkloadCoSignRefusesStartWithoutApprovalAuthority(t *testing.T) {
+	err := runWorkloadCoSign(context.Background(), workloadCoSignConfig{
+		Listen:          "unix:" + filepath.Join(t.TempDir(), "cosign.sock"),
+		DeploymentScope: "spiffe://d", IdentityID: "spiffe://d/app", TenantID: "tenant-a",
+		PredecessorKeyPath: "missing-key.pem", PeerUID: -1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "independent approval authority") {
+		t.Fatalf("ungated workload co-sign listener started or failed for another reason: %v", err)
+	}
+}
+
+func TestCR332WorkloadCoSignRefusesWritableApprovalState(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix owner-only mode is enforced by directory permissions")
+	}
+	authority, stateDir := testCoSignApprovalF261(t)
+	if err := os.Chmod(stateDir, 0o777); err != nil {
+		t.Fatal(err)
+	} // #nosec G302 -- deliberately loose test directory
+	err := runWorkloadCoSign(context.Background(), workloadCoSignConfig{
+		Listen:          "unix:" + filepath.Join(t.TempDir(), "cosign.sock"),
+		DeploymentScope: "spiffe://d", IdentityID: "spiffe://d/app", TenantID: "tenant-a",
+		PredecessorKeyPath: "missing-key.pem", ApprovalAuthorityFile: authority,
+		ApprovalStateDir: stateDir, PeerUID: -1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "owner-only") {
+		t.Fatalf("writable approval state accepted or failed for another reason: %v", err)
+	}
+}
 
 // callCoSignF261 sends opaque field bytes. A service that received the call
 // answers InvalidArgument (it never signs undecodable bytes); a refused caller
@@ -90,8 +121,10 @@ func TestWorkloadCoSignRequiresThePinnedCaller(t *testing.T) {
 // F261: a TCP listener without the pinned mutual-TLS material refuses to start,
 // before the predecessor key is ever loaded.
 func TestWorkloadCoSignNetworkListenerWithoutTLSRefusesToStart(t *testing.T) {
+	authority, stateDir := testCoSignApprovalF261(t)
 	err := runWorkloadCoSign(context.Background(), workloadCoSignConfig{
 		Listen: freeLoopbackAddrF261(t), PredecessorKeyPath: filepath.Join(t.TempDir(), "missing.key"), PeerUID: -1,
+		ApprovalAuthorityFile: authority, ApprovalStateDir: stateDir,
 	})
 	if err == nil || !strings.Contains(err.Error(), "mutual TLS") || strings.Contains(err.Error(), "predecessor key") {
 		t.Fatalf("plain TCP co-sign start = %v; want a mutual-TLS refusal before the key is read", err)

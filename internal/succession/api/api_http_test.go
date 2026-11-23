@@ -499,7 +499,7 @@ func TestGenesisRegistration_IdempotencyRBACAndStatus(t *testing.T) {
 func TestRequestSuccession_Idempotent(t *testing.T) {
 	svc := &fakeService{}
 	a := newAPI(t, svc)
-	body := `{"identity_id":"spiffe://d/id","credential_type":"x509","target_algorithm":"ML-DSA-65"}`
+	body := `{"identity_id":"spiffe://d/id","credential_type":"x509","target_algorithm":"ML-DSA-65","authorization":{"payload":{"nonce":"approved"},"sig":"AQID"}}`
 
 	do := func() *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/successions", bytes.NewBufferString(body))
@@ -536,13 +536,25 @@ func TestRequestSuccession_MissingIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestCR332RequestSuccessionRejectsMissingApproval(t *testing.T) {
+	svc := &fakeService{}
+	a := newAPI(t, svc)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/successions", bytes.NewBufferString(`{"identity_id":"spiffe://d/id","credential_type":"x509","target_algorithm":"ML-DSA-65"}`))
+	r.Header.Set("Idempotency-Key", "cr332-no-approval")
+	rr := httptest.NewRecorder()
+	a.ServeHTTP(rr, r)
+	if rr.Code != http.StatusBadRequest || svc.requestCalls != 0 {
+		t.Fatalf("missing approval: status=%d service calls=%d, want 400 and no enqueued request", rr.Code, svc.requestCalls)
+	}
+}
+
 // TestIdentityTypes_X509_SSH_SVID_Token_Secret: every PCAS-claim-9 credential type
 // round-trips the API end-to-end; a type outside the genus is rejected (PCAS-claim-9).
 func TestIdentityTypes_X509_SSH_SVID_Token_Secret(t *testing.T) {
 	svc := &fakeService{}
 	a := newAPI(t, svc)
 	for i, ct := range []string{"x509", "ssh", "workload-svid", "api-token", "secret"} {
-		body := fmt.Sprintf(`{"identity_id":"spiffe://d/%d","credential_type":%q,"target_algorithm":"ML-DSA-65"}`, i, ct)
+		body := fmt.Sprintf(`{"identity_id":"spiffe://d/%d","credential_type":%q,"target_algorithm":"ML-DSA-65","authorization":{"payload":{"nonce":"approved"},"sig":"AQID"}}`, i, ct)
 		r := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/successions", bytes.NewBufferString(body))
 		r.Header.Set("Idempotency-Key", fmt.Sprintf("k-%s", ct))
 		rr := httptest.NewRecorder()

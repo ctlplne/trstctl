@@ -3,13 +3,122 @@
 package agent_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/succession"
 	"trstctl.com/trstctl/internal/succession/agent"
+	"trstctl.com/trstctl/internal/succession/minter"
 )
+
+func TestCR332WorkloadAgentReturnsOnlyExactSavedResultAfterLostReply(t *testing.T) {
+	pred, successor, authority := ecdsa(t), ecdsa(t), ecdsa(t)
+	stateDir := t.TempDir()
+	makeAgent := func() *agent.CoSigner {
+		t.Helper()
+		approval, err := minter.NewDurableSignedTokenAuthorizerForCustody(authority.Public().DER, stateDir, succession.PredecessorCustodyWorkload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results, err := agent.NewDurableApprovalResults(stateDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, err := agent.New(agent.Config{DeploymentScope: deployment, IdentityID: identity,
+			TenantID: tenant, Signer: pred, Approval: approval, ApprovalResults: results})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	fields := fullFields(pred.Public().DER, successor.Public().DER)
+	request := signing.MintRequest{IdentityID: identity, TenantID: tenant,
+		DeploymentScope: deployment, PredecessorHandle: succession.TenantKeyHandle(tenant, identity, 0),
+		TargetAlgorithm: crypto.ECDSAP256, PolicyRef: fields.PolicyRef}
+	payload, err := json.Marshal(minter.AuthorizationToken{IdentityID: identity, TenantID: tenant,
+		PredecessorCustody: succession.PredecessorCustodyWorkload,
+		TargetAlgorithm:    crypto.ECDSAP256, ParamsDigest: minter.RequestParamsDigest(request), Nonce: "lost-reply-approval"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := minter.SignEnvelope(authority, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := agent.Request{Purpose: agent.Purpose, Fields: fields, Authorization: token}
+	first, err := makeAgent().CoSign(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := makeAgent().CoSign(req)
+	if err != nil || !bytes.Equal(again.Signature, first.Signature) {
+		t.Fatalf("lost reply did not return the exact durable signature: err=%v", err)
+	}
+	req.Fields.PolicyRef = "different-policy"
+	if _, err := makeAgent().CoSign(req); !errors.Is(err, agent.ErrApproval) {
+		t.Fatalf("spent token replayed for a different commitment: %v", err)
+	}
+}
+
+func TestCR332WorkloadAgentRequiresIndependentSingleUseApproval(t *testing.T) {
+	pred, successor := ecdsa(t), ecdsa(t)
+	authority := ecdsa(t)
+	stateDir := t.TempDir()
+	approval, err := minter.NewDurableSignedTokenAuthorizerForCustody(authority.Public().DER, stateDir, succession.PredecessorCustodyWorkload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := agent.New(agent.Config{DeploymentScope: deployment, IdentityID: identity,
+		TenantID: tenant, Signer: pred, Approval: approval})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := fullFields(pred.Public().DER, successor.Public().DER)
+	base := agent.Request{Purpose: agent.Purpose, Fields: fields}
+	if _, err := a.CoSign(base); !errors.Is(err, agent.ErrApproval) {
+		t.Fatalf("unapproved co-sign: %v", err)
+	}
+	request := signing.MintRequest{IdentityID: identity, TenantID: tenant,
+		DeploymentScope: deployment, PredecessorHandle: succession.TenantKeyHandle(tenant, identity, 0),
+		TargetAlgorithm: crypto.ECDSAP256, PolicyRef: fields.PolicyRef}
+	payload, err := json.Marshal(minter.AuthorizationToken{IdentityID: identity, TenantID: tenant,
+		PredecessorCustody: succession.PredecessorCustodyWorkload,
+		TargetAlgorithm:    crypto.ECDSAP256, ParamsDigest: minter.RequestParamsDigest(request), Nonce: "cr332-workload-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.Authorization, err = minter.SignEnvelope(authority, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CoSign(base); err != nil {
+		t.Fatalf("approved co-sign: %v", err)
+	}
+	if _, err := a.CoSign(base); !errors.Is(err, agent.ErrApproval) {
+		t.Fatalf("replayed co-sign: %v", err)
+	}
+	reopened, err := minter.NewDurableSignedTokenAuthorizerForCustody(authority.Public().DER, stateDir, succession.PredecessorCustodyWorkload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := agent.New(agent.Config{DeploymentScope: deployment, IdentityID: identity,
+		TenantID: tenant, Signer: pred, Approval: reopened})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restarted.CoSign(base); !errors.Is(err, agent.ErrApproval) {
+		t.Fatalf("replayed co-sign after restart: %v", err)
+	}
+	changed := base
+	changed.Fields.PolicyRef = "different-policy"
+	if _, err := a.CoSign(changed); !errors.Is(err, agent.ErrApproval) {
+		t.Fatalf("misbound co-sign: %v", err)
+	}
+}
 
 const (
 	deployment = "spiffe://d"

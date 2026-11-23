@@ -51,13 +51,14 @@ func NewSuccessionRequestWorker(orch *Orchestrator) *SuccessionRequestWorker {
 // requestPayload mirrors the internal/succession/api enqueued request (RequestID plus the
 // RequestSuccessionRequest fields).
 type requestPayload struct {
-	RequestID       string `json:"request_id"`
-	IdentityID      string `json:"identity_id"`
-	CredentialType  string `json:"credential_type"`
-	TargetAlgorithm string `json:"target_algorithm"`
-	PolicyRef       string `json:"policy_ref"`
-	DeploymentScope string `json:"deployment_scope"`
-	DelegationScope string `json:"delegation_scope"`
+	RequestID       string          `json:"request_id"`
+	IdentityID      string          `json:"identity_id"`
+	CredentialType  string          `json:"credential_type"`
+	TargetAlgorithm string          `json:"target_algorithm"`
+	PolicyRef       string          `json:"policy_ref"`
+	DeploymentScope string          `json:"deployment_scope"`
+	DelegationScope string          `json:"delegation_scope"`
+	Authorization   json.RawMessage `json:"authorization"`
 	// PredecessorCustody mirrors the request; the anchor decides when empty.
 	PredecessorCustody string `json:"predecessor_custody"`
 }
@@ -122,6 +123,9 @@ func (w *SuccessionRequestWorker) Handle(ctx context.Context, tenantID string, p
 	// the co-sign flow. Once the successor lives in the signer, successions are
 	// signer-held again.
 	workloadHeld := anchor.Genesis.PredecessorCustody == succession.PredecessorCustodyWorkload && epoch == 0
+	if workloadHeld && p.PredecessorCustody != succession.PredecessorCustodyWorkload {
+		return errors.New("succession worker: workload-held first succession requires explicit workload custody approval")
+	}
 	if p.PredecessorCustody == succession.PredecessorCustodyWorkload && !workloadHeld {
 		return errors.New("succession worker: request asks for workload custody but the identity's predecessor is signer-held")
 	}
@@ -144,6 +148,7 @@ func (w *SuccessionRequestWorker) Handle(ctx context.Context, tenantID string, p
 		TargetAlgorithm:          crypto.Algorithm(p.TargetAlgorithm),
 		PolicyRef:                p.PolicyRef,
 		DelegationScope:          p.DelegationScope,
+		Authorization:            append([]byte(nil), p.Authorization...),
 	}
 
 	if _, err := w.orch.RunSuccession(ctx, tenantID, req, idempotencyKey); err != nil {

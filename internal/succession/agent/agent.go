@@ -29,7 +29,9 @@ import (
 	"fmt"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/succession"
+	"trstctl.com/trstctl/internal/succession/minter"
 )
 
 // Purpose is the distinct key-usage purpose under which the workload agent will
@@ -44,6 +46,7 @@ var (
 	ErrForeignBinding = errors.New("agent: refusing a commitment whose identity/tenant/deployment is not this agent's")
 	ErrNotPredecessor = errors.New("agent: refusing a commitment whose predecessor key is not this agent's")
 	ErrMalformed      = errors.New("agent: refusing a malformed / non-domain-separated succession commitment")
+	ErrApproval       = errors.New("agent: refusing a co-sign request without valid independent approval")
 
 	ErrCoSignInvalid     = errors.New("agent: predecessor co-signature does not verify against the supplied commitment")
 	ErrInclusionRequired = errors.New("agent: workload-held-predecessor record requires a transparency-log inclusion proof")
@@ -55,15 +58,18 @@ type Config struct {
 	DeploymentScope string
 	IdentityID      string
 	TenantID        string
-	Signer          crypto.Signer // the workload-held predecessor key
+	Signer          crypto.Signer       // the workload-held predecessor key
+	Approval        minter.AuthVerifier // required for the served workload co-sign process
+	ApprovalResults ApprovalResultStore // durable reply cache for lost co-sign RPC results
 }
 
 // Request is a structured co-sign request. It carries the STRUCTURED commitment
 // fields — never opaque bytes — so the agent reconstructs and domain-separates the
 // commitment itself and can never be coerced into signing an arbitrary value.
 type Request struct {
-	Purpose string
-	Fields  succession.CommitmentFields
+	Purpose       string
+	Fields        succession.CommitmentFields
+	Authorization []byte
 }
 
 // Response carries the predecessor co-signature over the reconstructed commitment.
@@ -83,6 +89,9 @@ func New(cfg Config) (*CoSigner, error) {
 	}
 	if cfg.Signer == nil {
 		return nil, errors.New("agent: a predecessor signer is required")
+	}
+	if cfg.ApprovalResults != nil && cfg.Approval == nil {
+		return nil, errors.New("agent: approval results require an approval verifier")
 	}
 	return &CoSigner{cfg: cfg}, nil
 }
@@ -112,9 +121,36 @@ func (a *CoSigner) CoSign(req Request) (Response, error) {
 	if err != nil {
 		return Response{}, fmt.Errorf("%w: %v", ErrMalformed, err)
 	}
+	if a.cfg.Approval != nil {
+		if a.cfg.ApprovalResults != nil {
+			if saved, found, err := a.cfg.ApprovalResults.Load(req.Authorization, commitment); err != nil {
+				return Response{}, fmt.Errorf("%w: saved result: %v", ErrApproval, err)
+			} else if found {
+				if err := crypto.VerifyAlgorithmMessage(a.cfg.Signer.Public(), commitment, saved); err != nil {
+					return Response{}, fmt.Errorf("%w: saved signature: %v", ErrApproval, err)
+				}
+				return Response{Signature: saved}, nil
+			}
+		}
+		approvalRequest := signing.MintRequest{
+			IdentityID: f.IdentityID, TenantID: f.TenantID,
+			DeploymentScope:          f.DeploymentScope,
+			PredecessorHandle:        succession.TenantKeyHandle(f.TenantID, f.IdentityID, f.PredecessorEpoch),
+			AssertedPredecessorEpoch: f.PredecessorEpoch,
+			TargetAlgorithm:          f.SuccessorAlg, PolicyRef: f.PolicyRef,
+		}
+		if len(req.Authorization) == 0 || a.cfg.Approval.VerifyAndConsume(req.Authorization, approvalRequest, minter.RequestParamsDigest(approvalRequest)) != nil {
+			return Response{}, ErrApproval
+		}
+	}
 	sig, err := a.cfg.Signer.Sign(commitment, crypto.SignOptions{Hash: crypto.SHA256})
 	if err != nil {
 		return Response{}, err
+	}
+	if a.cfg.ApprovalResults != nil {
+		if err := a.cfg.ApprovalResults.Save(req.Authorization, commitment, sig); err != nil {
+			return Response{}, fmt.Errorf("agent: save co-sign result: %w", err)
+		}
 	}
 	return Response{Signature: sig}, nil
 }
@@ -133,6 +169,12 @@ type PredecessorCoSigner interface {
 // (e.g. a substituted epoch) fails verification, so the agent cannot alter the
 // succession.
 func MintWorkloadHeld(fields succession.CommitmentFields, agent PredecessorCoSigner, successor crypto.Signer) (succession.SuccessionRecord, error) {
+	return MintWorkloadHeldAuthorized(fields, agent, successor, nil)
+}
+
+// MintWorkloadHeldAuthorized passes the independent approval artifact to the
+// workload agent, which verifies it before releasing the predecessor signature.
+func MintWorkloadHeldAuthorized(fields succession.CommitmentFields, agent PredecessorCoSigner, successor crypto.Signer, authorization []byte) (succession.SuccessionRecord, error) {
 	fields.SuccessorAlg = successor.Algorithm()
 	fields.SuccessorPub = successor.Public().DER
 
@@ -140,7 +182,7 @@ func MintWorkloadHeld(fields succession.CommitmentFields, agent PredecessorCoSig
 	if err != nil {
 		return succession.SuccessionRecord{}, err
 	}
-	resp, err := agent.CoSign(Request{Purpose: Purpose, Fields: fields})
+	resp, err := agent.CoSign(Request{Purpose: Purpose, Fields: fields, Authorization: authorization})
 	if err != nil {
 		return succession.SuccessionRecord{}, fmt.Errorf("agent co-sign: %w", err)
 	}

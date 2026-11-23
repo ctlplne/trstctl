@@ -41,6 +41,9 @@ type RequestSuccessionRequest struct {
 	PolicyRef       string `json:"policy_ref"`
 	DeploymentScope string `json:"deployment_scope"`
 	DelegationScope string `json:"delegation_scope,omitempty"`
+	// Authorization is an operator-approved, authority-signed, single-use token
+	// for this exact successor request. The signer verifies and consumes it.
+	Authorization json.RawMessage `json:"authorization"`
 	// PredecessorCustody is optional and must agree with the genesis anchor:
 	// "workload" asks for the co-sign flow against the registered workload
 	// agent; the worker also selects it from the anchor when omitted.
@@ -765,6 +768,9 @@ func requestSuccessionHandler(a *api.API, svc Service) http.HandlerFunc {
 			if req.TargetAlgorithm == "" {
 				return 0, nil, api.ErrStatus(http.StatusBadRequest, "target_algorithm is required")
 			}
+			if len(req.Authorization) == 0 || string(req.Authorization) == "null" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "authorization is required for signer dual control")
+			}
 			start := time.Now()
 			var opErr error
 			defer func() { a.ObserveFeature("pcas_succession", "request", start, opErr) }()
@@ -1398,7 +1404,15 @@ func schemas() map[string]*api.Schema {
 			"deployment_scope":    api.StringSchema(),
 			"delegation_scope":    api.StringSchema(),
 			"predecessor_custody": api.StringSchema(),
-		}, "identity_id", "credential_type", "target_algorithm"),
+			"authorization": api.ObjectSchema(map[string]*api.Schema{
+				"payload": api.ObjectSchema(map[string]*api.Schema{
+					"identity_id": api.StringSchema(), "tenant_id": api.StringSchema(),
+					"asserted_predecessor_epoch": api.IntegerSchema(), "target_algorithm": api.StringSchema(),
+					"params_digest": api.StringSchema(), "nonce": api.StringSchema(),
+				}, "identity_id", "tenant_id", "asserted_predecessor_epoch", "target_algorithm", "params_digest", "nonce"),
+				"sig": api.StringSchema(),
+			}, "payload", "sig"),
+		}, "identity_id", "credential_type", "target_algorithm", "authorization"),
 		"PCASSuccessionAck": api.ObjectSchema(map[string]*api.Schema{
 			"request_id":       api.StringSchema(),
 			"identity_id":      api.StringSchema(),

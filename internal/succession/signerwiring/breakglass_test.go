@@ -3,6 +3,7 @@
 package signerwiring
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,8 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/succession/minter"
 )
 
 // The key is generated through internal/crypto rather than crypto/ed25519
@@ -29,6 +32,70 @@ func writeAuthorityPEM(t *testing.T, dir string) []byte {
 		t.Fatal(err)
 	}
 	return der
+}
+
+func TestCR332LoadedApprovalAuthorityVerifiesAndPersistsOneUse(t *testing.T) {
+	if key, err := LoadDualControlAuthority(t.TempDir()); key != nil || err != nil {
+		t.Fatalf("absent approval authority: key=%v err=%v, want fail-closed nil key", key, err)
+	}
+	bad := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bad, DualControlAuthorityFile), []byte("not a public key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadDualControlAuthority(bad); err == nil {
+		t.Fatal("malformed approval authority did not fail signer startup")
+	}
+	dir := t.TempDir()
+	privatePEM, publicPEM, err := crypto.GenerateEd25519KeyPEM()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, DualControlAuthorityFile), publicPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	publicDER, err := LoadDualControlAuthority(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := signing.MintRequest{
+		IdentityID: "spiffe://d/cr332", TenantID: "tenant-a", DeploymentScope: "deployment-1",
+		AssertedPredecessorEpoch: 0, TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "policy:approved",
+	}
+	digest := minter.RequestParamsDigest(req)
+	payload, err := json.Marshal(minter.AuthorizationToken{
+		IdentityID: req.IdentityID, TenantID: req.TenantID,
+		PredecessorCustody:       "signer",
+		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch, TargetAlgorithm: req.TargetAlgorithm,
+		ParamsDigest: digest, Nonce: "cr332-one-use",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := crypto.SignEd25519(privatePEM, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := json.Marshal(struct {
+		Payload json.RawMessage `json:"payload"`
+		Sig     []byte          `json:"sig"`
+	}{payload, signature})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := minter.NewDurableSignedTokenAuthorizer(publicDER, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.VerifyAndConsume(token, req, digest); err != nil {
+		t.Fatalf("signer rejected a valid operator approval: %v", err)
+	}
+	restarted, err := minter.NewDurableSignedTokenAuthorizer(publicDER, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.VerifyAndConsume(token, req, digest); err == nil {
+		t.Fatal("signer accepted approval replay after restart")
+	}
 }
 
 // TestLoadBreakGlassAuthority covers the three states an operator can leave

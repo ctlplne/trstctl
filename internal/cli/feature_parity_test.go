@@ -450,9 +450,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A236-L4 adds `secrets deleted list`, `restore` and `purge` (903).
 	// M3-L4 adds `discovery findings replace-cloud-key` (904). M4-L3 adds
 	// `workloads tokens introspect` (905). Three missing read paths for the
-	// application view and project member access bring the served set to 908.
-	if len(out) != 908 {
-		t.Fatalf("CLI commands = %d, want 908", len(out))
+	// application view and project member access brought the set to 908;
+	// CR-332 adds offline PCAS approval prepare/assemble (910).
+	if len(out) != 910 {
+		t.Fatalf("CLI commands = %d, want 910", len(out))
 	}
 	return out
 }

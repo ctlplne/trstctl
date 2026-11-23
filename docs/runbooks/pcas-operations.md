@@ -61,20 +61,76 @@ root signature on genesis. The Posture console shows the root fingerprint and
 chain count for this review. Keep the output as public evidence; it contains no
 private key.
 
-After genesis is delivered, submit a different target algorithm and poll its
-request. The successor record is returned in `records` as base64 JSON bytes;
-verify both signatures, epoch continuity, policy and scope against the pinned
-root before changing a relying party. The chain API does not deploy a new
-credential or make a relying party adopt it.
+After genesis is delivered, obtain an approval from the independent PCAS
+authority before requesting a different target algorithm. Provision the
+authority's Ed25519 **public** key as
+`pcas-dual-control-authority.pem` in the isolated signer's custody directory
+before starting it. Keep the private key outside both the control plane and
+signer; the approval authority must release a detached signature only after
+its own second-approver or threshold check. If the public key is absent, the
+signer refuses every succession mint. A malformed key stops signer startup.
+For an identity whose first predecessor key lives in a workload agent, install
+the same independent authority's public key on that agent with
+`--workload-cosign-approval-authority` and give it an agent-only persistent
+directory with `--workload-cosign-approval-state-dir`. The agent refuses to
+start its co-sign listener if either is absent. Its co-sign service verifies
+and consumes the signed approval before releasing the predecessor signature.
+Preserve and back up that state directory with the agent's predecessor key;
+losing it loses the spent-token and exact-reply records needed across restarts.
+
+The operator CLI prepares the exact bytes for that authority to sign. First
+read the chain and review its current predecessor epoch. The example below is
+for an identity at genesis (epoch 0). Use the authenticated tenant's UUID, the
+registered deployment scope, and the intended credential type and policy.
 
 ```bash
-cat > /secure/operator-succession.json <<'JSON'
-{"identity_id":"spiffe://example.test/workload/api","credential_type":"workload-svid","target_algorithm":"ECDSA-P384","policy_ref":"policy:operator","deployment_scope":"spiffe://example.test"}
+cat > /secure/operator-succession-intent.json <<'JSON'
+{"tenant_id":"TENANT_UUID","identity_id":"spiffe://example.test/workload/api","credential_type":"workload-svid","predecessor_custody":"signer","predecessor_epoch":0,"target_algorithm":"ECDSA-P384","policy_ref":"policy:operator","deployment_scope":"spiffe://example.test"}
 JSON
+trstctl pcas succession approval prepare -f /secure/operator-succession-intent.json --out /secure/approval-payload.json
+```
+
+Send `/secure/approval-payload.json` to the independently controlled authority.
+It must sign the file's **exact bytes** with the private key matching the
+signer's configured public key and return a raw Ed25519 signature file. Do not
+parse and reserialize the payload between preparation and signing. The CLI
+does not read the authority private key or count approvers; the authority's
+custody and approval process enforce that quorum. Once the signed file returns:
+
+```bash
+trstctl pcas succession approval assemble \
+  -f /secure/operator-succession-intent.json \
+  --payload /secure/approval-payload.json \
+  --signature /secure/approval-signature.bin \
+  --public-key /secure/pcas-dual-control-authority.pem \
+  --out /secure/operator-succession.json
 trstctl pcas succession request -f /secure/operator-succession.json
 trstctl pcas requests status REQUEST_ID
 trstctl pcas chain get --identity_id spiffe://example.test/workload/api
 ```
+
+For a workload-held first succession, set `predecessor_custody` to `workload`
+in the reviewed intent and omit `delegation_scope`. The agent verifies the
+approval against identity, tenant, deployment, predecessor epoch, target
+algorithm, policy and the signed custody mode. A signer-held approval cannot
+authorize a workload-held co-signature. Once the successor is signer-held, use `signer` for
+later approvals.
+
+`assemble` verifies the detached signature and exact request digest before
+writing the API body. The Posture console accepts the resulting
+`authorization` object in its signed approval field. The isolated signer
+consumes signer-held tokens; the workload agent consumes workload-held first
+succession tokens. Both remember spent nonces across restarts. If the epoch, policy,
+scope, target, predecessor handle, or evidence changes, prepare and approve a
+new payload. An idempotent replay of a completed request returns the original
+record without consuming another token. If a workload co-sign reply is lost,
+the agent returns its exact saved predecessor signature for the same token and
+commitment, even after restart; a changed commitment still needs new approval.
+The successor record is returned in
+`records` as base64 JSON bytes;
+verify both signatures, epoch continuity, policy and scope against the pinned
+root before changing a relying party. The chain API does not deploy a new
+credential or make a relying party adopt it.
 
 Use distinct idempotency keys for distinct POST operations. A request for an
 unregistered identity returns 409 with the registration path; it never creates

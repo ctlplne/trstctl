@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { IntlProvider } from "@/i18n/I18nProvider";
 import { AppQueryProvider } from "@/lib/query";
@@ -60,8 +60,8 @@ describe("PCAS first-use console", () => {
         </IntlProvider>
       </AppQueryProvider>,
     );
-    await user.type(screen.getByLabelText("Stable identity ID"), "spiffe://example.test/workload/api");
-    await user.type(screen.getByLabelText("Deployment scope"), "spiffe://example.test");
+    fireEvent.change(screen.getByLabelText("Stable identity ID"), { target: { value: "spiffe://example.test/workload/api" } });
+    fireEvent.change(screen.getByLabelText("Deployment scope"), { target: { value: "spiffe://example.test" } });
     await user.click(screen.getByRole("button", { name: "Review first-key registration" }));
     expect(screen.getByText("Review the exact genesis")).toBeInTheDocument();
     await user.clear(screen.getByLabelText("Deployment scope"));
@@ -85,6 +85,45 @@ describe("PCAS first-use console", () => {
     expect(await screen.findByText("Signed first-key anchor")).toBeInTheDocument();
     expect(screen.getByText(/Delivery state: delivered/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review succession" })).toBeInTheDocument();
+  });
+
+  it("requires a signed approval and sends the reviewed envelope with the succession", async () => {
+    const user = userEvent.setup();
+    pcasMock.chain.mockResolvedValue({
+      identity_id: "spiffe://example.test/workload/api",
+      genesis: { identity_id: "spiffe://example.test/workload/api", algorithm: "ECDSA-P256", epoch: 0 },
+      records: [],
+      count: 0,
+    });
+    pcasMock.requestSuccession.mockResolvedValue({ request_id: "approved-1", status: "queued" });
+    render(
+      <AppQueryProvider>
+        <IntlProvider>
+          <PCASSuccessionWorkflow />
+        </IntlProvider>
+      </AppQueryProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Stable identity ID"), { target: { value: "spiffe://example.test/workload/api" } });
+    fireEvent.change(screen.getByLabelText("Deployment scope"), { target: { value: "spiffe://example.test" } });
+    await user.click(screen.getByRole("button", { name: "Read existing chain" }));
+    expect(await screen.findByText("Signed first-key anchor")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Policy reference"), { target: { value: "policy:approved" } });
+    expect(screen.getByRole("button", { name: "Review succession" })).toBeDisabled();
+    const token = { payload: { nonce: "approved-once" }, sig: "AQID" };
+    fireEvent.change(screen.getByLabelText("Signer-held signed approval token (JSON)"), { target: { value: JSON.stringify(token) } });
+    await user.click(screen.getByRole("button", { name: "Review succession" }));
+    await user.click(screen.getByRole("button", { name: "Queue signed succession" }));
+    await waitFor(() =>
+      expect(pcasMock.requestSuccession).toHaveBeenCalledWith({
+        identity_id: "spiffe://example.test/workload/api",
+        credential_type: "workload-svid",
+        target_algorithm: "ECDSA-P384",
+        policy_ref: "policy:approved",
+        deployment_scope: "spiffe://example.test",
+        authorization: token,
+      }),
+    );
+    expect(screen.getByLabelText("Signer-held signed approval token (JSON)")).toHaveValue("");
   });
 
   it("shows the checkpoint signer fingerprint and exact log head", async () => {

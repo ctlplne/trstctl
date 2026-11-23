@@ -1030,6 +1030,8 @@ var coreCommandTable = []Command{
 }
 
 var specialCommandTable = []Command{
+	{Name: []string{"pcas", "succession", "approval", "prepare"}, Summary: "Prepare an exact custody-bound payload for an independent approval authority"},
+	{Name: []string{"pcas", "succession", "approval", "assemble"}, Summary: "Verify a detached authority signature and assemble a succession request"},
 	{Name: []string{"audit", "verify"}, Summary: "Verify any saved audit export completely offline"},
 	{Name: []string{"run"}, Summary: "Run a child process with fetched secrets injected into its environment"},
 	{Name: []string{"access", "run"}, Summary: "Run a command with a short-lived access bundle run credential, revoked when it exits"},

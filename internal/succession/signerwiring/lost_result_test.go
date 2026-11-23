@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/signing"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
@@ -30,9 +31,10 @@ func TestProductionMinterReplaysLostMintResultAcrossRestart(t *testing.T) {
 	}
 	defer wrapper.Destroy()
 	dir := t.TempDir()
+	authority := approvalAuthority(t)
 	boot := func() *signing.Server {
 		t.Helper()
-		minter, err := signerwiring.NewProductionMinter(signerwiring.Config{FloorDir: dir, JournalWrapper: wrapper})
+		minter, err := signerwiring.NewProductionMinter(signerwiring.Config{FloorDir: dir, JournalWrapper: wrapper, DualControlAuthorityPubDER: authority.Public().DER})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,6 +59,11 @@ func TestProductionMinterReplaysLostMintResultAcrossRestart(t *testing.T) {
 		PredecessorHandle: predecessor, AssertedPredecessorEpoch: 0,
 		TargetAlgorithm: signerpb.Algorithm_ALGORITHM_ECDSA_P384, PolicyRef: "qa-policy-v1",
 	}
+	request.Authorization = approveMint(t, authority, signing.MintRequest{
+		TenantID: tenant, IdentityID: identity, DeploymentScope: request.DeploymentScope,
+		PredecessorHandle: predecessor, AssertedPredecessorEpoch: 0,
+		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: request.PolicyRef,
+	}, "lost-result-approval")
 	first, err := server.MintSuccessor(ctx, request)
 	if err != nil {
 		t.Fatalf("first mint: %v", err)

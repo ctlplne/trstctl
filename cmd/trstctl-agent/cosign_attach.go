@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,7 +20,9 @@ import (
 	"trstctl.com/trstctl/internal/agent/workloadapi"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/succession"
 	"trstctl.com/trstctl/internal/succession/agent"
+	"trstctl.com/trstctl/internal/succession/minter"
 )
 
 // cosign_attach.go is the workload-agent co-sign seam (INT-16, claim 19). PCAS is
@@ -31,11 +34,13 @@ import (
 
 // workloadCoSignConfig configures the workload-held predecessor co-sign service.
 type workloadCoSignConfig struct {
-	Listen             string // "unix:/path" or "host:port"; empty disables the service
-	DeploymentScope    string
-	IdentityID         string
-	TenantID           string
-	PredecessorKeyPath string // PKCS#8 PEM holding the workload predecessor key
+	Listen                string // "unix:/path" or "host:port"; empty disables the service
+	DeploymentScope       string
+	IdentityID            string
+	TenantID              string
+	PredecessorKeyPath    string // PKCS#8 PEM holding the workload predecessor key
+	ApprovalAuthorityFile string // independent Ed25519 public key PEM
+	ApprovalStateDir      string // durable, agent-only spent-token state
 
 	// Caller authentication (F261). The service signs with the workload's
 	// predecessor key, so an unauthenticated listener is a signing oracle for
@@ -69,6 +74,35 @@ const (
 // enrollment/connection settings. It refuses to start rather than serve an
 // unauthenticated listener, and it checks this before loading the key.
 func runWorkloadCoSign(ctx context.Context, cfg workloadCoSignConfig) error {
+	if cfg.ApprovalAuthorityFile == "" || cfg.ApprovalStateDir == "" {
+		return errors.New("workload co-sign: independent approval authority and durable state directory are required")
+	}
+	authorityPEM, err := os.ReadFile(cfg.ApprovalAuthorityFile) // #nosec G304 -- explicitly configured public key
+	if err != nil {
+		return fmt.Errorf("workload co-sign: read approval authority: %w", err)
+	}
+	authorityDER, err := crypto.ParseEd25519PublicKeyPEM(authorityPEM)
+	if err != nil {
+		return fmt.Errorf("workload co-sign: parse approval authority: %w", err)
+	}
+	if err := os.MkdirAll(cfg.ApprovalStateDir, 0o700); err != nil {
+		return fmt.Errorf("workload co-sign: create approval state: %w", err)
+	}
+	stateInfo, err := os.Lstat(cfg.ApprovalStateDir)
+	if err != nil || !stateInfo.IsDir() || stateInfo.Mode()&os.ModeSymlink != 0 {
+		return errors.New("workload co-sign: approval state must be a real directory")
+	}
+	if runtime.GOOS != "windows" && stateInfo.Mode().Perm()&0o077 != 0 {
+		return errors.New("workload co-sign: approval state directory must be owner-only")
+	}
+	approval, err := minter.NewDurableSignedTokenAuthorizerForCustody(authorityDER, cfg.ApprovalStateDir, succession.PredecessorCustodyWorkload)
+	if err != nil {
+		return fmt.Errorf("workload co-sign: open durable approval state: %w", err)
+	}
+	results, err := agent.NewDurableApprovalResults(cfg.ApprovalStateDir)
+	if err != nil {
+		return fmt.Errorf("workload co-sign: open durable approval result cache: %w", err)
+	}
 	network, addr := workloadCoSignAddress(cfg.Listen)
 	var serverOptions []grpc.ServerOption
 	if network == "tcp" || cfg.tlsConfigured() {
@@ -98,6 +132,8 @@ func runWorkloadCoSign(ctx context.Context, cfg workloadCoSignConfig) error {
 		IdentityID:      cfg.IdentityID,
 		TenantID:        cfg.TenantID,
 		Signer:          signer,
+		Approval:        approval,
+		ApprovalResults: results,
 	})
 	if err != nil {
 		return err

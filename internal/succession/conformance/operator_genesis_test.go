@@ -51,6 +51,7 @@ func TestOperatorGenesisThenSuccessionThroughOutbox(t *testing.T) {
 	if _, err := st.svc.RequestSuccession(st.ctx, st.tenantID, succapi.RequestSuccessionRequest{
 		IdentityID: id, CredentialType: "workload-svid", TargetAlgorithm: string(crypto.ECDSAP384),
 		PolicyRef: "policy:operator", DeploymentScope: "spiffe://operator.example",
+		Authorization: st.approveRequest(t, st.tenantID, id, "spiffe://operator.example", 0, crypto.ECDSAP384, "policy:operator"),
 	}); err != nil {
 		t.Fatalf("request succession: %v", err)
 	}

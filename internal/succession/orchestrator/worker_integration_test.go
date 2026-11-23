@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 	corestore "trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/succession"
+	"trstctl.com/trstctl/internal/succession/minter"
 	"trstctl.com/trstctl/internal/succession/orchestrator"
 	"trstctl.com/trstctl/internal/succession/signerwiring"
 )
@@ -43,7 +44,7 @@ func TestINT03_RequestWorker_EndToEnd(t *testing.T) {
 
 	// Real isolated signer with the production minter attached, over UDS. Its custody
 	// resolves predecessors and PERSISTS successors under their per-epoch handles.
-	client := serveProductionSigner(t)
+	client, authority := serveProductionSigner(t)
 
 	const id = "spiffe://d/int03"
 
@@ -59,7 +60,8 @@ func TestINT03_RequestWorker_EndToEnd(t *testing.T) {
 	worker := orchestrator.NewSuccessionRequestWorker(orch)
 
 	// First succession (genesis -> epoch 1: P-256 -> P-384) driven by a queued request.
-	if err := worker.Handle(ctx, tenantA, reqPayload("req-1", id, crypto.ECDSAP384)); err != nil {
+	firstPayload := reqPayload(t, authority, "req-1", id, crypto.ECDSAP384, 0)
+	if err := worker.Handle(ctx, tenantA, firstPayload); err != nil {
 		t.Fatalf("worker handle (epoch 1): %v", err)
 	}
 	assertRecord(t, cs, id, 1, 0)   // epoch 1, predecessor_epoch 0
@@ -69,7 +71,7 @@ func TestINT03_RequestWorker_EndToEnd(t *testing.T) {
 	// Second succession (epoch 1 -> epoch 2: P-384 -> P-521). The predecessor is
 	// TenantKeyHandle(tenant,id,1), which the signer PERSISTED when it minted epoch 1 — proving
 	// the successor survives and chains.
-	if err := worker.Handle(ctx, tenantA, reqPayload("req-2", id, crypto.ECDSAP521)); err != nil {
+	if err := worker.Handle(ctx, tenantA, reqPayload(t, authority, "req-2", id, crypto.ECDSAP521, 1)); err != nil {
 		t.Fatalf("worker handle (epoch 2): %v", err)
 	}
 	assertRecord(t, cs, id, 2, 1)
@@ -78,7 +80,7 @@ func TestINT03_RequestWorker_EndToEnd(t *testing.T) {
 
 	// Idempotency: re-delivering req-1 mints nothing new (RunSuccession replays the
 	// already-recorded record on the same key). The chain stays length 2.
-	if err := worker.Handle(ctx, tenantA, reqPayload("req-1", id, crypto.ECDSAP384)); err != nil {
+	if err := worker.Handle(ctx, tenantA, firstPayload); err != nil {
 		t.Fatalf("worker handle (idempotent re-delivery): %v", err)
 	}
 	assertChainLen(t, cs, id, 2)
@@ -112,14 +114,38 @@ func registerWorkerFixtureGenesis(t *testing.T, cs *corestore.Store, id string, 
 	}
 }
 
-func reqPayload(requestID, identityID string, alg crypto.Algorithm) []byte {
+func reqPayload(t *testing.T, authority crypto.Signer, requestID, identityID string, alg crypto.Algorithm, predecessorEpoch uint64) []byte {
+	t.Helper()
+	var approval []byte
+	if authority != nil {
+		req := signing.MintRequest{
+			IdentityID: identityID, TenantID: tenantA, DeploymentScope: "spiffe://d",
+			PredecessorHandle:        succession.TenantKeyHandle(tenantA, identityID, predecessorEpoch),
+			AssertedPredecessorEpoch: predecessorEpoch, TargetAlgorithm: alg, PolicyRef: "policy:1",
+		}
+		payload, err := json.Marshal(minter.AuthorizationToken{
+			IdentityID: req.IdentityID, TenantID: req.TenantID,
+			PredecessorCustody:       "signer",
+			AssertedPredecessorEpoch: req.AssertedPredecessorEpoch,
+			TargetAlgorithm:          req.TargetAlgorithm, ParamsDigest: minter.RequestParamsDigest(req),
+			Nonce: requestID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		approval, err = minter.SignEnvelope(authority, payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	b, _ := json.Marshal(struct {
-		RequestID       string `json:"request_id"`
-		IdentityID      string `json:"identity_id"`
-		TargetAlgorithm string `json:"target_algorithm"`
-		PolicyRef       string `json:"policy_ref"`
-		DeploymentScope string `json:"deployment_scope"`
-	}{RequestID: requestID, IdentityID: identityID, TargetAlgorithm: string(alg), PolicyRef: "policy:1", DeploymentScope: "spiffe://d"})
+		RequestID       string          `json:"request_id"`
+		IdentityID      string          `json:"identity_id"`
+		TargetAlgorithm string          `json:"target_algorithm"`
+		PolicyRef       string          `json:"policy_ref"`
+		DeploymentScope string          `json:"deployment_scope"`
+		Authorization   json.RawMessage `json:"authorization,omitempty"`
+	}{RequestID: requestID, IdentityID: identityID, TargetAlgorithm: string(alg), PolicyRef: "policy:1", DeploymentScope: "spiffe://d", Authorization: approval})
 	return b
 }
 
@@ -174,9 +200,13 @@ func assertChainLen(t *testing.T, cs *corestore.Store, id string, want int) {
 
 // serveProductionSigner runs an isolated signer with the production minter attached
 // over UDS and returns a connected control-plane client.
-func serveProductionSigner(t *testing.T) *signing.Client {
+func serveProductionSigner(t *testing.T) (*signing.Client, crypto.Signer) {
 	t.Helper()
-	m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer-test"})
+	authority, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer-test", DualControlAuthorityPubDER: authority.Public().DER})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,5 +242,5 @@ func serveProductionSigner(t *testing.T) *signing.Client {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	return client
+	return client, authority
 }

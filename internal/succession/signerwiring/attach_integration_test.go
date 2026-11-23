@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/succession"
@@ -22,7 +25,8 @@ import (
 // succession over the transport. The predecessor is a real signer-held key created
 // through the signer's own GenerateKey RPC, not a control-plane-supplied map.
 func TestINT02_ProductionMinterResolvesSignerHeldPredecessor(t *testing.T) {
-	m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer-test"})
+	authority := approvalAuthority(t)
+	m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer-test", DualControlAuthorityPubDER: authority.Public().DER})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +41,7 @@ func TestINT02_ProductionMinterResolvesSignerHeldPredecessor(t *testing.T) {
 
 	// Succeed it over the transport; the minter resolves "issuer-key" via the
 	// signer's injected custody, then generates the successor inside the signer.
-	res, err := client.MintSuccessor(context.Background(), signing.MintRequest{
+	req := signing.MintRequest{
 		IdentityID:               "spiffe://d/issuer",
 		TenantID:                 "tenant-a",
 		DeploymentScope:          "deployment-1",
@@ -47,7 +51,9 @@ func TestINT02_ProductionMinterResolvesSignerHeldPredecessor(t *testing.T) {
 		PolicyRef:                "sha256:policyref",
 		NotBefore:                time.Now().Add(-time.Minute).Unix(),
 		NotAfter:                 time.Now().Add(time.Hour).Unix(),
-	})
+	}
+	req.Authorization = approveMint(t, authority, req, "int02-approval")
+	res, err := client.MintSuccessor(context.Background(), req)
 	if err != nil {
 		t.Fatalf("mint over transport: %v", err)
 	}
@@ -63,6 +69,55 @@ func TestINT02_ProductionMinterResolvesSignerHeldPredecessor(t *testing.T) {
 	}
 	if rec.Fields.Epoch != 1 || res.SuccessorAlgorithm != crypto.ECDSAP384 {
 		t.Fatalf("epoch=%d succ-alg=%q, want 1 / ECDSA-P384", rec.Fields.Epoch, res.SuccessorAlgorithm)
+	}
+}
+
+func TestCR332ProductionSignerRefusesSuccessionWithoutDualControl(t *testing.T) {
+	m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := serveSigner(t, signing.NewServer(signing.WithSuccessionMinter(m)))
+	if _, err := client.GenerateKeyHandle(t.Context(), crypto.ECDSAP256, "cr332-predecessor"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.MintSuccessor(t.Context(), signing.MintRequest{
+		IdentityID: "spiffe://d/cr332", TenantID: "tenant-a", DeploymentScope: "deployment-1",
+		PredecessorHandle: "cr332-predecessor", AssertedPredecessorEpoch: 0,
+		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "sha256:policyref",
+		NotBefore: time.Now().Add(-time.Minute).Unix(), NotAfter: time.Now().Add(time.Hour).Unix(),
+	})
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("unapproved production succession = %v, want signer refusal", err)
+	}
+}
+
+func TestCR332ProductionSignerConsumesOnlyBoundApproval(t *testing.T) {
+	authority := approvalAuthority(t)
+	m, err := signerwiring.NewProductionMinter(signerwiring.Config{
+		SignerID: "trstctl-signer-test", DualControlAuthorityPubDER: authority.Public().DER,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := serveSigner(t, signing.NewServer(signing.WithSuccessionMinter(m)))
+	if _, err := client.GenerateKeyHandle(t.Context(), crypto.ECDSAP256, "cr332-bound-predecessor"); err != nil {
+		t.Fatal(err)
+	}
+	req := signing.MintRequest{
+		IdentityID: "spiffe://d/cr332-bound", TenantID: "tenant-a", DeploymentScope: "deployment-1",
+		PredecessorHandle: "cr332-bound-predecessor", AssertedPredecessorEpoch: 0,
+		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "sha256:policyref",
+	}
+	wrong := req
+	wrong.PolicyRef = "sha256:other-policy"
+	req.Authorization = approveMint(t, authority, wrong, "wrong-binding")
+	if _, err := client.MintSuccessor(t.Context(), req); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("misbound approval = %v, want refusal", err)
+	}
+	req.Authorization = approveMint(t, authority, req, "correct-binding")
+	if _, err := client.MintSuccessor(t.Context(), req); err != nil {
+		t.Fatalf("approved succession: %v", err)
 	}
 }
 

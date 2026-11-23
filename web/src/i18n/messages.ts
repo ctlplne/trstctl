@@ -4697,6 +4697,10 @@ export const messages = {
   "pcas.credentialType": { defaultMessage: "Credential type", description: "PCAS credential type field." },
   "pcas.targetAlgorithm": { defaultMessage: "Successor algorithm", description: "PCAS successor algorithm field." },
   "pcas.policyRef": { defaultMessage: "Policy reference", description: "PCAS policy reference field." },
+  "pcas.approvalToken": {
+    defaultMessage: "Signer-held signed approval token (JSON)",
+    description: "PCAS succession authority-signed approval envelope for a signer-held predecessor.",
+  },
   "pcas.policyExample": { defaultMessage: "policy:approved-change", description: "Example approved policy reference." },
   "pcas.reviewSuccession": { defaultMessage: "Review succession", description: "PCAS succession review button." },
   "pcas.successionReview": { defaultMessage: "Review the exact transition", description: "PCAS succession review heading." },
@@ -4709,6 +4713,10 @@ export const messages = {
   },
   "pcas.error.register": { defaultMessage: "Could not register the first key.", description: "PCAS registration fallback error." },
   "pcas.error.succession": { defaultMessage: "Could not queue succession.", description: "PCAS succession fallback error." },
+  "pcas.error.approval": {
+    defaultMessage: "Signed approval token must contain a payload and signature.",
+    description: "PCAS succession approval envelope validation error.",
+  },
   "pcas.retirement.title": { defaultMessage: "Predecessor-key retirement", description: "PCAS retirement policy section." },
   "pcas.retirement.description": {
     defaultMessage:

@@ -12,6 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -168,12 +169,24 @@ func (s *CoSignServer) Register(gs *grpc.Server) { cosignpb.RegisterCoSignerServ
 // CoSign is the gRPC handler. It maps the agent's typed refusals to
 // FailedPrecondition so the caller can distinguish an oracle-prevention refusal from
 // a transport error, and returns only the predecessor signature.
-func (s *CoSignServer) CoSign(_ context.Context, req *cosignpb.CoSignRequest) (*cosignpb.CoSignResponse, error) {
+const approvalMetadataKey = "trstctl-pcas-approval-bin"
+
+func (s *CoSignServer) CoSign(ctx context.Context, req *cosignpb.CoSignRequest) (*cosignpb.CoSignResponse, error) {
 	fields, err := UnmarshalFields(req.GetFields())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	resp, err := s.cosigner.CoSign(Request{Purpose: req.GetPurpose(), Fields: fields})
+	var approval []byte
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		values := md.Get(approvalMetadataKey)
+		if len(values) > 1 {
+			return nil, status.Error(codes.InvalidArgument, "multiple PCAS approvals")
+		}
+		if len(values) == 1 {
+			approval = []byte(values[0])
+		}
+	}
+	resp, err := s.cosigner.CoSign(Request{Purpose: req.GetPurpose(), Fields: fields, Authorization: approval})
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "%v", err)
 	}
@@ -205,7 +218,11 @@ func (r *RemoteCoSigner) WithContext(ctx context.Context) *RemoteCoSigner {
 // CoSign performs the co-sign RPC and maps a remote oracle-prevention refusal back to
 // the corresponding agent sentinel so callers can errors.Is against it.
 func (r *RemoteCoSigner) CoSign(req Request) (Response, error) {
-	resp, err := r.client.CoSign(r.ctx, &cosignpb.CoSignRequest{Purpose: req.Purpose, Fields: MarshalFields(req.Fields)})
+	ctx := r.ctx
+	if len(req.Authorization) > 0 {
+		ctx = metadata.AppendToOutgoingContext(ctx, approvalMetadataKey, string(req.Authorization))
+	}
+	resp, err := r.client.CoSign(ctx, &cosignpb.CoSignRequest{Purpose: req.Purpose, Fields: MarshalFields(req.Fields)})
 	if err != nil {
 		return Response{}, mapRemoteErr(err)
 	}
@@ -220,7 +237,7 @@ func mapRemoteErr(err error) error {
 		return err
 	}
 	msg := st.Message()
-	for _, sentinel := range []error{ErrForeignPurpose, ErrForeignBinding, ErrNotPredecessor, ErrMalformed, ErrFieldsMalformed} {
+	for _, sentinel := range []error{ErrForeignPurpose, ErrForeignBinding, ErrNotPredecessor, ErrMalformed, ErrFieldsMalformed, ErrApproval} {
 		if msg == sentinel.Error() {
 			return fmt.Errorf("agent co-sign refused over transport: %w", sentinel)
 		}

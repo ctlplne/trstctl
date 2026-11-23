@@ -2560,6 +2560,10 @@ journey (Track B).
 
 `trstctl-agent --workload-cosign-listen` serves the PCAS workload-held predecessor
 co-sign RPC with the workload's predecessor key, and the control plane now calls it.
+The listener requires an independent Ed25519 approval authority public key via
+`--workload-cosign-approval-authority` and an agent-only durable nonce directory
+via `--workload-cosign-approval-state-dir`; it refuses to start without both.
+It verifies and consumes the request-bound approval before returning a signature.
 Register the identity's genesis with `predecessor_custody: "workload"` and the
 agent key's public half (`public_key_pem`); the anchor records that key instead of
 minting one in the signer. Configure the agent's endpoint under

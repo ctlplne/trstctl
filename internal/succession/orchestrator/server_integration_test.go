@@ -33,7 +33,7 @@ func TestINT04_LicensedOutboxFactory_DrivesMint(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	client := serveProductionSigner(t)
+	client, authority := serveProductionSigner(t)
 	const id = "spiffe://d/int04"
 	key, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantA, id, 0))
 	if err != nil {
@@ -51,7 +51,7 @@ func TestINT04_LicensedOutboxFactory_DrivesMint(t *testing.T) {
 	// A pcas.succession-request message is handled -> a real record appears.
 	handled, err := h.DeliverLicensed(ctx, coreorch.Message{
 		Destination: orchestrator.RequestDestination, TenantID: tenantA,
-		Payload: reqPayload("req-int04", id, crypto.ECDSAP384),
+		Payload: reqPayload(t, authority, "req-int04", id, crypto.ECDSAP384, 0),
 	})
 	if !handled || err != nil {
 		t.Fatalf("succession-request: handled=%v err=%v, want true,nil", handled, err)
@@ -98,7 +98,7 @@ func TestINT04_FailsClosedWithoutSigner(t *testing.T) {
 	}
 	handled, err := h.DeliverLicensed(ctx, coreorch.Message{
 		Destination: orchestrator.RequestDestination, TenantID: tenantA,
-		Payload: reqPayload("req-x", "spiffe://d/int04-nominter", crypto.ECDSAP384),
+		Payload: reqPayload(t, nil, "req-x", "spiffe://d/int04-nominter", crypto.ECDSAP384, 0),
 	})
 	if !handled || err == nil {
 		t.Fatalf("no-signer succession-request: handled=%v err=%v, want true + error (fail closed)", handled, err)

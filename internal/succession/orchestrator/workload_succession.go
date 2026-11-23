@@ -47,6 +47,11 @@ func (w *SuccessionRequestWorker) WithWorkloadCoSign(custody KeyCustody, dialer 
 // recording it with the same transaction every succession uses.
 func (w *SuccessionRequestWorker) handleWorkloadHeld(ctx context.Context, tenantID string, p requestPayload,
 	anchor pcasstore.GenesisAnchor, epoch uint64, idempotencyKey string) error {
+	// Reject an absent token before allocating the successor handle. The agent
+	// remains the independent signature/nonce authority for a supplied token.
+	if len(p.Authorization) == 0 {
+		return errors.New("pcas succession: workload-held first succession requires independent approval")
+	}
 	if w.custody == nil || w.cosigners == nil {
 		return errors.New("pcas succession: workload custody needs the isolated signer and a configured workload co-signer")
 	}
@@ -105,7 +110,7 @@ func (w *SuccessionRequestWorker) handleWorkloadHeld(ctx context.Context, tenant
 		return err
 	}
 	defer release()
-	rec, err := agent.MintWorkloadHeld(fields, cosigner, successor)
+	rec, err := agent.MintWorkloadHeldAuthorized(fields, cosigner, successor, p.Authorization)
 	if err != nil {
 		return fmt.Errorf("pcas succession: workload-held mint: %w", err)
 	}

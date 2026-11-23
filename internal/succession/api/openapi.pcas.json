@@ -1397,6 +1397,49 @@
       "PCASSuccessionRequest": {
         "type": "object",
         "properties": {
+          "authorization": {
+            "type": "object",
+            "properties": {
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "asserted_predecessor_epoch": {
+                    "type": "integer"
+                  },
+                  "identity_id": {
+                    "type": "string"
+                  },
+                  "nonce": {
+                    "type": "string"
+                  },
+                  "params_digest": {
+                    "type": "string"
+                  },
+                  "target_algorithm": {
+                    "type": "string"
+                  },
+                  "tenant_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "identity_id",
+                  "tenant_id",
+                  "asserted_predecessor_epoch",
+                  "target_algorithm",
+                  "params_digest",
+                  "nonce"
+                ]
+              },
+              "sig": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "payload",
+              "sig"
+            ]
+          },
           "credential_type": {
             "type": "string"
           },
@@ -1422,7 +1465,8 @@
         "required": [
           "identity_id",
           "credential_type",
-          "target_algorithm"
+          "target_algorithm",
+          "authorization"
         ]
       }
     }

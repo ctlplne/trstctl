@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/signing"
 	corestore "trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/succession"
 	"trstctl.com/trstctl/internal/succession/agent"
@@ -84,7 +85,12 @@ func TestWorkloadHeldSuccessionCoSignsThroughAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cosigner, err := agent.New(agent.Config{DeploymentScope: scope, IdentityID: identity, TenantID: tenantA, Signer: workloadKey})
+	authority, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cosigner, err := agent.New(agent.Config{DeploymentScope: scope, IdentityID: identity, TenantID: tenantA,
+		Signer: workloadKey, Approval: minter.NewSignedTokenAuthorizerForCustody(authority.Public().DER, succession.PredecessorCustodyWorkload)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,10 +138,35 @@ func TestWorkloadHeldSuccessionCoSignsThroughAgent(t *testing.T) {
 
 	dialer := orchestrator.NewConfiguredWorkloadCoSigners([]orchestrator.WorkloadCoSignerEndpoint{{TenantID: tenantA, IdentityID: identity, Address: "unix:" + sock}})
 	worker := orchestrator.NewSuccessionRequestWorker(orchestrator.New(cs, nil)).WithWorkloadCoSign(custody, dialer)
+	approvalReq := signing.MintRequest{IdentityID: identity, TenantID: tenantA,
+		DeploymentScope: scope, PredecessorHandle: succession.TenantKeyHandle(tenantA, identity, 0),
+		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "policy:workload"}
+	approvalPayload, err := json.Marshal(minter.AuthorizationToken{IdentityID: identity, TenantID: tenantA,
+		PredecessorCustody: succession.PredecessorCustodyWorkload,
+		TargetAlgorithm:    crypto.ECDSAP384, ParamsDigest: minter.RequestParamsDigest(approvalReq), Nonce: "workload-succession-approval-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := minter.SignEnvelope(authority, approvalPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unapproved, _ := json.Marshal(map[string]any{
+		"request_id": "workload-succession-unapproved", "identity_id": identity, "credential_type": "x509",
+		"target_algorithm": string(crypto.ECDSAP384), "policy_ref": "policy:workload", "deployment_scope": scope,
+		"predecessor_custody": "workload",
+	})
+	if err := worker.Handle(ctx, tenantA, unapproved); err == nil || !strings.Contains(err.Error(), "approval") {
+		t.Fatalf("workload agent released predecessor signature without independent approval: %v", err)
+	}
+	if _, held := custody.keys[succession.TenantKeyHandle(tenantA, identity, 1)]; held {
+		t.Fatal("unapproved request allocated a successor key before agent approval")
+	}
 	payload, _ := json.Marshal(map[string]any{
 		"request_id": "workload-succession-1", "identity_id": identity, "credential_type": "x509",
 		"target_algorithm": string(crypto.ECDSAP384), "policy_ref": "policy:workload", "deployment_scope": scope,
 		"predecessor_custody": "workload",
+		"authorization":       json.RawMessage(approval),
 	})
 	if err := worker.Handle(ctx, tenantA, payload); err != nil {
 		t.Fatalf("workload-held succession: %v", err)
@@ -193,6 +224,8 @@ func TestWorkloadHeldSuccessionCoSignsThroughAgent(t *testing.T) {
 	otherPayload, _ := json.Marshal(map[string]any{
 		"request_id": "workload-succession-other", "identity_id": "spiffe://qa.local/workload/other", "credential_type": "x509",
 		"target_algorithm": string(crypto.ECDSAP384), "policy_ref": "policy:workload", "deployment_scope": scope,
+		"predecessor_custody": "workload",
+		"authorization":       json.RawMessage(approval),
 	})
 	if err := otherWorker.Handle(ctx, tenantA, otherPayload); err == nil || !strings.Contains(err.Error(), "refus") {
 		t.Fatalf("agent must refuse a foreign identity's commitment: %v", err)

@@ -722,8 +722,11 @@ same way.
 An identity whose predecessor key lives in a workload agent (not in the isolated
 signer) is registered with `predecessor_custody: "workload"` and the agent key's
 public half, and the agent serves the co-sign RPC with
-`trstctl-agent --workload-cosign-listen`. The control plane reaches it through one
-entry per identity:
+`trstctl-agent --workload-cosign-listen`. The listener also requires
+`--workload-cosign-approval-authority /path/to/authority-public.pem` and
+`--workload-cosign-approval-state-dir /path/to/agent-only-state` to verify
+independent request-bound approval and persist spent nonces. The control plane
+reaches it through one entry per identity:
 
 ```json
 {

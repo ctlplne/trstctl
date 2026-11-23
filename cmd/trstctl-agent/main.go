@@ -201,6 +201,8 @@ func main() {
 	workloadTenant := flag.String("workload-tenant", "", "workload tenant id for the co-sign binding")
 	workloadDeployment := flag.String("workload-deployment", "", "workload deployment scope for the co-sign binding")
 	workloadPredecessorKey := flag.String("workload-predecessor-key", "", "path to the workload predecessor key (PKCS#8 PEM) the agent holds and co-signs with")
+	workloadApprovalAuthority := flag.String("workload-cosign-approval-authority", "", "independent Ed25519 approval authority public key PEM; required for workload co-sign")
+	workloadApprovalStateDir := flag.String("workload-cosign-approval-state-dir", "", "agent-only durable spent-approval directory; required for workload co-sign")
 	// B6: one-shot, fully offline edge sub-CA modes for a host with no path to
 	// the brain. edge-csr generates the delegated key non-extractably in a TPM
 	// or PKCS#11 token by default and prints the attestation challenge; edge-issue issues one
@@ -484,16 +486,18 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 		if err := runWorkloadCoSign(ctx, workloadCoSignConfig{
-			Listen:             *workloadCoSignListen,
-			DeploymentScope:    *workloadDeployment,
-			IdentityID:         *workloadIdentity,
-			TenantID:           *workloadTenant,
-			PredecessorKeyPath: *workloadPredecessorKey,
-			TLSCertFile:        *workloadCoSignTLSCert,
-			TLSKeyFile:         *workloadCoSignTLSKey,
-			PeerCAFile:         *workloadCoSignPeerCA,
-			PeerPinHex:         *workloadCoSignPeerPin,
-			PeerUID:            *workloadCoSignPeerUID,
+			Listen:                *workloadCoSignListen,
+			DeploymentScope:       *workloadDeployment,
+			IdentityID:            *workloadIdentity,
+			TenantID:              *workloadTenant,
+			PredecessorKeyPath:    *workloadPredecessorKey,
+			ApprovalAuthorityFile: *workloadApprovalAuthority,
+			ApprovalStateDir:      *workloadApprovalStateDir,
+			TLSCertFile:           *workloadCoSignTLSCert,
+			TLSKeyFile:            *workloadCoSignTLSKey,
+			PeerCAFile:            *workloadCoSignPeerCA,
+			PeerPinHex:            *workloadCoSignPeerPin,
+			PeerUID:               *workloadCoSignPeerUID,
 		}); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(1)

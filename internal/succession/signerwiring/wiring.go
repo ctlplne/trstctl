@@ -13,9 +13,9 @@ import (
 )
 
 // Config configures the production succession minter attached to the isolated
-// signer (INT-02). All fields are optional; the zero value yields a working minter
-// with interim in-memory defaults that later cards harden (durable floor at INT-05,
-// PKCS#11/KMS key backend at INT-07, mandatory attestation at INT-11).
+// signer (INT-02). A missing dual-control authority leaves minting disabled.
+// Tests may omit FloorDir for an interim in-memory floor and spent-token store;
+// the served signer supplies FloorDir so both survive restart.
 type Config struct {
 	// SignerID identifies this signer; bound into signer attestations when an
 	// AttestSigner is set.
@@ -49,6 +49,17 @@ type Config struct {
 	// so an unconfigured deployment fails closed rather than accepting tokens
 	// from anywhere (PCAS-claim-17).
 	BreakGlassAuthorityPubDER []byte
+	// DualControlAuthorityPubDER is the operator-provisioned approval authority's
+	// public key. The signer requires a request-bound, single-use token on EVERY
+	// succession. Without this key it refuses all succession mints, including
+	// tokens a control-plane peer supplies, rather than trusting that peer.
+	DualControlAuthorityPubDER []byte
+}
+
+type unavailableDualControl struct{}
+
+func (unavailableDualControl) VerifyAndConsume([]byte, signing.MintRequest, []byte) error {
+	return errors.New("pcas dual-control approval authority is not provisioned in the signer")
 }
 
 // NewProductionMinter builds a fully-gated succession minter for attachment to the
@@ -97,6 +108,19 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 		// so base chain verification detects a tamper of any of them.
 		minter.WithCommitmentV2(),
 	}
+	var approval minter.AuthVerifier = unavailableDualControl{}
+	if len(cfg.DualControlAuthorityPubDER) > 0 {
+		if cfg.FloorDir != "" {
+			verified, err := minter.NewDurableSignedTokenAuthorizer(cfg.DualControlAuthorityPubDER, cfg.FloorDir)
+			if err != nil {
+				return nil, err
+			}
+			approval = verified
+		} else {
+			approval = minter.NewSignedTokenAuthorizer(cfg.DualControlAuthorityPubDER)
+		}
+	}
+	opts = append(opts, minter.WithDualControl(approval))
 	if cfg.AttestSigner != nil {
 		opts = append(opts, minter.WithAttestation(cfg.AttestSigner, cfg.SignerID))
 	}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { pcasApi, type PCASAcceptedRequest, type PCASChain, type PCASCheckpoint, type PCASRequestStatus } from "@/lib/pcasApi";
 import { PCASRetirementPanel } from "@/pages/posture/PCASRetirementPanel";
@@ -24,6 +25,7 @@ export function PCASSuccessionWorkflow() {
   const [targetAlgorithm, setTargetAlgorithm] = useState("ECDSA-P384");
   const [credentialType, setCredentialType] = useState("workload-svid");
   const [policyRef, setPolicyRef] = useState("");
+  const [authorizationJSON, setAuthorizationJSON] = useState("");
   const [reviewed, setReviewed] = useState<"genesis" | "succession" | null>(null);
   const [reviewTuple, setReviewTuple] = useState("");
   const [request, setRequest] = useState<PCASAcceptedRequest | null>(null);
@@ -37,7 +39,7 @@ export function PCASSuccessionWorkflow() {
   const [error, setError] = useState<string | null>(null);
 
   const genesisTuple = JSON.stringify([identityID.trim(), scope.trim(), genesisAlgorithm]);
-  const successionTuple = JSON.stringify([identityID.trim(), scope.trim(), credentialType, targetAlgorithm, policyRef.trim()]);
+  const successionTuple = JSON.stringify([identityID.trim(), scope.trim(), credentialType, targetAlgorithm, policyRef.trim(), authorizationJSON.trim()]);
 
   async function loadChain() {
     if (!identityID.trim()) return;
@@ -122,17 +124,32 @@ export function PCASSuccessionWorkflow() {
     setBusy(true);
     setError(null);
     try {
+      const parsed: unknown = JSON.parse(authorizationJSON);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("payload" in parsed) ||
+        typeof parsed.payload !== "object" ||
+        parsed.payload === null ||
+        !("sig" in parsed) ||
+        typeof parsed.sig !== "string" ||
+        !parsed.sig
+      ) {
+        throw new Error(t("pcas.error.approval"));
+      }
       const accepted = await pcasApi.requestSuccession({
         identity_id: identityID.trim(),
         credential_type: credentialType,
         target_algorithm: targetAlgorithm,
         policy_ref: policyRef.trim(),
         deployment_scope: scope.trim(),
+        authorization: parsed as { payload: Record<string, unknown>; sig: string },
       });
       setRequest(accepted);
       setRequestIdentityID(identityID.trim());
       setRequestStatus(null);
       setReviewed(null);
+      setAuthorizationJSON("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("pcas.error.succession"));
     } finally {
@@ -323,9 +340,22 @@ export function PCASSuccessionWorkflow() {
               />
             </label>
           </div>
+          <label className="grid gap-1 text-sm">
+            <span>{t("pcas.approvalToken")}</span>
+            <Textarea
+              className="min-h-24 font-mono text-xs"
+              value={authorizationJSON}
+              onChange={(event) => {
+                setAuthorizationJSON(event.target.value);
+                setReviewed(null);
+              }}
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </label>
           <Button
             type="button"
-            disabled={busy || !policyRef.trim() || targetAlgorithm === chain.genesis.algorithm}
+            disabled={busy || !policyRef.trim() || !authorizationJSON.trim() || targetAlgorithm === chain.genesis.algorithm}
             onClick={() => {
               setReviewed("succession");
               setReviewTuple(successionTuple);

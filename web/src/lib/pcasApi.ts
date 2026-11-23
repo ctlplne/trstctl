@@ -14,6 +14,7 @@ export interface PCASSuccessionRequest {
   target_algorithm: string;
   policy_ref: string;
   deployment_scope: string;
+  authorization: { payload: Record<string, unknown>; sig: string };
 }
 
 export interface PCASAcceptedRequest {

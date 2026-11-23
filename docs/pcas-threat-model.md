@@ -55,8 +55,10 @@ semantics on top. The boundaries that carry the most security weight:
 ## Adversaries
 
 1. **A malicious/compromised control plane.** Can call the signer's RPCs and shape
-   requests, but cannot obtain key material or advance an epoch the signer's floor does
-   not permit.
+   requests, but cannot obtain signer-held key material or advance a signer-held
+   epoch the signer's floor does not permit. A workload-held first succession
+   additionally requires the independently configured agent's co-signature and
+   approval authority.
 2. **A network/relay attacker between control plane, signer, agent, and RP.** Can drop,
    replay, or reorder messages and present arbitrary bytes to an RP.
 3. **A malicious presenter / relying-party-facing peer.** Holds some valid artifacts and
@@ -72,7 +74,18 @@ Mapped to the claim / invariant that carries the mitigation.
 - **Forge a succession (install an attacker key).** Every record is dual-signed —
   predecessor attestation + successor possession over the same domain-separated
   commitment — and the commitment binds identity/tenant/deployment/epoch/keys. Forgery
-  requires the predecessor key, which never leaves the signer (claims 1/4; AN-4/AN-8).
+  requires the predecessor key, which remains inside its signer or workload-agent
+  custody boundary (claims 1/4/19; AN-4/AN-8).
+- **Drive an otherwise valid succession with one control-plane principal.** The
+  isolated signer's served minter requires an independent Ed25519 authority's
+  single-use, request-bound approval before signer-held succession. The authority
+  private key stays outside the control plane and signer. For a workload-held
+  predecessor, the separately configured workload agent verifies and consumes
+  that approval before co-signing. The product verifies the authority signature
+  and durable nonce, and the signed token binds the signer-held or workload-held
+  custody path; the independent approval authority enforces its own
+  second-approver or threshold-release process (claim 5). Without an installed
+  authority public key, each served mint or co-sign path refuses the operation.
 - **Downgrade to a weaker algorithm.** The signer refuses a forward succession to a
   weaker class without a distinct, single-use, request-bound **break-glass** token; the
   RP mirrors the refusal (claim 17 / INV-8). The break-glass token binds
@@ -137,7 +150,9 @@ Mapped to the claim / invariant that carries the mitigation.
 - **Policy-decision scope binding is best-effort-when-present.** A signed policy decision
   now binds tenant/deployment when it names them; a decision that omits them still binds
   identity+target. Operators should configure the policy authority to always emit the
-  full scope. Dual-control and plan-provenance remain the primary gates.
+  full scope. The served signer enforces signed dual-control approval; the
+  plan-provenance and signed policy-decision verifier hooks are not installed
+  in production, so operators must not treat them as additional served gates.
 - **The signer's trust in its host.** AN-8 locks and zeroizes key material, but a root
   attacker on the signer host with live-process memory access is out of scope for
   software custody; the HSM/module custody boundary (claim 26, `pcas-ceremony.md`) is the

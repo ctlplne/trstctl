@@ -36,6 +36,7 @@ func TestINT06_DurableDualControlSingleUseSurvivesRestart(t *testing.T) {
 	pd := minter.RequestParamsDigest(req)
 	payload, _ := json.Marshal(minter.AuthorizationToken{
 		IdentityID: req.IdentityID, TenantID: req.TenantID,
+		PredecessorCustody:       "signer",
 		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch, TargetAlgorithm: req.TargetAlgorithm,
 		ParamsDigest: pd, Nonce: "nonce-1",
 	})

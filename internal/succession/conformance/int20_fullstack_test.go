@@ -46,6 +46,7 @@ import (
 	pcasorch "trstctl.com/trstctl/internal/succession/orchestrator"
 	"trstctl.com/trstctl/internal/succession/recovery"
 	"trstctl.com/trstctl/internal/succession/retirement"
+	"trstctl.com/trstctl/internal/succession/signerwiring"
 	"trstctl.com/trstctl/internal/succession/staple"
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 	"trstctl.com/trstctl/internal/translog"
@@ -54,19 +55,59 @@ import (
 const int20Tenant = "11111111-1111-1111-1111-111111111111"
 
 type int20Stack struct {
-	ctx       context.Context
-	store     *corestore.Store
-	repo      *pcasstore.Repo
-	log       *events.Log
-	outbox    *coreorch.Outbox
-	handler   editionseam.LicensedOutboxHandler
-	svc       succapi.Service
-	signer    *signing.Client
-	signAuthz *crypto.SignAuthorizer
-	keyDir    string
-	tenantID  string
-	features  *featureRecorder
-	closeSign func()
+	ctx             context.Context
+	store           *corestore.Store
+	repo            *pcasstore.Repo
+	log             *events.Log
+	outbox          *coreorch.Outbox
+	handler         editionseam.LicensedOutboxHandler
+	svc             succapi.Service
+	signer          *signing.Client
+	signAuthz       *crypto.SignAuthorizer
+	approvalPrivate []byte
+	keyDir          string
+	tenantID        string
+	features        *featureRecorder
+	closeSign       func()
+}
+
+func (st *int20Stack) approveMint(t *testing.T, req signing.MintRequest) []byte {
+	t.Helper()
+	nonce, err := crypto.RandomBytes(16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(minter.AuthorizationToken{
+		IdentityID: req.IdentityID, TenantID: req.TenantID,
+		PredecessorCustody:       "signer",
+		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch,
+		TargetAlgorithm:          req.TargetAlgorithm, ParamsDigest: minter.RequestParamsDigest(req),
+		Nonce: base64.RawURLEncoding.EncodeToString(nonce),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := crypto.SignEd25519(st.approvalPrivate, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := json.Marshal(struct {
+		Payload json.RawMessage `json:"payload"`
+		Sig     []byte          `json:"sig"`
+	}{payload, signature})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return envelope
+}
+
+func (st *int20Stack) approveRequest(t *testing.T, tenantID, identityID, scope string, epoch uint64, algorithm crypto.Algorithm, policyRef string) json.RawMessage {
+	t.Helper()
+	return st.approveMint(t, signing.MintRequest{
+		IdentityID: identityID, TenantID: tenantID, DeploymentScope: scope,
+		PredecessorHandle:        succession.TenantKeyHandle(tenantID, identityID, epoch),
+		AssertedPredecessorEpoch: epoch, TargetAlgorithm: algorithm, PolicyRef: policyRef,
+	})
 }
 
 type staticSignerProvider struct{ c *signing.Client }
@@ -162,12 +203,14 @@ func TestINT20_DelegationScopeCrossesIsolatedSignerBoundary(t *testing.T) {
 	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.KeyHandle(identity, 0)); err != nil {
 		t.Fatalf("generate predecessor key: %v", err)
 	}
-	if _, err := st.signer.MintSuccessor(st.ctx, signing.MintRequest{
+	approved := signing.MintRequest{
 		IdentityID: identity, TenantID: st.tenantID, DeploymentScope: "spiffe://int20.example",
 		PredecessorHandle: succession.KeyHandle(identity, 0), AssertedPredecessorEpoch: 0,
 		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "policy:int20-isolated-delegation",
 		DelegationScope: scopeID,
-	}); err != nil {
+	}
+	approved.Authorization = st.approveMint(t, approved)
+	if _, err := st.signer.MintSuccessor(st.ctx, approved); err != nil {
 		t.Fatalf("isolated signer did not enforce configured delegation: %v", err)
 	}
 	const otherTenant = "22222222-2222-2222-2222-222222222222"
@@ -195,12 +238,14 @@ func TestINT20_DelegationScopeCrossesIsolatedSignerBoundary(t *testing.T) {
 		t.Fatalf("configure same scope for distinct tenant: %v", err)
 	}
 	st.dispatchAll(t)
-	if _, err := st.signer.MintSuccessor(st.ctx, signing.MintRequest{
+	otherApproved := signing.MintRequest{
 		IdentityID: otherIdentity, TenantID: otherTenant, DeploymentScope: "spiffe://int20.example",
 		PredecessorHandle: succession.KeyHandle(otherIdentity, 0), AssertedPredecessorEpoch: 0,
 		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "policy:int20-other-tenant",
 		DelegationScope: scopeID,
-	}); err != nil {
+	}
+	otherApproved.Authorization = st.approveMint(t, otherApproved)
+	if _, err := st.signer.MintSuccessor(st.ctx, otherApproved); err != nil {
 		t.Fatalf("other tenant scope did not enforce its independent floor: %v", err)
 	}
 	raised, err := svc.RaiseDelegationFloor(st.ctx, st.tenantID, succapi.DelegationFloorRequest{ScopeID: scopeID, EpochFloor: 3})
@@ -271,7 +316,7 @@ func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack 
 		t.Fatalf("open embedded JetStream: %v", err)
 	}
 
-	signer, stopSign, keyDir, signAuthz := startLicensedSignerSubprocess(t)
+	signer, stopSign, keyDir, signAuthz, approvalPrivate := startLicensedSignerSubprocess(t)
 	features := &featureRecorder{}
 	outbox := coreorch.NewOutbox(cs,
 		coreorch.WithWorkerID("pcas-int20"),
@@ -305,7 +350,7 @@ func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack 
 
 	st := &int20Stack{
 		ctx: ctx, store: cs, repo: pcasstore.New(cs), log: log, outbox: outbox,
-		handler: handler, svc: svc, signer: signer, signAuthz: signAuthz, keyDir: keyDir, tenantID: int20Tenant,
+		handler: handler, svc: svc, signer: signer, signAuthz: signAuthz, approvalPrivate: approvalPrivate, keyDir: keyDir, tenantID: int20Tenant,
 		features: features, closeSign: stopSign,
 	}
 	t.Cleanup(func() {
@@ -321,6 +366,10 @@ func (st *int20Stack) close() {
 		st.closeSign()
 		st.closeSign = nil
 	}
+	for i := range st.approvalPrivate {
+		st.approvalPrivate[i] = 0
+	}
+	st.approvalPrivate = nil
 }
 
 func (st *int20Stack) requestSuccessionChain(t *testing.T) (string, succession.GenesisRecord, []byte) {
@@ -342,6 +391,7 @@ func (st *int20Stack) requestSuccessionChain(t *testing.T) (string, succession.G
 	if _, err := st.svc.RequestSuccession(st.ctx, st.tenantID, succapi.RequestSuccessionRequest{
 		IdentityID: id, CredentialType: "x509", TargetAlgorithm: string(crypto.ECDSAP384),
 		PolicyRef: "policy:int20-core", DeploymentScope: "spiffe://int20.example",
+		Authorization: st.approveRequest(t, st.tenantID, id, "spiffe://int20.example", 0, crypto.ECDSAP384, "policy:int20-core"),
 	}); err != nil {
 		t.Fatalf("request succession: %v", err)
 	}
@@ -1309,7 +1359,7 @@ func startEmbeddedPostgres(t *testing.T) (string, func()) {
 	return dsn, func() { _ = pg.Stop() }
 }
 
-func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), string, *crypto.SignAuthorizer) {
+func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), string, *crypto.SignAuthorizer, []byte) {
 	t.Helper()
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()
 	if err != nil {
@@ -1345,6 +1395,16 @@ func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), strin
 	}
 	socket := filepath.Join(socketDir, "s.sock")
 	keyDir := filepath.Join(dir, "keys")
+	approvalPrivate, approvalPublic, err := crypto.GenerateEd25519KeyPEM()
+	if err != nil {
+		t.Fatalf("generate test approval authority: %v", err)
+	}
+	if err := os.MkdirAll(keyDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(keyDir, signerwiring.DualControlAuthorityFile), approvalPublic, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	kekFile := filepath.Join(dir, "kek.bin")
 	authFile := filepath.Join(dir, "sign-auth.bin")
 	authz, err := signing.LoadOrCreateAuthorizer(authFile)
@@ -1367,7 +1427,7 @@ func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), strin
 		authz.Destroy()
 		_ = os.RemoveAll(dir)
 		_ = os.RemoveAll(socketDir)
-	}, keyDir, authz
+	}, keyDir, authz, approvalPrivate
 }
 
 // freeTCPPort returns an unused loopback port as a uint32 — the type

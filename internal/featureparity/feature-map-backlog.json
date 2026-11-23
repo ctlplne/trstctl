@@ -11922,6 +11922,8 @@
                 "pcas delegation scopes set",
                 "pcas delegation floors raise",
                 "pcas succession request",
+                "pcas succession approval prepare",
+                "pcas succession approval assemble",
                 "pcas chain get",
                 "pcas checkpoints get",
                 "pcas retirement show",
