@@ -11,10 +11,9 @@ import (
 // op: the gate must refuse a chain whose head (or any ancestor) has been revoked by
 // the AGID-02 ledger projection. The gate depends only on this small interface -- NOT
 // the SQL *Repo -- so it is testable with a fake and keeps the heavy store out of the
-// AN-4 signer's dependency closure. The production adapter over the AGID-02 projection
-// reader is wired at attach time (a later card); a signer built with no reader treats
-// EVERY subject as non-revoked ONLY if explicitly constructed that way, and the
-// production wiring always supplies a real reader (fail-closed by construction).
+// AN-4 signer's dependency closure. The production control plane reads AGID-02
+// and signs a one-use proof; the isolated signer verifies that proof and never
+// links the SQL reader.
 
 // ErrRevoked is returned by the gate when a delegation record on the chain has been
 // revoked. Fail-closed: a revoked chain yields a signed refusal, no key op.
@@ -36,9 +35,25 @@ type RevocationReader interface {
 	IsRevoked(tenantID string, recordDigest []byte) (bool, error)
 }
 
+// SubjectRevocationReader checks the identities named by a signed hop, independent
+// of whether that hop has reached the read model. A terminal directive still
+// revokes the subject: terminal describes cascade completion, not reinstatement.
+// Signer gates use this in addition to the digest check when a reader supports it.
+type SubjectRevocationReader interface {
+	IsSubjectRevoked(tenantID, subjectID string) (bool, error)
+}
+
+// KeyRevocationReader closes the alias case: a revoked subject can sign another
+// hop while spelling its identity differently, but it cannot change the held
+// delegator public key's SHA-256 thumbprint.
+type KeyRevocationReader interface {
+	IsKeyRevoked(tenantID string, delegatorKeyThumbprint []byte) (bool, error)
+}
+
 // NeverRevoked is a RevocationReader that reports nothing revoked. It exists ONLY for
 // tests and for the single-hop/no-chain paths where there is no chain record to
-// revoke; production wiring supplies a real projection-backed reader. It is exported
+// revoke; production wiring requires a signed online proof when it uses this
+// fallback. It is exported
 // so tests and the attestation-gated fallback (which has no chain) can pass it
 // explicitly rather than a nil reader (a nil reader is rejected by the gate
 // constructor, fail-closed).

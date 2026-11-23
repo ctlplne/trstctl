@@ -177,6 +177,7 @@ func issuancePreconditionsFromProto(req *signerpb.GatedIssueRequest) (IssuancePr
 		TrustAnchorRef:    req.GetTrustAnchorRef(),
 		NotBefore:         req.GetNotBefore(),
 		NotAfter:          req.GetNotAfter(),
+		Algorithm:         alg,
 		Preconditions:     req.GetPreconditions(),
 		SubjectRepr:       req.GetSubjectRepr(),
 		Attestation:       req.GetAttestation(),

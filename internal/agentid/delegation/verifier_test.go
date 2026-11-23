@@ -168,6 +168,37 @@ func TestSignerGate_UsesDurableAnchorSourceDynamically(t *testing.T) {
 	}
 }
 
+func TestCR053SignerWithProvisionedRootRequiresRevocationAuthorization(t *testing.T) {
+	const tenantID = "tenant-revocation-proof"
+	envs, anchors, _ := singleAnchorChain(t, nil, tenantID, "fido2:root")
+	store := NewDurableAnchorStore(t.TempDir())
+	if err := store.PutRootAnchor(backgroundCtx(), tenantID, "root-key", anchors["root-key"]); err != nil {
+		t.Fatal(err)
+	}
+	// This is the production shape: a live signer has a root-anchor source but
+	// cannot link the SQL-backed revocation reader into its isolated process.
+	gate, _, err := NewSignerGate(SignerConfig{SignerID: "test-signer", AnchorSource: store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pre, err := encodePreconditionsForTest(PreconditionsBody{Chain: envs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec, err := gate.VerifyIssuancePreconditions(backgroundCtx(), signing.IssuancePreconditions{
+		TenantID: tenantID, TrustAnchorRef: "leaf", Preconditions: pre,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dec.Approved {
+		t.Fatal("CR-053: production signer approved a root-anchored chain without any revocation authorization")
+	}
+	if art := decodeRefusalForTest(t, dec.RefusalRecord); art.FailedCheck != CheckRevocation {
+		t.Fatalf("failed_check = %q, want %q", art.FailedCheck, CheckRevocation)
+	}
+}
+
 // TestIssue_VerifiesChainBeforeKeyOp proves INV-A1: with an instrumented fake keystore
 // recording call order, the gate verifies the whole chain and approves BEFORE any key op,
 // and exactly one key op runs, strictly after the gate consult. It also asserts a refused

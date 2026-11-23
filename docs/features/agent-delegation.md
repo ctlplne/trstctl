@@ -233,6 +233,21 @@ trstctl-cli agent-delegation revocations incomplete-jobs --directive_id directiv
 trstctl-cli agent-delegation revocations evidence --directive_id directive-1
 ```
 
+The revoke command returns `queued` while the outbox worker records the
+directive. Once the directive is recorded, issuance and renewal check every
+signed delegation hop, its two subjects, and each delegator public key that
+was previously observed for a revoked subject. A retry makes the same checks
+again. `terminal` means the cascade over already-issued credentials has
+completion evidence; it does not restore issuance authority. A future
+reinstatement needs a separate audited action.
+
+The control plane checks the tenant's revocation projection immediately
+before each signer call and signs a five-second authorization bound to that
+exact issuance request. The isolated signer verifies the authorization using
+its operator-installed public verdict key and durably spends its nonce before
+minting. A direct signer peer without that proof receives a signed refusal.
+If the projection or proof custody is unavailable, issuance fails closed.
+
 ## Relying services
 
 A relying service is whatever an agent calls with its credential: a tool

@@ -82,6 +82,19 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 	if err != nil || string(gotDER) != string(wantAnchor.PublicDER) || gotAuthRef != wantAnchor.AuthRef {
 		t.Fatalf("signer root readback differs: der=%x auth_ref=%q err=%v", gotDER, gotAuthRef, err)
 	}
+	// A direct signer peer has the same valid chain and reachability verdict,
+	// but no fresh control-plane revocation read. It must get a signed refusal.
+	unauthorized, err := client1.GatedIssue(context.Background(), signing.IssuancePreconditions{
+		TenantID: tenantID, TrustAnchorRef: "leaf-without-proof",
+		NotBefore: time.Now().Unix(), NotAfter: time.Now().Add(20 * time.Minute).Unix(),
+		Preconditions: fx.pre,
+	}, crypto.ECDSAP256)
+	if err != nil || unauthorized.Approved {
+		t.Fatalf("direct signer peer without revocation proof approved=%t err=%v", unauthorized.Approved, err)
+	}
+	if art, err := DecodeRefusal(unauthorized.RefusalRecord); err != nil || art.FailedCheck != CheckRevocation {
+		t.Fatalf("direct peer refusal failed_check=%q err=%v", art.FailedCheck, err)
+	}
 	first := issue(t, client1, "leaf-first")
 	stop1()
 
@@ -345,15 +358,34 @@ func (fx *signerSubprocessFixture) provisionFloors(t *testing.T, client *signing
 func (fx *signerSubprocessFixture) gatedIssue(t *testing.T, client *signing.Client, ref string, attestation []byte, method string) signing.IssuanceDecision {
 	t.Helper()
 	now := time.Now().UTC()
-	decision, err := client.GatedIssue(context.Background(), signing.IssuancePreconditions{
+	req := signing.IssuancePreconditions{
 		TenantID:          fx.tenantID,
 		TrustAnchorRef:    ref,
 		NotBefore:         now.Unix(),
 		NotAfter:          now.Add(20 * time.Minute).Unix(),
+		Algorithm:         crypto.ECDSAP256,
 		Preconditions:     fx.pre,
 		Attestation:       attestation,
 		AttestationMethod: method,
-	}, crypto.ECDSAP256)
+	}
+	nonce, err := crypto.RandomBytes(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, err := SignRevocationProof(req, fx.verdictKey, fx.verdictSigner, nonce, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := DecodePreconditionsBody(req.Preconditions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.RevocationProof = proof
+	req.Preconditions, err = EncodePreconditionsBody(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := client.GatedIssue(context.Background(), req, crypto.ECDSAP256)
 	if err != nil {
 		t.Fatalf("GatedIssue(%s): %v", ref, err)
 	}

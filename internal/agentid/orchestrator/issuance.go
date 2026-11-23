@@ -67,11 +67,6 @@ type issuanceWorker struct {
 	// manifest is compared against (AGID-03). Constructed here (NewRegisteredToolSet
 	// caller); a real deployment provisions the concrete set in AGID-INT-WIRE.
 	registeredTools agentstack.RegisteredToolSet
-	// revocationReader is the directive-backed control-plane non-revocation reader (claim
-	// 20). It refuses active directives before the signer is called; the signer remains
-	// datastore-free and can later consume a signed non-revocation attestation as defense in
-	// depth.
-	revocationReader *revoke.DirectiveRevocationReader
 	// policyEngine is the S10.1 decision gate the chain-bound precondition consults
 	// (AGID-claim-14). The conservative BaseModule (deny-by-default) is the safe default.
 	policyEngine *policy.Engine
@@ -95,7 +90,8 @@ type issuanceWorker struct {
 // newIssuanceWorker constructs the issuance worker and, in doing so, every previously
 // test-only reachability/agent-stack constructor gains a non-test caller:
 // reach.NewEngine, reach.NewCeilingPolicy, delegation.NewToolRegistry,
-// agentstack.NewToolManifest/NewRegisteredToolSet, and revoke.NewDirectiveRevocationReader.
+// agentstack.NewToolManifest/NewRegisteredToolSet. Each delivery constructs its
+// own deadline-bound revoke.NewDirectiveRevocationReader.
 func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, log *events.Log, policyEngine *policy.Engine, signerGate signing.IssuanceGate, verdictSigner crypto.Signer, verdictKey reach.VerdictKeyRef) *issuanceWorker {
 	// The production reachability engine over the tenant credential graph built under RLS
 	// (StoreGraphSource). The watermark binds the verdict's freshness to a real ledger
@@ -117,24 +113,18 @@ func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, log *events.
 	toolRegistry := delegation.NewToolRegistry(map[string]string{})
 	registeredTools := agentstack.NewRegisteredToolSet()
 
-	// The directive-backed non-revocation reader (AGID-claim-20). It reads the AGID-02
-	// projection under a background context and refuses active directives before the
-	// signer transport is called.
-	revocationReader := revoke.NewDirectiveRevocationReader(repo, context.Background())
-
 	return &issuanceWorker{
-		core:             core,
-		repo:             repo,
-		engine:           engine,
-		policy:           ceilingPolicy,
-		toolRegistry:     toolRegistry,
-		registeredTools:  registeredTools,
-		revocationReader: revocationReader,
-		policyEngine:     policyEngine,
-		recorder:         brokerstore.New(core).WithEventLog(log),
-		signerGate:       signerGate,
-		verdictSigner:    verdictSigner,
-		verdictKey:       verdictKey,
+		core:            core,
+		repo:            repo,
+		engine:          engine,
+		policy:          ceilingPolicy,
+		toolRegistry:    toolRegistry,
+		registeredTools: registeredTools,
+		policyEngine:    policyEngine,
+		recorder:        brokerstore.New(core).WithEventLog(log),
+		signerGate:      signerGate,
+		verdictSigner:   verdictSigner,
+		verdictKey:      verdictKey,
 	}
 }
 
@@ -200,22 +190,14 @@ func (w *issuanceWorker) deliver(ctx context.Context, m coreorch.Message) error 
 		return fmt.Errorf("agentid issuance worker: tool manifest exceeds registered set: %s", manifestVerdict.Reason)
 	}
 
-	// Pre-issuance non-revocation guard (AGID-claim-20): consult the directive-backed
-	// revocation reader for the chain head record digest. This is the production caller
-	// for revoke.NewDirectiveRevocationReader / DirectiveRevocationReader.IsRevoked: if the
-	// head (or any subject on its chain) is under an ACTIVE (non-terminal) revocation
-	// directive, refuse the chain-bound issuance before any key op — the same
-	// refuse-while-active answer the in-signer gate consults per hop. A read error fails
-	// closed (the reader reports revoked on a broken view), so a chain-bound issuance never
-	// proceeds under an unreadable revocation view.
-	if headDigest := headRecordDigest(preBody, w.toolRegistry); len(headDigest) > 0 {
-		revoked, err := w.revocationReader.IsRevoked(tenantID, headDigest)
-		if err != nil {
-			return fmt.Errorf("agentid issuance worker: non-revocation check failed closed: %w", err)
-		}
-		if revoked {
-			return fmt.Errorf("agentid issuance worker: chain head is under an active revocation directive; refusing chain-bound issuance (AGID-claim-20)")
-		}
+	// Every outbox retry rechecks the full signed chain and the requested agent.
+	// A head-only lookup misses a revoked ancestor; a digest-only lookup misses a
+	// freshly signed descendant that has no projection row. Terminal directives
+	// remain revocations after their already-issued cascade finishes.
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if err := checkRevocation(revoke.NewDirectiveRevocationReader(w.repo, checkCtx), tenantID, s.AgentID, preBody); err != nil {
+		return err
 	}
 
 	staged := brokerstore.ChainBoundRequest{
@@ -232,6 +214,65 @@ func (w *issuanceWorker) deliver(ctx context.Context, m coreorch.Message) error 
 		PolicyAttrs:         map[string]any{"designated_class": s.DesignatedClass},
 	}
 	return w.driveChainBoundIssuance(ctx, tenantID, s, staged)
+}
+
+type revocationChecks interface {
+	delegation.RevocationReader
+	delegation.SubjectRevocationReader
+	delegation.KeyRevocationReader
+}
+
+func checkRevocation(reader revocationChecks, tenantID, agentID string, body delegation.PreconditionsBody) error {
+	if reader == nil {
+		return fmt.Errorf("agentid issuance worker: no revocation reader")
+	}
+	seen := map[string]bool{}
+	checkSubject := func(subjectID string) error {
+		if subjectID == "" || seen[subjectID] {
+			return nil
+		}
+		seen[subjectID] = true
+		revoked, err := reader.IsSubjectRevoked(tenantID, subjectID)
+		if err != nil {
+			return fmt.Errorf("agentid issuance worker: subject revocation check failed closed: %w", err)
+		}
+		if revoked {
+			return fmt.Errorf("agentid issuance worker: subject %q has a revocation directive; refusing chain-bound issuance", subjectID)
+		}
+		return nil
+	}
+	if err := checkSubject(agentID); err != nil {
+		return err
+	}
+	for _, hop := range body.Chain {
+		if err := checkSubject(hop.Record.DelegatorID); err != nil {
+			return err
+		}
+		if err := checkSubject(hop.Record.DelegateID); err != nil {
+			return err
+		}
+		if len(hop.DelegatorPublicDER) > 0 {
+			revoked, err := reader.IsKeyRevoked(tenantID, delegation.DelegateKeyThumbprintOf(hop.DelegatorPublicDER))
+			if err != nil {
+				return fmt.Errorf("agentid issuance worker: delegator key revocation check failed closed: %w", err)
+			}
+			if revoked {
+				return fmt.Errorf("agentid issuance worker: delegator key has a revocation directive; refusing chain-bound issuance")
+			}
+		}
+		digest, err := hop.Record.Digest(nil)
+		if err != nil {
+			return fmt.Errorf("agentid issuance worker: delegation digest: %w", err)
+		}
+		revoked, err := reader.IsRevoked(tenantID, digest)
+		if err != nil {
+			return fmt.Errorf("agentid issuance worker: hop revocation check failed closed: %w", err)
+		}
+		if revoked {
+			return fmt.Errorf("agentid issuance worker: delegation hop has a revocation directive; refusing chain-bound issuance")
+		}
+	}
+	return nil
 }
 
 // computeReachabilityVerdict calls the reach engine to produce a signed verdict for the

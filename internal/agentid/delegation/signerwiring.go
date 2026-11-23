@@ -15,11 +15,10 @@ import (
 //
 // The refusal-signing key is generated INSIDE the signer as LOCKED, zeroizable material
 // (AN-8) and never leaves the boundary; only its public form is exposed for verifying
-// refusals. Root anchors and the projection-backed revocation reader are provisioned by
-// the deployment (root-anchor provisioning + the AGID-02 projection adapter are the
-// integration cards, AGID-INT-WIRE); until provisioned, the gate holds an empty trust
-// store and a fail-closed revocation reader, so a delegated chain simply fails the
-// root-anchor check with a signed refusal -- never an unverified approval. The
+// refusals. Root anchors and the public key for online non-revocation proofs are
+// provisioned in the signer's local floor. The SQL-backed projection reader stays
+// in the control plane (AN-4). Until the floors are provisioned, a delegated
+// chain fails with a signed refusal. The
 // min-attestation-class policy and the attestation verifier are likewise supplied by the
 // deployment.
 //
@@ -54,11 +53,14 @@ type SignerConfig struct {
 	// file-backed provisioning store. It is consulted after static tenant anchors
 	// and before global single-tenant anchors.
 	AnchorSource RootAnchorSource
-	// Revocations is the AGID-02 projection-backed non-revocation reader. When nil, a
-	// fail-closed reader is used that reports nothing revoked ONLY because there is no
-	// chain to revoke on the free path; a real reader is required before delegated
-	// issuance is enabled.
+	// Revocations is an optional direct reader for controlled tests. Production
+	// leaves it nil and requires a fresh signed proof for every gated issuance.
 	Revocations RevocationReader
+	// RevocationProofTrust and ProofConsumer are signer-local authorization
+	// dependencies used when the SQL-backed reader cannot be linked into the
+	// isolated process. A missing dependency refuses delegated issuance.
+	RevocationProofTrust reach.VerdictTrustLookup
+	ProofConsumer        ProofConsumer
 	// Attestor verifies attestation evidence read-only over internal/attest. When nil,
 	// any request requiring attestation is refused.
 	Attestor AttestationVerifier
@@ -97,12 +99,10 @@ func NewSignerGate(cfg SignerConfig) (*Gate, crypto.PublicKey, error) {
 	refusalSigner := crypto.SignerFromDigestSigner(locked)
 
 	revocations := cfg.Revocations
+	requireRevocationProof := revocations == nil && (cfg.AnchorSource != nil || len(cfg.Anchors) > 0 || len(cfg.TenantAnchors) > 0)
 	if revocations == nil {
-		// No projection adapter yet: a reader that reports nothing revoked. This is safe
-		// ONLY because, absent root anchors, no delegated chain anchors -- every
-		// multi-hop request is refused at the root-anchor check before revocation is
-		// consulted. AGID-INT-WIRE replaces this with the real projection reader before
-		// delegated issuance is enabled.
+		// The signer has no SQL driver. A live root requires a signed online
+		// authorization; NeverRevoked alone is never sufficient to approve.
 		revocations = NeverRevoked{}
 	}
 
@@ -118,16 +118,19 @@ func NewSignerGate(cfg SignerConfig) (*Gate, crypto.PublicKey, error) {
 	}
 
 	gate, err := NewGate(Config{
-		SignerID:              cfg.SignerID,
-		Roots:                 roots,
-		RefusalSigner:         refusalSigner,
-		Revocations:           revocations,
-		Attestor:              cfg.Attestor,
-		MinClass:              cfg.MinClass,
-		Tools:                 cfg.Tools,
-		ReachabilityTrust:     cfg.ReachabilityTrust,
-		ReachabilityWatermark: cfg.ReachabilityWatermark,
-		RequireReachability:   cfg.RequireReachability,
+		SignerID:               cfg.SignerID,
+		Roots:                  roots,
+		RefusalSigner:          refusalSigner,
+		Revocations:            revocations,
+		Attestor:               cfg.Attestor,
+		MinClass:               cfg.MinClass,
+		Tools:                  cfg.Tools,
+		ReachabilityTrust:      cfg.ReachabilityTrust,
+		ReachabilityWatermark:  cfg.ReachabilityWatermark,
+		RequireReachability:    cfg.RequireReachability,
+		RequireRevocationProof: requireRevocationProof,
+		RevocationProofTrust:   cfg.RevocationProofTrust,
+		ProofConsumer:          cfg.ProofConsumer,
 	})
 	if err != nil {
 		locked.Destroy()

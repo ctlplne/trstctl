@@ -5,6 +5,8 @@ package orchestrator
 import (
 	"bytes"
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	agidapi "trstctl.com/trstctl/internal/agentid/api"
@@ -12,6 +14,43 @@ import (
 	"trstctl.com/trstctl/internal/agentid/revoke"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 )
+
+type cr053Revocations struct {
+	subject string
+	seen    []string
+	err     error
+}
+
+func (r *cr053Revocations) IsRevoked(string, []byte) (bool, error)    { return false, r.err }
+func (r *cr053Revocations) IsKeyRevoked(string, []byte) (bool, error) { return false, r.err }
+func (r *cr053Revocations) IsSubjectRevoked(_ string, subject string) (bool, error) {
+	r.seen = append(r.seen, subject)
+	return subject == r.subject, r.err
+}
+
+func TestCR053IssuanceRetryChecksEverySubjectAndChainlessAgent(t *testing.T) {
+	chain := delegation.PreconditionsBody{Chain: []delegation.RecordEnvelope{
+		{Record: delegation.Record{TenantID: "tenant-a", DelegatorID: "root", DelegateID: "middle"}},
+		{Record: delegation.Record{TenantID: "tenant-a", DelegatorID: "middle", DelegateID: "leaf"}},
+	}}
+	for _, subject := range []string{"root", "middle", "leaf", "agent"} {
+		t.Run(subject, func(t *testing.T) {
+			reader := &cr053Revocations{subject: subject}
+			body := chain
+			if subject == "agent" {
+				body = delegation.PreconditionsBody{}
+			}
+			err := checkRevocation(reader, "tenant-a", "agent", body)
+			if err == nil || !strings.Contains(err.Error(), "revocation directive") {
+				t.Fatalf("revoked %s was not refused: %v", subject, err)
+			}
+		})
+	}
+	reader := &cr053Revocations{err: errors.New("projection unavailable")}
+	if err := checkRevocation(reader, "tenant-a", "agent", chain); !errors.Is(err, reader.err) {
+		t.Fatalf("unavailable projection must fail closed: %v", err)
+	}
+}
 
 // TestDestinations_MatchAPI asserts the worker drains exactly the destinations the API
 // enqueues, and the cascade job destinations it re-exports. A drift would silently break a

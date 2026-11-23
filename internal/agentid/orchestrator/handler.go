@@ -61,7 +61,7 @@ func newHandler(d editionseam.LicensedOutboxDeps, signer crypto.Signer) (*handle
 	// fails closed (brokerstore.ErrNoSignerGate) and mints nothing. The agent-credential key
 	// algorithm the signer generates inside the boundary is ECDSA P-256 (the control-plane
 	// norm; the signer's key op picks its own default if left empty).
-	signerGate := NewSignerIssuanceGate(d.IssuanceGate, crypto.ECDSAP256)
+	signerGate := NewSignerIssuanceGateWithRevocationProof(d.IssuanceGate, crypto.ECDSAP256, repo, verdictSigner, verdictKey)
 	issue := newIssuanceWorker(d.Store, repo, d.Log, policyEngine, signerGate, verdictSigner, verdictKey)
 	cascade, err := newCascadeWorker(d.Store, repo, d.Log, outbox, signer)
 	if err != nil {

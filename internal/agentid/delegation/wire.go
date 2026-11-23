@@ -79,6 +79,9 @@ type PreconditionsBody struct {
 	// (no key op). When reachability is not enabled, this is inert and the gate behaves
 	// exactly as AGID-05 (no regression).
 	ReachabilityVerdict []byte `json:"reachability_verdict,omitempty"`
+	// RevocationProof is a short-lived, one-use control-plane authorization for
+	// this exact issuance. The isolated signer verifies and spends it before minting.
+	RevocationProof []byte `json:"revocation_proof,omitempty"`
 }
 
 // ErrDecodePreconditions is returned when the opaque precondition body cannot be
@@ -99,6 +102,10 @@ func decodePreconditions(b []byte) (PreconditionsBody, error) {
 	return body, nil
 }
 
+// DecodePreconditionsBody is the control-plane inverse of EncodePreconditionsBody.
+// The isolated gate still verifies every signed field after decoding.
+func DecodePreconditionsBody(b []byte) (PreconditionsBody, error) { return decodePreconditions(b) }
+
 // EncodePreconditionsBody encodes a precondition body to the opaque JSON carriage the
 // AGID-04a seam forwards (signing.IssuancePreconditions.Preconditions). It is the
 // control-plane inverse of decodePreconditions: the AGID-07b broker precondition (in the
@@ -110,7 +117,7 @@ func decodePreconditions(b []byte) (PreconditionsBody, error) {
 // matching decodePreconditions' empty-body handling (a nil body decodes to the zero body).
 func EncodePreconditionsBody(body PreconditionsBody) ([]byte, error) {
 	if len(body.Chain) == 0 && body.DesignatedClass == "" && len(body.DeclaredTools) == 0 &&
-		len(body.Envelope) == 0 && len(body.ReachabilityVerdict) == 0 {
+		len(body.Envelope) == 0 && len(body.ReachabilityVerdict) == 0 && len(body.RevocationProof) == 0 {
 		return nil, nil
 	}
 	return json.Marshal(body)

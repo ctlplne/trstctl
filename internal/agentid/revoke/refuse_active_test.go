@@ -4,6 +4,7 @@ package revoke_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -25,11 +26,8 @@ import (
 // refusal names CheckRevocation and NO key op runs (an issued-key op would panic the fake
 // keystore, so a bare refusal decision with zero key ops is the assertion).
 //
-// It also asserts RENEWAL is not exempt: a renewal re-verifies the chain through this same
-// gate, so a renewal whose chain includes the subject is refused exactly like a fresh
-// issuance (§7.4). And it asserts the refusal is scoped to the ACTIVE window: once the
-// directive is terminal (revoked-with-evidence), the reader lifts and a fresh chain over
-// the same record is approved.
+// Renewal re-verifies the same chain, and terminal cascade completion leaves the
+// revoked subject refused on all later attempts.
 func TestRevoke_SignerRefusesWhileDirectiveActive(t *testing.T) {
 	h := newHarness(t, "revoke_refuse_active")
 	ctx := context.Background()
@@ -156,27 +154,128 @@ func TestRevoke_SignerRefusesWhileDirectiveActive(t *testing.T) {
 		t.Fatalf("renewal failed_check = %q, want %q", renewArt.FailedCheck, delegation.CheckRevocation)
 	}
 
-	// Scope check: once the directive is TERMINAL (revoked-with-evidence), the reader lifts
-	// (its cascade has fully evidenced), so a fresh chain over the same record is approved —
-	// the refusal is bounded to the ACTIVE window, not forever.
+	// CR-053: terminal means the cascade finished; it must not restore the revoked
+	// subject's authority to mint a new credential.
 	flipDirectiveTerminal(t, h, tenantA, directiveID)
 
 	afterDec, err := gate.VerifyIssuancePreconditions(ctx, req)
 	if err != nil {
 		t.Fatalf("VerifyIssuancePreconditions (post-terminal): %v", err)
 	}
-	if !afterDec.Approved {
-		if a, _ := delegation.DecodeRefusal(afterDec.RefusalRecord); a.FailedCheck == delegation.CheckRevocation {
-			t.Fatal("chain still refused at CheckRevocation after the directive went terminal (refusal not scoped to the active window)")
-		}
-		t.Fatalf("post-terminal issuance not approved (unexpected refusal): %+v", afterDec)
+	if afterDec.Approved {
+		t.Fatal("CR-053: terminal directive restored the revoked subject's issuance authority")
+	}
+	if a, _ := delegation.DecodeRefusal(afterDec.RefusalRecord); a.FailedCheck != delegation.CheckRevocation {
+		t.Fatalf("post-terminal refusal failed_check = %q, want %q", a.FailedCheck, delegation.CheckRevocation)
 	}
 }
 
-// flipDirectiveTerminal marks a directive terminal via the AGID-02 store helper, so the
-// directive-backed reader stops reporting the subject as under an active directive. It is
-// the durable transition the terminal engine performs; the test flips it directly to
-// assert the reader's active-window scoping without driving a full cascade.
+func TestCR053UnrecordedDescendantOfRevokedSubjectIsRefused(t *testing.T) {
+	h := newHarness(t, "cr053_unrecorded_descendant")
+	ctx := context.Background()
+	be := crypto.NewSoftwareBackend()
+	rootSigner, err := be.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refusalSigner, err := be.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := delegation.Record{
+		TenantID: tenantA, DelegatorID: "revoked-root", DelegateID: "child",
+		DelegatorKey:   delegation.KeyRef{ID: "root-key", Algorithm: string(crypto.ECDSAP256)},
+		Authority:      delegation.Authority{Scopes: []string{"read"}, Depth: 3},
+		DepthRemaining: 3, RootAnchor: true,
+	}
+	root, err = root.Sign(rootSigner, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This signed hop is deliberately absent from the projection: an attacker can
+	// present it straight to the signer after the directive was committed.
+	if err := h.repo.InsertRevocationDirectiveWithJobs(ctx, tenantA, agidstore.RevocationDirective{
+		DirectiveID: "cr053-root", SubjectID: "revoked-root", Reason: string(revoke.ReasonCompromise),
+		Watermark: 1, Terminal: true,
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	gate, err := delegation.NewGate(delegation.Config{
+		SignerID: "test-signer", RefusalSigner: refusalSigner,
+		Roots: delegation.NewTrustStore(map[string]delegation.RootAnchor{
+			"root-key": {PublicDER: rootSigner.Public().DER, AuthRef: "fido2:root"},
+		}),
+		Revocations: revoke.NewDirectiveRevocationReader(h.repo, ctx),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pre, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{
+		Chain: []delegation.RecordEnvelope{{Record: root, DelegatorPublicDER: rootSigner.Public().DER}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec, err := gate.VerifyIssuancePreconditions(ctx, signing.IssuancePreconditions{
+		TenantID: tenantA, TrustAnchorRef: "child", Preconditions: pre,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dec.Approved {
+		t.Fatal("CR-053: unrecorded hop signed by a revoked subject was approved")
+	}
+	if a, _ := delegation.DecodeRefusal(dec.RefusalRecord); a.FailedCheck != delegation.CheckRevocation {
+		t.Fatalf("failed_check = %q, want %q", a.FailedCheck, delegation.CheckRevocation)
+	}
+
+	// The subject's previously observed key must remain revoked even if that
+	// same key signs a new root hop under a different textual subject ID.
+	encoded, err := json.Marshal(delegation.RecordEnvelope{Record: root, DelegatorPublicDER: rootSigner.Public().DER})
+	if err != nil {
+		t.Fatal(err)
+	}
+	priorDigest, err := root.Digest(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.repo.InsertDelegationRecord(ctx, tenantA, agidstore.DelegationRecord{
+		RecordDigest: priorDigest, RootAnchor: true, DelegatorID: "revoked-root", DelegateID: "child",
+		DepthRemaining: 3, Encoded: encoded, Seq: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	alias := root
+	alias.DelegatorID = "fresh-alias"
+	alias.Signature = nil
+	alias, err = alias.Sign(rootSigner, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliasPre, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{
+		Chain: []delegation.RecordEnvelope{{Record: alias, DelegatorPublicDER: rootSigner.Public().DER}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliasDec, err := gate.VerifyIssuancePreconditions(ctx, signing.IssuancePreconditions{
+		TenantID: tenantA, TrustAnchorRef: "child", Preconditions: aliasPre,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if aliasDec.Approved {
+		t.Fatal("CR-053: revoked subject's key minted under a new subject alias")
+	}
+	reader := revoke.NewDirectiveRevocationReader(h.repo, ctx)
+	otherTenantRevoked, err := reader.IsKeyRevoked(tenantB, delegation.DelegateKeyThumbprintOf(rootSigner.Public().DER))
+	if err != nil || otherTenantRevoked {
+		t.Fatalf("tenant B inherited tenant A's revoked key: revoked=%t err=%v", otherTenantRevoked, err)
+	}
+}
+
+// flipDirectiveTerminal models the cascade's completed transition. It must not
+// reauthorize the revoked identity.
 func flipDirectiveTerminal(t *testing.T, h *harness, tenant, directiveID string) {
 	t.Helper()
 	err := h.core.WithTenant(context.Background(), tenant, func(tx pgx.Tx) error {

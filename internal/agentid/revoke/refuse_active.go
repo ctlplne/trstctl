@@ -3,49 +3,21 @@
 package revoke
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 
+	"trstctl.com/trstctl/internal/agentid/delegation"
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
 )
 
-// refuse_active.go is the in-signer REFUSE-WHILE-ACTIVE half of AGID-11 (AGID-claim-20): while
-// a revocation directive is ACTIVE against any delegation record of a chain, the isolated
-// signing process refuses any ISSUANCE OR RENEWAL whose chain includes the subject. It
-// does this by REUSING the AGID-04 gate seam — the gate already consults a
-// delegation.RevocationReader per hop and refuses (CheckRevocation, no key op) when any
-// hop reports revoked. AGID-11 supplies a directive-backed RevocationReader: a hop whose
-// record names a subject under an active directive reports revoked. There is NO new
-// internal/signing option and NO new gate check — the extension is entirely in what the
-// reader answers (the card's "extending AGID-04's gate — no new core option").
-//
-// AN-4 (why this lives in internal/agentid/revoke, NOT the signer-linked delegation package):
-// the SQL-backed reader is a CONTROL-PLANE implementation — it reaches the AGID-02
-// projection over the core store (a SQL driver). If it lived in the `delegation` package
-// (which the signer links), the signer's dependency closure would pull in pgx and the
-// store. Instead the reader lives HERE, in the control-plane `revoke` package; the signer
-// links only the delegation.RevocationReader INTERFACE. Production wiring (AGID-INT-WIRE)
-// constructs this reader in the control plane and hands the gate the interface value, so
-// the signer closure stays SQL-free (verified by internal/signing DependencyClosure /
-// NoSQLDriver). This is the same boundary the cascade itself respects: the control plane
-// holds the SQL; the signer holds interfaces.
-//
-// RENEWAL is not exempt (§7.4 / card): AGID-07's renewal path re-verifies the chain
-// through this same gate, so a renewal whose chain includes a subject under an active
-// directive fails the per-hop non-revocation check exactly like a fresh issuance — the
-// directive "fails ancestor non-revocation." Terminal (revoked-with-evidence) directives
-// no longer refuse (their cascade has fully evidenced), so an unrelated fresh chain is not
-// force-refused forever; the refusal is scoped to the ACTIVE window.
-
-// DirectiveRevocationReader is a delegation.RevocationReader backed by the AGID-02 active
-// -directive projection. For a chain hop's record digest it reports revoked iff a
-// NON-TERMINAL revocation directive names the record's delegator or delegate as its
-// subject (RecordDigestUnderActiveDirective). It is a PURE READ over the control-plane
-// store — no key op, no mutation — so it is safe to hand the gate as the per-hop
-// non-revocation reader while keeping SQL out of the signer's own linked packages.
-//
-// It satisfies delegation.RevocationReader structurally (IsRevoked(tenantID string,
-// recordDigest []byte) (bool, error)); the compile-time assertion lives in the wiring/test
-// that constructs the gate with it, so this package does not import the signer seam.
+// DirectiveRevocationReader reads the tenant-scoped AGID projection in the control
+// plane. A directive continues to revoke its subject after cascade terminal. The
+// per-subject read covers freshly signed hops that have no projection row yet.
+// This package is never linked into the isolated signer (AN-4): the signer holds
+// only narrow interfaces and obtains any online authorization through its transport.
 type DirectiveRevocationReader struct {
 	repo *agidstore.Repo
 	// ctx is the context the per-hop reads run under. The gate's RevocationReader
@@ -65,21 +37,54 @@ func NewDirectiveRevocationReader(repo *agidstore.Repo, ctx context.Context) *Di
 	return &DirectiveRevocationReader{repo: repo, ctx: ctx}
 }
 
-// IsRevoked reports whether the delegation record identified by recordDigest is under an
-// ACTIVE (non-terminal) revocation directive for tenantID — the per-hop non-revocation
-// answer the gate consults before any key op (AGID-claim-20). A nil repo (misconfiguration)
-// or a read error surfaces to the gate, which FAILS CLOSED (refuses with CheckRevocation):
-// a reader that cannot answer must not let issuance/renewal proceed. A record with no
-// matching row (unknown digest, or no active directive naming its subjects) reports false,
-// so an ordinary chain issues normally while a subtree under an active directive is
-// refused.
+// IsRevoked checks an indexed record's parties. An unindexed record returns false;
+// the caller must also check its signed subject IDs with IsSubjectRevoked.
 func (d *DirectiveRevocationReader) IsRevoked(tenantID string, recordDigest []byte) (bool, error) {
 	if d == nil || d.repo == nil {
 		// Fail closed: an unconfigured reader reports "revoked" so the gate refuses rather
 		// than silently approving under a broken revocation view.
 		return true, errNoRevocationRepo
 	}
-	return d.repo.RecordDigestUnderActiveDirective(d.ctx, tenantID, recordDigest)
+	return d.repo.RecordDigestUnderRevocationDirective(d.ctx, tenantID, recordDigest)
+}
+
+// IsSubjectRevoked checks an identity directly, including when its newly signed
+// delegation record has not yet been projected. Read errors refuse issuance.
+func (d *DirectiveRevocationReader) IsSubjectRevoked(tenantID, subjectID string) (bool, error) {
+	if d == nil || d.repo == nil {
+		return true, errNoRevocationRepo
+	}
+	return d.repo.SubjectHasRevocationDirective(d.ctx, tenantID, subjectID)
+}
+
+// IsKeyRevoked derives key bindings from already-issued signed envelopes. It
+// catches a revoked subject that reuses its key under a new textual identity.
+// Malformed retained evidence fails closed instead of silently losing a key.
+func (d *DirectiveRevocationReader) IsKeyRevoked(tenantID string, keyThumbprint []byte) (bool, error) {
+	if d == nil || d.repo == nil {
+		return true, errNoRevocationRepo
+	}
+	if len(keyThumbprint) == 0 {
+		return true, errors.New("revoke: empty delegator key thumbprint")
+	}
+	records, err := d.repo.RevokedSubjectRecords(d.ctx, tenantID)
+	if err != nil {
+		return false, err
+	}
+	for _, row := range records {
+		var env delegation.RecordEnvelope
+		if err := json.Unmarshal(row.Encoded, &env); err != nil || env.Record.TenantID != tenantID ||
+			env.Record.DelegatorID != row.DelegatorID || env.Record.DelegateID != row.DelegateID {
+			return false, fmt.Errorf("revoke: malformed retained delegation envelope for revoked subject %q", row.SubjectID)
+		}
+		if row.SubjectID == row.DelegatorID && bytes.Equal(delegation.DelegateKeyThumbprintOf(env.DelegatorPublicDER), keyThumbprint) {
+			return true, nil
+		}
+		if row.SubjectID == row.DelegateID && bytes.Equal(env.Record.DelegateKeyThumbprint, keyThumbprint) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // errNoRevocationRepo is returned by a nil/unconfigured DirectiveRevocationReader so the

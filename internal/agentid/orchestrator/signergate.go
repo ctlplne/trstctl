@@ -4,7 +4,13 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"trstctl.com/trstctl/internal/agentid/delegation"
+	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
+	"trstctl.com/trstctl/internal/agentid/reach"
+	"trstctl.com/trstctl/internal/agentid/revoke"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/signing"
@@ -30,8 +36,22 @@ import (
 // It carries the requested agent-key algorithm the signer generates inside the boundary on
 // approval.
 type signerIssuanceGate struct {
-	transport editionseam.IssuanceGate
-	alg       crypto.Algorithm
+	transport    editionseam.IssuanceGate
+	alg          crypto.Algorithm
+	repo         *agidstore.Repo
+	proofKey     reach.VerdictKeyRef
+	signer       crypto.Signer
+	requireProof bool
+}
+
+// NewSignerIssuanceGateWithRevocationProof is the production adapter. The
+// control plane checks the current tenant projection immediately before signing
+// a one-use authorization for the isolated signer.
+func NewSignerIssuanceGateWithRevocationProof(transport editionseam.IssuanceGate, alg crypto.Algorithm, repo *agidstore.Repo, signer crypto.Signer, key reach.VerdictKeyRef) signing.IssuanceGate {
+	if transport == nil {
+		return nil
+	}
+	return &signerIssuanceGate{transport: transport, alg: alg, repo: repo, signer: signer, proofKey: key, requireProof: true}
 }
 
 // Compile-time proof the adapter is a valid in-signer gate for the precondition.
@@ -59,5 +79,37 @@ func NewSignerIssuanceGate(transport editionseam.IssuanceGate, alg crypto.Algori
 // or Approved:false with the signed refusal on a refusal. A transport error surfaces so the
 // precondition fails closed (it never mints on an unreachable/erroring signer).
 func (g *signerIssuanceGate) VerifyIssuancePreconditions(ctx context.Context, req signing.IssuancePreconditions) (signing.IssuanceDecision, error) {
+	req.Algorithm = g.alg
+	if g.requireProof {
+		if g.repo == nil || g.signer == nil || g.proofKey.ID == "" {
+			return signing.IssuanceDecision{}, fmt.Errorf("agentid signer gate: non-revocation signer is unavailable")
+		}
+		var body delegation.PreconditionsBody
+		if len(req.Preconditions) > 0 {
+			var err error
+			body, err = delegation.DecodePreconditionsBody(req.Preconditions)
+			if err != nil {
+				return signing.IssuanceDecision{}, err
+			}
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		reader := revoke.NewDirectiveRevocationReader(g.repo, checkCtx)
+		if err := checkRevocation(reader, req.TenantID, req.TrustAnchorRef, body); err != nil {
+			return signing.IssuanceDecision{}, err
+		}
+		nonce, err := crypto.RandomBytes(32)
+		if err != nil {
+			return signing.IssuanceDecision{}, err
+		}
+		body.RevocationProof, err = delegation.SignRevocationProof(req, g.proofKey, g.signer, nonce, time.Now())
+		if err != nil {
+			return signing.IssuanceDecision{}, err
+		}
+		req.Preconditions, err = delegation.EncodePreconditionsBody(body)
+		if err != nil {
+			return signing.IssuanceDecision{}, err
+		}
+	}
 	return g.transport.GatedIssue(ctx, req, g.alg)
 }

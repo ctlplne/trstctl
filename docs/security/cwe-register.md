@@ -2007,8 +2007,8 @@ not this file.
 | `internal/agent/workloadapi/attest_darwin_test.go:75` | test runs the system nc against its own socket (CWE-78) |
 | `internal/agent/workloadapi/attest_linux_test.go:138` | the test re-executes its own binary (CWE-78) |
 | `internal/agent/workloadapi/attest_linux_test.go:155` | the system sleep binary (CWE-78) |
-| `internal/agentid/delegation/signer_subprocess_test.go:244` | fixed test-built signer executable and task-owned JSON path (CWE-78) |
-| `internal/agentid/delegation/signer_subprocess_test.go:374` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
+| `internal/agentid/delegation/signer_subprocess_test.go:257` | fixed test-built signer executable and task-owned JSON path (CWE-78) |
+| `internal/agentid/delegation/signer_subprocess_test.go:406` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `internal/agentid/verify/wasm_parity_test.go:49` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `internal/agentid/verify/wasm_parity_test.go:59` | execShim is Go's fixed wasm_exec_node shim and wasmOut is this test's TempDir artifact (CWE-78). |
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |

@@ -193,8 +193,8 @@ type Config struct {
 	// rejects a nil signer.
 	RefusalSigner crypto.Signer
 	// Revocations is the AGID-02 non-revocation reader consulted per hop. REQUIRED
-	// (fail-closed by construction): production wiring supplies a projection-backed
-	// reader; tests inject a fake (NeverRevoked / MapRevocationReader).
+	// (fail-closed by construction): production wiring combines the fallback
+	// reader with a mandatory signed online proof; tests may inject a fake.
 	Revocations RevocationReader
 	// Attestor verifies attestation evidence over internal/attest (read-only).
 	// Optional: when nil, a request that requires attestation (a designated class with
@@ -249,6 +249,12 @@ type Config struct {
 	// wired, closing an accidental-misconfiguration gap. Default false preserves AGID-05
 	// behavior.
 	RequireReachability bool
+	// RequireRevocationProof forces every gated issuance to carry an online,
+	// short-lived control-plane non-revocation authorization. Production uses it
+	// when SQL cannot enter the isolated signer (AN-4).
+	RequireRevocationProof bool
+	RevocationProofTrust   reach.VerdictTrustLookup
+	ProofConsumer          ProofConsumer
 }
 
 // Gate is the real in-signer verify-before-keygen issuance gate (AGID-claim-1). It
@@ -379,6 +385,14 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 		}
 		if issuanceTTLSeconds(req, now) <= 0 {
 			return refusal(CheckExpiry, len(body.Chain)-1, "requested credential expiry is past or exceeds the delegation ceiling")
+		}
+	}
+	// A missing or replayed online revocation proof must refuse before the
+	// attestor consumes one-use evidence. A direct signer peer cannot burn a
+	// legitimate attestation nonce merely by omitting this authorization.
+	if g.cfg.RequireRevocationProof {
+		if err := VerifyRevocationProof(req, body.RevocationProof, g.cfg.RevocationProofTrust, g.cfg.ProofConsumer, now); err != nil {
+			return refusal(CheckRevocation, -1, err.Error())
 		}
 	}
 
@@ -597,6 +611,29 @@ func (g *Gate) verifyChain(tenantID string, chain []RecordEnvelope, now time.Tim
 		}
 		if revoked {
 			return refusal(CheckRevocation, i, "hop is revoked")
+		}
+		// A newly signed descendant may not have a projection row yet. Check both
+		// identities in the signed hop so a revoked delegator cannot mint a new
+		// record and a revoked delegate cannot use it, even after cascade terminal.
+		if subjects, ok := g.cfg.Revocations.(SubjectRevocationReader); ok {
+			for _, subjectID := range []string{rec.DelegatorID, rec.DelegateID} {
+				revoked, err := subjects.IsSubjectRevoked(tenantID, subjectID)
+				if err != nil {
+					return refusal(CheckRevocation, i, "subject revocation reader error")
+				}
+				if revoked {
+					return refusal(CheckRevocation, i, "hop subject is revoked")
+				}
+			}
+		}
+		if keys, ok := g.cfg.Revocations.(KeyRevocationReader); ok {
+			revoked, err := keys.IsKeyRevoked(tenantID, DelegateKeyThumbprintOf(env.DelegatorPublicDER))
+			if err != nil {
+				return refusal(CheckRevocation, i, "delegator key revocation reader error")
+			}
+			if revoked {
+				return refusal(CheckRevocation, i, "delegator key is revoked")
+			}
 		}
 
 		parentDigest = d

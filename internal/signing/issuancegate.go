@@ -5,6 +5,8 @@ package signing
 import (
 	"context"
 	"errors"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // IssuanceGate is a generic issuance-precondition extension attached to the AN-4
@@ -49,6 +51,9 @@ type IssuancePreconditions struct {
 	// acceptable.
 	NotBefore int64
 	NotAfter  int64
+	// Algorithm is the requested key algorithm from GatedIssue. The signer
+	// forwards it to the gate so authorization can bind the eventual key op.
+	Algorithm crypto.Algorithm
 
 	// Preconditions is the opaque precondition body: the serialized set of
 	// conditions the edition gate must verify before issuance. Opaque to core.

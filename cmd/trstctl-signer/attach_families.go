@@ -39,6 +39,7 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 	var anchorSource agiddelegation.RootAnchorSource
 	var reachabilityTrust reach.VerdictTrustLookup
 	var attestor agiddelegation.AttestationVerifier
+	var proofConsumer agiddelegation.ProofConsumer
 	if floorDir != "" {
 		anchorStore := agiddelegation.NewDurableAnchorStore(floorDir)
 		anchorSource = anchorStore
@@ -49,6 +50,7 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 		attestorStore := agiddelegation.NewDurableAttestationTrustStore(floorDir)
 		attestor = attestorStore
 		opts = append(opts, signing.WithAgentAttestorStore(attestorStore))
+		proofConsumer = agiddelegation.NewDurableProofConsumer(floorDir)
 	}
 	// Issuance-precondition gate (AGID-04a seam; AGID-04b verifier). Attached in
 	// every build: the free single-hop issuance path is never gated
@@ -63,11 +65,13 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 	// confirm their exact readback over this transport. Until a root is present a delegated
 	// chain fails closed at the root-anchor check rather than being approved unverified.
 	gate, _, err := agiddelegation.NewSignerGate(agiddelegation.SignerConfig{
-		SignerID:            "trstctl-signer",
-		AnchorSource:        anchorSource,
-		Attestor:            attestor,
-		ReachabilityTrust:   reachabilityTrust,
-		RequireReachability: reachabilityTrust != nil,
+		SignerID:             "trstctl-signer",
+		AnchorSource:         anchorSource,
+		Attestor:             attestor,
+		ReachabilityTrust:    reachabilityTrust,
+		RevocationProofTrust: reachabilityTrust,
+		ProofConsumer:        proofConsumer,
+		RequireReachability:  reachabilityTrust != nil,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: build AGID issuance gate: %v\n", err)

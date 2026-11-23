@@ -118,6 +118,50 @@ func TestAGID_Wire_CascadeRevokeWithEvidence_RealInfra(t *testing.T) {
 	}
 }
 
+func TestCR053TerminalDirectiveRejectsFreshAndRetriedIssuance_RealInfra(t *testing.T) {
+	h := newHarness(t, tenantCascade)
+	h.issueAgent(t, "agent-before-revoke", "nonce-before-revoke")
+	rev, err := h.api.Revoke(h.ctx, h.tenant, agidapi.RevokeRequest{Subject: "manager", Reason: "compromise"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.drain(t, 20)
+	evidence, err := h.api.RevocationEvidence(h.ctx, h.tenant, rev.DirectiveID)
+	if err != nil || !evidence.Terminal {
+		t.Fatalf("revocation must be terminal before retry test: terminal=%t err=%v", evidence.Terminal, err)
+	}
+	chain := signedChain(t, h.tenant, "agent-after-revoke", false)
+	pre, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{
+		Chain: chain, DesignatedClass: "agent-worker", DeclaredTools: []string{"search"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	att := attestationBody(t, "software", h.signedAttestation(t, "agent-after-revoke", "nonce-after-revoke"))
+	payload, err := json.Marshal(struct {
+		IssuanceID string `json:"issuance_id"`
+		agidapi.IssueChainBoundRequest
+	}{"cr053-retried-issuance", agidapi.IssueChainBoundRequest{
+		AgentID: "agent-after-revoke", TrustAnchorRef: "agent-after-revoke",
+		DesignatedClass: "agent-worker", Chain: pre, AgentStackRepr: agentStackRepr(t),
+		Scopes: []string{"read"}, DeclaredTools: []string{"search"},
+		Attestation: att, AttestationMethod: "software", TTLSeconds: 1200,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := coreorch.Message{TenantID: h.tenant, Destination: agidorch.IssuanceRequestDestination, Payload: payload}
+	for attempt := 0; attempt < 2; attempt++ {
+		handled, err := h.handler.DeliverLicensed(h.ctx, message)
+		if !handled || err == nil || !strings.Contains(err.Error(), "revocation directive") {
+			t.Fatalf("terminal directive retry %d: handled=%t err=%v", attempt, handled, err)
+		}
+	}
+	if id := h.latestCredentialID(t, "agent-after-revoke"); id != "" {
+		t.Fatalf("revoked subject minted fresh credential %q after cascade terminal", id)
+	}
+}
+
 func TestAGID_Wire_SystemE2EOfflineVerify_RealInfra(t *testing.T) {
 	h := newHarness(t, tenantSystem)
 	issued := h.issueAgent(t, "agent-system", "nonce-system")
@@ -614,7 +658,13 @@ func (h *harness) restartSigner(t *testing.T) {
 
 func (h *harness) gatedIssue(t *testing.T, req signing.IssuancePreconditions, alg crypto.Algorithm) signing.IssuanceDecision {
 	t.Helper()
-	decision, err := h.client.GatedIssue(h.ctx, req, alg)
+	if h.testReachSigner == nil {
+		t.Fatal("direct gated issue requires its provisioned test verdict authority")
+	}
+	gate := agidorch.NewSignerIssuanceGateWithRevocationProof(h.client, alg,
+		agidstore.New(h.store), h.testReachSigner,
+		reach.VerdictKeyRef{ID: "agentid-intwire-test-reach-verdict", Algorithm: string(h.testReachSigner.Algorithm())})
+	decision, err := gate.VerifyIssuancePreconditions(h.ctx, req)
 	if err != nil {
 		t.Fatalf("GatedIssue: %v", err)
 	}

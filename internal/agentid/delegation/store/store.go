@@ -870,21 +870,9 @@ func (r *Repo) IncompleteJobs(ctx context.Context, tenantID, directiveID string)
 	return out, nil
 }
 
-// RecordDigestUnderActiveDirective reports whether the delegation record identified by
-// recordDigest names (as delegator or delegate) a subject against which a NON-TERMINAL
-// (active) revocation directive exists, scoped to tenantID by RLS. It is the single
-// read the CONTROL-PLANE directive-backed revocation reader (internal/agentid/revoke
-// refuse_active.go) consults per hop so the in-signer gate refuses issuance/renewal
-// whose chain includes such a subject while the directive is active (AGID-claim-20).
-//
-// A directive is "active" while it has NOT reached the terminal revoked-with-evidence
-// state (terminal = false): the cascade over already-issued credentials + future
-// issuance/renewal is in force. Once the directive is terminal, its cascade has fully
-// evidenced and the pre-issuance refusal for that subject lifts (a fresh, unrelated
-// chain is not force-refused forever). This read performs no key operation and no
-// mutation; it lives entirely in the control plane, so the signer never links SQL —
-// the gate holds only the RevocationReader interface (AN-4).
-func (r *Repo) RecordDigestUnderActiveDirective(ctx context.Context, tenantID string, recordDigest []byte) (bool, error) {
+// RecordDigestUnderRevocationDirective detects a revoked party in an indexed hop.
+// Terminal records remain effective: terminal only means the cascade has evidence.
+func (r *Repo) RecordDigestUnderRevocationDirective(ctx context.Context, tenantID string, recordDigest []byte) (bool, error) {
 	var active bool
 	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
@@ -894,34 +882,69 @@ func (r *Repo) RecordDigestUnderActiveDirective(ctx context.Context, tenantID st
 			       JOIN agent_revocation_directives d
 			         ON d.tenant_id = r.tenant_id
 			        AND d.subject_id IN (r.delegator_id, r.delegate_id)
-			        AND d.terminal = false
 			      WHERE r.tenant_id = current_setting('trstctl.tenant_id')::uuid
 			        AND r.record_digest = $1
 			 )`, recordDigest).Scan(&active)
 	})
 	if err != nil {
-		return false, fmt.Errorf("agid store: active-directive read: %w", err)
+		return false, fmt.Errorf("agid store: directive read: %w", err)
 	}
 	return active, nil
 }
 
-// SubjectHasActiveDirective reports whether subjectID has a NON-TERMINAL (active)
-// revocation directive, scoped to tenantID by RLS. It is the by-subject companion to
-// RecordDigestUnderActiveDirective, used by the directive-backed reader when a caller
-// resolves a chain to its subjects directly (and by tests). A directive is active
-// while terminal = false (see RecordDigestUnderActiveDirective).
-func (r *Repo) SubjectHasActiveDirective(ctx context.Context, tenantID, subjectID string) (bool, error) {
+// SubjectHasRevocationDirective checks the signed subject independently of record
+// projection timing. It stays true after cascade terminal and is tenant scoped by RLS.
+func (r *Repo) SubjectHasRevocationDirective(ctx context.Context, tenantID, subjectID string) (bool, error) {
 	var active bool
 	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`SELECT EXISTS (
 			     SELECT 1 FROM agent_revocation_directives
 			      WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
-			        AND subject_id = $1 AND terminal = false
+			        AND subject_id = $1
 			 )`, subjectID).Scan(&active)
 	})
 	if err != nil {
-		return false, fmt.Errorf("agid store: subject active-directive read: %w", err)
+		return false, fmt.Errorf("agid store: subject directive read: %w", err)
 	}
 	return active, nil
+}
+
+// RevokedSubjectRecords returns the existing signed envelopes in which a
+// revoked subject was a party. The control plane derives their key fingerprints
+// from the encoded envelopes; SQL never enters the isolated signer (AN-4).
+type RevokedSubjectRecord struct {
+	SubjectID   string
+	DelegatorID string
+	DelegateID  string
+	Encoded     []byte
+}
+
+func (r *Repo) RevokedSubjectRecords(ctx context.Context, tenantID string) ([]RevokedSubjectRecord, error) {
+	var out []RevokedSubjectRecord
+	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT DISTINCT d.subject_id, r.delegator_id, r.delegate_id, r.encoded
+			   FROM agent_revocation_directives d
+			   JOIN agent_delegation_records r
+			     ON r.tenant_id = d.tenant_id
+			    AND d.subject_id IN (r.delegator_id, r.delegate_id)
+			  WHERE d.tenant_id = current_setting('trstctl.tenant_id')::uuid`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var rec RevokedSubjectRecord
+			if err := rows.Scan(&rec.SubjectID, &rec.DelegatorID, &rec.DelegateID, &rec.Encoded); err != nil {
+				return err
+			}
+			out = append(out, rec)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("agid store: revoked subject key read: %w", err)
+	}
+	return out, nil
 }
