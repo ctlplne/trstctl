@@ -295,3 +295,6 @@ f5851b60f56f5d10c7a76d6a290875b68651c718:internal/server/mcp_inventory_served_te
 # rule matched that label beside the fixture's token variable; no credential
 # value is present. Pin only this committed line, preserving all other matches.
 75a737dc9c3d050e9c5e89b7cf45801f6161d04b:internal/server/cr415_drift_root_served_test.go:generic-api-key:73
+# CR-418: historical deterministic test idempotency key, removed in the next
+# commit. This exact committed line contains no credential.
+bf1e1075c2a0755d22d97e5e5e1e16c1cf26d61b:internal/server/cr418_cbom_host_roots_served_test.go:generic-api-key:26

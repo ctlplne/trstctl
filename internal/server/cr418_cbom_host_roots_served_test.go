@@ -23,7 +23,7 @@ func TestCR418ServedCBOMRefusesControlPlaneHostFilesWithoutOperatorRoots(t *test
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans/preview", token, request); status != http.StatusBadRequest {
 		t.Fatalf("unapproved host path preview status=%d body=%s", status, body)
 	}
-	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", token, "cr418-unapproved", request); status != http.StatusBadRequest {
+	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans", token, request); status != http.StatusBadRequest {
 		t.Fatalf("unapproved host path scan status=%d body=%s", status, body)
 	}
 }
