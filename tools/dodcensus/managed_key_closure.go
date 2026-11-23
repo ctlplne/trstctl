@@ -215,6 +215,11 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 		`(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != ""`,
 		`Proxy:                 nil`,
 		`signerAddress := dodManagedKeySignerAddress(r.t, r.signerPort)`,
+		`func (r *dodManagedKeyRuntime) provisionVerdictTrust()`,
+		`"--network", "none"`,
+		`"--mount", "type=bind,src=" + bindingMount + ",dst=/runtime/agid-verdict-trust.json,readonly"`,
+		`"--entrypoint", "/usr/local/bin/trstctl-signer-hsm", r.artifacts.runtimeImage`,
+		`"--keystore", "/runtime/keystore", "--agid-provision-trust", "/runtime/agid-verdict-trust.json"`,
 	} {
 		if !strings.Contains(runtimeSource, required) {
 			return fmt.Errorf("managed-key runtime omits content-addressed image dataflow %q", required)
@@ -223,8 +228,8 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 	if count := strings.Count(runtimeSource, `"--platform", platform`); count != 3 {
 		return fmt.Errorf("managed-key runtime pins the profile platform at %d pull/build sites, want three", count)
 	}
-	if count := strings.Count(runtimeSource, `"--platform", r.artifacts.platform`); count != 1 {
-		return fmt.Errorf("managed-key runtime pins the profile platform at %d signer run sites, want one", count)
+	if count := strings.Count(runtimeSource, `"--platform", r.artifacts.platform`); count != 2 {
+		return fmt.Errorf("managed-key runtime pins the profile platform at %d signer/provisioning run sites, want two", count)
 	}
 	if count := strings.Count(runtimeSource, `"--format={{.Id}} {{.Os}}/{{.Architecture}}"`); count != 2 {
 		return fmt.Errorf("managed-key runtime has %d architecture-bound image inspections, want PostgreSQL plus signer", count)

@@ -193,6 +193,9 @@ func TestManagedKeyClosureRejectsRehashedMutableBuildInputs(t *testing.T) {
 		{"base returns moving tag", "internal/server/dod_managed_key_runtime_test.go", `ref := repository + "@" + digest`, `ref := taggedImage`},
 		{"arm64 profile changes its frozen platform", "internal/server/dod_managed_key_runtime_test.go", `dodManagedKeyArm64RuntimePlatform          = "linux/arm64"`, `dodManagedKeyArm64RuntimePlatform          = "linux/amd64"`},
 		{"signer run pins a literal platform", "internal/server/dod_managed_key_runtime_test.go", `"--platform", r.artifacts.platform,`, `"--platform", "linux/amd64",`},
+		{"operator provisioning loses isolated network", "internal/server/dod_managed_key_runtime_test.go", `"--network", "none"`, `"--network", "host"`},
+		{"operator provisioning gives signer a writable binding", "internal/server/dod_managed_key_runtime_test.go", `",dst=/runtime/agid-verdict-trust.json,readonly"`, `",dst=/runtime/agid-verdict-trust.json"`},
+		{"operator provisioning stops using its one-shot entrypoint", "internal/server/dod_managed_key_runtime_test.go", `"--agid-provision-trust", "/runtime/agid-verdict-trust.json"`, `"--mtls-listen", ":9443"`},
 		{"artifacts accept any platform", "internal/server/dod_managed_key_runtime_test.go", `if platform != dodManagedKeyRuntimePlatform && platform != dodManagedKeyArm64RuntimePlatform {`, `if platform == "" {`},
 		{"arm64 proof skips the TPM restart", "internal/server/dod_managed_key_runtime_test.go", `dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.tpm2", config.ManagedKeyProviderTPM2, tpmEntry, tpmEntry.Endpoint())`, `_ = tpmEntry`},
 		{"runtime restores embedded postgres sibling", "internal/server/dod_managed_key_runtime_test.go", `postgresDSN: dodManagedKeyPostgresDSN(t)`, `postgresDSN: serverTestPostgresDSN(t)`},
@@ -383,8 +386,8 @@ func TestManagedKeyRuntimeUsesContentAddressedImageAtBothRunSites(t *testing.T) 
 			t.Errorf("managed-key runtime source omits content-addressed image dataflow %q", required)
 		}
 	}
-	if count := strings.Count(source, `"--platform", platform`) + strings.Count(source, `"--platform", r.artifacts.platform`); count != 4 {
-		t.Errorf("managed-key runtime pins the profile's pull/build/run platform %d times, want four", count)
+	if count := strings.Count(source, `"--platform", platform`) + strings.Count(source, `"--platform", r.artifacts.platform`); count != 5 {
+		t.Errorf("managed-key runtime pins the profile's pull/build/signer/provisioning platform %d times, want five", count)
 	}
 	for _, forbidden := range []string{
 		`t.Setenv("TRSTCTL_HSM_PROOF_IMAGE", "trstctl-managed-key-runtime:dod")`,
