@@ -158,6 +158,8 @@ else:
     def test_continuous_background_events_do_not_hide_settled_seed(self):
         result = self.run_convergence(continuous_background_events=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('demo JetStream stream growth across replay:', result.stdout)
+        self.assertIn('"stream":"TRSTCTL_EVENTS"', result.stdout)
 
     def test_checkpoint_refuses_a_stream_count_rollback(self):
         result = self.run_convergence(stream_rollback=True)

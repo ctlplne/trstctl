@@ -157,6 +157,18 @@ report_new_audit_types() {
   '
 }
 
+report_stream_growth() {
+  # The audit view covers domain events, while jsz also counts derived index
+  # streams. Log stream names and count deltas, never event IDs or payloads, so
+  # an empty audit-type delta is not mistaken for proof that no stream grew.
+  jq -crn --argjson before "$1" --argjson after "$2" '
+    [($after.jetstream_streams | to_entries[]) as $entry |
+      ($entry.value - ($before.jetstream_streams[$entry.key] // 0)) as $added |
+      select($added > 0) | {stream:$entry.key, added:$added}] |
+    "demo JetStream stream growth across replay: \(.)"
+  '
+}
+
 wait_for_seed() {
   local container_id state exit_code
   container_id="$(docker compose -f "$compose_file" ps -aq demo-seed)"
@@ -223,8 +235,9 @@ if jq -en --argjson before "$first" --argjson after "$second" '
      $after.jetstream_message_count > $before.jetstream_message_count
    ' >/dev/null; then
   # The baseline already retried unconfigured notifications, but those retries
-  # cannot append events. Attribute any stream growth to its actual tenant
-  # event types; emit no event IDs or payloads into the CI log.
+  # cannot append events. Identify which stream grew before attributing it to
+  # tenant event types; emit no event IDs or payloads into the CI log.
+  report_stream_growth "$first" "$second"
   report_new_audit_types "$first_audit" "$second_audit" "across replay"
 fi
 
