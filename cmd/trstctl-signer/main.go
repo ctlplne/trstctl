@@ -47,6 +47,7 @@ func main() {
 	rewrapKeystore := flag.Bool("rewrap-keystore", false, "one-shot: move the --keystore directory from the --kek that sealed it onto the --kms-provider/--kms-key-ref/--kms-wrap-command adapter, keeping the original as a rollback copy, then exit (stop the signer first)")
 	initImportOfferIdentity := flag.Bool("init-import-offer-identity", false, "one-shot: initialize the CA import offer identity in an existing signer keystore and print its fingerprint")
 	importOfferFingerprint := flag.Bool("import-offer-fingerprint", false, "one-shot: print the fingerprint of the existing CA import offer identity")
+	agentTrustProvision := flag.String("agid-provision-trust", "", "one-shot: install an operator-reviewed public AGID trust binding from JSON into the signer-local keystore")
 	managedKeysConfig := flag.String("managed-keys-config", "", "path to signer-local managed-key provider JSON (credentials must be file references, never argv/env)")
 	tenantKEKConfig := flag.String("tenant-kek-config", "", "path to signer-local tenant KEK custody JSON: the PKCS#11 token and the HSM AES keys that wrap tenant domain KEKs, and the wrapper keys a cloud KMS key wraps through the KMS wrap adapter with an optional cache time limit (credentials must be file references)")
 	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
@@ -114,6 +115,11 @@ func main() {
 	offlineMode := *offlineInitPolicy != "" || *offlineIssueRequest != "" || *offlineApproveRequest != "" || *offlineGenerateCustodian != "" || *offlinePrepareKit != "" || *pcasRecoveryMode != ""
 	useMTLS := *mtlsListen != ""
 	importOfferMode := *initImportOfferIdentity || *importOfferFingerprint
+	agentTrustMode := *agentTrustProvision != ""
+	if agentTrustMode && (offlineMode || importOfferMode || *rewrapKeystore || useMTLS || *socket != "") {
+		fmt.Fprintln(os.Stderr, "trstctl-signer: AGID trust provisioning is a one-shot mode and cannot serve a socket or run another ceremony")
+		os.Exit(2)
+	}
 	if importOfferMode && (*initImportOfferIdentity == *importOfferFingerprint || offlineMode || *rewrapKeystore || useMTLS || *socket != "") {
 		fmt.Fprintln(os.Stderr, "trstctl-signer: choose one CA import offer identity operation; it cannot run with a listener or another one-shot mode")
 		os.Exit(2)
@@ -122,7 +128,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "trstctl-signer: --rewrap-keystore is a one-shot mode: it serves no socket and runs no offline ceremony")
 		os.Exit(2)
 	}
-	if !offlineMode && !*rewrapKeystore && !importOfferMode && !useMTLS && *socket == "" {
+	if !offlineMode && !*rewrapKeystore && !importOfferMode && !agentTrustMode && !useMTLS && *socket == "" {
 		fmt.Fprintln(os.Stderr, "trstctl-signer: one of --socket (UDS) or --mtls-listen (cross-node mTLS) is required")
 		os.Exit(2)
 	}
@@ -151,6 +157,13 @@ func main() {
 	if _, err := crypto.PowerOnSelfTest(*fipsRequired || signerFIPSEnvRequired(os.Getenv("TRSTCTL_FIPS"))); err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: crypto power-on self-test: %v\n", err)
 		os.Exit(1)
+	}
+	if agentTrustMode {
+		if err := runAgentTrustProvision(*agentTrustProvision, *keystore); err != nil {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: AGID trust provisioning: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if importOfferMode {
 		fingerprint, err := runImportOfferIdentity(*initImportOfferIdentity,

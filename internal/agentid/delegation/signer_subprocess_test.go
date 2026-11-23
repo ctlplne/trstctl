@@ -4,6 +4,7 @@ package delegation
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,11 +21,11 @@ import (
 )
 
 // TestSignerBinaryAGIDRootAnchorsSurviveRestart launches the shipped trstctl-signer
-// binary, not an in-process signing.Server. It provisions an AGID root anchor into the
+// binary, not an in-process signing.Server. It locally provisions an AGID root anchor into the
 // signer's keystore/floor directory, drives GatedIssue over the real UDS transport, stops
 // the signer, launches a fresh signer process over the same directory, and drives
 // GatedIssue again. This is the AGID-INT-WIRE process-boundary/restart proof for the
-// root-anchor provisioning path: the signer reads public trust anchors from durable local
+// root-anchor trust path: the signer reads public trust anchors from durable local
 // state while linking no SQL, NATS, or HTTP.
 //
 // It is also the executed-medium proof for AGID-claim-30 (the non-transitory
@@ -51,7 +52,7 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 
 	client1, stop1 := start(t)
 	if err := client1.ProvisionAgentReachabilityKey(context.Background(), verdictKey.ID, verdictSigner.Public().DER); err != nil {
-		t.Fatalf("provision verdict key over authenticated transport: %v", err)
+		t.Fatalf("confirm operator-provisioned verdict key over authenticated transport: %v", err)
 	}
 	if err := client1.ProvisionAgentReachabilityKey(context.Background(), verdictKey.ID, verdictSigner.Public().DER); err != nil {
 		t.Fatalf("exact verdict key retry: %v", err)
@@ -69,7 +70,7 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 	}
 	wantAnchor := anchors["root-key"]
 	if err := client1.ProvisionAgentRootAnchor(context.Background(), tenantID, "root-key", wantAnchor.PublicDER, wantAnchor.AuthRef); err != nil {
-		t.Fatalf("provision signer root over authenticated transport: %v", err)
+		t.Fatalf("confirm operator-provisioned root over authenticated transport: %v", err)
 	}
 	if err := client1.ProvisionAgentRootAnchor(context.Background(), tenantID, "root-key", wantAnchor.PublicDER, wantAnchor.AuthRef); err != nil {
 		t.Fatalf("exact signer retry: %v", err)
@@ -97,7 +98,7 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 	}
 }
 
-// A150: a tenant attestor provisioned over the signer's authenticated transport is
+// A150/CR-297: a tenant attestor provisioned locally by the signer operator is
 // held by the shipped signer binary, keeps its first writer, survives a restart, and
 // the binary's gate verifies attested issuance against it; evidence from a key the
 // tenant never registered is refused before keygen.
@@ -123,12 +124,15 @@ func TestSignerBinaryAGIDTenantAttestorsSurviveRestart(t *testing.T) {
 		}
 		return attBody(t, "tpm", payload)
 	}
+	if err := NewDurableAttestationTrustStore(fx.keystore).ProvisionAgentAttestor(context.Background(), tenantID, "tpm-verifier", attestorKey.Public().DER, "tpm"); err != nil {
+		t.Fatalf("operator provision attestor: %v", err)
+	}
 
 	client1, stop1 := fx.start(t)
 	fx.provisionFloors(t, client1)
 	ctx := context.Background()
 	if err := client1.ProvisionAgentAttestor(ctx, tenantID, "tpm-verifier", attestorKey.Public().DER, "tpm"); err != nil {
-		t.Fatalf("provision attestor over the signer transport: %v", err)
+		t.Fatalf("confirm operator-provisioned attestor over the signer transport: %v", err)
 	}
 	if err := client1.ProvisionAgentAttestor(ctx, tenantID, "tpm-verifier", attestorKey.Public().DER, "tpm"); err != nil {
 		t.Fatalf("exact attestor retry: %v", err)
@@ -139,8 +143,11 @@ func TestSignerBinaryAGIDTenantAttestorsSurviveRestart(t *testing.T) {
 	if err := client1.ProvisionAgentAttestor(ctx, tenantID, "tpm-verifier", attestorKey.Public().DER, "hsm"); status.Code(err) != codes.AlreadyExists {
 		t.Fatalf("changed attestor method = %v, want AlreadyExists", err)
 	}
-	if err := client1.ProvisionAgentAttestor(ctx, tenantID, "other-verifier", attestorKey.Public().DER, "made-up"); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("unknown attestation method = %v, want InvalidArgument", err)
+	if err := NewDurableAttestationTrustStore(fx.keystore).ProvisionAgentAttestor(ctx, tenantID, "other-verifier", attestorKey.Public().DER, "made-up"); err == nil {
+		t.Fatal("operator store accepted unknown attestation method")
+	}
+	if err := client1.ProvisionAgentAttestor(ctx, tenantID, "other-verifier", attestorKey.Public().DER, "made-up"); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("unprovisioned attestor over RPC = %v, want PermissionDenied", err)
 	}
 	if _, _, err := client1.ReadAgentAttestor(ctx, "another-tenant", "tpm-verifier"); status.Code(err) != codes.NotFound {
 		t.Fatalf("another tenant's attestor readback = %v, want NotFound", err)
@@ -176,6 +183,83 @@ type signerSubprocessFixture struct {
 	pre           []byte
 }
 
+func TestCR297SignerSocketCannotInstallTrustWithoutLocalOperator(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and launches the real trstctl-signer binary")
+	}
+	dir := t.TempDir()
+	fx := &signerSubprocessFixture{
+		bin: buildSignerBinaryForAGID(t), keystore: filepath.Join(dir, "keystore"),
+		kekFile: filepath.Join(dir, "signer.kek"),
+	}
+	client, stop := fx.start(t)
+	defer stop()
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := client.ProvisionAgentRootAnchor(ctx, "victim", "fresh-root", key.Public().DER, "fido2:attacker"); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("socket created fresh root: %v", err)
+	}
+	if err := client.ProvisionAgentAttestor(ctx, "victim", "fresh-attestor", key.Public().DER, "software"); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("socket created fresh attestor: %v", err)
+	}
+	if err := client.ProvisionAgentReachabilityKey(ctx, "fresh-verdict", key.Public().DER); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("socket created fresh verdict key: %v", err)
+	}
+	if _, _, err := client.ReadAgentRootAnchor(ctx, "victim", "fresh-root"); status.Code(err) != codes.NotFound {
+		t.Fatalf("fresh root appeared after denied write: %v", err)
+	}
+	if _, _, err := client.ReadAgentAttestor(ctx, "victim", "fresh-attestor"); status.Code(err) != codes.NotFound {
+		t.Fatalf("fresh attestor appeared after denied write: %v", err)
+	}
+	if _, err := client.ReadAgentReachabilityKey(ctx, "fresh-verdict"); status.Code(err) != codes.NotFound {
+		t.Fatalf("fresh verdict key appeared after denied write: %v", err)
+	}
+	operatorProvision := func(kind, tenantID, keyID, field, value string) {
+		t.Helper()
+		binding := map[string]string{
+			"kind": kind, "key_id": keyID,
+			"public_key_pem": string(crypto.MarshalPublicKeyPEM(key.Public().DER)),
+		}
+		if tenantID != "" {
+			binding["tenant_id"] = tenantID
+		}
+		if field != "" {
+			binding[field] = value
+		}
+		raw, err := json.Marshal(binding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "binding.json")
+		if err := os.WriteFile(path, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		args := []string{"--keystore", fx.keystore, "--agid-provision-trust", path}
+		if runtime.GOOS != "linux" {
+			args = append(args, "--allow-insecure-dev-nonlinux")
+		}
+		output, err := exec.Command(fx.bin, args...).CombinedOutput() // #nosec G204 -- fixed test-built signer executable and task-owned JSON path (CWE-78)
+		if err != nil {
+			t.Fatalf("operator one-shot provision %s: %v: %s", kind, err, output)
+		}
+	}
+	operatorProvision("root_anchor", "victim", "fresh-root", "auth_ref", "fido2:attacker")
+	operatorProvision("attestor", "victim", "fresh-attestor", "method", "software")
+	operatorProvision("reachability_key", "", "fresh-verdict", "", "")
+	if err := client.ProvisionAgentRootAnchor(ctx, "victim", "fresh-root", key.Public().DER, "fido2:attacker"); err != nil {
+		t.Fatalf("operator-installed root was not confirmed over RPC: %v", err)
+	}
+	if err := client.ProvisionAgentAttestor(ctx, "victim", "fresh-attestor", key.Public().DER, "software"); err != nil {
+		t.Fatalf("operator-installed attestor was not confirmed over RPC: %v", err)
+	}
+	if err := client.ProvisionAgentReachabilityKey(ctx, "fresh-verdict", key.Public().DER); err != nil {
+		t.Fatalf("operator-installed verdict key was not confirmed over RPC: %v", err)
+	}
+}
+
 func newSignerSubprocessFixture(t *testing.T, tenantID string) *signerSubprocessFixture {
 	t.Helper()
 	dir := t.TempDir()
@@ -191,6 +275,12 @@ func newSignerSubprocessFixture(t *testing.T, tenantID string) *signerSubprocess
 	}
 	fx.verdictSigner = verdictSigner
 	fx.verdictKey = reach.VerdictKeyRef{ID: "agentid-reach-verdict", Algorithm: string(verdictSigner.Algorithm())}
+	if err := NewDurableReachabilityTrustStore(fx.keystore).PutVerdictSigner(context.Background(), fx.verdictKey.ID, verdictSigner.Public().DER); err != nil {
+		t.Fatalf("operator provision verdict key: %v", err)
+	}
+	if err := NewDurableAnchorStore(fx.keystore).PutRootAnchor(context.Background(), tenantID, "root-key", anchors["root-key"]); err != nil {
+		t.Fatalf("operator provision root: %v", err)
+	}
 	subjectDigest, err := CanonicalDigest(envs[len(envs)-1].Record.Authority, nil)
 	if err != nil {
 		t.Fatalf("authority digest: %v", err)
@@ -239,7 +329,7 @@ func (fx *signerSubprocessFixture) start(t *testing.T) (*signing.Client, func())
 	return client, stop
 }
 
-// provisionFloors sends the fixture's verdict key and root anchor over the transport.
+// provisionFloors confirms the fixture's signer-local verdict key and root anchor over the transport.
 func (fx *signerSubprocessFixture) provisionFloors(t *testing.T, client *signing.Client) {
 	t.Helper()
 	if err := client.ProvisionAgentReachabilityKey(context.Background(), fx.verdictKey.ID, fx.verdictSigner.Public().DER); err != nil {

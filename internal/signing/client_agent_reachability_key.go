@@ -10,8 +10,8 @@ import (
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
-// ProvisionAgentReachabilityKey sends only a public key over the authenticated
-// signer channel and verifies the signer's exact durable readback.
+// ProvisionAgentReachabilityKey confirms an operator-installed public key over
+// the authenticated signer channel and verifies its exact durable readback.
 func (c *Client) ProvisionAgentReachabilityKey(ctx context.Context, keyID string, publicDER []byte) error {
 	if c == nil || c.svc == nil {
 		return errors.New("signing: signer client is unavailable")

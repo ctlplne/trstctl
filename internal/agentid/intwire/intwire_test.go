@@ -433,6 +433,13 @@ func newHarness(t *testing.T, tenant string) *harness {
 		t.Fatalf("RegisterRootAnchor: %v", err)
 	}
 	chainKeys[t.Name()+tenant] = rootKey
+	verdictKey, verdictPublic, err := agidorch.PrepareReachabilityVerdictKey(h.keystore, h.wrapper)
+	if err != nil {
+		t.Fatalf("prepare control-plane verdict public key: %v", err)
+	}
+	if err := delegation.NewDurableReachabilityTrustStore(h.keystore).PutVerdictSigner(ctx, verdictKey.ID, verdictPublic.DER); err != nil {
+		t.Fatalf("operator provision signer verdict key: %v", err)
+	}
 
 	h.startSigner(t)
 	h.restartControlPlane(t)
@@ -440,6 +447,9 @@ func newHarness(t *testing.T, tenant string) *harness {
 	// through the API, which records it, provisions it over the signer transport
 	// and reads it back from the signer process.
 	h.attestor = generateSigner(t)
+	if err := delegation.NewDurableAttestationTrustStore(h.keystore).ProvisionAgentAttestor(ctx, tenant, "attestor-1", h.attestor.Public().DER, "software"); err != nil {
+		t.Fatalf("operator provision signer attestor: %v", err)
+	}
 	registered, err := h.api.RegisterAttestor(ctx, tenant, agidapi.AttestorRequest{
 		KeyID: "attestor-1", Method: "software", PublicDER: h.attestor.Public().DER,
 	})

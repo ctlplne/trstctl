@@ -12,12 +12,14 @@ import (
 
 	"trstctl.com/trstctl/internal/agentid/reach"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/fsatomic"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/editionseam"
 )
 
 const reachKeyFile = "agid-control-plane/reachability-verdict-v1.sealed"
+const reachPublicFile = "agid-control-plane/reachability-verdict-v1.pub"
 const reachKeyDomain = "agid-control-plane-reachability-verdict/v1"
 
 // provisionReachabilityVerdictSigner reopens one sealed control-plane key and
@@ -27,22 +29,87 @@ func provisionReachabilityVerdictSigner(floorDir string, wrapper seal.KeyWrapper
 	if floorDir == "" || wrapper == nil || remote == nil {
 		return nil, reach.VerdictKeyRef{}, errors.New("agentid outbox: sealed verdict custody and isolated signer provisioner are required")
 	}
-	locked, err := loadOrCreateReachabilityKey(floorDir, wrapper)
+	key, public, err := PrepareReachabilityVerdictKey(floorDir, wrapper)
 	if err != nil {
 		return nil, reach.VerdictKeyRef{}, err
 	}
-	public := locked.Public()
-	public.DER = append([]byte(nil), public.DER...)
-	locked.Destroy()
-	key := reach.VerdictKeyRef{ID: defaultReachabilityVerdictKeyID, Algorithm: string(public.Algorithm)}
 	if err := remote.ProvisionAgentReachabilityKey(context.Background(), key.ID, public.DER); err != nil {
-		return nil, reach.VerdictKeyRef{}, fmt.Errorf("agentid outbox: provision signer verdict trust: %w", err)
+		return nil, reach.VerdictKeyRef{}, fmt.Errorf("agentid outbox: confirm signer verdict trust (operator public key: %s): %w", ReachabilityPublicKeyPath(floorDir), err)
 	}
 	readback, err := remote.ReadAgentReachabilityKey(context.Background(), key.ID)
 	if err != nil || !bytes.Equal(readback, public.DER) {
 		return nil, reach.VerdictKeyRef{}, errors.New("agentid outbox: signer verdict trust readback differs from sealed key")
 	}
 	return &sealedReachabilitySigner{floorDir: floorDir, wrapper: wrapper, public: public}, key, nil
+}
+
+// PrepareReachabilityVerdictKey creates or reopens only control-plane sealed
+// custody and publishes the public half for a separate signer operator to
+// review. It does not change the signer's trust floor.
+func PrepareReachabilityVerdictKey(floorDir string, wrapper seal.KeyWrapper) (reach.VerdictKeyRef, crypto.PublicKey, error) {
+	locked, err := loadOrCreateReachabilityKey(floorDir, wrapper)
+	if err != nil {
+		return reach.VerdictKeyRef{}, crypto.PublicKey{}, err
+	}
+	public := locked.Public()
+	public.DER = append([]byte(nil), public.DER...)
+	locked.Destroy()
+	if err := writeReachabilityPublic(floorDir, public.DER); err != nil {
+		return reach.VerdictKeyRef{}, crypto.PublicKey{}, fmt.Errorf("agentid outbox: export verdict public key for operator review: %w", err)
+	}
+	return reach.VerdictKeyRef{ID: defaultReachabilityVerdictKeyID, Algorithm: string(public.Algorithm)}, public, nil
+}
+
+// ReachabilityPublicKeyPath holds only the public half of the sealed verdict
+// key. The signer operator reviews it and provisions the matching local floor.
+func ReachabilityPublicKeyPath(floorDir string) string {
+	return filepath.Join(floorDir, reachPublicFile)
+}
+
+func writeReachabilityPublic(floorDir string, publicDER []byte) error {
+	root, err := os.OpenRoot(floorDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	want := crypto.MarshalPublicKeyPEM(publicDER)
+	if existing, err := root.ReadFile(reachPublicFile); err == nil {
+		if !bytes.Equal(existing, want) {
+			return errors.New("retained verdict public key differs from sealed custody")
+		}
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	dir := filepath.Dir(ReachabilityPublicKeyPath(floorDir))
+	f, err := os.CreateTemp(dir, ".reachability-public-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if _, err := f.Write(want); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Link(f.Name(), ReachabilityPublicKeyPath(floorDir)); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	stored, err := root.ReadFile(reachPublicFile)
+	if err != nil || !bytes.Equal(stored, want) {
+		return errors.New("retained verdict public key differs from sealed custody")
+	}
+	return fsatomic.SyncDirectory(dir)
 }
 
 // sealedReachabilitySigner keeps only the public key in memory. Each signature

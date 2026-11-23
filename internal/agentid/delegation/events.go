@@ -74,7 +74,8 @@ func (RootAnchorRegisteredV1) isDelegationPayload() {}
 
 // RootAnchorUnprovisionedV1 preserves an old public tuple after an exact
 // signer NotFound. It cannot authorize issuance until a new explicit operator
-// registration provisions the matching tuple in the isolated signer.
+// registration confirms the matching tuple in the isolated signer after local
+// operator provisioning.
 type RootAnchorUnprovisionedV1 struct {
 	TenantID  string `json:"tenant_id"`
 	KeyID     string `json:"key_id"`

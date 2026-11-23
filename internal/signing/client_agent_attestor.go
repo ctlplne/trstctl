@@ -10,10 +10,8 @@ import (
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
-// ProvisionAgentAttestor sends one tenant's public attestor key and its
-// attestation method to the isolated signer over the authenticated,
-// admission-controlled transport. The signer enforces the first-writer fence
-// and returns the exact stored binding.
+// ProvisionAgentAttestor confirms an exact operator-installed tenant attestor
+// over the authenticated transport. The RPC cannot add or replace trust.
 func (c *Client) ProvisionAgentAttestor(ctx context.Context, tenantID, keyID string, publicDER []byte, method string) error {
 	if c == nil || c.svc == nil {
 		return errors.New("signing: signer client is unavailable")

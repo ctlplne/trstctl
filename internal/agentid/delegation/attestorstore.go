@@ -68,7 +68,7 @@ func SignAttestation(signer crypto.Signer, keyID, method, subject string, claims
 // DurableAttestationTrustStore is an AN-4-safe filesystem trust floor for attestation
 // verifier public keys. It stores only public key material under the signer keystore
 // directory: the operator-provisioned floor (one key per key ID, for every tenant) and
-// the tenant floor the control plane provisions over the signer transport (A150), where
+// the tenant floor the signer-local operator provisions (A150), where
 // each key is bound to one tenant and one attestation method by its first writer.
 type DurableAttestationTrustStore struct {
 	dir string

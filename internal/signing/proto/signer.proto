@@ -141,26 +141,21 @@ service SignerService {
   // request, but cannot forge.
   rpc GatedIssue(GatedIssueRequest) returns (GatedIssueResponse);
 
-  // ProvisionAgentRootAnchor stores a tenant-authorized, PUBLIC
-  // AGID delegation root inside the signer floor. The signer refuses a changed
-  // first-writer binding and returns its exact durable readback. This removes
-  // any need to expose the signer's private keystore to the control plane.
+  // ProvisionAgentRootAnchor confirms an exact PUBLIC root already installed
+  // through the signer-local operator ceremony. An RPC peer cannot add one.
   rpc ProvisionAgentRootAnchor(ProvisionAgentRootAnchorRequest) returns (ProvisionAgentRootAnchorResponse);
 
   // GetAgentRootAnchor reads the exact signer-held public AGID root. Callers
   // compare it with the tenant registry before reporting provisioned=true.
   rpc GetAgentRootAnchor(GetAgentRootAnchorRequest) returns (GetAgentRootAnchorResponse);
 
-  // Bind one public reachability-verdict signer in the isolated signer. The
-  // control plane retains its sealed private key; changed first writers refuse.
+  // Confirm one signer-local reachability-verdict public key. The control plane
+  // retains its sealed private key; an RPC peer cannot add or replace trust.
   rpc ProvisionAgentReachabilityKey(ProvisionAgentReachabilityKeyRequest) returns (ProvisionAgentReachabilityKeyResponse);
   rpc GetAgentReachabilityKey(GetAgentReachabilityKeyRequest) returns (GetAgentReachabilityKeyResponse);
 
-  // ProvisionAgentAttestor binds one tenant's PUBLIC attestation verifier key
-  // in the signer floor (A150), so a chain-bound mint can verify that tenant's
-  // attestation evidence without an operator writing the floor by hand. A
-  // changed first-writer binding is refused; the response is the exact durable
-  // readback.
+  // Confirm one tenant's PUBLIC attestation verifier key already installed in
+  // the signer floor by the operator. A changed binding is refused.
   rpc ProvisionAgentAttestor(ProvisionAgentAttestorRequest) returns (ProvisionAgentAttestorResponse);
   // GetAgentAttestor reads the exact signer-held public attestor key.
   rpc GetAgentAttestor(GetAgentAttestorRequest) returns (GetAgentAttestorResponse);

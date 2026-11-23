@@ -58,9 +58,9 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 	// per-hop narrowing under the AGID-01 partial order, and the attestation (with the
 	// min-class gate) BEFORE any key op, and failing closed with a signed refusal (INV-A1).
 	// The refusal-signing key is generated inside the signer as locked material and never
-	// leaves the boundary. Root anchors, attestors and the reachability verdict key reach
-	// the signer's floor over this transport from the control plane (attestors may also be
-	// operator-provisioned deployment-wide); until a root anchor is present a delegated
+	// leaves the boundary. Root anchors, attestors and the reachability verdict key are
+	// operator-provisioned in the signer-local floor; the control plane can only
+	// confirm their exact readback over this transport. Until a root is present a delegated
 	// chain fails closed at the root-anchor check rather than being approved unverified.
 	gate, _, err := agiddelegation.NewSignerGate(agiddelegation.SignerConfig{
 		SignerID:            "trstctl-signer",

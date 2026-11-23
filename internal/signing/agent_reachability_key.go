@@ -19,7 +19,6 @@ import (
 // AgentReachabilityKeyStore owns only public verdict trust. The signer reads it
 // locally and never accepts a verdict key from a GatedIssue request.
 type AgentReachabilityKeyStore interface {
-	PutVerdictSigner(context.Context, string, []byte) error
 	ReadVerdictSigner(context.Context, string) ([]byte, error)
 }
 
@@ -39,15 +38,15 @@ func (s *Server) ProvisionAgentReachabilityKey(ctx context.Context, req *signerp
 	if err := crypto.ValidatePublicKeyDER(req.GetPublicDer()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "AGID verdict key is not a usable public key")
 	}
-	if err := s.agentReachabilityKeys.PutVerdictSigner(ctx, req.GetKeyId(), req.GetPublicDer()); err != nil {
-		if errors.Is(err, ErrAgentReachabilityConflict) {
-			return nil, status.Error(codes.AlreadyExists, "signer AGID verdict key is bound to another authority")
-		}
+	stored, err := s.agentReachabilityKeys.ReadVerdictSigner(ctx, req.GetKeyId())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, status.Error(codes.PermissionDenied, "AGID verdict key must be provisioned locally by the signer operator")
+	}
+	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, "signer AGID reachability trust floor is unavailable")
 	}
-	stored, err := s.agentReachabilityKeys.ReadVerdictSigner(ctx, req.GetKeyId())
-	if err != nil || !bytes.Equal(stored, req.GetPublicDer()) {
-		return nil, status.Error(codes.FailedPrecondition, "signer AGID verdict key readback differs from requested authority")
+	if !bytes.Equal(stored, req.GetPublicDer()) {
+		return nil, status.Error(codes.AlreadyExists, "signer AGID verdict key is bound to another authority")
 	}
 	return &signerpb.ProvisionAgentReachabilityKeyResponse{PublicDer: stored}, nil
 }

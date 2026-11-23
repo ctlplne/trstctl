@@ -301,7 +301,7 @@ func Routes(svc Service) []api.LicensedRoute {
 	return []api.LicensedRoute{
 		{
 			Method: "POST", Path: "/api/v1/agent-delegation/root-anchors", OperationID: "registerAgentDelegationRootAnchor",
-			Summary:       "Register a tenant-scoped AGID delegation root anchor (idempotent)",
+			Summary:       "Register a tenant-scoped AGID root after signer-local operator provisioning (idempotent)",
 			Handler:       func(a *api.API) http.HandlerFunc { return registerRootAnchorHandler(a, svc) },
 			RequestSchema: "AGIDRootAnchorRequest", ResponseSchema: "AGIDRootAnchor",
 			SuccessCode: "200", Mutation: true, Permission: authz.AgentsWrite,
@@ -314,7 +314,7 @@ func Routes(svc Service) []api.LicensedRoute {
 		},
 		{
 			Method: "POST", Path: "/api/v1/agent-delegation/attestors", OperationID: "registerAgentDelegationAttestor",
-			Summary:       "Register a tenant attestor in the signer's attestation trust (idempotent)",
+			Summary:       "Register a tenant attestor after signer-local operator provisioning (idempotent)",
 			Handler:       func(a *api.API) http.HandlerFunc { return registerAttestorHandler(a, svc) },
 			RequestSchema: "AGIDAttestorRequest", ResponseSchema: "AGIDAttestor",
 			SuccessCode: "200", Mutation: true, Permission: authz.AgentsWrite,
@@ -392,9 +392,9 @@ func Routes(svc Service) []api.LicensedRoute {
 	}
 }
 
-// registerRootAnchorHandler persists and provisions one tenant-scoped root anchor. It is a
-// mutation because it writes both the RLS store and, when configured, the signer's durable
-// local anchor floor; api.Mutate supplies the AN-5 idempotency envelope.
+// registerRootAnchorHandler records one tenant-scoped root and confirms its
+// signer-local operator binding. It is a mutation because it appends an event;
+// api.Mutate supplies the AN-5 idempotency envelope.
 func registerRootAnchorHandler(a *api.API, svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -433,6 +433,9 @@ func registerRootAnchorHandler(a *api.API, svc Service) http.HandlerFunc {
 				if status.Code(err) == codes.InvalidArgument {
 					return 0, nil, api.ErrStatus(http.StatusBadRequest, "root-anchor key_id or public key is invalid")
 				}
+				if status.Code(err) == codes.PermissionDenied {
+					return 0, nil, api.ErrStatus(http.StatusConflict, "root anchor is absent from the signer trust floor; ask the signer operator to install this exact public binding before retrying")
+				}
 				if errors.Is(err, ErrRootAnchorLogUnavailable) || errors.Is(err, events.ErrEventIDIndexBehind) {
 					return 0, nil, api.ErrStatus(http.StatusServiceUnavailable, "root-anchor event authority is unavailable; retry the same request after recovery")
 				}
@@ -468,9 +471,8 @@ func listRootAnchorsHandler(a *api.API, svc Service) http.HandlerFunc {
 	}
 }
 
-// registerAttestorHandler persists and provisions one tenant attestor. Like the root
-// anchor route it is a mutation that writes the event log, the RLS registry and the
-// signer floor; api.Mutate supplies the AN-5 idempotency envelope.
+// registerAttestorHandler records one tenant attestor and confirms its
+// signer-local operator binding; api.Mutate supplies the AN-5 envelope.
 func registerAttestorHandler(a *api.API, svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -508,6 +510,9 @@ func registerAttestorHandler(a *api.API, svc Service) http.HandlerFunc {
 				}
 				if status.Code(err) == codes.InvalidArgument {
 					return 0, nil, api.ErrStatus(http.StatusBadRequest, "signer refused the attestor key_id, method or public key")
+				}
+				if status.Code(err) == codes.PermissionDenied {
+					return 0, nil, api.ErrStatus(http.StatusConflict, "attestor is absent from the signer trust floor; ask the signer operator to install this exact public binding before retrying")
 				}
 				if errors.Is(err, ErrAttestorLogUnavailable) || errors.Is(err, events.ErrEventIDIndexBehind) {
 					return 0, nil, api.ErrStatus(http.StatusServiceUnavailable, "attestor event authority is unavailable; retry the same request after recovery")

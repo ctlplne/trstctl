@@ -8,6 +8,9 @@ import (
 	"errors"
 	"testing"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	agidapi "trstctl.com/trstctl/internal/agentid/api"
 	"trstctl.com/trstctl/internal/agentid/delegation"
 	"trstctl.com/trstctl/internal/authz"
@@ -339,10 +342,14 @@ type rootReadbackProbe struct {
 	publicDER       []byte
 	authRef         string
 	overrideAuthRef string
+	provisionErr    error
 	readErr         error
 }
 
 func (p *rootReadbackProbe) ProvisionAgentRootAnchor(_ context.Context, _, _ string, publicDER []byte, authRef string) error {
+	if p.provisionErr != nil {
+		return p.provisionErr
+	}
 	p.publicDER = append([]byte(nil), publicDER...)
 	p.authRef = authRef
 	return nil
@@ -369,6 +376,11 @@ func TestService_RegisterRootAnchorNeedsExactSignerReadback(t *testing.T) {
 	}
 	probe := &rootReadbackProbe{readErr: errors.New("signer floor unreachable")}
 	svc := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{RootAnchors: probe})
+	probe.provisionErr = status.Error(codes.PermissionDenied, "operator local floor required")
+	if _, err := svc.RegisterRootAnchor(t.Context(), "tenant", req); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("missing operator floor = %v, want signer refusal", err)
+	}
+	probe.provisionErr = nil
 	if _, err := svc.RegisterRootAnchor(t.Context(), "tenant", req); err == nil {
 		t.Fatal("signer readback outage reported a provisioned root")
 	}
@@ -430,8 +442,8 @@ func (p *attestorReadbackProbe) ReadAgentAttestor(_ context.Context, _, _ string
 	return append([]byte(nil), p.publicDER...), p.method, nil
 }
 
-// A150: registering an attestor provisions the signer's tenant attestor floor and
-// reports provisioned only after an exact, independent readback.
+// A150: the in-process floor seam registers one tenant attestor and reports
+// provisioned only after an exact, independent readback.
 func TestService_RegisterAttestorProvisionsSignerFloor(t *testing.T) {
 	floor := delegation.NewDurableAttestationTrustStore(t.TempDir())
 	svc := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{Attestors: floor})
@@ -478,8 +490,13 @@ func TestService_RegisterAttestorNeedsExactSignerReadback(t *testing.T) {
 	}
 	probe := &attestorReadbackProbe{provisionErr: errors.New("signer floor unreachable")}
 	svc := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{Attestors: probe})
+	probe.provisionErr = status.Error(codes.PermissionDenied, "operator local floor required")
+	if _, err := svc.RegisterAttestor(t.Context(), "tenant", req); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("missing operator floor = %v, want signer refusal", err)
+	}
+	probe.provisionErr = errors.New("signer floor unreachable")
 	if _, err := svc.RegisterAttestor(t.Context(), "tenant", req); err == nil {
-		t.Fatal("signer provisioning outage reported a provisioned attestor")
+		t.Fatal("signer confirmation outage reported a provisioned attestor")
 	}
 	probe.provisionErr = nil
 	probe.readErr = errors.New("signer floor unreachable")

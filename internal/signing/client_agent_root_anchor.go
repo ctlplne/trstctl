@@ -10,9 +10,8 @@ import (
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
-// ProvisionAgentRootAnchor sends public trust material to the isolated signer
-// over its authenticated, admission-controlled transport. The signer enforces
-// the first-writer fence and returns the exact stored binding.
+// ProvisionAgentRootAnchor confirms an exact operator-installed signer binding
+// over the authenticated, admission-controlled transport. It cannot add trust.
 func (c *Client) ProvisionAgentRootAnchor(ctx context.Context, tenantID, keyID string, publicDER []byte, authRef string) error {
 	if c == nil || c.svc == nil {
 		return errors.New("signing: signer client is unavailable")

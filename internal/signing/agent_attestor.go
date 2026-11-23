@@ -20,10 +20,9 @@ import (
 // attestor public key is bound to one tenant, one key ID and one attestation
 // method; the gate verifies a tenant's attestation evidence only against that
 // tenant's attestors. Its implementation lives with AGID, so this transport
-// imports neither the AGID package nor a database driver. An exact retry is
-// safe; a changed binding must be refused by the store itself.
+// imports neither the AGID package nor a database driver. The RPC server
+// holds only the read capability; local operator provisioning writes the floor.
 type AgentAttestorStore interface {
-	ProvisionAgentAttestor(context.Context, string, string, []byte, string) error
 	ReadAgentAttestor(context.Context, string, string) ([]byte, string, error)
 }
 
@@ -52,18 +51,15 @@ func (s *Server) ProvisionAgentAttestor(ctx context.Context, req *signerpb.Provi
 	if err := crypto.ValidatePublicKeyDER(req.GetPublicDer()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "AGID attestor key is not a usable public key")
 	}
-	if err := s.agentAttestors.ProvisionAgentAttestor(ctx, req.GetTenantId(), req.GetKeyId(), req.GetPublicDer(), req.GetMethod()); err != nil {
-		switch {
-		case errors.Is(err, ErrAgentAttestorConflict):
-			return nil, status.Error(codes.AlreadyExists, "signer AGID attestor key ID is bound to another key or method")
-		case errors.Is(err, ErrAgentAttestorInvalid):
-			return nil, status.Error(codes.InvalidArgument, "signer refused the AGID attestor key ID or method")
-		}
+	publicDER, method, err := s.agentAttestors.ReadAgentAttestor(ctx, req.GetTenantId(), req.GetKeyId())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, status.Error(codes.PermissionDenied, "AGID attestor must be provisioned locally by the signer operator")
+	}
+	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, "signer AGID attestor floor is unavailable")
 	}
-	publicDER, method, err := s.agentAttestors.ReadAgentAttestor(ctx, req.GetTenantId(), req.GetKeyId())
-	if err != nil || !bytes.Equal(publicDER, req.GetPublicDer()) || method != req.GetMethod() {
-		return nil, status.Error(codes.FailedPrecondition, "signer AGID attestor readback differs from requested binding")
+	if !bytes.Equal(publicDER, req.GetPublicDer()) || method != req.GetMethod() {
+		return nil, status.Error(codes.AlreadyExists, "signer AGID attestor key ID is bound to another key or method")
 	}
 	return &signerpb.ProvisionAgentAttestorResponse{PublicDer: publicDER, Method: method}, nil
 }

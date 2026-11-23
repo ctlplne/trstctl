@@ -31,8 +31,8 @@ var (
 )
 
 // RegisterAttestor appends the immutable tenant/key attestor binding, projects its
-// RLS serving copy, then provisions the signer's tenant attestor floor and reads it
-// back independently (A150). The deterministic event ID, the projection and the
+// RLS serving copy, then confirms the operator-provisioned signer attestor
+// floor by independent readback (A150). The deterministic event ID, the projection and the
 // signer each keep the first writer, so a lost response can be retried and a
 // changed key or method needs a new key ID.
 func (s *service) RegisterAttestor(ctx context.Context, tenantID string, req AttestorRequest) (AttestorResponse, error) {

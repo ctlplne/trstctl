@@ -55,7 +55,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3594 annotated sites across 35 rules. Each row is
+3596 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1882,7 +1882,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (456 sites)
+### G204 — CWE-78 OS command injection (457 sites)
 
 | Location | Reason |
 |---|---|
@@ -1993,7 +1993,8 @@ not this file.
 | `internal/agent/workloadapi/attest_darwin_test.go:75` | test runs the system nc against its own socket (CWE-78) |
 | `internal/agent/workloadapi/attest_linux_test.go:138` | the test re-executes its own binary (CWE-78) |
 | `internal/agent/workloadapi/attest_linux_test.go:155` | the system sleep binary (CWE-78) |
-| `internal/agentid/delegation/signer_subprocess_test.go:284` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
+| `internal/agentid/delegation/signer_subprocess_test.go:244` | fixed test-built signer executable and task-owned JSON path (CWE-78) |
+| `internal/agentid/delegation/signer_subprocess_test.go:374` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `internal/agentid/verify/wasm_parity_test.go:49` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `internal/agentid/verify/wasm_parity_test.go:59` | execShim is Go's fixed wasm_exec_node shim and wasmOut is this test's TempDir artifact (CWE-78). |
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2484,7 +2485,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (844 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (845 sites)
 
 | Location | Reason |
 |---|---|
@@ -2559,6 +2560,7 @@ not this file.
 | `cmd/trstctl-agent/sshtrust.go:97` | operator-configured local path from the agent's own config (CWE-22) |
 | `cmd/trstctl-license/aud56_test.go:35` | licensePath is created inside this test's TempDir (CWE-22). |
 | `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
+| `cmd/trstctl-signer/agent_trust_provision.go:35` | explicit operator-selected public input |
 | `cmd/trstctl-signer/offline.go:117` | fixed public-kit path beneath the operator-selected offline vault (CWE-22) |
 | `cmd/trstctl-signer/offline.go:153` | operator-selected local offline input file (CWE-22) |
 | `cmd/trstctl-signer/offline.go:181` | operator-selected owner-only custodian key file (CWE-22) |
@@ -2803,7 +2805,7 @@ not this file.
 | `internal/agent/sshtrust/sshd_live_test.go:149` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/sshtrust/sshd_live_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agentid/delegation/reachtruststore.go:81` | signer-owned floor and validated key ID; open only to fsync the published directory |
-| `internal/agentid/orchestrator/reachability_key.go:156` | configured control-plane key directory; open only to fsync the sealed-key publication |
+| `internal/agentid/orchestrator/reachability_key.go:223` | configured control-plane key directory; open only to fsync the sealed-key publication |
 | `internal/api/backpressure_errors_test.go:88` | reads this package's own sources in a test (CWE-22) |
 | `internal/api/public_route_abuse_guard_test.go:91` | reads this package's own sources in a test (CWE-22) |
 | `internal/api/rogue_certificates_weak_key_test.go:18` | a fixed test fixture directory, named by the test itself (CWE-22) |

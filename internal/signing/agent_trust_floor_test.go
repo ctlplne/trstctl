@@ -108,6 +108,43 @@ func requireSignerCode(t *testing.T, err error, want codes.Code) {
 	}
 }
 
+// CR-297: possession of the signer socket is not permission to add a trust
+// root. A missing binding must be installed through the signer-local operator
+// ceremony before an RPC peer can obtain a matching readback.
+func TestCR297SignerPeerCannotCreateTrustFloor(t *testing.T) {
+	ctx := context.Background()
+	publicDER := testTrustPublicKey(t)
+	server := &Server{}
+	roots := &testRootAnchorStore{}
+	attestors := &testAttestorStore{}
+	reachability := &testReachabilityStore{}
+	WithAgentRootAnchorStore(roots)(server)
+	WithAgentAttestorStore(attestors)(server)
+	WithAgentReachabilityKeyStore(reachability)(server)
+
+	_, err := server.ProvisionAgentRootAnchor(ctx, &signerpb.ProvisionAgentRootAnchorRequest{
+		TenantId: "victim", KeyId: "attacker-root", PublicDer: publicDER, AuthRef: "agent:attacker",
+	})
+	requireSignerCode(t, err, codes.PermissionDenied)
+	if len(roots.anchors) != 0 {
+		t.Fatal("signer peer created a delegation root")
+	}
+	_, err = server.ProvisionAgentAttestor(ctx, &signerpb.ProvisionAgentAttestorRequest{
+		TenantId: "victim", KeyId: "attacker-attestor", PublicDer: publicDER, Method: "software",
+	})
+	requireSignerCode(t, err, codes.PermissionDenied)
+	if len(attestors.attestors) != 0 {
+		t.Fatal("signer peer created an attestor")
+	}
+	_, err = server.ProvisionAgentReachabilityKey(ctx, &signerpb.ProvisionAgentReachabilityKeyRequest{
+		KeyId: "attacker-verdict", PublicDer: publicDER,
+	})
+	requireSignerCode(t, err, codes.PermissionDenied)
+	if len(reachability.keys) != 0 {
+		t.Fatal("signer peer created a reachability key")
+	}
+}
+
 func TestAgentRootAnchorSignerTrustFloor(t *testing.T) {
 	ctx := context.Background()
 	publicDER := testTrustPublicKey(t)
@@ -136,6 +173,11 @@ func TestAgentRootAnchorSignerTrustFloor(t *testing.T) {
 	requireSignerCode(t, err, codes.InvalidArgument)
 	_, err = server.GetAgentRootAnchor(ctx, &signerpb.GetAgentRootAnchorRequest{TenantId: "tenant-a", KeyId: "missing"})
 	requireSignerCode(t, err, codes.NotFound)
+	_, err = server.ProvisionAgentRootAnchor(ctx, req)
+	requireSignerCode(t, err, codes.PermissionDenied)
+	if err := store.ProvisionAgentRootAnchor(ctx, req.TenantId, req.KeyId, publicDER, req.AuthRef); err != nil {
+		t.Fatalf("operator provision root: %v", err)
+	}
 
 	for attempt := 0; attempt < 2; attempt++ {
 		receipt, err := server.ProvisionAgentRootAnchor(ctx, req)
@@ -157,11 +199,15 @@ func TestAgentRootAnchorSignerTrustFloor(t *testing.T) {
 	requireSignerCode(t, err, codes.AlreadyExists)
 	store.badReadback = true
 	_, err = server.ProvisionAgentRootAnchor(ctx, req)
-	requireSignerCode(t, err, codes.FailedPrecondition)
+	requireSignerCode(t, err, codes.AlreadyExists)
 	store.badReadback = false
 	store.provisionErr = errors.New("retained floor unavailable")
-	_, err = server.ProvisionAgentRootAnchor(ctx, req)
-	requireSignerCode(t, err, codes.FailedPrecondition)
+	if err := store.ProvisionAgentRootAnchor(ctx, req.TenantId, "another-root", publicDER, req.AuthRef); err == nil {
+		t.Fatal("operator store accepted a failed local provision")
+	}
+	if _, err := server.ProvisionAgentRootAnchor(ctx, req); err != nil {
+		t.Fatalf("RPC readback depended on local write availability: %v", err)
+	}
 	store.provisionErr = nil
 	store.readErr = errors.New("read failure")
 	_, err = server.GetAgentRootAnchor(ctx, &signerpb.GetAgentRootAnchorRequest{TenantId: "tenant-a", KeyId: "root-a"})
@@ -193,6 +239,11 @@ func TestAgentReachabilitySignerTrustFloor(t *testing.T) {
 	requireSignerCode(t, err, codes.InvalidArgument)
 	_, err = server.GetAgentReachabilityKey(ctx, &signerpb.GetAgentReachabilityKeyRequest{KeyId: "missing"})
 	requireSignerCode(t, err, codes.NotFound)
+	_, err = server.ProvisionAgentReachabilityKey(ctx, req)
+	requireSignerCode(t, err, codes.PermissionDenied)
+	if err := store.PutVerdictSigner(ctx, req.KeyId, publicDER); err != nil {
+		t.Fatalf("operator provision verdict key: %v", err)
+	}
 
 	for attempt := 0; attempt < 2; attempt++ {
 		receipt, err := server.ProvisionAgentReachabilityKey(ctx, req)
@@ -209,11 +260,15 @@ func TestAgentReachabilitySignerTrustFloor(t *testing.T) {
 	requireSignerCode(t, err, codes.AlreadyExists)
 	store.badReadback = true
 	_, err = server.ProvisionAgentReachabilityKey(ctx, req)
-	requireSignerCode(t, err, codes.FailedPrecondition)
+	requireSignerCode(t, err, codes.AlreadyExists)
 	store.badReadback = false
 	store.provisionErr = errors.New("retained floor unavailable")
-	_, err = server.ProvisionAgentReachabilityKey(ctx, req)
-	requireSignerCode(t, err, codes.FailedPrecondition)
+	if err := store.PutVerdictSigner(ctx, "another-verdict", publicDER); err == nil {
+		t.Fatal("operator store accepted a failed local provision")
+	}
+	if _, err := server.ProvisionAgentReachabilityKey(ctx, req); err != nil {
+		t.Fatalf("RPC readback depended on local write availability: %v", err)
+	}
 	store.provisionErr = nil
 	store.readErr = errors.New("read failure")
 	_, err = server.GetAgentReachabilityKey(ctx, &signerpb.GetAgentReachabilityKeyRequest{KeyId: "verdict-a"})
@@ -261,8 +316,7 @@ func (s *testAttestorStore) ReadAgentAttestor(_ context.Context, tenant, keyID s
 	return bytes.Clone(value.publicDER), value.method, nil
 }
 
-// A150: the signer's attestor RPCs validate the binding, keep the first writer,
-// read back what they stored, and answer each failure with a distinct code.
+// A150/CR-297: an RPC can confirm only a signer-local first-writer binding.
 func TestAgentAttestorSignerTrustFloor(t *testing.T) {
 	ctx := context.Background()
 	publicDER := testTrustPublicKey(t)
@@ -291,6 +345,11 @@ func TestAgentAttestorSignerTrustFloor(t *testing.T) {
 	requireSignerCode(t, err, codes.InvalidArgument)
 	_, err = server.GetAgentAttestor(ctx, &signerpb.GetAgentAttestorRequest{TenantId: "tenant-a", KeyId: "missing"})
 	requireSignerCode(t, err, codes.NotFound)
+	_, err = server.ProvisionAgentAttestor(ctx, req)
+	requireSignerCode(t, err, codes.PermissionDenied)
+	if err := store.ProvisionAgentAttestor(ctx, req.TenantId, req.KeyId, publicDER, req.Method); err != nil {
+		t.Fatalf("operator provision attestor: %v", err)
+	}
 
 	for attempt := 0; attempt < 2; attempt++ {
 		receipt, err := server.ProvisionAgentAttestor(ctx, req)
@@ -310,15 +369,20 @@ func TestAgentAttestorSignerTrustFloor(t *testing.T) {
 	_, err = server.ProvisionAgentAttestor(ctx, &signerpb.ProvisionAgentAttestorRequest{TenantId: "tenant-a", KeyId: "attestor-a", PublicDer: publicDER, Method: "hsm"})
 	requireSignerCode(t, err, codes.AlreadyExists)
 	store.provisionErr = ErrAgentAttestorInvalid
-	_, err = server.ProvisionAgentAttestor(ctx, req)
-	requireSignerCode(t, err, codes.InvalidArgument)
+	if err := store.ProvisionAgentAttestor(ctx, req.TenantId, "another-attestor", publicDER, req.Method); !errors.Is(err, ErrAgentAttestorInvalid) {
+		t.Fatalf("operator store invalid binding = %v", err)
+	}
 	store.provisionErr = errors.New("retained floor unavailable")
-	_, err = server.ProvisionAgentAttestor(ctx, req)
-	requireSignerCode(t, err, codes.FailedPrecondition)
+	if err := store.ProvisionAgentAttestor(ctx, req.TenantId, "another-attestor", publicDER, req.Method); err == nil {
+		t.Fatal("operator store accepted a failed local provision")
+	}
+	if _, err := server.ProvisionAgentAttestor(ctx, req); err != nil {
+		t.Fatalf("RPC readback depended on local write availability: %v", err)
+	}
 	store.provisionErr = nil
 	store.badReadback = true
 	_, err = server.ProvisionAgentAttestor(ctx, req)
-	requireSignerCode(t, err, codes.FailedPrecondition)
+	requireSignerCode(t, err, codes.AlreadyExists)
 	store.badReadback = false
 	store.readErr = errors.New("read failure")
 	_, err = server.GetAgentAttestor(ctx, &signerpb.GetAgentAttestorRequest{TenantId: "tenant-a", KeyId: "attestor-a"})

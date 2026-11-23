@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -18,7 +19,17 @@ type reachKeyProbe struct {
 }
 
 func (p reachKeyProbe) ProvisionAgentReachabilityKey(ctx context.Context, id string, der []byte) error {
-	return p.store.PutVerdictSigner(ctx, id, der)
+	stored, err := p.store.ReadVerdictSigner(ctx, id)
+	if errors.Is(err, os.ErrNotExist) {
+		return errors.New("operator has not installed signer verdict trust")
+	}
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(stored, der) {
+		return errors.New("signer verdict trust differs")
+	}
+	return nil
 }
 func (p reachKeyProbe) ReadAgentReachabilityKey(ctx context.Context, id string) ([]byte, error) {
 	return p.store.ReadVerdictSigner(ctx, id)
@@ -32,6 +43,23 @@ func TestReachabilityVerdictKeySeparateVolumesAndColdRestart(t *testing.T) {
 	}
 	defer wrapper.Destroy()
 	remote := reachKeyProbe{store: delegation.NewDurableReachabilityTrustStore(signerDir)}
+	key, public, err := PrepareReachabilityVerdictKey(controlDir, wrapper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicPEM, err := os.ReadFile(ReachabilityPublicKeyPath(controlDir))
+	if err != nil || !bytes.Equal(publicPEM, crypto.MarshalPublicKeyPEM(public.DER)) {
+		t.Fatalf("operator public-key export differs from sealed custody: %v", err)
+	}
+	if _, _, err := provisionReachabilityVerdictSigner(controlDir, wrapper, remote); err == nil {
+		t.Fatal("control plane auto-provisioned an absent signer verdict floor")
+	}
+	if _, err := remote.ReadAgentReachabilityKey(context.Background(), key.ID); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("control plane wrote signer floor through RPC: %v", err)
+	}
+	if err := remote.store.PutVerdictSigner(context.Background(), key.ID, public.DER); err != nil {
+		t.Fatalf("operator provision signer verdict floor: %v", err)
+	}
 	first, key, err := provisionReachabilityVerdictSigner(controlDir, wrapper, remote)
 	if err != nil {
 		t.Fatal(err)
@@ -86,5 +114,15 @@ func TestReachabilityVerdictKeySeparateVolumesAndColdRestart(t *testing.T) {
 	}
 	if _, err := second.Sign(message, crypto.SignOptions{Hash: crypto.SHA256}); err != nil {
 		t.Fatalf("sealed custody could not resume signing: %v", err)
+	}
+	otherDER, _, err := crypto.GenerateEd25519KeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ReachabilityPublicKeyPath(controlDir), crypto.MarshalPublicKeyPEM(otherDER), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := provisionReachabilityVerdictSigner(controlDir, wrapper, remote); err == nil {
+		t.Fatal("control plane accepted a public bootstrap file differing from sealed custody")
 	}
 }

@@ -19,7 +19,7 @@ const durableReachVerdictDir = "agid-reach-verdict-keys"
 var ErrReachabilityTrustConflict = signing.ErrAgentReachabilityConflict
 
 // DurableReachabilityTrustStore is the AN-4-safe signer provisioning store for trusted
-// reachability-verdict public keys. The control plane writes public DER into the signer
+// reachability-verdict public keys. The signer-local operator writes public DER into the signer
 // keystore/floor directory; the isolated signer reads it dynamically and links no SQL,
 // NATS, HTTP, or control-plane graph code.
 type DurableReachabilityTrustStore struct {

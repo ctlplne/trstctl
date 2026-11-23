@@ -18,10 +18,9 @@ import (
 
 // AgentRootAnchorStore is a signer-local public trust floor. Its implementation
 // lives with AGID; this signer transport does not import the AGID package or a
-// database driver. An exact retry is safe, and a changed tenant/key binding
-// must be refused by the store itself.
+// database driver. The RPC server holds only the read capability; local
+// operator provisioning uses the store's separate write method.
 type AgentRootAnchorStore interface {
-	ProvisionAgentRootAnchor(context.Context, string, string, []byte, string) error
 	ReadAgentRootAnchor(context.Context, string, string) ([]byte, string, error)
 }
 
@@ -45,15 +44,15 @@ func (s *Server) ProvisionAgentRootAnchor(ctx context.Context, req *signerpb.Pro
 	if err := crypto.ValidatePublicKeyDER(req.GetPublicDer()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "AGID root anchor is not a usable public key")
 	}
-	if err := s.agentRootAnchors.ProvisionAgentRootAnchor(ctx, req.GetTenantId(), req.GetKeyId(), req.GetPublicDer(), req.GetAuthRef()); err != nil {
-		if errors.Is(err, ErrAgentRootConflict) {
-			return nil, status.Error(codes.AlreadyExists, "signer AGID root anchor is bound to another authority")
-		}
-		return nil, status.Error(codes.FailedPrecondition, "signer AGID root anchor conflicts with retained authority or its floor is unavailable")
-	}
 	publicDER, authRef, err := s.agentRootAnchors.ReadAgentRootAnchor(ctx, req.GetTenantId(), req.GetKeyId())
-	if err != nil || !bytes.Equal(publicDER, req.GetPublicDer()) || authRef != req.GetAuthRef() {
-		return nil, status.Error(codes.FailedPrecondition, "signer AGID root-anchor readback differs from requested authority")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, status.Error(codes.PermissionDenied, "AGID root anchor must be provisioned locally by the signer operator")
+	}
+	if err != nil {
+		return nil, status.Error(codes.FailedPrecondition, "signer AGID root-anchor floor is unavailable")
+	}
+	if !bytes.Equal(publicDER, req.GetPublicDer()) || authRef != req.GetAuthRef() {
+		return nil, status.Error(codes.AlreadyExists, "signer AGID root anchor is bound to another authority")
 	}
 	return &signerpb.ProvisionAgentRootAnchorResponse{PublicDer: publicDER, AuthRef: authRef}, nil
 }

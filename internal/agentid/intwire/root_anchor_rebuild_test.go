@@ -93,6 +93,9 @@ func TestAGIDLegacyRootRequiresExactSignerBeforeEventBackfill(t *testing.T) {
 	if err := agidstore.BackfillLegacyRootAnchorEvents(h.ctx, h.store, h.log, h.client); err == nil {
 		t.Fatal("startup backfill accepted root absent from the isolated signer")
 	}
+	if err := delegation.NewDurableAnchorStore(h.keystore).PutRootAnchor(h.ctx, h.tenant, row.KeyID, delegation.RootAnchor{PublicDER: row.PublicDER, AuthRef: row.AuthRef}); err != nil {
+		t.Fatalf("operator provision legacy root: %v", err)
+	}
 	if err := h.client.ProvisionAgentRootAnchor(h.ctx, h.tenant, row.KeyID, row.PublicDER, row.AuthRef); err != nil {
 		t.Fatal(err)
 	}
@@ -210,6 +213,9 @@ func TestAGIDLegacyUnprovisionedSignerLaterAppearsGetsVerifiedSourceEvent(t *tes
 	}
 	if err := agidstore.RecoverLegacyRootAnchorEvents(h.ctx, h.store, h.log, h.client); err != nil {
 		t.Fatalf("record signer-absent legacy tuple: %v", err)
+	}
+	if err := delegation.NewDurableAnchorStore(h.keystore).PutRootAnchor(h.ctx, h.tenant, row.KeyID, delegation.RootAnchor{PublicDER: row.PublicDER, AuthRef: row.AuthRef}); err != nil {
+		t.Fatalf("operator provision legacy root: %v", err)
 	}
 	if err := h.client.ProvisionAgentRootAnchor(h.ctx, h.tenant, row.KeyID, row.PublicDER, row.AuthRef); err != nil {
 		t.Fatalf("exact signer provision: %v", err)

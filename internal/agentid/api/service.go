@@ -81,9 +81,9 @@ func NewService(store *corestore.Store, log *events.Log, outbox *orchestrator.Ou
 }
 
 // SignerFloors are the isolated signer's public trust floors the AGID API
-// provisions and reads back. Production supplies the authenticated signer client
-// for each; the signer writes and reads its own durable floors in its own
-// address space. A nil floor makes its registration routes answer unavailable.
+// confirms by exact readback. Production supplies the authenticated signer
+// client; only the signer-local operator ceremony can add trust. A nil floor
+// makes its registration routes answer unavailable.
 type SignerFloors struct {
 	RootAnchors RootAnchorProvisioner
 	Attestors   AttestorProvisioner
@@ -105,7 +105,7 @@ func NewServiceWithSignerFloors(store *corestore.Store, log *events.Log, outbox 
 var _ Service = (*service)(nil)
 
 // RegisterRootAnchor appends the immutable tenant/key trust tuple, projects its
-// RLS serving copy, then provisions and independently reads the signer floor.
+// RLS serving copy, then confirms the independently provisioned signer floor.
 // The deterministic event ID, projection and signer each enforce first writer.
 // A lost response can be retried without replacing a different authority.
 func (s *service) RegisterRootAnchor(ctx context.Context, tenantID string, req RootAnchorRequest) (RootAnchorResponse, error) {

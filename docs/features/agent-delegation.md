@@ -47,31 +47,34 @@ representation without a chain needs verified attestation; a representation
 alone cannot authorize issuance.
 
 The signer’s public-trust floors live under the **signer process's** key store
-(`TRSTCTL_SIGNER_KEY_STORE_DIR`, default `data/signer/keys`). The root-anchor API
-sends the tenant-bound public key to that signer over the authenticated signer
-transport; the control plane does not write a local copy and assume it reached
-the signer. For an external signer, configure its durable key store on the
-signer host. The control plane seals one reachability-verdict private key under
-its own `TRSTCTL_SIGNER_KEY_STORE_DIR` path using the deployment KEK. It sends
-only that key's public DER over the authenticated signer transport and verifies
-the signer's independent readback before starting AGID delivery. The signer
-keeps the first public key for that key ID across restarts and rejects a changed
-binding. Control-plane and signer paths can be separate volumes. Attestors reach
-the signer the same way: the attestor API sends a tenant's attestor public key
-and its attestation method over the authenticated signer transport and reads the
-exact binding back. An operator can still place a deployment-wide attestor in
-the signer's floor by hand; a tenant's own attestor under the same key ID decides
-for that tenant:
+(`TRSTCTL_SIGNER_KEY_STORE_DIR`, default `data/signer/keys`). An RPC peer can
+only confirm an exact binding already installed there; it cannot add one. An
+operator reviews the public key, tenant, key ID and purpose, then runs the
+signer locally in `--agid-provision-trust` one-shot mode against the signer's
+key store. Keep this volume writable only by the signer operator, separate
+from the control-plane volume and process identity. The root-anchor and
+attestor APIs record tenant registration and confirm signer readback.
+
+The control plane seals one reachability-verdict private key under its own
+`TRSTCTL_SIGNER_KEY_STORE_DIR` path using the deployment KEK. It also writes
+the public half to `agid-control-plane/reachability-verdict-v1.pub`. On first
+start, AGID delivery refuses to start until the operator installs that exact
+public key into the signer floor under key ID `agentid-reach-verdict`, then
+restarts the control plane. The signer retains the first public key for each
+key ID across restarts and rejects a changed binding. An operator can still
+place a deployment-wide attestor in the signer's floor by hand; a tenant's
+own attestor under the same key ID decides for that tenant:
 
 ```text
 <signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.pem      # root anchor, public key DER wrapped as PEM
 <signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.authref  # non-secret auth reference
-<signer key store dir>/agid-reach-verdict-keys/agentid-reach-verdict.der  # RPC-provisioned public key
-<signer key store dir>/agid-tenant-attestors/<tenant_id>/<key_id>.pem     # tenant attestor, RPC-provisioned
+<signer key store dir>/agid-reach-verdict-keys/agentid-reach-verdict.der  # operator-provisioned public key
+<signer key store dir>/agid-tenant-attestors/<tenant_id>/<key_id>.pem     # tenant attestor, operator-provisioned
 <signer key store dir>/agid-tenant-attestors/<tenant_id>/<key_id>.method  # the attestation method it vouches for
 <signer key store dir>/agid-attestors/<key_id>.der                        # deployment-wide attestor, operator-provisioned
 <signer key store dir>/agid-attestor-spent/<evidence_digest>.spent
 <control-plane key store dir>/agid-control-plane/reachability-verdict-v1.sealed  # KEK-sealed private key
+<control-plane key store dir>/agid-control-plane/reachability-verdict-v1.pub     # public key for operator review
 ```
 
 The signer floor files hold public material only. The control-plane sealed
@@ -82,6 +85,22 @@ operation completes, so replayed attestation evidence stays refused across a
 signer restart.
 
 ## Use it
+
+Before tenant registration, install each exact public trust binding on the
+signer host. Example operator input for a root anchor:
+
+```json
+{"kind":"root_anchor","tenant_id":"<tenant UUID>","key_id":"root-key-1","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n","auth_ref":"webauthn:root-principal-credential"}
+```
+
+Run `trstctl-signer --keystore <signer key store dir> --agid-provision-trust <binding.json>`
+with no signing listener. Use `kind: "attestor"` with `tenant_id`, `key_id`,
+`public_key_pem` and `method`; use `kind: "reachability_key"` with only
+`key_id: "agentid-reach-verdict"` and `public_key_pem` copied from the
+control-plane public-key file. The command rejects a changed first writer and
+checks its local readback. Then submit the matching root or attestor API
+registration. A missing signer-local binding returns a permission error;
+the API cannot silently create trust from its own socket access.
 
 Register a tenant root anchor. A `key_id` is bound to its first public key and
 authentication reference: an identical request can be retried, while a changed
@@ -287,13 +306,11 @@ agent than it meant to are refused. Finding A2A endpoints is not part of this.
   conferred-authority expiry. A request above it or already expired is refused.
   A request without an explicit expiry receives a conservative lifetime within
   that ceiling; when less than a usable second remains, issuance is refused.
-- Register root anchors through the API, CLI, or console. The signer stores its
-  public root floor under its own durable key store; an absent anchor is a
-  refusal, not a fallback. The control plane provisions and reads back the
-  reachability public floor and each tenant attestor over the authenticated
-  signer RPC. A list response marks an attestor unprovisioned when the signer
-  readback is absent or differs; registering the same binding again
-  re-provisions it, for example after the signer volume was replaced.
+- Install each public binding through the signer-local one-shot command before
+  registering root anchors or tenant attestors through the API, CLI, or console.
+  An absent signer binding is a refusal. The control plane confirms the exact
+  reachability, root and attestor readback over the authenticated signer RPC;
+  retries do not provision a missing or replaced signer volume.
 - A deployment-wide attestor placed by hand under `agid-attestors/` still
   serves every tenant that has not registered the same key ID, with no method
   binding. Prefer tenant registration: it is recorded, rebuilt after read-model
@@ -306,12 +323,16 @@ agent than it meant to are refused. Finding A2A endpoints is not part of this.
   authorize issuance. A different signer tuple or signer transport failure
   still blocks startup. A one-shot rebuild refuses a SQL-only row until a
   paired signer/control-plane start records one of those two source facts.
-  An operator can provision an unprovisioned root by registering the exact
-  public tuple through the normal API, CLI, or console path. If the signer
+  An operator can provision an unprovisioned root locally on the signer,
+  then register the exact public tuple through the normal API, CLI, or console
+  path. If the signer
   floor is restored separately, paired startup independently checks the exact
   tuple and records a registered event before treating it as authority.
-- The chain is verified by the signer, not the API: a compromised control
-  plane cannot mint a widened credential.
+- The signer verifies the chain against its locally installed trust floor.
+  Compromise of an API or RPC peer alone cannot add a new signer root. This
+  boundary requires separate operator custody of the signer floor: a deployment
+  where the control-plane process can write the signer keystore cannot make
+  that guarantee, including a single-node same-UID layout.
 - An issuance POST is only a queue acknowledgement. Follow its `status_url`
   until status is `issued`, then use the returned `credential_id` for the public
   credential and chain. `pending` can be retried, `failed` needs operator
