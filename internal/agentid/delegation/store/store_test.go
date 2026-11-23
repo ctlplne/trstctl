@@ -103,11 +103,32 @@ func newRepoOn(t *testing.T, dbName string) *agidstore.Repo {
 	if err != nil {
 		t.Fatalf("core store open: %v", err)
 	}
+	t.Cleanup(cs.Close)
 	cs.WithExtraMigrations(agidstore.MigrationsFS())
 	if err := cs.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return agidstore.New(cs)
+}
+
+func TestNewRepoOnClosesPoolsAtTestBoundary(t *testing.T) {
+	const dbName = "agid_cleanup_probe"
+	t.Run("open a real RLS store", func(t *testing.T) {
+		_ = newRepoOn(t, dbName)
+	})
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, testDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = admin.Close(ctx) }()
+	var remaining int
+	if err := admin.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=$1`, dbName).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 0 {
+		t.Fatalf("AGID test store left %d PostgreSQL sessions after its test ended", remaining)
+	}
 }
 
 // digest is a helper making a 32-byte digest from a label so tests read clearly.
