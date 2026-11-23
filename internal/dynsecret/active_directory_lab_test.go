@@ -107,8 +107,29 @@ func TestActiveDirectoryVaultedPasswordNativeA263(t *testing.T) {
 	if before != "badPwdCount: 1" {
 		t.Fatalf("old password attempt did not reach native AD: %s", before)
 	}
+	// An administrator can still retire the exposed password after one
+	// unrelated failed sign-in. The just-set password is proved while one
+	// failed proof would still leave the account below its threshold of three.
+	third := makeCredential(account)
+	defer secret.Wipe(third)
+	if err = backend.VerifyCredential(ctx, third); err != nil {
+		t.Fatal("administrative rotation or safe successor proof failed after one bad bind:", err)
+	}
+	if after := counter(); after != "badPwdCount: 0" {
+		t.Fatalf("successful successor proof did not clear the native count: %s", after)
+	}
+	// Near the threshold, no proof bind is sent, even for a stale value.
 	for i := 0; i < 2; i++ {
-		if err = backend.VerifyCredential(ctx, first); err == nil {
+		if _, e := adStockTool(ctx, []byte("Tr5!unrelated-owned-invalid-password"), "ldapsearch", "-D", account, "-LLL", "-b", account, "-s", "base", "sAMAccountName"); e == nil {
+			t.Fatal("unrelated invalid password bound")
+		}
+	}
+	before = counter()
+	if before != "badPwdCount: 2" {
+		t.Fatalf("native account did not reach the lockout margin: %s", before)
+	}
+	for i := 0; i < 2; i++ {
+		if err = backend.VerifyCredential(ctx, second); err == nil {
 			t.Fatal("unsafe repeated bind allowed")
 		}
 	}

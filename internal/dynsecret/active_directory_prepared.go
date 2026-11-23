@@ -192,14 +192,14 @@ func (b *LDAPBackend) boundADPreparation(ctx context.Context, req GenerateReques
 	return p, current, nil
 }
 func (b *LDAPBackend) verifyBoundADPassword(ctx context.Context, dn string, password []byte) error {
-	if _, err := b.inspectADAccount(ctx, dn, true); err != nil {
+	if _, err := b.inspectADAccount(ctx, dn, false); err != nil {
 		return err
 	}
-	conn, err := ldapbind.DialPinned(ctx, b.adRoute(), dn, password)
+	route, err := b.adSignInRoute(ctx)
 	if err != nil {
 		return err
 	}
-	return conn.Close()
+	return b.proveADPassword(ctx, route, dn, password)
 }
 func (b *LDAPBackend) GenerateStaticPrepared(ctx context.Context, req GenerateRequest, raw []byte, binding string) (string, []byte, error) {
 	p, current, err := b.boundADPreparation(ctx, req, raw, binding)

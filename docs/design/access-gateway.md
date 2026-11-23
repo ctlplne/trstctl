@@ -1217,9 +1217,10 @@ exact native version counts, then prove current/retired credentials with stock
 LDAP. They do not claim power-loss or forest replication qualification.
 
 The native proof runs against a separate owned Samba4.15.13-Ubuntu DC, a DNS-SAN
-certificate and a three-attempt lockout policy. After an unrelated bad password
-increments `badPwdCount` once, repeated verification calls leave it at one: no
-additional target passwords were sent. This cached lab version is stand-in
+certificate and a three-attempt lockout policy. One unrelated bad bind does not
+block an administrative rotation: the new password is proved on the same DC
+while a refused proof would still leave the account below lockout. At two bad
+binds, repeated verification sends no target password. This cached lab version is stand-in
 coverage, not current Samba release qualification. The earlier Samba lab is kept.
 See [Microsoft's password-reset protocol](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/change-windows-active-directory-user-password)
 and [Samba's password grace period](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html#OLDPASSWORDALLOWEDPERIOD).

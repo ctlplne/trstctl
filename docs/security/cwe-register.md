@@ -52,6 +52,7 @@ golangci-lint results do not replace that evidence.
 | CWE-295 | `internal/crypto/mtls/mtls.go` | Pinned TLS configs enforced the key pin only in VerifyPeerCertificate, which resumed sessions skip, so a session ticket could outlive a pin rotation; pinned listeners now disable tickets and re-verify the pin in VerifyConnection. | TestPinnedConfigsEnforcePinOnResumedSessions (internal/crypto/mtls/resumption_pin_test.go) |
 | CWE-79 | `internal/secretstore/access.go` | The secret-store access API returned secret bytes with no declared content type, inviting browsers to sniff them into a renderable type; every response now declares Content-Type and X-Content-Type-Options: nosniff. | TestAPIResponsesDeclareContentTypeAndNosniff (internal/secretstore/access_headers_test.go) |
 | CWE-295 | `tools/trstctllint/tlsverify` | Class guard, not an instance fix: the ninth trstctllint analyzer forbids InsecureSkipVerify outside the tlsprobe discovery prober and _test.go files (the loopback liveness probe pins the served certificate), so the class cannot reappear anywhere in shipped code. | TestTLSVerify fixtures (tools/trstctllint/tlsverify) + the repo-wide linter selftest |
+| CWE-693 | `internal/dynsecret/active_directory.go` | An unrelated failed AD sign-in no longer blocks an administrator from rotating a managed password. Every successor proof reads the effective lockout threshold on the same pinned DC and refuses a bind at the safety margin; locked and disabled accounts remain refused. | TestCR009AdministrativeResetAndProofUseSeparateLockoutRules (internal/dynsecret/active_directory_cr009_test.go) + TestNativeADPreparedResetAfterBadBindCR009 (internal/dynsecret/active_directory_reset_native_lab_test.go) + TestServedADAccountRotationA263 (internal/server/pam_ad_rotation_served_test.go) |
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
@@ -1356,7 +1357,7 @@ not this file.
 | `internal/dns/rfc2136/rfc2136.go:352` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:305` | preparation is checked at <=64KiB before conversion (CWE-190) |
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:306` | predecessor is checked at <=1024 bytes before conversion (CWE-190) |
-| `internal/dynsecret/active_directory_signin.go:187` | unix is within year 1970..9999, so the FILETIME fits (CWE-190) |
+| `internal/dynsecret/active_directory_signin.go:200` | unix is within year 1970..9999, so the FILETIME fits (CWE-190) |
 | `internal/dynsecret/drivers.go:284` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/drivers.go:292` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/providers_real.go:1855` | a string length is never negative (CWE-190) |
@@ -1696,7 +1697,7 @@ not this file.
 | `internal/agent/accessgateway/console_test.go:25` | owned STS-envelope fixture; parsed into locked bytes and scratch wiped (CWE-200) |
 | `internal/agent/accessgateway/gcp_test.go:35` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/agent/accessgateway/gcp_test.go:166` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
-| `internal/dynsecret/active_directory.go:123` | byte-backed rotated credential is sealed by the existing outbox rotation worker (CWE-200) |
+| `internal/dynsecret/active_directory.go:124` | byte-backed rotated credential is sealed by the existing outbox rotation worker (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_json.go:107` | all three secret generations are cleared before marshaling public metadata (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_test.go:18` | synthetic byte-backed parser fixture, wiped and never logged (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_test.go:32` | synthetic rejected credential fixture, wiped and never logged (CWE-200) |
@@ -2018,7 +2019,7 @@ not this file.
 | `internal/crypto/windependents/rotation_native_windows_test.go:279` | exact compiler-output digest verified by the parent; absolute regular lab binary, fixed argv, no shell or credential argument (CWE-78) |
 | `internal/decommission/conformance/release_test.go:22` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/decommission/conformance/release_test.go:416` | fixed argv, no user input (CWE-78) |
-| `internal/dynsecret/active_directory_lab_test.go:132` | fixed stock tools and test-owned public directory arguments; password arrives on an inherited pipe, no shell (CWE-78) |
+| `internal/dynsecret/active_directory_lab_test.go:153` | fixed stock tools and test-owned public directory arguments; password arrives on an inherited pipe, no shell (CWE-78) |
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:216` | this exact owned test executable and public fixture references; key material travels only through the anonymous stdin pipe (CWE-78) |
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:247` | fixed stock LDAP binary and exact owned DN; only a private inherited pipe carries the password, no argv/environment/plain file (CWE-78) |
 | `internal/dynsecret/active_directory_signin_lab_test.go:64` | the lab runner's own container and stock Samba tools; no credential arguments (CWE-78) |
@@ -2168,7 +2169,7 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:233` | test executes a fixed local tool (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:247` | test executes a fixed local tool (CWE-78) |
-| `internal/server/pam_ad_rotation_served_test.go:171` | fixed stock client, exact owned directory DN and inherited password pipe; no shell (CWE-78) |
+| `internal/server/pam_ad_rotation_served_test.go:176` | fixed stock client, exact owned directory DN and inherited password pipe; no shell (CWE-78) |
 | `internal/server/pam_command_clickhouse_served_test.go:67` | stock curl against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mongo_served_test.go:71` | stock Mongo shell against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mysql_served_test.go:66` | stock client against this test's owned tunnel (CWE-78) |

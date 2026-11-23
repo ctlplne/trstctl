@@ -100,9 +100,10 @@ for attempt in $(seq 1 60); do
 done
 $ready
 TRSTCTL_AD_NATIVE_LAB=1 /run/dynsecret-test -test.v -test.run ^TestActiveDirectoryVaultedPasswordNativeA263$ -test.timeout=60s
-TRSTCTL_AD_DURABLE_LAB=1 /run/dynsecret-test -test.v -test.run "^(TestNativeADPreparedResetSurvivesEveryWorkerExitA267|TestNativeADPreparedResetRefusesSerialDriftA267)$" -test.timeout=6m
+TRSTCTL_AD_DURABLE_LAB=1 /run/dynsecret-test -test.v -test.run "^(TestNativeADPreparedResetSurvivesEveryWorkerExitA267|TestNativeADPreparedResetAfterBadBindCR009|TestNativeADPreparedResetRefusesSerialDriftA267)$" -test.timeout=6m
 ' > "$proof/native.log" 2>&1
 grep -q A267_AD_DURABLE_EXIT_OK "$proof/native.log"
+grep -q CR009_NATIVE_AD_ROTATION_OK "$proof/native.log"
 grep -q A267_AD_DURABLE_DRIFT_OK "$proof/native.log"
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run "^(TestServedADAccountRotationA263|TestServedADStaticRotationRollbackA267|TestServedADPreparedResponseLossA267|TestServedADImportedUnicodeRecoveryA267|TestServedADServiceAccountDiscoveryA267)$" -test.timeout=90s' > "$proof/served.log" 2>&1
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run ^TestServedNativeADDependentCoordinatorA267$ -test.timeout=90s' > "$proof/coordinator.log" 2>&1

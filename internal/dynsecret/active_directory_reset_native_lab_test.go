@@ -373,6 +373,47 @@ func TestNativeADPreparedResetSurvivesEveryWorkerExitA267(t *testing.T) {
 	t.Log("A267_AD_DURABLE_EXIT_OK: four actual worker exits after native writes, encrypted preparation reload, exact native version counts, stock LDAP current acceptance/retired refusal and no-write replay; concurrent external administrative reset is not atomic CAS")
 }
 
+func TestNativeADPreparedResetAfterBadBindCR009(t *testing.T) {
+	if os.Getenv("TRSTCTL_AD_DURABLE_LAB") != "1" {
+		t.Skip("owned native AD reset lab not requested")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	dn, old := ownedADNativeResetAccount(t, ctx)
+	backend := ownedADCrashBackend(t, dn)
+	defer backend.Close()
+	if accepted, refused := ownedADStockBind(t, ctx, dn, strings.TrimPrefix(strings.SplitN(dn, ",", 2)[0], "CN="), []byte("Tr5!unrelated-owned-invalid-password")); accepted || !refused {
+		t.Fatal("unrelated failed sign-in did not reach native AD")
+	}
+	req := GenerateRequest{Role: "directory/durable", Static: true, LeaseID: "owned-cr009", PrincipalSuffix: testPrincipalSuffix("owned-cr009"), Predecessor: dn}
+	binding := strings.Repeat("c", 64)
+	preparation, err := backend.PrepareStaticCredential(ctx, req, binding)
+	if err != nil {
+		t.Fatal("native preparation refused after an unrelated failed sign-in:", err)
+	}
+	defer secret.Wipe(preparation)
+	p, err := decodeADStaticPreparation(preparation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.destroy()
+	ref, credential, err := backend.GenerateStaticPrepared(ctx, req, preparation, binding)
+	if err != nil || ref != dn {
+		t.Fatal("native administrative reset or exact successor proof failed:", err)
+	}
+	defer secret.Wipe(credential)
+	if err := backend.VerifyCredential(ctx, credential); err != nil {
+		t.Fatal("the successor could not bind after the unrelated failed sign-in:", err)
+	}
+	if accepted, refused := ownedADStockBind(t, ctx, dn, p.Name, old.Bytes()); accepted || !refused {
+		t.Fatal("the original password remained valid after two native reset generations")
+	}
+	if accepted, _ := ownedADStockBind(t, ctx, dn, p.Name, p.Password); !accepted {
+		t.Fatal("the exact successor did not bind with a stock LDAP client")
+	}
+	t.Log("CR009_NATIVE_AD_ROTATION_OK: nonzero failed-login counter did not block the administrative durable reset; only the selected successor binds")
+}
+
 func TestNativeADPreparedResetRefusesSerialDriftA267(t *testing.T) {
 	if os.Getenv("TRSTCTL_AD_DURABLE_LAB") != "1" {
 		t.Skip("owned native AD serial drift lab not requested")
@@ -438,14 +479,26 @@ func TestNativeADPreparedResetRefusesSerialDriftA267(t *testing.T) {
 		}
 		return version, bad
 	}
-	for attempt := 0; attempt < 3; attempt++ {
+	_, value, e := backend.GenerateStaticPrepared(ctx, req, raw, binding)
+	secret.Wipe(value)
+	if e == nil {
+		t.Fatal("unrelated native password was overwritten")
+	}
+	version, bad := readCounts()
+	if version != p.KeyVersion+1 || bad != 1 {
+		t.Fatal("serial drift caused another reset or password candidate", version, bad)
+	}
+	if accepted, refused := ownedADStockBind(t, ctx, dn, p.Name, []byte("Tr5!unrelated-owned-invalid-password")); accepted || !refused {
+		t.Fatal("unrelated failed bind did not move the native count to its safety margin")
+	}
+	for attempt := 0; attempt < 2; attempt++ {
 		_, value, e := backend.GenerateStaticPrepared(ctx, req, raw, binding)
 		secret.Wipe(value)
 		if e == nil {
 			t.Fatal("unrelated native password was overwritten")
 		}
 		version, bad := readCounts()
-		if version != p.KeyVersion+1 || bad != 1 {
+		if version != p.KeyVersion+1 || bad != 2 {
 			t.Fatal("serial drift caused another reset or password candidate", version, bad)
 		}
 	}

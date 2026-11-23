@@ -45,6 +45,7 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE-295 | `internal/crypto/mtls/mtls.go` | TestPinnedConfigsEnforcePinOnResumedSessions (internal/crypto/mtls/resumption_pin_test.go) |
 | CWE-79 | `internal/secretstore/access.go` | TestAPIResponsesDeclareContentTypeAndNosniff (internal/secretstore/access_headers_test.go) |
 | CWE-295 | `tools/trstctllint/tlsverify` | TestTLSVerify fixtures (tools/trstctllint/tlsverify) + the repo-wide linter selftest |
+| CWE-693 | `internal/dynsecret/active_directory.go` | TestCR009AdministrativeResetAndProofUseSeparateLockoutRules (internal/dynsecret/active_directory_cr009_test.go) + TestNativeADPreparedResetAfterBadBindCR009 (internal/dynsecret/active_directory_reset_native_lab_test.go) + TestServedADAccountRotationA263 (internal/server/pam_ad_rotation_served_test.go) |
 
 ## Accepted / false-positive, by CWE class
 

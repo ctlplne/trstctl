@@ -3155,6 +3155,12 @@ An upstream reset or sign-in failure produces `rollback_failed`; it does not
 publish an old vault value while claiming the directory recovered. Inspect that
 command and resolve its native account/fenced publication before another scheduled
 rotation. Existing lockout checks still refuse unsafe authentication attempts.
+An unrelated failed sign-in does not block an administrator's password reset.
+Proof of the selected successor reads the account's effective lockout threshold
+and failed-sign-in count on the pinned domain controller before binding. It
+refuses the bind when one more failure could reach the threshold; an unreadable
+policy also prevents a bind. A near-lockout account therefore needs an operator
+to resolve its lockout state before the pending rotation can be verified.
 This inverse is specific to the configured AD single-account profile. Paired
 accounts retain their existing two-phase lifecycle. The native recovery proof uses
 Samba AD; Windows service/task/IIS dependent coordination and directory drift

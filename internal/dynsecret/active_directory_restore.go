@@ -54,15 +54,12 @@ func (b *LDAPBackend) RestoreStaticCredential(ctx context.Context, role, ref str
 	}
 	// The recovery password remains locked; constructing another credential
 	// document would only create an unnecessary plaintext copy.
-	if _, err = b.inspectADAccount(ctx, dn, true); err != nil {
+	route, err := b.adSignInRoute(ctx)
+	if err != nil {
 		return err
 	}
 	return held.Use(func(password []byte) error {
-		conn, err := ldapbind.DialPinned(ctx, b.adRoute(), dn, password)
-		if err != nil {
-			return err
-		}
-		return conn.Close()
+		return b.proveADPassword(ctx, route, dn, password)
 	})
 }
 func sameADRestoreDN(a, b string) bool {

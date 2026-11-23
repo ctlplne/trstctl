@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
@@ -28,8 +29,9 @@ import (
 // state alone. Otherwise the check signs in with the vaulted password, at the
 // same domain controller, only when a refusal would leave the account below
 // its threshold; one short of it reads lockout_risk and nothing is sent. The
-// rotation's own check (verifyADCredential) stays stricter: it sends nothing
-// after any failed sign-in.
+// rotation's proof uses the same DC-pinned threshold check. An administrator
+// can reset a password regardless of the counter, but a proof bind may occur
+// only when one more failed bind would still leave a safety margin.
 
 // adSignInState is what the check reads before it signs in.
 type adSignInState struct {
@@ -57,14 +59,21 @@ func (b *LDAPBackend) CheckADAccountSignIn(ctx context.Context, credential []byt
 	if err != nil {
 		return err
 	}
-	state, err := b.readADSignInState(ctx, route, c.BindDN)
+	return b.proveADPassword(ctx, route, c.BindDN, c.Password)
+}
+
+func (b *LDAPBackend) proveADPassword(ctx context.Context, route ldapbind.PinnedTLS, dn string, password []byte) error {
+	if !b.ownsADAccount(dn) {
+		return errors.New("dynsecret AD: the vaulted account is outside the configured role bindings")
+	}
+	state, err := b.readADSignInState(ctx, route, dn)
 	if err != nil {
 		return err
 	}
 	if err := state.refusal(time.Now()); err != nil {
 		return err
 	}
-	conn, err := ldapbind.DialPinned(ctx, route, c.BindDN, c.Password)
+	conn, err := ldapbind.DialPinned(ctx, route, dn, password)
 	if err != nil {
 		return classifyADSignIn(err)
 	}
@@ -108,9 +117,13 @@ func (b *LDAPBackend) readADSignInState(ctx context.Context, route ldapbind.Pinn
 		defer func() { _ = conn.Close() }()
 		stop := context.AfterFunc(ctx, func() { _ = raw.Close() })
 		defer stop()
-		entry, err := adBaseEntry(conn, dn, "(&(objectClass=user)(!(objectClass=computer)))", "userAccountControl", "msDS-User-Account-Control-Computed", "badPwdCount", "pwdLastSet", "accountExpires", "msDS-ResultantPSO")
+		entry, err := adBaseEntry(conn, dn, "(&(objectClass=user)(!(objectClass=computer)))", "sAMAccountName", "userAccountControl", "msDS-User-Account-Control-Computed", "badPwdCount", "pwdLastSet", "accountExpires", "msDS-ResultantPSO")
 		if err != nil {
 			return errors.New("dynsecret AD: cannot read the exact account state")
+		}
+		names := entry.GetAttributeValues("sAMAccountName")
+		if len(names) != 1 || len(names[0]) == 0 || len(names[0]) > 128 || strings.ContainsAny(names[0], "\x00\r\n") {
+			return errors.New("dynsecret AD: invalid logon name; no user bind attempted")
 		}
 		for _, field := range []struct {
 			name string
@@ -167,7 +180,7 @@ func (s adSignInState) refusal(now time.Time) error {
 		return withSignInClass(ErrSignInExpired, errors.New("dynsecret AD: the account has expired; no sign-in attempted"))
 	case s.pwdLastSet == 0 || s.computed&passwordExpired != 0:
 		return withSignInClass(ErrSignInExpired, errors.New("dynsecret AD: the password has expired or must change; no sign-in attempted"))
-	case s.threshold > 0 && s.bad+1 >= s.threshold:
+	case s.threshold > 0 && s.bad >= s.threshold-1:
 		return withSignInClass(ErrSignInLockoutRisk, fmt.Errorf("dynsecret AD: %d of the account's %d failed sign-ins before lockout; no sign-in attempted", s.bad, s.threshold))
 	}
 	return nil

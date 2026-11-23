@@ -115,6 +115,11 @@ func TestServedADAccountRotationA263(t *testing.T) {
 	first := rotate("ad-rotation-1")
 	firstRaw := read()
 	defer secret.Wipe(firstRaw)
+	// CR-009: an unrelated failed target bind must not prevent the next
+	// product-driven rotation from retiring this now-revealed password.
+	if out, e := servedADStockRead(ctx, []byte("Tr5!unrelated-owned-invalid-password"), account); e == nil || !bytes.Contains(out, []byte("Invalid credentials (49)")) {
+		t.Fatal("unrelated wrong-password bind did not reach the native directory")
+	}
 	second := rotate("ad-rotation-2")
 	secondRaw := read()
 	defer secret.Wipe(secondRaw)

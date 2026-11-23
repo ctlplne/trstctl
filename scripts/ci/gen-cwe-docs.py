@@ -133,6 +133,9 @@ FIXED = [
     ("CWE-295", "tools/trstctllint/tlsverify",
      "Class guard, not an instance fix: the ninth trstctllint analyzer forbids InsecureSkipVerify outside the tlsprobe discovery prober and _test.go files (the loopback liveness probe pins the served certificate), so the class cannot reappear anywhere in shipped code.",
      "TestTLSVerify fixtures (tools/trstctllint/tlsverify) + the repo-wide linter selftest"),
+    ("CWE-693", "internal/dynsecret/active_directory.go",
+     "An unrelated failed AD sign-in no longer blocks an administrator from rotating a managed password. Every successor proof reads the effective lockout threshold on the same pinned DC and refuses a bind at the safety margin; locked and disabled accounts remain refused.",
+     "TestCR009AdministrativeResetAndProofUseSeparateLockoutRules (internal/dynsecret/active_directory_cr009_test.go) + TestNativeADPreparedResetAfterBadBindCR009 (internal/dynsecret/active_directory_reset_native_lab_test.go) + TestServedADAccountRotationA263 (internal/server/pam_ad_rotation_served_test.go)"),
 ]
 
 DETECTORS = [

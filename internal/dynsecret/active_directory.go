@@ -36,8 +36,9 @@ func (b *LDAPBackend) ownsADAccount(dn string) bool {
 	return b.isRotationAccount(dn)
 }
 
-// inspectADAccount never tries the target's password. Fail closed on incomplete
-// state and any previous bad password; one DC's observation cannot prevent races.
+// inspectADAccount never tries the target's password. An administrative reset
+// can proceed after a failed user logon; a proof bind checks the effective
+// lockout threshold separately on the DC it will use.
 type adNativeIdentity struct{ Name, GUID, SID, PasswordSetAt string }
 
 func (b *LDAPBackend) inspectADAccount(ctx context.Context, dn string, forBind bool) (string, error) {
@@ -124,22 +125,7 @@ func (b *LDAPBackend) createADCredential(ctx context.Context, req GenerateReques
 	return dn, raw, err
 }
 func (b *LDAPBackend) verifyADCredential(ctx context.Context, raw []byte) error {
-	var c struct {
-		BindDN   string           `json:"bind_dn"`
-		Password secret.JSONBytes `json:"password"`
-	}
-	defer func() { secret.Wipe(c.Password) }()
-	if len(raw) > 64<<10 || json.Unmarshal(raw, &c) != nil || len(c.Password) == 0 || len(c.Password) > 1024 {
-		return errors.New("dynsecret AD: invalid credential")
-	}
-	if _, err := b.inspectADAccount(ctx, c.BindDN, true); err != nil {
-		return err
-	}
-	conn, err := ldapbind.DialPinned(ctx, b.adRoute(), c.BindDN, c.Password)
-	if err != nil {
-		return err
-	}
-	return conn.Close()
+	return b.CheckADAccountSignIn(ctx, raw)
 }
 func (b *LDAPBackend) retireADAccount(ctx context.Context, dn string) error {
 	// A single-account predecessor was already replaced during the in-place
@@ -225,7 +211,7 @@ func validateADAccountState(entry *ldap.Entry, forBind bool, now time.Time) (str
 	bad, be := number("badPwdCount", false)
 	pwd, pe := number("pwdLastSet", false)
 	expiry, ee := number("accountExpires", true)
-	if e != nil || ce != nil || be != nil || pe != nil || ee != nil || uac&2 != 0 || computed&16 != 0 || bad != 0 {
+	if e != nil || ce != nil || be != nil || pe != nil || ee != nil || uac&2 != 0 || computed&16 != 0 || forBind && bad != 0 {
 		return "", errors.New("dynsecret AD: account state is unsafe for a password operation; no user bind attempted")
 	}
 	// accountExpires is Windows FILETIME; zero and max int64 mean no expiry.

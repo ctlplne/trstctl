@@ -37,14 +37,10 @@ func (n *adPreparedResetNative) check(ctx context.Context, expected adNativeRese
 	return nil
 }
 func (n *adPreparedResetNative) Prove(ctx context.Context, expected adNativeResetIdentity, password []byte) error {
-	if e := n.check(ctx, expected, true); e != nil {
+	if e := n.check(ctx, expected, false); e != nil {
 		return e
 	}
-	conn, e := ldapbind.DialPinned(ctx, n.route, n.preparation.DN, password)
-	if e != nil {
-		return e
-	}
-	return conn.Close()
+	return n.backend.proveADPassword(ctx, n.route, n.preparation.DN, password)
 }
 func (n *adPreparedResetNative) Reset(ctx context.Context, expected adNativeResetIdentity, password []byte, recovery bool) error {
 	if e := n.check(ctx, expected, false); e != nil {
