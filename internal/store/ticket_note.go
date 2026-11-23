@@ -26,11 +26,12 @@ func (s *Store) IssuanceRequestTx(ctx context.Context, tx pgx.Tx, tenantID, id s
 	return r, err == nil, err
 }
 
-// ServiceNowIntakeScheduleForTableTx is the enabled ServiceNow intake schedule
-// reading table, the first by name: a decision's work note goes back through it.
-func (s *Store) ServiceNowIntakeScheduleForTableTx(ctx context.Context, tx pgx.Tx, tenantID, table string) (TicketIntakeSchedule, bool, error) {
+// ServiceNowIntakeScheduleForSourceTx reads only the original named source.
+// The projector compares its full identity, including instance URL, before
+// queueing any external effect. A reconfigured/deleted source fails closed.
+func (s *Store) ServiceNowIntakeScheduleForSourceTx(ctx context.Context, tx pgx.Tx, tenantID, table, name string) (TicketIntakeSchedule, bool, error) {
 	sched, err := scanTicketIntake(tx.QueryRow(ctx, `SELECT `+ticketIntakeCols+` FROM ticket_intake_schedules
-		WHERE tenant_id = $1 AND system = 'servicenow' AND sn_table = $2 AND enabled ORDER BY name LIMIT 1`, tenantID, table))
+		WHERE tenant_id = $1 AND system = 'servicenow' AND sn_table = $2 AND name = $3 AND enabled`, tenantID, table, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TicketIntakeSchedule{}, false, nil
 	}

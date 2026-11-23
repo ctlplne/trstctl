@@ -27,7 +27,7 @@ const servedIntakeTokenRef = "secret://itsm/intake-token" // #nosec G101 -- cred
 
 func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "secrets:read")
 
 	config := map[string]any{
 		"system": "servicenow", "instance_url": "https://servicenow.internal.example", "token_ref": servedIntakeTokenRef,
@@ -187,7 +187,7 @@ func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 func TestServedTicketIntakePaginatesBothProvidersWithoutGapsAUD47(t *testing.T) {
 	ctx := t.Context()
 	h := newOperatingServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "secrets:read")
 	configs := []map[string]any{
 		{
 			"system": "servicenow", "instance_url": "https://servicenow.internal.example",

@@ -73,7 +73,7 @@ func TestServedTrstctlDecisionsAreWorkNotesOnTheirTicketsP13L1(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedApplicationSecretFixture(t, h.store, h.tenant, tokenName, sealed)
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "secrets:read")
 	if status, out := secretsReqKey(t, h.servedHarness, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok, "p13l1-intake",
 		map[string]any{"system": "servicenow", "name": "changes", "instance_url": stand.URL, "token_ref": "secret://" + tokenName,
 			"sn_table": "change_request", "subject_field": "u_subject", "profile_field": "u_profile", "requester_field": "requested_by",

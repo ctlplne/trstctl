@@ -15,10 +15,9 @@ import (
 
 // queueTicketNoteTx writes a decision on a request ServiceNow intake opened
 // back to its ticket as a work note (P13-L1): approved, denied, canceled,
-// expired and issued each queue one note, through the enabled intake schedule
-// for the ticket's table, in the decision's own projection transaction.
-// Requests from elsewhere, and tickets whose table no enabled schedule reads,
-// queue nothing.
+// expired and issued each queue one note through the exact source that opened
+// the request, in the decision's own projection transaction. Requests with no
+// bound source or whose opening schedule was removed or repointed queue nothing.
 func (p *Projector) queueTicketNoteTx(ctx context.Context, tx pgx.Tx, tenantID, requestID, decision string) error {
 	req, found, err := p.store.IssuanceRequestTx(ctx, tx, tenantID, requestID)
 	if err != nil || !found || req.Origin != ticketintake.SystemServiceNow {
@@ -28,9 +27,19 @@ func (p *Projector) queueTicketNoteTx(ctx context.Context, tx pgx.Tx, tenantID, 
 	if !ok || table == "" || sysID == "" {
 		return nil
 	}
-	sched, found, err := p.store.ServiceNowIntakeScheduleForTableTx(ctx, tx, tenantID, table)
+	name, ok := ticketintake.SourceSchedule(req.TicketSource, ticketintake.SystemServiceNow)
+	if !ok {
+		return nil
+	}
+	sched, found, err := p.store.ServiceNowIntakeScheduleForSourceTx(ctx, tx, tenantID, table, name)
 	if err != nil || !found {
 		return err
+	}
+	source, err := ticketintake.SourceIdentity(sched.System, sched.Name, sched.InstanceURL)
+	if err != nil || source != req.TicketSource {
+		// A missing or changed endpoint cannot receive this request's note.
+		// The decision still commits; the operator can inspect the request.
+		return nil
 	}
 	intent := ticketintake.NoteIntent{Schedule: sched.Name, NoteID: ticketintake.NoteID(tenantID, req.ID, decision),
 		InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef, SNTable: table, SourceRef: sysID,

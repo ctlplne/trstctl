@@ -42,7 +42,8 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
   const [recovery, setRecovery] = useState<Record<string, IssuanceRequestRecovery>>({});
   const canDecideRequests = hasPermission(currentPrincipal, "certs:issue");
   const canRequestCertificates = hasPermission(currentPrincipal, "certs:request");
-  const canConfigureIntake = hasPermission(currentPrincipal, "certs:write");
+  const canRemoveIntake = hasPermission(currentPrincipal, "certs:write");
+  const canConfigureIntake = canRemoveIntake && hasPermission(currentPrincipal, "secrets:read");
   const canFulfillRequests = canDecideRequests && hasPermission(currentPrincipal, "identities:write");
   const items = requests.data?.items ?? [];
   function retainDecision(updated: IssuanceRequest) {
@@ -159,7 +160,7 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
           {decisionError}
         </p>
       ) : null}
-      <TicketIntakeSchedulesPanel canConfigure={canConfigureIntake} />
+      <TicketIntakeSchedulesPanel canConfigure={canConfigureIntake} canRemove={canRemoveIntake} />
       {items.length > 0 ? (
         <>
           <p className="text-sm">

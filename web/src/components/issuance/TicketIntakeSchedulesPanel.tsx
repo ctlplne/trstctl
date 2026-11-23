@@ -53,7 +53,7 @@ function Coverage({ schedule }: { schedule: TicketIntakeSchedule }) {
   );
 }
 
-export function TicketIntakeSchedulesPanel({ canConfigure }: { canConfigure: boolean }) {
+export function TicketIntakeSchedulesPanel({ canConfigure, canRemove }: { canConfigure: boolean; canRemove: boolean }) {
   const queryClient = useQueryClient();
   const query = useApiQuery(ticketIntakeSchedulesQueryKey, () => api.ticketIntakeSchedules());
   const rows = query.data?.items ?? [];
@@ -111,35 +111,39 @@ export function TicketIntakeSchedulesPanel({ canConfigure }: { canConfigure: boo
       ),
     },
     { id: "coverage", header: t("ticket.intake.named.coverage"), cell: (schedule) => <Coverage schedule={schedule} /> },
-    ...(canConfigure
+    ...(canConfigure || canRemove
       ? [
           {
             id: "actions",
             header: t("ticket.intake.named.actions"),
             cell: (schedule: TicketIntakeSchedule) => (
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setEditing({ current: schedule });
-                    setSaved(false);
-                  }}
-                >
-                  {t("ticket.intake.setup.edit")}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive-outline"
-                  onClick={() => {
-                    setRemoving({ schedule, key: newIdempotencyKey() });
-                    setError(null);
-                  }}
-                >
-                  {t("ticket.intake.named.remove")}
-                </Button>
+                {canConfigure ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditing({ current: schedule });
+                      setSaved(false);
+                    }}
+                  >
+                    {t("ticket.intake.setup.edit")}
+                  </Button>
+                ) : null}
+                {canRemove ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive-outline"
+                    onClick={() => {
+                      setRemoving({ schedule, key: newIdempotencyKey() });
+                      setError(null);
+                    }}
+                  >
+                    {t("ticket.intake.named.remove")}
+                  </Button>
+                ) : null}
               </div>
             ),
           },

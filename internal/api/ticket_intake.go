@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -107,9 +108,16 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 		if err := requireAbsoluteURL(body.InstanceURL, "instance_url"); err != nil {
 			return 0, nil, err
 		}
+		if _, err := ticketintake.SourceIdentity(system, name, body.InstanceURL); err != nil {
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
+		}
 		if !strings.HasPrefix(strings.TrimSpace(body.TokenRef), "secret://") {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"token_ref must be a secret:// reference redeemed by the network relay per attempt")
+		}
+		principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
+		if !ok || !principal.Can(authz.SecretsRead, authz.Scope{TenantID: tenantID}) {
+			return 0, nil, errStatus(http.StatusForbidden, "token_ref requires secrets:read because the relay sends that secret to instance_url")
 		}
 		// A235-L2: the relay sends this token to instance_url; a caller may
 		// name only a secret it could read.

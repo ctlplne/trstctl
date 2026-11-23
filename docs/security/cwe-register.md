@@ -55,11 +55,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3591 annotated sites across 35 rules. Each row is
+3594 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (902 sites)
+### G101 — CWE-798 Use of hardcoded credentials (905 sites)
 
 | Location | Reason |
 |---|---|
@@ -787,6 +787,9 @@ not this file.
 | `internal/server/response_integrations_served_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:52` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:54` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/review_v2_c2_l2_verify_test.go:32` | test-only fixture value, not a credential (CWE-798) |
+| `internal/server/review_v2_c2_l2_verify_test.go:65` | name of a test-only secret (CWE-798) |
+| `internal/server/review_v2_c2_l2_verify_test.go:218` | test-only secret name (CWE-798) |
 | `internal/server/revocation_ldap_served_test.go:37` | a logical fixture name, not secret material (CWE-798). |
 | `internal/server/revocation_ldap_served_test.go:38` | a non-secret reference, not secret material (CWE-798). |
 | `internal/server/rewrap_pending_sync_served_test.go:190` | this is a fixed non-secret idempotency marker in an isolated test |
@@ -1401,10 +1404,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:8004` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8021` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:8034` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8069` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:8005` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8022` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:8035` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8070` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:46` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |

@@ -39,7 +39,12 @@ func (s *Server) dispatchTicketStatusJob(ctx context.Context, tenantID string, s
 	if err != nil || pending {
 		return
 	}
-	waiting, err := s.store.IssuanceRequestsAwaitingTicket(ctx, tenantID, sched.SNTable, ticketintake.MaxStatusTickets)
+	source, err := ticketintake.SourceIdentity(sched.System, sched.Name, sched.InstanceURL)
+	if err != nil {
+		s.logger.Warn("ticket status dispatch: source refused", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
+		return
+	}
+	waiting, err := s.store.IssuanceRequestsAwaitingTicket(ctx, tenantID, source, sched.SNTable, ticketintake.MaxStatusTickets)
 	if err != nil || len(waiting) == 0 {
 		return
 	}
@@ -88,6 +93,10 @@ func (a *agentService) recordTicketStatus(ctx context.Context, tenantID string, 
 	if a.orch == nil || a.store == nil {
 		return errors.New("ticket status receiver is not configured")
 	}
+	source, err := ticketintake.SourceIdentity(ticketintake.SystemServiceNow, intent.Schedule, intent.InstanceURL)
+	if err != nil {
+		return err
+	}
 	for _, ticket := range report.Tickets {
 		var to, verb string
 		switch ticket.Approval {
@@ -98,7 +107,7 @@ func (a *agentService) recordTicketStatus(ctx context.Context, tenantID string, 
 		default:
 			continue
 		}
-		request, found, err := a.store.IssuanceRequestByTicket(ctx, tenantID, intent.SNTable+":"+ticket.SourceRef)
+		request, found, err := a.store.IssuanceRequestByTicketSource(ctx, tenantID, source, intent.SNTable+":"+ticket.SourceRef)
 		if err != nil {
 			return err
 		}

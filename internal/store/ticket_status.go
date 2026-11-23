@@ -17,13 +17,13 @@ import (
 
 // IssuanceRequestsAwaitingTicket lists the requests intake opened from a
 // ServiceNow table's tickets that still wait on a decision, oldest first.
-func (s *Store) IssuanceRequestsAwaitingTicket(ctx context.Context, tenantID, table string, limit int) ([]IssuanceRequest, error) {
+func (s *Store) IssuanceRequestsAwaitingTicket(ctx context.Context, tenantID, source, table string, limit int) ([]IssuanceRequest, error) {
 	out := []IssuanceRequest{}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT `+issuanceRequestCols+` FROM issuance_requests
-			WHERE tenant_id = $1 AND origin = $2 AND status = $3 AND starts_with(ticket_ref, $4)
-			ORDER BY created_at, id LIMIT $5`,
-			tenantID, ticketintake.SystemServiceNow, issuancerequest.StateRequested, table+":", limit)
+			WHERE tenant_id = $1 AND origin = $2 AND status = $3 AND ticket_source = $4 AND starts_with(ticket_ref, $5)
+			ORDER BY created_at, id LIMIT $6`,
+			tenantID, ticketintake.SystemServiceNow, issuancerequest.StateRequested, source, table+":", limit)
 		if err != nil {
 			return err
 		}
@@ -38,6 +38,24 @@ func (s *Store) IssuanceRequestsAwaitingTicket(ctx context.Context, tenantID, ta
 		return rows.Err()
 	})
 	return out, err
+}
+
+// IssuanceRequestByTicketSource prevents one instance's status report from
+// choosing another instance's request with the same human-readable ticket key.
+func (s *Store) IssuanceRequestByTicketSource(ctx context.Context, tenantID, source, ticketRef string) (IssuanceRequest, bool, error) {
+	var out IssuanceRequest
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		out, err = scanIssuanceRequest(tx.QueryRow(ctx, `SELECT `+issuanceRequestCols+` FROM issuance_requests
+			WHERE tenant_id = $1 AND ticket_source = $2 AND ticket_ref = $3`, tenantID, source, ticketRef))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		found = err == nil
+		return err
+	})
+	return out, found, err
 }
 
 // IssuanceRequestByTicket reads the one request a ticket opened.

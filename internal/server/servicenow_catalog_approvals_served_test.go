@@ -66,7 +66,7 @@ func TestServedCatalogApprovalsDecideTheirRequestsP13L2(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedApplicationSecretFixture(t, h.store, h.tenant, tokenName, sealed)
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "secrets:read")
 	for name, table := range map[string]string{"items": "sc_req_item", "requests": "sc_request"} {
 		if status, out := secretsReqKey(t, h.servedHarness, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok, "p13l2-"+name,
 			map[string]any{"system": "servicenow", "name": name, "instance_url": stand.URL, "token_ref": "secret://" + tokenName,

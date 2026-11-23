@@ -109,6 +109,10 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 	if err := ticketintake.ValidateReport(intent, report); err != nil {
 		return out, err
 	}
+	source, err := ticketintake.SourceIdentity(intent.System, intent.Schedule, intent.InstanceURL)
+	if err != nil {
+		return out, err
+	}
 	out.Read = len(report.Tickets)
 	owners, err := s.ticketIntakeOwners(ctx, tenantID, intent, report.Tickets)
 	if err != nil {
@@ -136,7 +140,7 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 		if intent.System == ticketintake.SystemServiceNow {
 			ticketRef = intent.SNTable + ":" + sourceRef
 		}
-		exists, err := s.store.IssuanceRequestExistsForTicket(ctx, tenantID, ticketRef)
+		exists, err := s.store.IssuanceRequestExistsForTicket(ctx, tenantID, source, ticketRef)
 		if err != nil {
 			return out, err
 		}
@@ -162,6 +166,7 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 			Justification: strings.TrimSpace(ticket.Justification),
 			Origin:        intent.System,
 			TicketRef:     ticketRef,
+			TicketSource:  source,
 			ExpiresAt:     report.ObservedAt.UTC().Add(ticketIntakeRequestTTL),
 		}); err != nil {
 			return out, err

@@ -16,7 +16,7 @@ import (
 func TestServedNamedTicketIntakesKeepTheirSourcesAndMapTenantOwners(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "owners:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "owners:write", "secrets:read")
 	ownerID := servedCreateID(t, h, tok, "intake-owner", "/api/v1/owners", map[string]any{"kind": "team", "name": "Operations", "email": "ops@example.test"})
 	sources := []struct{ system, name, table, project, key string }{
 		{"servicenow", "incidents", "incident", "", "row1"},

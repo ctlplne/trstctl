@@ -57,11 +57,11 @@ func (o *Orchestrator) OpenIssuanceRequest(ctx context.Context, tenantID string,
 }
 
 // OpenIssuanceRequestFromRelay is the durable ticket-result receiver. Both the
-// request and event identities derive from the outbox idempotency key and exact
-// ticket reference, so a crash after append but before job completion replays
+// request and event identities derive from the outbox idempotency key, exact
+// source, and ticket reference, so a crash after append but before job completion replays
 // the same fact instead of opening a second request.
 func (o *Orchestrator) OpenIssuanceRequestFromRelay(ctx context.Context, tenantID, resultKey string, in projections.IssuanceRequestOpened) (store.IssuanceRequest, error) {
-	binding := tenantID + "\x00" + resultKey + "\x00" + in.TicketRef
+	binding := tenantID + "\x00" + resultKey + "\x00" + in.TicketSource + "\x00" + in.TicketRef
 	in.ID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("ticket-intake-request\x00"+binding)).String()
 	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("ticket-intake-event\x00"+binding)).String()
 	return o.openIssuanceRequest(ctx, tenantID, in, eventID)
@@ -113,7 +113,7 @@ func (o *Orchestrator) openIssuanceRequest(ctx context.Context, tenantID string,
 		ID: in.ID, TenantID: tenantID, Subject: in.Subject, Profile: in.Profile,
 		IssuerSource: in.IssuerSource, IssuerID: in.IssuerID, IssuerName: in.IssuerName,
 		OwnerID: in.OwnerID, CSRPEM: in.CSRPEM, Requester: in.Requester, Justification: in.Justification,
-		Origin: in.Origin, TicketRef: in.TicketRef, Status: issuancerequest.StateRequested,
+		Origin: in.Origin, TicketRef: in.TicketRef, TicketSource: in.TicketSource, Status: issuancerequest.StateRequested,
 		ExpiresAt: in.ExpiresAt, CreatedAt: ev.Time,
 	}, nil
 }

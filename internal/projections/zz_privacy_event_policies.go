@@ -407,7 +407,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/issuer_source", opaque), privacyRule("/issuer_id", opaque),
 		privacyRule("/issuer_name", token),
 		privacyRule("/requester", exact), privacyRule("/justification", clear),
-		privacyRule("/origin", opaque), privacyRule("/ticket_ref", opaque),
+		privacyRule("/origin", opaque), privacyRule("/ticket_ref", opaque), privacyRule("/ticket_source", opaque),
 		privacyRule("/expires_at", opaque),
 	)
 	issuanceRequestDecided := privacyRules(

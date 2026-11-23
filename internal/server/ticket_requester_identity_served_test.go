@@ -38,7 +38,7 @@ func TestServedTicketRequesterCannotApproveUnderTheirLoginA225L1(t *testing.T) {
 	}
 	alice := seedScopedTokenSubject(t, h.store, h.tenant, aliceSubject, "certs:issue", "certs:read")
 	bob := seedScopedTokenSubject(t, h.store, h.tenant, "oidc|a225l1-bob-91aa", "certs:issue", "certs:read")
-	admin := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
+	admin := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "secrets:read")
 	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", admin, "a225l1-intake", map[string]any{
 		"system": "jira", "instance_url": "https://acme.atlassian.net", "token_ref": servedIntakeTokenRef,
 		"jira_project": "NHI", "query": `status = "Open"`,

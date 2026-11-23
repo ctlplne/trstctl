@@ -32,6 +32,7 @@ type IssuanceRequest struct {
 	Justification  string
 	Origin         string
 	TicketRef      string
+	TicketSource   string
 	Status         string
 	DecidedBy      string
 	DecisionReason string
@@ -45,14 +46,14 @@ type IssuanceRequest struct {
 
 const issuanceRequestCols = `id::text, tenant_id::text, subject, coalesce(owner_id::text, ''), profile,
 	issuer_source, issuer_id, issuer_name, csr_pem, requester,
-	justification, origin, ticket_ref, status, decided_by, decision_reason, decided_at,
+	justification, origin, ticket_ref, ticket_source, status, decided_by, decision_reason, decided_at,
 	coalesce(identity_id::text, ''), coalesce(issued_by, ''), issued_at, expires_at, created_at`
 
 func scanIssuanceRequest(row pgx.Row) (IssuanceRequest, error) {
 	var r IssuanceRequest
 	err := row.Scan(&r.ID, &r.TenantID, &r.Subject, &r.OwnerID, &r.Profile,
 		&r.IssuerSource, &r.IssuerID, &r.IssuerName, &r.CSRPEM, &r.Requester,
-		&r.Justification, &r.Origin, &r.TicketRef, &r.Status, &r.DecidedBy, &r.DecisionReason,
+		&r.Justification, &r.Origin, &r.TicketRef, &r.TicketSource, &r.Status, &r.DecidedBy, &r.DecisionReason,
 		&r.DecidedAt, &r.IdentityID, &r.IssuedBy, &r.IssuedAt, &r.ExpiresAt, &r.CreatedAt)
 	return r, err
 }
@@ -326,16 +327,16 @@ func (s *Store) ApplyTicketIntakeConfiguredTx(ctx context.Context, tx pgx.Tx, te
 }
 
 // IssuanceRequestExistsForTicket reports whether a request already carries this
-// ticket reference — the intake's idempotency: one ticket, one request, however
+// source and ticket reference — the intake's idempotency: one ticket, one request, however
 // many polls see it. Closed or expired requests still count; a ticket whose
 // request was denied must not silently reopen on the next sweep, because the
 // denial WAS the answer to that ticket.
-func (s *Store) IssuanceRequestExistsForTicket(ctx context.Context, tenantID, ticketRef string) (bool, error) {
+func (s *Store) IssuanceRequestExistsForTicket(ctx context.Context, tenantID, ticketSource, ticketRef string) (bool, error) {
 	var exists bool
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM issuance_requests WHERE tenant_id = $1 AND ticket_ref = $2)`,
-			tenantID, ticketRef).Scan(&exists)
+			`SELECT EXISTS (SELECT 1 FROM issuance_requests WHERE tenant_id = $1 AND ticket_source = $2 AND ticket_ref = $3)`,
+			tenantID, ticketSource, ticketRef).Scan(&exists)
 	})
 	return exists, err
 }

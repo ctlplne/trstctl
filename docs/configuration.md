@@ -5597,6 +5597,10 @@ digits, underscores or hyphens.
 
 Send this body to `PUT /api/v1/issuance-requests/intake-schedule`, or save it to a
 file and run `trstctl-cli issuance-requests intake-schedule set -f intake.json`.
+The caller needs `certs:write` and `secrets:read`: the network relay sends the
+secret named by `token_ref` to `instance_url`, so naming that secret is a read
+capability. The caller must also have access to the secret's environment. Use
+an HTTP(S) instance base URL with no userinfo, query, or fragment.
 Create another name with its own table, or use `system: jira` and `jira_project`
 instead of `sn_table`. List all sources with `intake-schedule list`; read one with
 `intake-schedule show --system servicenow --name service-requests`. The Approvals
@@ -5605,6 +5609,14 @@ Saving configures a read; only terminal relay coverage claims that tickets were
 read. Updates and removals refuse an incomplete sweep. A removal also waits for
 its last pending relay job, then stops future reads while retaining requests and
 audit evidence. Use `intake-schedule delete --system servicenow --name <name>`.
+Each imported request keeps the exact opening source: provider, schedule name,
+and normalized instance URL. Ticket keys are unique within that source, not
+across all sources. ServiceNow approval polling and decision work notes use only
+the opening source. Changing a schedule's instance URL creates a new source;
+old requests remain in the review queue, but automatic status polling and work
+notes stop until an operator resolves them through the ordinary request review
+path. Requests imported before this source binding was added also need manual
+review because their historical source cannot be inferred safely.
 
 Owner mapping is optional and explicit. ServiceNow reference dot-walk fields are
 requested through `sysparm_fields`, as documented in its

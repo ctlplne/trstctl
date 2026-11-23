@@ -18,7 +18,7 @@ import (
 func TestNamedIntakeRemovalAndOwnerMappingKeepTenantAndSweepBoundaries(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "secrets:read")
 	configure := func(name string) {
 		t.Helper()
 		status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok, "named-set-"+name, map[string]any{"name": name, "system": "servicenow", "instance_url": "https://tickets.example.test", "token_ref": servedIntakeTokenRef, "sn_table": "incident", "subject_field": "u_subject", "profile_field": "u_profile", "owner_field": "u_owner_email", "interval_seconds": 3600, "enabled": true})
@@ -86,7 +86,12 @@ func TestNamedIntakeRemovalAndOwnerMappingKeepTenantAndSweepBoundaries(t *testin
 		t.Fatal(err)
 	}
 	for i, email := range []string{"ambiguous@example.test", "foreign@example.test"} {
-		intent := ticketintake.SyncIntent{Schedule: "keep-me", System: "servicenow", SNTable: "incident", OwnerField: "u_owner_email", SweepID: uuid.NewString(), PageLimit: 100}
+		sched, found, err := h.store.GetTicketIntakeSchedule(ctx, h.tenant, "servicenow", "keep-me")
+		if err != nil || !found {
+			t.Fatalf("keep-me source: found=%v err=%v", found, err)
+		}
+		intent := ticketSyncIntent(sched)
+		intent.SweepID = uuid.NewString()
 		ref := []string{"ambiguous-ticket", "foreign-ticket"}[i]
 		report := ticketintake.SyncReport{Schedule: intent.Schedule, System: intent.System, SweepID: intent.SweepID, ObservedAt: time.Now().UTC(), SourceRefs: []string{ref}, Tickets: []ticketintake.Ticket{{SourceRef: ref, Subject: ref + ".example.test", Profile: "tls-server", OwnerEmail: email}}, ReadCount: 1, Complete: true}
 		if _, err = h.srv.ingestTicketReport(ctx, h.tenant, "owner-lookup-"+ref, intent, report); err != nil {

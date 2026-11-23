@@ -25,7 +25,7 @@ const servedTicketIntakeTokenRef = "secret://itsm/intake" // #nosec G101 -- secr
 func TestSignedTicketResultStaysRetryableUntilProjectionSucceeds(t *testing.T) {
 	ctx := context.Background()
 	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, agentJobKindTicketSync)
-	token := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
+	token := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "secrets:read")
 	status, body := secretsReqKey(t, h.servedHarness, http.MethodPut,
 		"/api/v1/issuance-requests/intake-schedule", token, "ticket-result-config", map[string]any{
 			"system": "servicenow", "instance_url": "https://servicenow.internal.example",

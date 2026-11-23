@@ -814,6 +814,7 @@ type IssuanceRequestOpened struct {
 	Justification string    `json:"justification,omitempty"`
 	Origin        string    `json:"origin,omitempty"`
 	TicketRef     string    `json:"ticket_ref,omitempty"`
+	TicketSource  string    `json:"ticket_source,omitempty"`
 	ExpiresAt     time.Time `json:"expires_at"`
 }
 
@@ -6898,7 +6899,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ID: pl.ID, TenantID: e.TenantID, Subject: pl.Subject, Profile: pl.Profile,
 			IssuerSource: pl.IssuerSource, IssuerID: pl.IssuerID, IssuerName: pl.IssuerName,
 			OwnerID: pl.OwnerID, CSRPEM: pl.CSRPEM, Requester: pl.Requester, Justification: pl.Justification,
-			Origin: pl.Origin, TicketRef: pl.TicketRef, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
+			Origin: pl.Origin, TicketRef: pl.TicketRef, TicketSource: pl.TicketSource, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
 		})
 	case EventIssuanceRequestDecided:
 		var pl IssuanceRequestDecided
