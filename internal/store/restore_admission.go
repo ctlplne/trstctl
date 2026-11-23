@@ -341,12 +341,14 @@ func (s *Store) requireNoArmedRewrapGatesTx(ctx context.Context, tx pgx.Tx) erro
 }
 
 // WithRestoreActivity commits the exact start before invoking a mutation or
-// external effect. A callback error leaves the start unresolved; only a proven
-// terminal callback clears it. A failed session is never no-effect evidence.
+// external effect. A callback error leaves the start unresolved; a nil or
+// explicitly terminal result clears it under a bounded deadline even if the
+// caller is canceled just after commit. A failed session is never no-effect
+// evidence.
 func (s *Store) WithRestoreActivity(ctx context.Context, tenantID, operationID, kind, lane string,
 	fn func(context.Context) error,
 ) error {
-	return s.withRestoreActivity(ctx, tenantID, operationID, kind, lane, "", false, fn)
+	return s.withRestoreActivity(ctx, tenantID, operationID, kind, lane, "", fn)
 }
 
 // WithRestoreEventIngress commits a durable start tied to the normalized event
@@ -372,7 +374,7 @@ func (s *Store) WithRestoreEventIngress(ctx context.Context, tenantID, eventID, 
 		activityTenant = RestoreControlTenantID
 	}
 	if s.HasKeyStateSnapshotEvent(ctx) {
-		return s.withRestoreActivity(ctx, activityTenant, uuid.NewString(), "ingress", "event-append", eventID, false,
+		return s.withRestoreActivity(ctx, activityTenant, uuid.NewString(), "ingress", "event-append", eventID,
 			func(admitted context.Context) error {
 				admitted = context.WithValue(admitted, restoreIngressEventTypeContextKey{}, eventType)
 				admitted = context.WithValue(admitted, restoreIngressTenantScopeContextKey{}, tenantID)
@@ -388,7 +390,7 @@ func (s *Store) WithRestoreEventIngress(ctx context.Context, tenantID, eventID, 
 	return s.withRestoreActivitySession(ctx, func(session context.Context, lease *restoreActivityLease) error {
 		return s.withRewrapEventIngress(session, tenantID, eventType, func(locked context.Context) error {
 			return s.withRestoreActivityOnLease(locked, lease, activityTenant, uuid.NewString(),
-				"ingress", "event-append", eventID, false, func(ingress context.Context) error {
+				"ingress", "event-append", eventID, func(ingress context.Context) error {
 					ingress = context.WithValue(ingress, restoreIngressEventTypeContextKey{}, eventType)
 					ingress = context.WithValue(ingress, restoreIngressTenantScopeContextKey{}, tenantID)
 					return s.withOwnerCommandProjectionActivity(ingress, lease, activityTenant, eventID, fn)
@@ -536,7 +538,7 @@ func (s *Store) WithRestoreProjectionAdmission(ctx context.Context, tenantID, ev
 		}
 		return fn(ctx)
 	}
-	return s.withRestoreActivity(ctx, tenantID, uuid.NewString(), "projection", "direct-apply", eventID, false, fn)
+	return s.withRestoreActivity(ctx, tenantID, uuid.NewString(), "projection", "direct-apply", eventID, fn)
 }
 
 // RequireRestoreProjectionTx is the transaction half for callers that own an
@@ -666,11 +668,11 @@ func (s *Store) requireRestoreOwnerRebuildScope(ctx context.Context) error {
 func (s *Store) WithRestoreActivityAfterDrain(ctx context.Context, tenantID, operationID, kind, lane string,
 	fn func(context.Context) error,
 ) error {
-	return s.withRestoreActivity(ctx, tenantID, operationID, kind, lane, "", true, fn)
+	return s.withRestoreActivity(ctx, tenantID, operationID, kind, lane, "", fn)
 }
 
 func (s *Store) withRestoreActivity(ctx context.Context, tenantID, operationID, kind, lane string,
-	eventID string, terminalAfterDrain bool, fn func(context.Context) error,
+	eventID string, fn func(context.Context) error,
 ) (retErr error) {
 	if s == nil {
 		return ErrRestoreAdmissionLost
@@ -689,7 +691,7 @@ func (s *Store) withRestoreActivity(ctx context.Context, tenantID, operationID, 
 	}
 	return s.withRestoreActivitySession(ctx, func(session context.Context, lease *restoreActivityLease) error {
 		return s.withRestoreActivityOnLease(session, lease, tenantID, operationID,
-			kind, lane, eventID, terminalAfterDrain, fn)
+			kind, lane, eventID, fn)
 	})
 }
 
@@ -751,7 +753,7 @@ func (s *Store) withRestoreActivitySession(ctx context.Context,
 }
 
 func (s *Store) withRestoreActivityOnLease(ctx context.Context, lease *restoreActivityLease,
-	tenantID, operationID, kind, lane, eventID string, terminalAfterDrain bool,
+	tenantID, operationID, kind, lane, eventID string,
 	fn func(context.Context) error,
 ) error {
 	if lease == nil || lease.origin != s || !lease.active.Load() {
@@ -777,14 +779,12 @@ func (s *Store) withRestoreActivityOnLease(ctx context.Context, lease *restoreAc
 	if callbackErr != nil && !errors.As(callbackErr, &noEffect) && !errors.As(callbackErr, &terminal) {
 		return callbackErr
 	}
-	settleCtx := ctx
-	if terminalAfterDrain || noEffect != nil || terminal != nil {
-		var cancel context.CancelFunc
-		settleCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-	} else if err := ctx.Err(); err != nil {
-		return context.Cause(ctx)
-	}
+	// A nil callback means its effect committed. Cancellation between that
+	// commit and token settlement cannot undo it, so finish the exact token
+	// under a short independent deadline. Errors without terminal/no-effect
+	// proof returned above still leave the durable start unresolved.
+	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
 	lease.mu.Lock()
 	defer lease.mu.Unlock()
 	if !lease.active.Load() {
