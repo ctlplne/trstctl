@@ -143,16 +143,21 @@ func (s *Service) ring(tenantID string) *Keyring {
 // CreateKey creates a tenant-scoped key.
 func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kind) (KeyInfo, error) {
 	if p := s.sharedState(); p != nil {
-		err := s.mutateShared(ctx, p, tenantID, func(k *Keyring) (func(), error) {
-			if err := k.CreateKey(ctx, name, kind); err != nil {
-				return nil, err
+		err := s.withSharedAdmission(ctx, p, tenantID, func(held context.Context) error {
+			if err := s.mutateSharedAdmitted(held, p, tenantID, func(k *Keyring) (func(), error) {
+				if err := k.CreateKey(held, name, kind); err != nil {
+					return nil, err
+				}
+				return func() { k.discardUnpersistedKey(name) }, nil
+			}); err != nil {
+				return err
 			}
-			return func() { k.discardUnpersistedKey(name) }, nil
+			s.afterSave(held, tenantID, s.ring(tenantID), name, EventKeyCreated)
+			return nil
 		})
 		if err != nil {
 			return KeyInfo{}, err
 		}
-		s.afterSave(ctx, tenantID, s.ring(tenantID), name, EventKeyCreated)
 		return KeyInfo{Name: name, Kind: kind, Version: 1}, nil
 	}
 	k := s.ring(tenantID)
@@ -176,11 +181,17 @@ func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kin
 // A read for an empty tenant does not allocate a ring or create mutable state.
 func (s *Service) ListKeys(ctx context.Context, tenantID string) ([]KeyInfo, error) {
 	if p := s.sharedState(); p != nil {
-		k, err := s.readShared(ctx, p, tenantID)
-		if err != nil || k == nil {
-			return []KeyInfo{}, err
+		var keys []KeyInfo
+		err := s.readShared(ctx, p, tenantID, func(k *Keyring) error {
+			if k != nil {
+				keys = k.ListKeys()
+			}
+			return nil
+		})
+		if keys == nil {
+			keys = []KeyInfo{}
 		}
-		return k.ListKeys(), nil
+		return keys, err
 	}
 	s.mu.Lock()
 	k := s.rings[tenantID]
@@ -195,22 +206,30 @@ func (s *Service) ListKeys(ctx context.Context, tenantID string) ([]KeyInfo, err
 // key, with whether the event log records each version's lifecycle fact.
 func (s *Service) ListKeyVersions(ctx context.Context, tenantID, name string) (Kind, []KeyVersionInfo, error) {
 	var k *Keyring
+	var kind Kind
+	var versions []KeyVersionInfo
 	if p := s.sharedState(); p != nil {
-		var err error
-		if k, err = s.readShared(ctx, p, tenantID); err != nil {
+		if err := s.readShared(ctx, p, tenantID, func(ring *Keyring) (err error) {
+			if ring == nil {
+				return fmt.Errorf("transit: unknown key %q", name)
+			}
+			kind, versions, err = ring.ListKeyVersions(name)
+			return err
+		}); err != nil {
 			return "", nil, err
 		}
 	} else {
 		s.mu.Lock()
 		k = s.rings[tenantID]
 		s.mu.Unlock()
-	}
-	if k == nil {
-		return "", nil, fmt.Errorf("transit: unknown key %q", name)
-	}
-	kind, versions, err := k.ListKeyVersions(name)
-	if err != nil {
-		return "", nil, err
+		if k == nil {
+			return "", nil, fmt.Errorf("transit: unknown key %q", name)
+		}
+		var err error
+		kind, versions, err = k.ListKeyVersions(name)
+		if err != nil {
+			return "", nil, err
+		}
 	}
 	rec := s.factRecorder()
 	if rec == nil {
@@ -241,24 +260,29 @@ func (s *Service) ListKeyVersions(ctx context.Context, tenantID, name string) (K
 func (s *Service) Rotate(ctx context.Context, tenantID, name string) (KeyInfo, error) {
 	if p := s.sharedState(); p != nil {
 		var info KeyInfo
-		err := s.mutateShared(ctx, p, tenantID, func(k *Keyring) (func(), error) {
-			version, err := k.Rotate(ctx, name)
-			if err != nil {
-				return nil, err
+		err := s.withSharedAdmission(ctx, p, tenantID, func(held context.Context) error {
+			if err := s.mutateSharedAdmitted(held, p, tenantID, func(k *Keyring) (func(), error) {
+				version, err := k.Rotate(held, name)
+				if err != nil {
+					return nil, err
+				}
+				undo := func() { k.discardUnpersistedVersion(name, version) }
+				kind, err := k.Kind(name)
+				if err != nil {
+					undo()
+					return nil, err
+				}
+				info = KeyInfo{Name: name, Kind: kind, Version: version}
+				return undo, nil
+			}); err != nil {
+				return err
 			}
-			undo := func() { k.discardUnpersistedVersion(name, version) }
-			kind, err := k.Kind(name)
-			if err != nil {
-				undo()
-				return nil, err
-			}
-			info = KeyInfo{Name: name, Kind: kind, Version: version}
-			return undo, nil
+			s.afterSave(held, tenantID, s.ring(tenantID), name, EventKeyRotated)
+			return nil
 		})
 		if err != nil {
 			return KeyInfo{}, err
 		}
-		s.afterSave(ctx, tenantID, s.ring(tenantID), name, EventKeyRotated)
 		return info, nil
 	}
 	k := s.ring(tenantID)
@@ -321,6 +345,11 @@ func (s *Service) Sign(ctx context.Context, tenantID, name string, message []byt
 }
 
 func (s *Service) Verify(ctx context.Context, tenantID string, message, sig, pubDER []byte) error {
+	if s.sharedState() != nil {
+		return s.withRing(ctx, tenantID, func(k *Keyring) error {
+			return k.Verify(ctx, message, sig, pubDER)
+		})
+	}
 	return s.ring(tenantID).Verify(ctx, message, sig, pubDER)
 }
 

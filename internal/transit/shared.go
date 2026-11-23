@@ -36,6 +36,10 @@ type TenantKeyringStore interface {
 // TenantSealer seals and opens one tenant's keyring under that tenant's key
 // domain.
 type TenantSealer interface {
+	// WithTenantKeyringAccess checks current tenant custody and holds its
+	// cross-replica read lease through the callback. A seal or key rotation
+	// waits for this callback; a sealed or unavailable wrapper never enters it.
+	WithTenantKeyringAccess(ctx context.Context, tenantID string, fn func(context.Context) error) error
 	SealTenantKeyring(ctx context.Context, tenantID string, plaintext, aad []byte) ([]byte, error)
 	OpenTenantKeyring(ctx context.Context, tenantID string, sealed, aad []byte) ([]byte, error)
 }
@@ -76,6 +80,7 @@ type tenantSync struct {
 	mu       sync.Mutex
 	loaded   bool
 	revision int64
+	active   int
 }
 
 type sharedPersistence struct {
@@ -123,17 +128,70 @@ func (s *Service) withRing(ctx context.Context, tenantID string, op func(*Keyrin
 	if p == nil {
 		return op(s.ring(tenantID))
 	}
-	k, err := s.loadShared(ctx, p, tenantID, false)
-	if err != nil {
-		return err
+	return s.withSharedAdmission(ctx, p, tenantID, func(held context.Context) error {
+		k, err := s.loadShared(held, p, tenantID, false)
+		if err != nil {
+			return err
+		}
+		if err := op(k); !isKeyMiss(err) {
+			return err
+		}
+		if k, err = s.loadShared(held, p, tenantID, true); err != nil {
+			return err
+		}
+		return op(k)
+	})
+}
+
+func (s *Service) withSharedAdmission(ctx context.Context, p *sharedPersistence, tenantID string,
+	fn func(context.Context) error) error {
+	entered := false
+	err := p.sealer.WithTenantKeyringAccess(ctx, tenantID, func(held context.Context) error {
+		entered = true
+		ts := p.sync(tenantID)
+		ts.mu.Lock()
+		ts.active++
+		ts.mu.Unlock()
+		defer func() {
+			ts.mu.Lock()
+			ts.active--
+			if ts.active == 0 {
+				// No replica retains idle plaintext material. The next operation
+				// reopens the sealed row under a fresh custody check.
+				s.evictSharedTenantLocked(ts, tenantID)
+			}
+			ts.mu.Unlock()
+		}()
+		return fn(held)
+	})
+	if err != nil && !entered {
+		// A failed custody check must not leave usable plaintext keys cached.
+		// This is per tenant; another tenant's warm ring stays untouched.
+		s.evictSharedTenant(p, tenantID)
 	}
-	if err := op(k); !isKeyMiss(err) {
-		return err
+	return err
+}
+
+func (s *Service) evictSharedTenant(p *sharedPersistence, tenantID string) {
+	ts := p.sync(tenantID)
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.active == 0 {
+		s.evictSharedTenantLocked(ts, tenantID)
 	}
-	if k, err = s.loadShared(ctx, p, tenantID, true); err != nil {
-		return err
+}
+
+// The caller holds ts.mu and has proved no operation still uses this ring.
+func (s *Service) evictSharedTenantLocked(ts *tenantSync, tenantID string) {
+	s.mu.Lock()
+	k := s.rings[tenantID]
+	delete(s.rings, tenantID)
+	s.mu.Unlock()
+	if k != nil {
+		k.Destroy()
 	}
-	return op(k)
+	ts.loaded = false
+	ts.revision = 0
 }
 
 // loadShared returns the tenant's ring, loading its row on first use or, with
@@ -156,16 +214,25 @@ func (s *Service) loadShared(ctx context.Context, p *sharedPersistence, tenantID
 // readShared returns the tenant's ring caught up to the stored revision for a
 // metadata read, or nil when the tenant has no keyring anywhere; a read for an
 // empty tenant allocates nothing.
-func (s *Service) readShared(ctx context.Context, p *sharedPersistence, tenantID string) (*Keyring, error) {
-	s.mu.Lock()
-	k := s.rings[tenantID]
-	s.mu.Unlock()
-	if k == nil {
-		if _, _, found, err := p.store.LoadTransitKeyring(ctx, tenantID); err != nil || !found {
-			return nil, err
+func (s *Service) readShared(ctx context.Context, p *sharedPersistence, tenantID string, read func(*Keyring) error) error {
+	return s.withSharedAdmission(ctx, p, tenantID, func(held context.Context) error {
+		s.mu.Lock()
+		k := s.rings[tenantID]
+		s.mu.Unlock()
+		if k == nil {
+			if _, _, found, err := p.store.LoadTransitKeyring(held, tenantID); err != nil || !found {
+				if err != nil {
+					return err
+				}
+				return read(nil)
+			}
 		}
-	}
-	return s.loadShared(ctx, p, tenantID, true)
+		ring, err := s.loadShared(held, p, tenantID, true)
+		if err != nil {
+			return err
+		}
+		return read(ring)
+	})
 }
 
 // refreshLocked catches the ring up to the stored row. The caller holds ts.mu.
@@ -225,11 +292,10 @@ func (s *Service) saveLocked(ctx context.Context, p *sharedPersistence, tenantID
 	return saved, nil
 }
 
-// mutateShared applies a create or rotate to the tenant's ring caught up to
-// the stored revision and saves it; when another replica saved first, the
-// change is undone, the ring caught up again and the change reapplied. An
-// apply that changes nothing returns a nil undo, and nothing is saved.
-func (s *Service) mutateShared(ctx context.Context, p *sharedPersistence, tenantID string, apply func(*Keyring) (undo func(), err error)) error {
+// mutateSharedAdmitted saves a create or rotate over the revision last read.
+// The caller holds tenant custody through its fact recording. A lost save is
+// undone, caught up, and retried; a nil undo means nothing changed.
+func (s *Service) mutateSharedAdmitted(ctx context.Context, p *sharedPersistence, tenantID string, apply func(*Keyring) (undo func(), err error)) error {
 	k := s.ring(tenantID)
 	ts := p.sync(tenantID)
 	ts.mu.Lock()

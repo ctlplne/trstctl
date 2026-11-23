@@ -68,8 +68,9 @@ func (m *memKeyringStore) takeHook() func() {
 // kekSealer seals tenant keyrings under one local KEK, as a tenant on the
 // legacy deployment KEK is sealed.
 type kekSealer struct {
-	kek      *seal.LocalKEK
-	failOpen bool
+	kek        *seal.LocalKEK
+	failOpen   bool
+	failTenant string
 }
 
 func newKEKSealer(t *testing.T) *kekSealer {
@@ -87,12 +88,19 @@ func newKEKSealer(t *testing.T) *kekSealer {
 	return &kekSealer{kek: kek}
 }
 
+func (k *kekSealer) WithTenantKeyringAccess(ctx context.Context, tenantID string, fn func(context.Context) error) error {
+	if k.failOpen && (k.failTenant == "" || k.failTenant == tenantID) {
+		return errors.New("tenant key domain sealed")
+	}
+	return fn(ctx)
+}
+
 func (k *kekSealer) SealTenantKeyring(_ context.Context, _ string, plaintext, aad []byte) ([]byte, error) {
 	return seal.Seal(k.kek, plaintext, aad)
 }
 
-func (k *kekSealer) OpenTenantKeyring(_ context.Context, _ string, sealed, aad []byte) ([]byte, error) {
-	if k.failOpen {
+func (k *kekSealer) OpenTenantKeyring(_ context.Context, tenantID string, sealed, aad []byte) ([]byte, error) {
+	if k.failOpen && (k.failTenant == "" || k.failTenant == tenantID) {
 		return nil, errors.New("tenant key domain sealed")
 	}
 	return seal.Open(k.kek, sealed, aad)

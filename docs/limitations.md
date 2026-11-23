@@ -5661,10 +5661,11 @@ revision the replica last read, so two replicas changing one tenant's keys at on
 cannot overwrite each other: the replica that loses the save catches up and applies
 its change again. A failed save fails the mutation rather than handing back a key
 that disappears later: the unsaved key (or new version) is rolled back out of the
-in-memory ring and its material wiped, so nothing can encrypt under it and a retry
-succeeds. A replica loads a tenant's row the first time the tenant is used and
-reloads it when an operation names a key or version it does not hold, so a key
-created or rotated on one replica works on every other.
+  in-memory ring and its material wiped, so nothing can encrypt under it and a retry
+  succeeds. Each shared-keyring operation checks the tenant's current key custody,
+  opens the sealed row, and wipes its plaintext ring when the last concurrent
+  operation finishes. This prevents an idle replica from retaining key material
+  after another replica seals the tenant or loses its key wrapper.
 
 Three properties bound what this gives you:
 
@@ -5677,7 +5678,8 @@ Three properties bound what this gives you:
   cannot be opened still refuses the start.
 - **A keyring that cannot be opened fails the operation.** A row the tenant's key
   domain cannot open (a sealed tenant, a lost KEK) fails each transit operation for
-  that tenant instead of minting fresh keys over it. The key bytes are deliberately
+  that tenant, including calls on a previously warm replica, instead of minting
+  fresh keys over it. The key bytes are deliberately
   not event-sourced, so the table restores from the PostgreSQL backup.
 - **Create and rotate are event-sourced facts (A126).** Each is a
   `transit.key.created` or `transit.key.rotated` event (schema 2: key, kind,

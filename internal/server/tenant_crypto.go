@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -12,6 +13,12 @@ import (
 )
 
 type tenantCipherContextKey struct{}
+
+type borrowedTenantCipher struct {
+	tenantID string
+	cipher   tenantseal.Cipher
+	active   *atomic.Bool
+}
 
 // withTenantCipher keeps one tenant-domain lease in the context so a complete
 // request or worker delivery can hold the shared cross-replica fence while
@@ -26,12 +33,17 @@ func withTenantCipher(
 	if fn == nil {
 		return errors.New("server: tenant cipher callback is required")
 	}
-	if cipher, ok := ctx.Value(tenantCipherContextKey{}).(tenantseal.Cipher); ok {
-		return fn(ctx, cipher)
+	if borrowed, ok := ctx.Value(tenantCipherContextKey{}).(borrowedTenantCipher); ok &&
+		borrowed.tenantID == tenantID && borrowed.active.Load() {
+		return fn(ctx, borrowed.cipher)
 	}
 	if access != nil {
 		return access.WithTenant(ctx, tenantID, func(cipher tenantseal.Cipher) error {
-			return fn(context.WithValue(ctx, tenantCipherContextKey{}, cipher), cipher)
+			active := &atomic.Bool{}
+			active.Store(true)
+			defer active.Store(false)
+			borrowed := borrowedTenantCipher{tenantID: tenantID, cipher: cipher, active: active}
+			return fn(context.WithValue(ctx, tenantCipherContextKey{}, borrowed), cipher)
 		})
 	}
 	if legacy == nil {
@@ -82,6 +94,12 @@ func (c legacyTenantCipher) Open(container, aad []byte) ([]byte, error) {
 type transitTenantSealer struct {
 	access tenantseal.Access
 	legacy seal.KeyWrapper
+}
+
+func (t transitTenantSealer) WithTenantKeyringAccess(ctx context.Context, tenantID string,
+	fn func(context.Context) error) error {
+	return withTenantCipher(ctx, t.access, t.legacy, tenantID,
+		func(held context.Context, _ tenantseal.Cipher) error { return fn(held) })
 }
 
 func (t transitTenantSealer) SealTenantKeyring(ctx context.Context, tenantID string, plaintext, aad []byte) ([]byte, error) {

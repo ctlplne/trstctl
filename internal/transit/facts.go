@@ -140,16 +140,18 @@ func (s *Service) ReconcileFacts(ctx context.Context, tenantID string) error {
 	if _, _, found, err := p.store.LoadTransitKeyring(ctx, tenantID); err != nil || !found {
 		return err
 	}
-	if err := s.mutateShared(ctx, p, tenantID, func(k *Keyring) (func(), error) {
-		return k.assignMissingFacts()
-	}); err != nil {
-		return err
-	}
-	k, err := s.loadShared(ctx, p, tenantID, false)
-	if err != nil {
-		return err
-	}
-	return s.recordFacts(ctx, rec, tenantID, k.allFacts())
+	return s.withSharedAdmission(ctx, p, tenantID, func(held context.Context) error {
+		if err := s.mutateSharedAdmitted(held, p, tenantID, func(k *Keyring) (func(), error) {
+			return k.assignMissingFacts()
+		}); err != nil {
+			return err
+		}
+		k, err := s.loadShared(held, p, tenantID, false)
+		if err != nil {
+			return err
+		}
+		return s.recordFacts(held, rec, tenantID, k.allFacts())
+	})
 }
 
 // keyFacts lists the named key's facts, oldest first; versions without a fact

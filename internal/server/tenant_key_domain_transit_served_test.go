@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -32,7 +31,7 @@ import (
 // nothing cached) still decrypts what was encrypted before the migration.
 func TestServedTenantKeyDomainMigrationAndRotationRewrapTransitKeyrings(t *testing.T) {
 	ctx := context.Background()
-	st := newServerTestStore(t)
+	st := v2nd4CutoverStore(t)
 	const tenantID = "57575757-5757-4575-8575-575757575757"
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "tenant-transit-domain", EventSeq: 1}); err != nil {
 		t.Fatal(err)
@@ -52,34 +51,46 @@ func TestServedTenantKeyDomainMigrationAndRotationRewrapTransitKeyrings(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := openHistoryAwareEventLog(
-		ctx,
-		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
-		st,
-		auditKey,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
-		_ = log.Close()
 		t.Fatal(err)
 	}
 	secrets, err := loadRunSecrets(cfg)
 	if err != nil {
-		_ = log.Close()
 		t.Fatal(err)
 	}
 	t.Cleanup(secrets.Close)
+	registry, err := tenantseal.NewLocalWrapperRegistry([]tenantseal.LocalWrapper{{ID: "transit-domain-wrapper", Path: wrapperPath}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialAccess, err := tenantseal.NewAccess(st, secrets.kek, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var admissionAccess tenantseal.Access = initialAccess
+	admission := events.WithAppendAdmission(func(ctx context.Context, e events.Event,
+		publish func(context.Context) (events.Event, error)) (events.Event, error) {
+		if !events.SealedBearingEvent(e) {
+			return publish(ctx)
+		}
+		return restoreEventIngressAdmissionWithCustody(st, func() tenantseal.Access { return admissionAccess })(ctx, e, publish)
+	})
+	log, err := openHistoryAwareEventLog(ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
+		st, auditKey, admission)
+	if err != nil {
+		t.Fatal(err)
+	}
 	deps, err := buildRunDeps(
 		ctx, cfg, st, log, runSigner{}, secrets,
-		slog.New(slog.NewTextHandler(io.Discard, nil)), guard, auditKey,
+		slog.New(slog.NewTextHandler(t.Output(), nil)), guard, auditKey,
 	)
 	if err != nil {
 		_ = log.Close()
 		t.Fatal(err)
 	}
+	admissionAccess = deps.TenantCrypto
 	srv, err := Build(ctx, deps)
 	if err != nil {
 		_ = log.Close()
@@ -119,6 +130,49 @@ func TestServedTenantKeyDomainMigrationAndRotationRewrapTransitKeyrings(t *testi
 	}
 	servedRequireTransitKeyringGeneration(t, st, deps, tenantID)
 	servedRequireFreshReplicaDecrypts(t, st, log, deps, secrets, tenantID, encrypted.Ciphertext, plaintext)
+
+	// CR-044: this server already holds the tenant's transit keys in memory.
+	// Sealing the domain must remove its authority on this warm replica too.
+	requested, err := deps.TenantKeyDomains.RequestSeal(ctx, tenantID, "cr044-seal", "cr044-seal-binding")
+	if err != nil || requested.OperationID == nil {
+		t.Fatalf("request tenant seal: operation=%+v err=%v", requested, err)
+	}
+	if _, err := deps.TenantKeyDomains.CompleteSeal(ctx, tenantID, *requested.OperationID); err != nil {
+		t.Fatalf("complete tenant seal: %v", err)
+	}
+	if err := deps.TenantCrypto.WithTenant(ctx, tenantID, func(tenantseal.Cipher) error { return nil }); err == nil {
+		t.Fatal("control: tenant crypto still opens after the seal")
+	} else if status, _ := tenantseal.StatusOf(err); status != tenantseal.StatusSealed {
+		t.Fatalf("tenant crypto status = %v, want sealed", err)
+	}
+	decryptBody, err := json.Marshal(map[string]string{"key": "payments", "ciphertext": encrypted.Ciphertext})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []struct {
+		path, key string
+		body      []byte
+	}{
+		{"/api/v1/transit/encrypt", "cr044-sealed-encrypt", body},
+		{"/api/v1/transit/decrypt", "cr044-sealed-decrypt", decryptBody},
+		{"/api/v1/transit/rewrap", "cr044-sealed-rewrap", decryptBody},
+	} {
+		rec := servedTenantSealRequest(t, srv, token, http.MethodPost, check.path, check.key, check.body)
+		if rec.Code != http.StatusLocked {
+			t.Errorf("warm transit %s after seal = %d body=%s, want 423", check.path, rec.Code, rec.Body.String())
+		}
+	}
+	// The HTTP gate already rejects a sealed tenant. Check the warm service
+	// behind it too: internal and Vault-compatible callers share this keyring.
+	if opened, err := srv.transit.Decrypt(ctx, tenantID, "payments", encrypted.Ciphertext, nil); err == nil {
+		t.Errorf("warm transit service decrypted %d bytes after seal", len(opened))
+	}
+	if _, err := srv.transit.Encrypt(ctx, tenantID, "payments", []byte("new data"), nil); err == nil {
+		t.Error("warm transit service encrypted after seal")
+	}
+	if _, err := srv.transit.Rewrap(ctx, tenantID, "payments", encrypted.Ciphertext, nil); err == nil {
+		t.Error("warm transit service rewrapped after seal")
+	}
 }
 
 // servedRequireTransitKeyringGeneration reads the stored keyring row back from
