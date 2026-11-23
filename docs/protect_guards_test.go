@@ -2129,9 +2129,9 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		"EventCAEndEntityIssued: {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CAEndEntityInventorySchemaVersion: true}",
 		"EventDiscoverySourceUpserted: {1: true}",
 		"EventDiscoveryScheduleUpserted: {1: true}",
-		// Nested and endpoint-probe commands retain distinct closed v2/v3
-		// shapes; historical queued v1 and observed v1-v3 remain required.
-		"EventDiscoveryRunQueued: {1: true, DiscoveryEnrollmentGroupsQueuedSchemaVersion: true, DiscoveryEndpointProbeQueuedSchemaVersion: true}",
+		// Nested, endpoint-probe, and directory-TLS commands retain distinct
+		// closed v2/v3/v4 shapes; historical queued v1 and observed v1-v3 remain required.
+		"EventDiscoveryRunQueued: {1: true, DiscoveryEnrollmentGroupsQueuedSchemaVersion: true, DiscoveryEndpointProbeQueuedSchemaVersion: true, DiscoveryDirectoryTLSQueuedSchemaVersion: true}",
 		"EventADCSInventoryObserved: {1: true, 2: true, adcsdiscovery.InventoryMembershipSchemaVersion: true, adcsdiscovery.InventoryEventSchemaVersion: true}",
 		"EventDiscoveryRunStarted: {1: true}",
 		"EventDiscoveryFindingRecorded: {1: true, DiscoveryAttackPathFindingSchemaVersion: true}",
