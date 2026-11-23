@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -196,13 +197,37 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 	// Reuse the served token command so the immutable event is the source of truth
 	// and the token row is its tenant-scoped projection. Raw material stays outside
 	// both the event and the database and is wiped by the command on failure.
-	mintCtx := events.ContextWithActor(ctx, events.Actor{Subject: "trstctl:local-token-create"})
 	orch := orchestrator.NewOrchestrator(log, st, nil)
-	_, raw, err := orch.CreateAPIToken(mintCtx, opts.TenantID, opts.Subject, scopes, nil)
-	if err != nil {
-		return nil, fmt.Errorf("bootstrap: record token: %w", err)
+	// A live projector may briefly hold the tenant's event-protection lock.
+	// Acquire it BEFORE token generation and retry only while the callback has
+	// never run. Once the callback begins, a failure could follow an appended
+	// event; retrying then would mint another raw token that cannot be recovered.
+	window := time.NewTimer(30 * time.Second)
+	defer window.Stop()
+	for {
+		entered := false
+		var raw []byte
+		err := st.WithTenantEventProtection(ctx, opts.TenantID, func(protected context.Context) error {
+			entered = true
+			mintCtx := events.ContextWithActor(protected, events.Actor{Subject: "trstctl:local-token-create"})
+			_, minted, mintErr := orch.CreateAPIToken(mintCtx, opts.TenantID, opts.Subject, scopes, nil)
+			raw = minted
+			return mintErr
+		})
+		if err == nil {
+			return raw, nil
+		}
+		if entered || !errors.Is(err, store.ErrDatastoreBusy) {
+			return nil, fmt.Errorf("bootstrap: record token: %w", err)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("bootstrap: wait for tenant event protection: %w", ctx.Err())
+		case <-window.C:
+			return nil, fmt.Errorf("bootstrap: tenant event protection stayed busy for 30s: %w", err)
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
-	return raw, nil
 }
 
 // discardWriter is an io.Writer that drops everything written to it. It backs the
