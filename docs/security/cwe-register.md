@@ -2091,7 +2091,7 @@ not this file.
 | `internal/server/agent_workload_api_darwin_path_test.go:42` | test builds a fixed local fixture (CWE-78) |
 | `internal/server/agent_workload_api_darwin_path_test.go:96` | test runs the client it built (CWE-78) |
 | `internal/server/agent_workload_api_gospiffe_test.go:215` | test executes a fixed local fixture (CWE-78) |
-| `internal/server/agent_workload_api_stock_clients_test.go:120` | the stock helper on PATH with a config this test wrote (CWE-78) |
+| `internal/server/agent_workload_api_stock_clients_test.go:133` | the stock helper on PATH with a config this test wrote (CWE-78) |
 | `internal/server/archive_minio_served_test.go:45` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/server/archive_minio_served_test.go:50` | test removes the container it started (CWE-78) |
 | `internal/server/archive_minio_served_test.go:51` | test inspects the container it started (CWE-78) |
