@@ -853,6 +853,10 @@ func TestNoBrokenInternalLinks(t *testing.T) {
 				continue
 			}
 			resolved := filepath.Join(dir, filepath.FromSlash(path))
+			if !filepath.IsLocal(resolved) {
+				t.Errorf("%s: link %q leaves the MkDocs documentation tree", f, target)
+				continue
+			}
 			if _, err := os.Stat(resolved); err != nil {
 				t.Errorf("%s: broken internal link %q (looked for %q)", f, target, resolved)
 			}

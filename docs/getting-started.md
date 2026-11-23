@@ -21,7 +21,16 @@ longer. Issuance itself is sub-second (measured under
 the optional agent-install step.
 
 If you want a pre-populated demo environment instead of a blank
-first-run, use the [demo stack's three-step startup](../deploy/demo/README.md)
+first-run, run the demo stack's three startup steps from the repository root:
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml up -d --build trstctl
+bash scripts/ci/provision-compose-agid-verdict.sh deploy/demo/docker-compose.yml
+docker compose -f deploy/demo/docker-compose.yml up -d --build
+```
+
+The second step installs the control plane's public AGID verdict key in the
+isolated signer after the operator has reviewed the binding. This stack
 serves a seeded UI (owners, certificates, secrets, transit keys, managed keys)
 with local SSO at <https://127.0.0.1:9443>. Everything below uses the blank
 stack at <https://localhost:8443>; the two can run side by side. The demo seed
