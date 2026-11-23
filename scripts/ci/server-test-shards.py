@@ -66,11 +66,15 @@ def slice_census(names, index, count):
 
 
 def partition_selected(selected, index, slices):
-    """Use the third process only for the CI slice that exceeded its fixed wall."""
+    """Start the long served lifecycle immediately in its own process."""
     if slices < 1 or not 0 <= index < slices:
         raise ValueError("--slice must be in [0, --slices)")
-    parts = 3 if slices == 6 and index == 3 else 2
-    return [group for group in (selected[offset::parts] for offset in range(parts)) if group]
+    long_case = "TestServedLargeSealedManifestExecutesEveryDependentA267"
+    ordinary = [name for name in selected if name != long_case]
+    groups = [group for group in (ordinary[::2], ordinary[1::2]) if group]
+    if long_case in selected:
+        groups.append([long_case])
+    return groups
 
 
 def verify_slices(paths):
@@ -307,8 +311,10 @@ def run(args):
             raise RuntimeError("test census compilation failed: " + str(census))
         names = selected_tests(read_events(census), args.skip)
         selected = slice_census(names, args.slice, args.slices)
-        # CI 45108722871 exhausted the unchanged 22-minute wall in slice 3.
-        # Other slices retain their two-process order and isolation.
+        # CI 45117748730 showed the long A267 execution started nine minutes
+        # into slice 3 and exhausted the unchanged 22-minute wall. Give that
+        # exact test a full wall wherever census ordering assigns it, while
+        # every other test retains the proven two-process order.
         groups = partition_selected(selected, args.slice, args.slices)
         record.update(census_seconds=time.monotonic() - began, census=names, selected=selected, partitions=groups,
                       workers=len(groups), census_sha256=census_digest(names))

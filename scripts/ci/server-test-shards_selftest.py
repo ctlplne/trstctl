@@ -300,11 +300,15 @@ class ProcessTests(unittest.TestCase):
         self.assertEqual(profile.count('internal/test.go'), 2)
         self.assertNotIn('stale', profile)
 
-    def test_only_timed_out_ci_slice_uses_three_complete_isolated_parts(self):
-        selected = [f'TestCase{index}' for index in range(9)]
+    def test_long_served_case_gets_its_own_full_wall_without_losing_any_test(self):
+        long_case = 'TestServedLargeSealedManifestExecutesEveryDependentA267'
+        ordinary = [f'TestCase{index}' for index in range(9)]
         for index in range(6):
+            self.assertEqual(len(runner.partition_selected(ordinary, index, 6)), 2)
+            selected = sorted([*ordinary, long_case])
             groups = runner.partition_selected(selected, index, 6)
-            self.assertEqual(len(groups), 3 if index == 3 else 2)
+            self.assertEqual(len(groups), 3)
+            self.assertEqual(groups[-1], [long_case])
             self.assertEqual(sorted(name for group in groups for name in group), selected)
             self.assertEqual(len({name for group in groups for name in group}), len(selected))
 
