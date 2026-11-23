@@ -172,11 +172,12 @@ func TestServedCertificationCampaignCertifiesAccountsAndApproversWithASignedResu
 	}
 
 	// Periodic certification: not due within the interval, due after it.
-	h.srv.pam.certificationInterval = time.Hour
-	if started, err := h.srv.pam.certifyTenantIfDue(ctx, h.tenant, time.Now().UTC()); err != nil || started {
+	// Pass the test interval directly; the expiry worker reads its own
+	// immutable configuration concurrently and must not be changed here.
+	if started, err := h.srv.pam.certifyTenantIfDue(ctx, h.tenant, time.Now().UTC(), time.Hour); err != nil || started {
 		t.Fatalf("a certification started within the interval: %v %v", started, err)
 	}
-	if started, err := h.srv.pam.certifyTenantIfDue(ctx, h.tenant, time.Now().UTC().Add(2*time.Hour)); err != nil || !started {
+	if started, err := h.srv.pam.certifyTenantIfDue(ctx, h.tenant, time.Now().UTC().Add(2*time.Hour), time.Hour); err != nil || !started {
 		t.Fatalf("no certification started after the interval: %v %v", started, err)
 	}
 	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/reviews", admin, nil)

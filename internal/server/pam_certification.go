@@ -214,13 +214,13 @@ func (s *pamService) certifyPeriodically(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		_, _ = s.certifyTenantIfDue(ctx, tenantID, now.UTC())
+		_, _ = s.certifyTenantIfDue(ctx, tenantID, now.UTC(), s.certificationInterval)
 	}
 }
 
 // certifyTenantIfDue starts the tenant's next certification campaign when
 // none began within the interval; it reports whether it started one.
-func (s *pamService) certifyTenantIfDue(ctx context.Context, tenantID string, now time.Time) (bool, error) {
+func (s *pamService) certifyTenantIfDue(ctx context.Context, tenantID string, now time.Time, interval time.Duration) (bool, error) {
 	var newest *time.Time
 	for after := ""; ; {
 		page, err := s.store.ListNHIReviewCampaignsPage(ctx, tenantID, after, 200)
@@ -238,7 +238,7 @@ func (s *pamService) certifyTenantIfDue(ctx context.Context, tenantID string, no
 		}
 		after = page[len(page)-1].ID
 	}
-	if newest != nil && now.Sub(*newest) < s.certificationInterval {
+	if newest != nil && now.Sub(*newest) < interval {
 		return false, nil
 	}
 	start, err := s.PAMCertificationCampaign(ctx, tenantID)
