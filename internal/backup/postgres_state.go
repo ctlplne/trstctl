@@ -1357,6 +1357,9 @@ func postgresStateTables() []string {
 func postgresStateRestoreOrder() ([]string, error) {
 	parentFirst := []string{
 		"api_tokens",
+		// Admission must remain denied after restore even when privacy retention
+		// removed the original poison event from the paired log artifact.
+		"projection_tenant_quarantines",
 		// Restore the global CA signer-handle first-writer fence with the
 		// independent receivers before the recovered server accepts CA work.
 		// Its pending public CSR receipt is not a CA authority projection.
