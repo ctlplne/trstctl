@@ -64,6 +64,7 @@ const { apiMock } = vi.hoisted(() => ({
     revokeUpstreamStandingApproval: vi.fn(),
     edgeSegmentPolicies: vi.fn(),
     edgeDelegations: vi.fn(),
+    factoryBatches: vi.fn(),
     caRetirementChecklist: vi.fn(),
     connectorTargets: vi.fn(),
     previewCAKeyReprotectionPlan: vi.fn(),
@@ -272,6 +273,7 @@ describe("CA hierarchy and custody surface", () => {
     apiMock.connectorTargets.mockResolvedValue({ items: [] });
     apiMock.edgeSegmentPolicies.mockResolvedValue({ items: [], guidance: "" });
     apiMock.edgeDelegations.mockResolvedValue({ items: [], guidance: "" });
+    apiMock.factoryBatches.mockResolvedValue({ items: [] });
     apiMock.caRetirementChecklist.mockResolvedValue({
       key_id: "iss-root",
       blocked: true,
