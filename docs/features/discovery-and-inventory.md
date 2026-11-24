@@ -1032,6 +1032,13 @@ and private-egress permission. For example, use `token_ref` and
 Credential reference fields anywhere in a source config must contain a canonical
 `secret://` or operator-bound `env:NAME` reference. Raw values are refused before
 the source is written to the event log.
+Provider declarations also reject fields outside the published source catalog;
+this prevents an unrecognized credential field from being stored by accident.
+Source list and create responses omit credential reference fields and inline
+credential-looking fields. Operators can still see non-secret provider settings,
+but must supply a reference again when changing credentials. Older source records
+receive the same response filtering, so a legacy inline value is not echoed by
+the source list.
 The cloud-secret worker applies the exact-case check to stored sources before
 opening a connection.
 

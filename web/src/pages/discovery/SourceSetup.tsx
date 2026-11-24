@@ -61,7 +61,7 @@ const networkFieldPaths = [
 ] as const;
 // A network source also carries the MCP probe's settings (P7's network probe).
 const networkSourceFieldPaths = [...networkFieldPaths, "mcp", "mcp_schemes", "mcp_ca_pem"] as const;
-const cloudFieldPaths = [
+const commonCloudFieldPaths = [
   "providers[].provider",
   "providers[].region",
   "providers[].endpoint",
@@ -75,8 +75,9 @@ const cloudFieldPaths = [
   "providers[].project",
   "providers[].location",
 ] as const;
+const cloudFieldPaths = [...commonCloudFieldPaths, "providers[].write_token_ref"] as const;
 const secretFieldPaths = [
-  ...cloudFieldPaths,
+  ...commonCloudFieldPaths,
   "providers[].api_version",
   "providers[].mount",
   "providers[].path_prefix",
@@ -208,6 +209,7 @@ const setupSchema = z
     project: z.string().trim(),
     location: z.string().trim(),
     tokenRef: z.string().trim(),
+    writeTokenRef: z.string().trim(),
     accessKeyIDRef: z.string().trim(),
     secretAccessKeyRef: z.string().trim(),
     sessionTokenRef: z.string().trim(),
@@ -412,6 +414,7 @@ const defaults: SetupValues = {
   project: "",
   location: "",
   tokenRef: "",
+  writeTokenRef: "",
   accessKeyIDRef: "",
   secretAccessKeyRef: "",
   sessionTokenRef: "",
@@ -1066,6 +1069,11 @@ function CloudFields({ form, providers }: { form: ReturnType<typeof useForm<Setu
           {(control) => <Input {...control} {...form.register("tokenRef")} className="font-mono text-xs" placeholder={examples.discoveryTokenRef} />}
         </Field>
       ) : null}
+      {provider === "azure-keyvault" && form.watch("kind") === "cloud_certificate" ? (
+        <Field label={t("discovery.setup.writeTokenRef")} description={t("discovery.setup.writeTokenRefDescription")} error={form.formState.errors.writeTokenRef?.message}>
+          {(control) => <Input {...control} {...form.register("writeTokenRef")} className="font-mono text-xs" placeholder={examples.discoveryTokenRef} />}
+        </Field>
+      ) : null}
       {isSecretStoreProvider(provider) ? <SecretStoreFields form={form} provider={provider} /> : null}
       {isVault ? (
         <div className="grid gap-4 lg:grid-cols-3">
@@ -1285,7 +1293,7 @@ function buildConfig(values: SetupValues): Record<string, unknown> {
       tag_value: values.tagValue,
     });
   } else if (values.provider === "azure-keyvault" || values.provider === "azure-key-vault") {
-    provider = compact({ ...providerBase, vault_url: values.vaultURL, token_ref: values.tokenRef });
+    provider = compact({ ...providerBase, vault_url: values.vaultURL, token_ref: values.tokenRef, ...(values.provider === "azure-keyvault" && values.kind === "cloud_certificate" ? { write_token_ref: values.writeTokenRef } : {}) });
   } else if (values.provider === "gcp-certmanager") {
     provider = compact({ ...providerBase, project: values.project, location: values.location, token_ref: values.tokenRef });
   } else if (values.provider === "gcp-secret-manager") {

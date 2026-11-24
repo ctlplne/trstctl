@@ -64,6 +64,15 @@ func TestValidateConfigRejectsEmptyAndUnknownProvider(t *testing.T) {
 	}
 }
 
+func TestCR676ValidateConfigRejectsUnadvertisedProviderCredential(t *testing.T) {
+	if err := ValidateConfig("cloud_certificate", []byte(`{"providers":[{"provider":"aws-acm","region":"us-east-1","api_key":"fake-cr676-value"}]}`)); err == nil {
+		t.Fatal("unadvertised provider credential was accepted")
+	}
+	if err := ValidateConfig("cloud_certificate", []byte(`{"providers":[{"provider":"aws-acm","region":"us-east-1"}],"opaque":"fake-cr676-value"}`)); err == nil {
+		t.Fatal("unadvertised top-level field was accepted")
+	}
+}
+
 func TestCloudSecretCapabilityMakesValueAccessAnExplicitOptIn(t *testing.T) {
 	capability, ok := Find("cloud_secret")
 	if !ok {

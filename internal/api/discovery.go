@@ -1885,6 +1885,9 @@ func containsInlineSecret(v any) bool {
 
 func inlineSecretKey(key string) bool {
 	k := strings.ToLower(strings.ReplaceAll(key, "-", "_"))
+	if strings.HasSuffix(k, "_key") && k != "tag_key" && k != "label_key" && k != "public_key" {
+		return true
+	}
 	if strings.Contains(k, "ref") || strings.Contains(k, "name") || strings.Contains(k, "id") {
 		return false
 	}
@@ -1900,13 +1903,71 @@ func inlineSecretKey(key string) bool {
 }
 
 func toDiscoverySourceResponse(src store.DiscoverySource) discoverySourceResponse {
-	cfg := src.Config
-	if len(cfg) == 0 {
-		cfg = json.RawMessage(`{}`)
-	}
+	cfg := publicDiscoverySourceConfig(src.Kind, src.Config)
 	return discoverySourceResponse{
 		ID: src.ID, TenantID: src.TenantID, Kind: src.Kind, Name: src.Name,
 		Config: cfg, CreatedAt: src.CreatedAt, UpdatedAt: src.UpdatedAt,
+	}
+}
+
+// Source configs are operational declarations, not a credential read API.
+// Older declarations may predate admission checks, so scrub them on every read
+// as well as rejecting new literal-bearing declarations before the event log.
+func publicDiscoverySourceConfig(kind string, raw json.RawMessage) json.RawMessage {
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
+		return json.RawMessage(`{}`)
+	}
+	if capability, ok := sourcecatalog.Find(kind); ok && len(capability.Providers) > 0 {
+		allowed := make(map[string]bool)
+		allowedTop := make(map[string]bool)
+		for _, field := range capability.Configuration {
+			top, _, _ := strings.Cut(field.Path, ".")
+			allowedTop[strings.TrimSuffix(top, "[]")] = true
+			if key, ok := strings.CutPrefix(field.Path, "providers[]."); ok && !strings.Contains(key, ".") {
+				allowed[key] = true
+			}
+		}
+		for key := range obj {
+			if !allowedTop[key] {
+				delete(obj, key)
+			}
+		}
+		if providers, ok := obj["providers"].([]any); ok {
+			for _, provider := range providers {
+				if fields, ok := provider.(map[string]any); ok {
+					for key := range fields {
+						if !allowed[key] {
+							delete(fields, key)
+						}
+					}
+				}
+			}
+		}
+	}
+	redactDiscoveryConfigValue(obj, false)
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return json.RawMessage(`{}`)
+	}
+	return out
+}
+
+func redactDiscoveryConfigValue(value any, evidence bool) {
+	switch x := value.(type) {
+	case map[string]any:
+		for key, child := range x {
+			refField := strings.HasSuffix(strings.ToLower(strings.ReplaceAll(key, "-", "_")), "_ref")
+			if inlineSecretKey(key) || ((refField || credentialReferenceField(key)) && !(evidence && key == "credential_ref")) {
+				delete(x, key)
+				continue
+			}
+			redactDiscoveryConfigValue(child, evidence || key == "observations" || key == "signals" || key == "findings")
+		}
+	case []any:
+		for _, child := range x {
+			redactDiscoveryConfigValue(child, evidence)
+		}
 	}
 }
 

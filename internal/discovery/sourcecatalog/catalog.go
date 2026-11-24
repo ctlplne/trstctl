@@ -212,7 +212,7 @@ func cloudCertificateCapability() Capability {
 		Permission:   "discovery:write", Edition: "core", Execution: "control plane",
 		Configuration: cloudFields(false), Providers: []Provider{
 			provider("aws-acm", "AWS Certificate Manager", "acm:ListCertificates and acm:DescribeCertificate on the authorized account/regions", "env: credential references", "region", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
-			provider("azure-keyvault", "Azure Key Vault certificates", "certificates/list and certificates/get on the authorized vault", "token_ref", "vault_url", "token_ref"),
+			provider("azure-keyvault", "Azure Key Vault certificates", "certificates/list and certificates/get on the authorized vault", "token_ref", "vault_url", "token_ref", "write_token_ref"),
 			provider("gcp-certmanager", "Google Cloud Certificate Manager", "certificatemanager.certificates.list/get on the authorized project/location", "token_ref", "project", "location", "token_ref"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-certificate-services",
@@ -382,6 +382,9 @@ func cloudFields(secret bool) []Field {
 		field("providers[].project", "Project", "string", false, false, false, "Authorized Google Cloud project, GitLab project, Infisical project ID, or Doppler project."),
 		field("providers[].location", "Location", "string", false, false, false, "Certificate Manager location."),
 	}
+	if !secret {
+		fields = append(fields, field("providers[].write_token_ref", "Certificate-disable token reference", "credential_ref", false, true, true, "Separate Azure Key Vault write token used only for an authorized disable operation."))
+	}
 	if secret {
 		fields = append(fields,
 			field("providers[].api_version", "Vault KV API version", "string", false, false, true, "KV v1 or v2 as configured on the mount."),
@@ -502,15 +505,36 @@ func ValidateConfig(kind string, raw []byte) error {
 	if len(capability.Providers) == 0 {
 		return nil
 	}
+	allowedTop := map[string]struct{}{}
+	for _, field := range capability.Configuration {
+		top, _, _ := strings.Cut(field.Path, ".")
+		allowedTop[strings.TrimSuffix(top, "[]")] = struct{}{}
+	}
+	for key := range obj {
+		if _, ok := allowedTop[key]; !ok {
+			return errorsForConfig(kind, fmt.Sprintf("has unsupported field %q", key))
+		}
+	}
 	var providers []map[string]json.RawMessage
 	if err := json.Unmarshal(obj["providers"], &providers); err != nil || len(providers) == 0 {
 		return errorsForConfig(kind, "requires at least one provider")
+	}
+	allowedFields := map[string]struct{}{}
+	for _, field := range capability.Configuration {
+		if key, ok := strings.CutPrefix(field.Path, "providers[]."); ok && !strings.Contains(key, ".") {
+			allowedFields[key] = struct{}{}
+		}
 	}
 	allowed := map[string]struct{}{}
 	for _, provider := range capability.Providers {
 		allowed[provider.ID] = struct{}{}
 	}
 	for i, provider := range providers {
+		for key := range provider {
+			if _, ok := allowedFields[key]; !ok {
+				return errorsForConfig(kind, fmt.Sprintf("provider %d has unsupported field %q", i+1, key))
+			}
+		}
 		var id string
 		if err := json.Unmarshal(provider["provider"], &id); err != nil || strings.TrimSpace(id) == "" {
 			return errorsForConfig(kind, fmt.Sprintf("provider %d requires provider", i+1))

@@ -4,6 +4,7 @@ package api
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/discovery/apikey"
@@ -12,7 +13,46 @@ import (
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/discovery/serviceaccount"
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestCR676DiscoveryRejectsLiteralCredentialAndFileReference(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind string
+		config     json.RawMessage
+	}{
+		{"unknown API key", "cloud_certificate", json.RawMessage(`{"providers":[{"provider":"aws-acm","region":"us-east-1","api_key":"fake-cr676-value"}]}`)},
+		{"file reference", "cloud_machine_entitlement", json.RawMessage(`{"session_file_ref":"fake-cr676-value","principals":["test"],"assessment":{}}`)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := validateDiscoverySourceRequest(discoverySourceRequest{Kind: tc.kind, Name: tc.name, Config: tc.config}); err == nil {
+				t.Fatal("literal credential was accepted as discovery source configuration")
+			}
+		})
+	}
+}
+
+func TestCR676DiscoveryResponseDoesNotEchoLegacyCredentials(t *testing.T) {
+	src := store.DiscoverySource{Kind: "cloud_certificate", Name: "legacy", Config: json.RawMessage(`{"providers":[{"provider":"aws-acm","region":"us-east-1","api_key":"fake-cr676-value","secret_access_key_ref":"fake-cr676-ref","opaque":"fake-cr676-opaque"}],"extra":"fake-cr676-top"}`)}
+	response := toDiscoverySourceResponse(src)
+	if strings.Contains(string(response.Config), "fake-cr676") {
+		t.Fatal("legacy source response echoed stored literal credentials")
+	}
+	if !strings.Contains(string(response.Config), "us-east-1") {
+		t.Fatal("legacy source response dropped safe provider metadata")
+	}
+}
+
+func TestCR676DiscoveryResponseOmitsEveryStoredReference(t *testing.T) {
+	src := store.DiscoverySource{Kind: "adcs", Name: "legacy", Config: json.RawMessage(`{"url":"https://ca.example.test","password_ref":"secret://tenant/bind","tls_ca_ref":"secret://tenant/ca"}`)}
+	response := toDiscoverySourceResponse(src)
+	if strings.Contains(string(response.Config), "secret://") {
+		t.Fatal("discovery source response exposed a stored reference")
+	}
+	if !strings.Contains(string(response.Config), "ca.example.test") {
+		t.Fatal("discovery source response lost safe endpoint metadata")
+	}
+}
 
 func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
 	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{

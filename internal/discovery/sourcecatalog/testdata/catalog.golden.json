@@ -596,6 +596,15 @@
           "type": "string",
           "required": false,
           "description": "Certificate Manager location."
+        },
+        {
+          "path": "providers[].write_token_ref",
+          "label": "Certificate-disable token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Separate Azure Key Vault write token used only for an authorized disable operation."
         }
       ],
       "providers": [
@@ -619,7 +628,8 @@
           "preferred_credential": "token_ref",
           "fields": [
             "vault_url",
-            "token_ref"
+            "token_ref",
+            "write_token_ref"
           ]
         },
         {
