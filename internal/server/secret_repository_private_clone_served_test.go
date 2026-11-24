@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -74,7 +75,9 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 	const token = "od1-served-repository-token" // #nosec G101 -- fabricated fixture token for the stand-in host (CWE-798)
 	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+token))
 	backendHandler := &cgi.Handler{Path: backend, Env: []string{"GIT_PROJECT_ROOT=" + hosted, "GIT_HTTP_EXPORT_ALL=1"}}
+	var hostHits atomic.Int64
 	host := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hostHits.Add(1)
 		if r.Header.Get("Authorization") != want {
 			w.Header().Set("WWW-Authenticate", `Basic realm="private"`)
 			http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -104,13 +107,15 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 	const hookSecret = "od1-hook-signing-secret"
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
+		d.SecretRepoPrivateEgressCIDRs = []string{"127.0.0.1/32"}
 		d.SecretScanWebhooks = []config.SecretScanWebhook{{
 			ID: "gh-private", TenantID: servedTestTenant, Provider: "github",
 			SecretRef:          writeServedCredentialFile(t, "od1-hook-secret", hookSecret),
 			CloneCredentialRef: writeServedCredentialFile(t, "od1-hook-clone-token", token), CloneOrigin: host.URL,
+			ClonePrivateEgressCIDRs: []string{"127.0.0.1/32"},
 		}}
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read")
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "egress:private")
 	cloneURL := host.URL + "/payments.git"
 	for _, item := range []struct{ name, value string }{{"od1/repo-token", token}, {"od1/wrong-token", "od1-not-the-token"}} {
 		if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store", tok, "od1-seed-"+item.name,
@@ -164,9 +169,29 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 		}
 		return receipt.RunID
 	}
+	privateBody := map[string]any{"repository": "acme/payments", "clone_url": cloneURL, // #nosec G101 -- tenant secret reference to fabricated fixture, not a credential value (CWE-798)
+		"credential_ref": "secret://od1/repo-token", "event": "push",
+		"allow_private_clone": true, "private_egress_cidrs": []string{"127.0.0.1/32"}}
+	withoutGrant := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read")
+	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/repositories/github/webhook",
+		withoutGrant, "od1-private-without-egress", privateBody); status != http.StatusForbidden {
+		t.Fatalf("private clone without egress:private: HTTP %d %s", status, body)
+	}
+	tooWide := map[string]any{"repository": "acme/payments", "clone_url": cloneURL,
+		"allow_private_clone": true, "private_egress_cidrs": []string{"127.0.0.0/8"}}
+	if status, body := queue("od1-private-outside-ceiling", tooWide); status != http.StatusBadRequest {
+		t.Fatalf("private clone outside operator ceiling: HTTP %d %s", status, body)
+	}
+	beforeDenied := hostHits.Load()
+	implicit := queued(queue("od1-private-implicit", map[string]any{
+		"repository": "acme/payments", "clone_url": cloneURL, "event": "push"}))
+	if status, reason := runStatus(implicit); status != "failed" || hostHits.Load() != beforeDenied {
+		t.Fatalf("implicit private clone: status=%s reason=%s host hits=%d -> %d", status, reason, beforeDenied, hostHits.Load())
+	}
 
 	good := queued(queue("od1-good", map[string]any{"repository": "acme/payments", "clone_url": cloneURL, // #nosec G101 -- tenant secret reference, not the token (CWE-798)
-		"credential_ref": "secret://od1/repo-token", "event": "push"}))
+		"credential_ref": "secret://od1/repo-token", "event": "push",
+		"allow_private_clone": true, "private_egress_cidrs": []string{"127.0.0.1/32"}}))
 	if status, message := runStatus(good); status != "succeeded" {
 		t.Fatalf("the private scan run is %s: %s", status, message)
 	}
@@ -265,7 +290,8 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 	}
 
 	bad := queued(queue("od1-bad", map[string]any{"repository": "acme/payments", "clone_url": cloneURL, // #nosec G101 -- tenant secret reference, not the token (CWE-798)
-		"credential_ref": "secret://od1/wrong-token", "event": "push"}))
+		"credential_ref": "secret://od1/wrong-token", "event": "push",
+		"allow_private_clone": true, "private_egress_cidrs": []string{"127.0.0.1/32"}}))
 	status, message := runStatus(bad)
 	if status != "failed" || !strings.Contains(message, "credential_ref") || strings.Contains(message, "od1-not-the-token") || strings.Contains(message, token) {
 		t.Fatalf("the wrong-token run is %s: %q; want failed naming the credential_ref and no token", status, message)

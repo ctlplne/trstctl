@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -1410,6 +1411,7 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 	if err := json.Unmarshal(src.Config, &cfg); err != nil {
 		return netscan.Report{}, "", "", fmt.Errorf("decode secret repository source config: %w", err)
 	}
+	var hookPrivateCIDRs []string
 	// A source row is durable tenant-authored data. Never let an older row's
 	// file: reference, or a forged hook reference, select a worker credential.
 	if cfg.ConfiguredHookID != "" {
@@ -1421,6 +1423,7 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		}
 		cfg.CredentialRef = hook.CloneCredentialRef
 		cfg.CredentialUsername = hook.CloneCredentialUsername
+		hookPrivateCIDRs = hook.ClonePrivateEgressCIDRs
 	} else if cfg.CredentialRef != "" {
 		if cfg.CredentialAdmissionVersion != 1 {
 			return netscan.Report{}, "failed", "repository credential source predates read authorization; resubmit the scan", nil
@@ -1431,6 +1434,25 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		if _, err := secretscan.HTTPSCloneOrigin(cfg.CloneURL); err != nil {
 			return netscan.Report{}, "failed", "repository credential_ref needs an https clone_url", nil
 		}
+	}
+	egress := secretscan.RepositoryCloneEgress{}
+	if cfg.AllowPrivateClone {
+		ceiling := d.repoPrivateEgressCeiling
+		if cfg.ConfiguredHookID != "" {
+			if cfg.PrivateEgressAdmissionVersion != 2 || !slices.Equal(cfg.PrivateEgressCIDRs, hookPrivateCIDRs) {
+				return netscan.Report{}, "failed", "repository hook private egress no longer matches operator configuration", nil
+			}
+			ceiling = hookPrivateCIDRs
+		} else if cfg.PrivateEgressAdmissionVersion != 1 {
+			return netscan.Report{}, "failed", "repository private egress source predates permission admission; resubmit the scan", nil
+		}
+		var err error
+		egress, err = secretscan.RepositoryCloneEgressFromCIDRs(cfg.PrivateEgressCIDRs, ceiling)
+		if err != nil {
+			return netscan.Report{}, "failed", "repository clone target is outside allowed HTTPS egress", nil
+		}
+	} else if len(cfg.PrivateEgressCIDRs) != 0 || cfg.PrivateEgressAdmissionVersion != 0 {
+		return netscan.Report{}, "failed", "repository private egress source is inconsistent", nil
 	}
 	// Open a checked credential for this clone alone and destroy it afterward.
 	var cred *secretscan.RepositoryCredential
@@ -1449,10 +1471,11 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		}
 		cred = &secretscan.RepositoryCredential{Username: user, Secret: buf.Bytes()}
 	}
-	target, err := secretscan.PrepareRepositoryTargetWithCredential(ctx, cfg, cred)
+	target, err := secretscan.PrepareRepositoryTargetWithCredentialEgress(ctx, cfg, cred, egress)
 	if err != nil {
 		if errors.Is(err, secretscan.ErrRepositoryTargetRequired) || errors.Is(err, secretscan.ErrRepositoryUnsafeCloneURL) ||
-			errors.Is(err, secretscan.ErrRepositoryCredentialNeedsHTTPS) || errors.Is(err, secretscan.ErrRepositoryUnsafeRef) {
+			errors.Is(err, secretscan.ErrRepositoryCredentialNeedsHTTPS) || errors.Is(err, secretscan.ErrRepositoryUnsafeRef) ||
+			errors.Is(err, secretscan.ErrRepositoryEgressBlocked) {
 			return netscan.Report{}, "failed", err.Error(), nil
 		}
 		if cred != nil {

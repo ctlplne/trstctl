@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cgi" // #nosec G504 -- test-only stand-in host: serves the local git-http-backend; the toolchain is far past the CVE-2016-5386 fix (CWE-284)
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -125,10 +126,13 @@ func TestPrivateRepositoryClonesWithItsCredentialOD1(t *testing.T) {
 	t.Setenv("GIT_CONFIG_VALUE_0", "X-Leak: inherited")
 
 	cfg := RepositoryScanConfig{Provider: "github", Repository: "acme/payments", CloneURL: host.srv.URL + "/payments.git"}
-	if _, err := PrepareRepositoryTarget(ctx, cfg); err == nil {
+	// The operator owns both local stand-in servers. A normal worker has an
+	// empty policy and refuses them; this fixture grants their exact /32.
+	egress := RepositoryCloneEgress{allowPrivateCIDRs: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}}
+	if _, err := PrepareRepositoryTargetWithCredentialEgress(ctx, cfg, nil, egress); err == nil {
 		t.Fatal("a private repository cloned without its credential")
 	}
-	_, err := PrepareRepositoryTargetWithCredential(ctx, cfg, &RepositoryCredential{Username: user, Secret: []byte("not-the-token")})
+	_, err := PrepareRepositoryTargetWithCredentialEgress(ctx, cfg, &RepositoryCredential{Username: user, Secret: []byte("not-the-token")}, egress)
 	if err == nil {
 		t.Fatal("a private repository cloned with the wrong token")
 	}
@@ -136,7 +140,7 @@ func TestPrivateRepositoryClonesWithItsCredentialOD1(t *testing.T) {
 		t.Fatalf("the clone error carries the token: %v", err)
 	}
 
-	target, err := PrepareRepositoryTargetWithCredential(ctx, cfg, &RepositoryCredential{Username: DefaultRepositoryUsername("github"), Secret: []byte(token)})
+	target, err := PrepareRepositoryTargetWithCredentialEgress(ctx, cfg, &RepositoryCredential{Username: DefaultRepositoryUsername("github"), Secret: []byte(token)}, egress)
 	if err != nil {
 		t.Fatalf("clone with the credential: %v", err)
 	}
@@ -165,20 +169,15 @@ func TestPrivateRepositoryClonesWithItsCredentialOD1(t *testing.T) {
 		t.Fatalf("no request carried the credential: %v", host.requests())
 	}
 
-	// A redirect to another origin gets no credential.
+	// A redirect to another origin is not followed at all.
 	moved := cfg
 	moved.CloneURL = host.srv.URL + "/moved.git"
-	if _, err := PrepareRepositoryTargetWithCredential(ctx, moved, &RepositoryCredential{Username: user, Secret: []byte(token)}); err == nil {
+	if _, err := PrepareRepositoryTargetWithCredentialEgress(ctx, moved, &RepositoryCredential{Username: user, Secret: []byte(token)}, egress); err == nil {
 		t.Fatal("a clone redirected to another origin succeeded")
 	}
 	otherRequests := other.requests()
-	if len(otherRequests) == 0 {
-		t.Fatal("the redirect was not followed, so the test proves nothing")
-	}
-	for _, r := range otherRequests {
-		if strings.Contains(r, "auth=Basic") {
-			t.Fatalf("the credential followed a redirect to another origin: %s", r)
-		}
+	if len(otherRequests) != 0 {
+		t.Fatalf("the clone followed a redirect to another origin: %v", otherRequests)
 	}
 
 	insecure := cfg

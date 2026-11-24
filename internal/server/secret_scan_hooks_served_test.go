@@ -35,15 +35,7 @@ func TestServedGitHubSecretScanHookVerifiesSignaturesP6(t *testing.T) {
 		_, err := os.Stat(filepath.Join(path, "README.md"))
 		cloned <- err
 	}}
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.SecretScanner = fake
-		d.SecretScanWebhooks = []config.SecretScanWebhook{{
-			ID: "gh-acme", TenantID: servedTestTenant, Provider: "github",
-			SecretRef: writeServedCredentialFile(t, "gh-acme-hook", "p6-hook-signing-secret"),
-		}}
-	})
-	// The pushed repository: a real git repository on this machine (the lab
-	// cannot reach github.com; a public https clone URL takes the same path).
+	// The pushed repository is exposed through the test's smart-HTTPS host.
 	origin := t.TempDir()
 	for _, args := range [][]string{
 		{"init", "-q", "-b", "main"}, {"config", "user.email", "p6@example.test"}, {"config", "user.name", "p6"},
@@ -64,8 +56,19 @@ func TestServedGitHubSecretScanHookVerifiesSignaturesP6(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cloneURL := serveTestGitHTTPS(t, origin)
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.SecretScanner = fake
+		d.SecretScanWebhooks = []config.SecretScanWebhook{{
+			ID: "gh-acme", TenantID: servedTestTenant, Provider: "github",
+			SecretRef:               writeServedCredentialFile(t, "gh-acme-hook", "p6-hook-signing-secret"),
+			CloneCredentialRef:      writeServedCredentialFile(t, "gh-acme-clone", "fixture-token"),
+			CloneOrigin:             strings.TrimSuffix(cloneURL, "/payments.git"),
+			ClonePrivateEgressCIDRs: []string{"127.0.0.1/32"},
+		}}
+	})
 	push := []byte(`{"ref":"refs/heads/main","after":"` + strings.TrimSpace(string(head)) + `","deleted":false,` +
-		`"repository":{"full_name":"acme/payments","clone_url":"` + origin + `"}}`)
+		`"repository":{"full_name":"acme/payments","clone_url":"` + cloneURL + `"}}`)
 	sign := func(key string, body []byte) string {
 		return "sha256=" + hex.EncodeToString(crypto.HMACSHA256([]byte(key), body))
 	}

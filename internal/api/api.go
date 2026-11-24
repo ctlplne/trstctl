@@ -70,6 +70,8 @@ type API struct {
 	secretScanHooks SecretScanHookLookup
 	// secretScanHookClone names a hook's private clone credential (OD-1).
 	secretScanHookClone SecretScanHookCloneCredential
+	// Operator ceiling for source-approved private HTTPS repository clones.
+	secretRepoPrivateCeiling []string
 	// policyVersionMemo memoizes the policy-version projection against the
 	// event-log head so GET /api/v1/policy/versions stops replaying the whole
 	// log per request.
@@ -285,7 +287,8 @@ type config struct {
 	// secretScanHooks resolves provider-native scan webhooks (P6).
 	secretScanHooks SecretScanHookLookup
 	// secretScanHookClone names a hook's private clone credential (OD-1).
-	secretScanHookClone SecretScanHookCloneCredential
+	secretScanHookClone      SecretScanHookCloneCredential
+	secretRepoPrivateCeiling []string
 	// principalFromReg is a resolver factory the test-only header resolver uses.
 	// It is built against the API's role registry (so custom roles work) and the
 	// real authenticated resolver (so test servers still accept bearer tokens and
@@ -611,28 +614,29 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	specialAbuseLimits := cfg.specialAbuseLimits.withDefaults()
 	a := &API{
-		subjectCSRInspector:    cfg.subjectCSRInspector,
-		tenantServiceCheck:     cfg.tenantServiceCheck,
-		store:                  st,
-		driftRoots:             append([]string(nil), cfg.driftRoots...),
-		log:                    cfg.eventLog,
-		usage:                  newCredentialUsageRecorder(cfg.credentialUsageClock),
-		secretScanHooks:        cfg.secretScanHooks,
-		secretScanHookClone:    cfg.secretScanHookClone,
-		idem:                   idem,
-		orch:                   orch,
-		tenantFn:               tenantFromHeader,
-		drVerify:               backupVerifierFor(cfg.backupDir),
-		lastDrill:              cfg.lastDrill,
-		restoreDrillKeys:       cfg.restoreDrillKeys,
-		roles:                  reg,
-		apiTokenMaxLifetime:    apiTokenMaxLifetimeFrom(cfg.apiTokenMaxLifetime),
-		audit:                  cfg.audit,
-		auditAnchor:            cfg.auditAnchor,
-		retirementChecklist:    cfg.retirementChecklist,
-		auth:                   cfg.auth,
-		providerPlaneAvailable: cfg.providerPlaneAvailable,
-		scim:                   cfg.scim,
+		subjectCSRInspector:      cfg.subjectCSRInspector,
+		tenantServiceCheck:       cfg.tenantServiceCheck,
+		store:                    st,
+		driftRoots:               append([]string(nil), cfg.driftRoots...),
+		log:                      cfg.eventLog,
+		usage:                    newCredentialUsageRecorder(cfg.credentialUsageClock),
+		secretScanHooks:          cfg.secretScanHooks,
+		secretScanHookClone:      cfg.secretScanHookClone,
+		secretRepoPrivateCeiling: append([]string(nil), cfg.secretRepoPrivateCeiling...),
+		idem:                     idem,
+		orch:                     orch,
+		tenantFn:                 tenantFromHeader,
+		drVerify:                 backupVerifierFor(cfg.backupDir),
+		lastDrill:                cfg.lastDrill,
+		restoreDrillKeys:         cfg.restoreDrillKeys,
+		roles:                    reg,
+		apiTokenMaxLifetime:      apiTokenMaxLifetimeFrom(cfg.apiTokenMaxLifetime),
+		audit:                    cfg.audit,
+		auditAnchor:              cfg.auditAnchor,
+		retirementChecklist:      cfg.retirementChecklist,
+		auth:                     cfg.auth,
+		providerPlaneAvailable:   cfg.providerPlaneAvailable,
+		scim:                     cfg.scim,
 
 		agentTokens:                 cfg.agentTokens,
 		agentConnection:             cfg.agentConnection,

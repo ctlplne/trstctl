@@ -5,10 +5,17 @@ package secretscan
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
 	"testing"
 	"time"
 )
+
+type fixedRepositoryResolver struct{}
+
+func (fixedRepositoryResolver) LookupIPAddr(context.Context, string) ([]net.IPAddr, error) {
+	return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
+}
 
 // CR-090. Only the worker's follow-up fetch owns this child context.
 func TestRepositoryFollowupFetchOwnsABoundedContext(t *testing.T) {
@@ -21,7 +28,7 @@ func TestRepositoryFollowupFetchOwnsABoundedContext(t *testing.T) {
 				defer cancel()
 			}
 			var fetch context.Context
-			origin := t.TempDir()
+			origin := "https://git.example.test/repo.git"
 			run := func(ctx context.Context, _ string, _ []string, args ...string) error {
 				switch args[0] {
 				case "clone":
@@ -49,7 +56,9 @@ func TestRepositoryFollowupFetchOwnsABoundedContext(t *testing.T) {
 					return nil
 				}
 			}
-			target, err := prepareRepositoryTargetWithGit(parent, RepositoryScanConfig{CloneURL: origin, CommitSHA: "01234567"}, nil, run)
+			target, err := prepareRepositoryTargetWithGitEgress(parent,
+				RepositoryScanConfig{CloneURL: origin, CommitSHA: "01234567"}, nil,
+				RepositoryCloneEgress{}, fixedRepositoryResolver{}, run)
 			if err != nil || fetch == nil || target.Mode != "clone_url" {
 				t.Fatalf("prepare fixture checkout through bounded fetch: mode=%q err=%v", target.Mode, err)
 			}

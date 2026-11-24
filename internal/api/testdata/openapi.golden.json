@@ -58435,6 +58435,10 @@
       },
       "SecretRepositoryWebhookRequest": {
         "properties": {
+          "allow_private_clone": {
+            "description": "Request an operator-approved private HTTPS Git host; requires egress:private and private_egress_cidrs.",
+            "type": "boolean"
+          },
           "annotation": {
             "description": "A174-L5: GitHub only — write each finding back as a code scanning analysis of its own for the push's commit_sha and ref (refs/...), with a token reference that may upload code scanning results.",
             "properties": {
@@ -58468,6 +58472,7 @@
             "type": "string"
           },
           "clone_url": {
+            "description": "HTTPS repository URL. Git resolves and pins every checked address, refuses redirects and proxies, and repeats the check before fetch.",
             "type": "string"
           },
           "commit_sha": {
@@ -58483,6 +58488,13 @@
           },
           "event": {
             "type": "string"
+          },
+          "private_egress_cidrs": {
+            "description": "Exact private clone CIDRs within secrets.repository_clone_private_cidrs. Empty grants no private address.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "ref": {
             "type": "string"

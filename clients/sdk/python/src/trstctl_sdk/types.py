@@ -17085,6 +17085,7 @@ SecretRepositoryWebhookReceipt = TypedDict(
 SecretRepositoryWebhookRequest = TypedDict(
     'SecretRepositoryWebhookRequest',
     {
+        'allow_private_clone': bool,
         'annotation': dict[str, Any],
         'checkout_path': str,
         'clone_url': str,
@@ -17092,6 +17093,7 @@ SecretRepositoryWebhookRequest = TypedDict(
         'credential_ref': str,
         'credential_username': str,
         'event': str,
+        'private_egress_cidrs': list[str],
         'ref': str,
         'repository': str,
     },

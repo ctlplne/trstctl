@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -76,6 +77,11 @@ type RepositoryScanConfig struct {
 	// CredentialUsername is the user name credential_ref's token clones
 	// with; empty uses the provider's (DefaultRepositoryUsername).
 	CredentialUsername string `json:"credential_username,omitempty"`
+	// Private clone egress is durable source authority only after the API
+	// checks egress:private and the worker rechecks the operator ceiling.
+	AllowPrivateClone             bool     `json:"allow_private_clone,omitempty"`
+	PrivateEgressCIDRs            []string `json:"private_egress_cidrs,omitempty"`
+	PrivateEgressAdmissionVersion int      `json:"private_egress_admission_version,omitempty"`
 	// Annotation writes each finding back through GitHub code scanning
 	// (A174-L5): the connection only; the repository, commit and ref are the
 	// scan's own.
@@ -96,6 +102,7 @@ type RepositoryTarget struct {
 	Path    string
 	Cleanup func()
 	Mode    string
+	Egress  RepositoryCloneEgress
 }
 
 // PrepareRepositoryTarget resolves a repository scan config into a local checkout.
@@ -113,10 +120,26 @@ func PrepareRepositoryTarget(ctx context.Context, cfg RepositoryScanConfig) (Rep
 // URL or the checkout's configuration, and is sent nowhere else: a redirect to
 // another origin gets no header, and the host's credential helpers are off.
 func PrepareRepositoryTargetWithCredential(ctx context.Context, cfg RepositoryScanConfig, cred *RepositoryCredential) (RepositoryTarget, error) {
-	return prepareRepositoryTargetWithGit(ctx, cfg, cred, runGit)
+	return PrepareRepositoryTargetWithCredentialEgress(ctx, cfg, cred, RepositoryCloneEgress{})
+}
+
+// PrepareRepositoryTargetWithCredentialEgress applies operator-owned private
+// CIDRs when the API has separately admitted this exact source for private
+// egress. The zero policy is the safe public-HTTPS default.
+func PrepareRepositoryTargetWithCredentialEgress(ctx context.Context, cfg RepositoryScanConfig, cred *RepositoryCredential,
+	egress RepositoryCloneEgress,
+) (RepositoryTarget, error) {
+	return prepareRepositoryTargetWithGitEgress(ctx, cfg, cred, egress, net.DefaultResolver, runGit)
 }
 
 func prepareRepositoryTargetWithGit(ctx context.Context, cfg RepositoryScanConfig, cred *RepositoryCredential,
+	run func(context.Context, string, []string, ...string) error,
+) (RepositoryTarget, error) {
+	return prepareRepositoryTargetWithGitEgress(ctx, cfg, cred, RepositoryCloneEgress{}, net.DefaultResolver, run)
+}
+
+func prepareRepositoryTargetWithGitEgress(ctx context.Context, cfg RepositoryScanConfig, cred *RepositoryCredential,
+	egress RepositoryCloneEgress, resolver repositoryHostResolver,
 	run func(context.Context, string, []string, ...string) error,
 ) (RepositoryTarget, error) {
 	if path := strings.TrimSpace(cfg.CheckoutPath); path != "" {
@@ -139,6 +162,11 @@ func prepareRepositoryTargetWithGit(ctx context.Context, cfg RepositoryScanConfi
 			return RepositoryTarget{}, err
 		}
 	}
+	guard, err := egress.gitConfig(ctx, cloneURL, resolver)
+	if err != nil {
+		return RepositoryTarget{}, err
+	}
+	gitConfig := append(guard, auth...)
 	tmp, err := os.MkdirTemp("", "trstctl-repo-secret-scan-*")
 	if err != nil {
 		return RepositoryTarget{}, fmt.Errorf("secretscan: create repo scan checkout: %w", err)
@@ -152,7 +180,7 @@ func prepareRepositoryTargetWithGit(ctx context.Context, cfg RepositoryScanConfi
 		args = append(args, "--branch", branch)
 	}
 	args = append(args, "--", cloneURL, tmp)
-	if err := run(ctx, "", auth, args...); err != nil {
+	if err := run(ctx, "", gitConfig, args...); err != nil {
 		cleanup()
 		return RepositoryTarget{}, err
 	}
@@ -161,7 +189,13 @@ func prepareRepositoryTargetWithGit(ctx context.Context, cfg RepositoryScanConfi
 			// The branch moved on after the push: fetch the pushed commit
 			// itself (hosts serve a reachable commit by its ID).
 			fetchCtx, cancel := context.WithTimeout(ctx, repositoryFetchTimeout)
-			fetchErr := run(fetchCtx, tmp, auth, "fetch", "--no-tags", "--depth", "1", "--", "origin", commit)
+			fetchGuard, guardErr := egress.gitConfig(fetchCtx, cloneURL, resolver)
+			if guardErr != nil {
+				cancel()
+				cleanup()
+				return RepositoryTarget{}, guardErr
+			}
+			fetchErr := run(fetchCtx, tmp, append(fetchGuard, auth...), "fetch", "--no-tags", "--depth", "1", "--", cloneURL, commit)
 			cancel()
 			if fetchErr != nil {
 				cleanup()
@@ -173,7 +207,7 @@ func prepareRepositoryTargetWithGit(ctx context.Context, cfg RepositoryScanConfi
 			}
 		}
 	}
-	return RepositoryTarget{Path: tmp, Cleanup: cleanup, Mode: "clone_url"}, nil
+	return RepositoryTarget{Path: tmp, Cleanup: cleanup, Mode: "clone_url", Egress: egress}, nil
 }
 
 // ValidateRepositoryRef refuses a ref that is not a plain branch or tag name
@@ -289,16 +323,14 @@ func runGit(ctx context.Context, dir string, config []string, args ...string) er
 			cmd.Env = append(cmd.Env, "GIT_CONFIG_KEY_"+n+"="+config[i], "GIT_CONFIG_VALUE_"+n+"="+config[i+1])
 		}
 	}
-	out, err := cmd.CombinedOutput()
+	_, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() != nil {
 			return fmt.Errorf("secretscan: git %s interrupted: %w", args[0], ctx.Err())
 		}
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			return fmt.Errorf("secretscan: git %s failed: %w", strings.Join(args, " "), err)
-		}
-		return fmt.Errorf("secretscan: git %s failed: %w: %s", strings.Join(args, " "), err, msg)
+		// A remote can echo the URL or response bytes in Git's stderr. Do
+		// not return either to the tenant through a discovery-run error.
+		return fmt.Errorf("secretscan: git %s failed: %w", args[0], err)
 	}
 	return nil
 }
@@ -306,15 +338,23 @@ func runGit(ctx context.Context, dir string, config []string, args ...string) er
 func sanitizedGitEnv(env []string) []string {
 	out := make([]string, 0, len(env)+2)
 	for _, kv := range env {
-		// The inherited environment may not inject git configuration: that
-		// channel carries the clone credential's header (OD-1).
-		if strings.HasPrefix(kv, "GIT_ASKPASS=") || strings.HasPrefix(kv, "SSH_ASKPASS=") ||
-			strings.HasPrefix(kv, "GIT_CONFIG_COUNT=") || strings.HasPrefix(kv, "GIT_CONFIG_KEY_") ||
-			strings.HasPrefix(kv, "GIT_CONFIG_VALUE_") || strings.HasPrefix(kv, "GIT_CONFIG_PARAMETERS=") {
+		// Only the operator's custom CA file may reach Git. The inherited
+		// environment cannot inject config, URL rewrites, proxies, templates,
+		// transport helpers, or a TLS-verification bypass.
+		if strings.HasPrefix(kv, "GIT_") && !strings.HasPrefix(kv, "GIT_SSL_CAINFO=") {
+			continue
+		}
+		if strings.HasPrefix(kv, "SSH_ASKPASS=") || strings.HasPrefix(kv, "HTTP_PROXY=") ||
+			strings.HasPrefix(kv, "HTTPS_PROXY=") || strings.HasPrefix(kv, "ALL_PROXY=") ||
+			strings.HasPrefix(kv, "http_proxy=") || strings.HasPrefix(kv, "https_proxy=") ||
+			strings.HasPrefix(kv, "all_proxy=") || strings.HasPrefix(kv, "NO_PROXY=") ||
+			strings.HasPrefix(kv, "no_proxy=") {
 			continue
 		}
 		out = append(out, kv)
 	}
-	out = append(out, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=Never")
+	out = append(out, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=Never",
+		"GIT_ALLOW_PROTOCOL=https", "GIT_PROTOCOL_FROM_USER=0",
+		"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull)
 	return out
 }

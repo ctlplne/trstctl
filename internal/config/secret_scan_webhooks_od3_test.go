@@ -38,3 +38,26 @@ func TestCR048NativeHookCloneCredentialRequiresPinnedOrigin(t *testing.T) {
 		t.Fatalf("canonical origin was refused: %v", errs)
 	}
 }
+
+func TestCR411NativeHookPrivateCloneNeedsPinnedOriginAndCIDR(t *testing.T) {
+	hook := SecretScanWebhook{
+		ID: "private", TenantID: "8d0c3a4e-6a51-4c43-9b7e-5f0f5b0f4a10", Provider: "github",
+		SecretRef: "file:/run/secrets/hook", CloneCredentialRef: "file:/run/secrets/clone",
+		ClonePrivateEgressCIDRs: []string{"127.0.0.1/32"},
+	}
+	if errs := validateSecretScanWebhooks([]SecretScanWebhook{hook}); len(errs) == 0 {
+		t.Fatal("private hook clone admitted without a pinned HTTPS origin")
+	}
+	hook.CloneOrigin = "https://git.example"
+	if errs := validateSecretScanWebhooks([]SecretScanWebhook{hook}); len(errs) != 0 {
+		t.Fatalf("exact private hook clone CIDR refused: %v", errs)
+	}
+	hook.ClonePrivateEgressCIDRs = []string{"0.0.0.0/0"}
+	if errs := validateSecretScanWebhooks([]SecretScanWebhook{hook}); len(errs) == 0 {
+		t.Fatal("private hook clone admitted a wildcard egress CIDR")
+	}
+	hook.ClonePrivateEgressCIDRs = []string{"0.0.0.0/1"}
+	if errs := validateSecretScanWebhooks([]SecretScanWebhook{hook}); len(errs) == 0 {
+		t.Fatal("private hook clone admitted a public-covering egress CIDR")
+	}
+}

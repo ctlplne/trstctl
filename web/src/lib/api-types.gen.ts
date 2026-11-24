@@ -12281,6 +12281,7 @@ export interface SecretRepositoryWebhookReceipt {
 }
 
 export interface SecretRepositoryWebhookRequest {
+  allow_private_clone?: boolean;
   annotation?: { allow_private_endpoint?: boolean; auto?: boolean; base_url: string; private_egress_cidrs?: string[]; token_ref: string };
   checkout_path?: string;
   clone_url?: string;
@@ -12288,6 +12289,7 @@ export interface SecretRepositoryWebhookRequest {
   credential_ref?: string;
   credential_username?: string;
   event?: string;
+  private_egress_cidrs?: string[];
   ref?: string;
   repository: string;
 }

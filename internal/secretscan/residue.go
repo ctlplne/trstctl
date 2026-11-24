@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -28,10 +29,16 @@ func DeepenClone(ctx context.Context, target RepositoryTarget, cfg RepositorySca
 	if target.Mode != "clone_url" {
 		return nil
 	}
+	cloneURL := strings.TrimSpace(cfg.CloneURL)
+	// Repeat the DNS decision before a follow-up fetch. The target carries
+	// only the policy used for its successful clone; never trust "origin".
+	guard, err := target.Egress.gitConfig(ctx, cloneURL, net.DefaultResolver)
+	if err != nil {
+		return err
+	}
 	var auth []string
 	if cred != nil {
-		var err error
-		if auth, err = credentialGitConfig(strings.TrimSpace(cfg.CloneURL), cred); err != nil {
+		if auth, err = credentialGitConfig(cloneURL, cred); err != nil {
 			return err
 		}
 	}
@@ -43,7 +50,7 @@ func DeepenClone(ctx context.Context, target RepositoryTarget, cfg RepositorySca
 	if strings.TrimSpace(string(shallow)) == "true" {
 		args = append(args, "--unshallow")
 	}
-	return runGit(ctx, target.Path, auth, append(args, "--", "origin", "+refs/heads/*:refs/remotes/origin/*")...)
+	return runGit(ctx, target.Path, append(guard, auth...), append(args, "--", cloneURL, "+refs/heads/*:refs/remotes/origin/*")...)
 }
 
 // HistoryResidueOf lists, for each of values, every commit reachable in the

@@ -8157,10 +8157,12 @@ func componentSchemas() map[string]*Schema {
 		"architecture_controls": {Type: "array", Items: str()},
 	}, "capability", "served", "generated_at", "providers", "webhook_paths", "queue_model", "scanner", "minimum_rules_active", "redaction_model", "event_flow", "release_gates", "operator_actions", "residuals", "evidence_refs", "architecture_controls")
 	secretRepoWebhookReq := object(map[string]*Schema{
-		"repository": str(), "clone_url": str(), "checkout_path": str(), "ref": str(),
+		"repository": str(), "clone_url": {Type: "string", Description: "HTTPS repository URL. Git resolves and pins every checked address, refuses redirects and proxies, and repeats the check before fetch."}, "checkout_path": str(), "ref": str(),
 		"commit_sha": str(), "event": str(),
-		"credential_ref":      {Type: "string", Description: "OD-1: a canonical tenant secret:// reference opened for one HTTPS clone; requires secrets:read as well as secrets:write and access to any restricted environment"},
-		"credential_username": {Type: "string", Description: "the user name the credential_ref token clones with; default by provider: x-access-token (GitHub), oauth2 (GitLab), x-token-auth (Bitbucket)"},
+		"allow_private_clone":  {Type: "boolean", Description: "Request an operator-approved private HTTPS Git host; requires egress:private and private_egress_cidrs."},
+		"private_egress_cidrs": {Type: "array", Items: str(), Description: "Exact private clone CIDRs within secrets.repository_clone_private_cidrs. Empty grants no private address."},
+		"credential_ref":       {Type: "string", Description: "OD-1: a canonical tenant secret:// reference opened for one HTTPS clone; requires secrets:read as well as secrets:write and access to any restricted environment"},
+		"credential_username":  {Type: "string", Description: "the user name the credential_ref token clones with; default by provider: x-access-token (GitHub), oauth2 (GitLab), x-token-auth (Bitbucket)"},
 		"annotation": {Type: "object", Description: "A174-L5: GitHub only — write each finding back as a code scanning analysis of its own for the push's commit_sha and ref (refs/...), with a token reference that may upload code scanning results.",
 			Properties: map[string]*Schema{
 				"base_url": str(), "token_ref": str(),

@@ -50,7 +50,7 @@ func WithSecretScanHooks(lookup SecretScanHookLookup) Option {
 
 // SecretScanHookCloneCredential returns the operator-owned clone credential and
 // the HTTPS origin to which a signed push may send it; empty for no credential.
-type SecretScanHookCloneCredential func(hookID string) (credentialRef, username, origin string)
+type SecretScanHookCloneCredential func(hookID string) (credentialRef, username, origin string, privateCIDRs []string)
 
 // WithSecretScanHookCloneCredentials attaches the hooks' clone credentials.
 func WithSecretScanHookCloneCredentials(lookup SecretScanHookCloneCredential) Option {

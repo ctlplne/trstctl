@@ -3188,6 +3188,9 @@ type Secrets struct {
 	// each delivery with the hook's own secret, and a push it verifies queues a
 	// repository secret scan for the hook's tenant.
 	ScanWebhooks []SecretScanWebhook `json:"scan_webhooks,omitempty"`
+	// RepositoryClonePrivateCIDRs is the operator ceiling for tenant-approved
+	// private HTTPS Git clones. Empty keeps all repository clones public-only.
+	RepositoryClonePrivateCIDRs []string `json:"repository_clone_private_cidrs,omitempty"`
 	// ValidityChecks (P14) checks, on the scanning host, whether a leaked
 	// secret still works. Off unless enabled.
 	ValidityChecks SecretValidityChecks `json:"validity_checks,omitempty"`
@@ -3313,6 +3316,9 @@ type SecretScanWebhook struct {
 	// CloneOrigin is the exact HTTPS origin allowed to receive the hook's clone
 	// credential, for example https://git.example.com (without a path).
 	CloneOrigin string `json:"clone_origin,omitempty"`
+	// ClonePrivateEgressCIDRs grants a signed hook only these operator-pinned
+	// private clone networks. The clone origin remains exact and HTTPS.
+	ClonePrivateEgressCIDRs []string `json:"clone_private_egress_cidrs,omitempty"`
 }
 
 // Transit configures the encryption-as-a-service keyring's durability.
@@ -4011,6 +4017,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
 	setCSV(getenv, "TRSTCTL_SECRETS_SCAN_ROOTS", &c.Secrets.ScanRoots)
 	setCSV(getenv, "TRSTCTL_SECRETS_DRIFT_ROOTS", &c.Secrets.DriftRoots)
+	setCSV(getenv, "TRSTCTL_SECRETS_REPOSITORY_CLONE_PRIVATE_CIDRS", &c.Secrets.RepositoryClonePrivateCIDRs)
 	setString(getenv, "TRSTCTL_TRANSIT_KEYRING_DIR", &c.Transit.KeyringDir)
 	setBool(getenv, "TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY", &c.Secrets.IdempotencyResultFleetReady)
 	setBool(getenv, "TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY", &c.Secrets.SecretRotationHistoryFleetReady)
@@ -5665,6 +5672,11 @@ func validateServedSurfaces(c *Config) []error {
 		errs = append(errs, fmt.Errorf("secrets.machine_auth_single_use_limit must be between 0 (the default, %d) and 10000000", DefaultMachineAuthSingleUseLimit))
 	}
 	errs = append(errs, validateSecretScanWebhooks(c.Secrets.ScanWebhooks)...)
+	for _, raw := range c.Secrets.RepositoryClonePrivateCIDRs {
+		if _, err := netsec.ParsePrivateEgressPrefix(raw); err != nil {
+			errs = append(errs, fmt.Errorf("secrets.repository_clone_private_cidrs: %w", err))
+		}
+	}
 	if _, err := safefile.ScanRoots(c.Secrets.ScanRoots); err != nil {
 		errs = append(errs, fmt.Errorf("secrets.scan_roots: %w", err))
 	}
@@ -6058,6 +6070,14 @@ func validateSecretScanWebhooks(hooks []SecretScanWebhook) []error {
 		if user := strings.TrimSpace(hook.CloneCredentialUsername); user != "" &&
 			(strings.TrimSpace(hook.CloneCredentialRef) == "" || len(user) > 128 || strings.ContainsAny(user, ":\r\n")) {
 			errs = append(errs, fmt.Errorf("%s: clone_credential_username goes with a clone_credential_ref and is a user name of at most 128 characters", where))
+		}
+		if len(hook.ClonePrivateEgressCIDRs) > 0 && hook.CloneOrigin == "" {
+			errs = append(errs, fmt.Errorf("%s: clone_private_egress_cidrs requires clone_origin", where))
+		}
+		for _, raw := range hook.ClonePrivateEgressCIDRs {
+			if _, err := netsec.ParsePrivateEgressPrefix(raw); err != nil {
+				errs = append(errs, fmt.Errorf("%s: clone_private_egress_cidrs: %w", where, err))
+			}
 		}
 	}
 	return errs

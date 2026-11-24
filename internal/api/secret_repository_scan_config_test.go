@@ -32,3 +32,15 @@ func TestRepositoryScanChecksStoredCloneReferenceBeforeQueueing(t *testing.T) {
 		}
 	}
 }
+
+func TestCR411RepositoryScanRefusesNonHTTPSCloneBeforeQueueing(t *testing.T) {
+	for _, target := range []string{"http://127.0.0.1/repo.git", "git://host.example/repo.git",
+		"ssh://host.example/repo.git", "file:///tmp/repo.git", "../repo"} {
+		_, err := secretRepoScanConfig("github", secretRepoScanWebhookRequest{
+			Repository: "tenant/repo", CloneURL: target,
+		})
+		if err == nil || !strings.Contains(err.Error(), "HTTPS repository URL") {
+			t.Errorf("accepted unsafe clone URL %q: %v", target, err)
+		}
+	}
+}

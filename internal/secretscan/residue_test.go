@@ -3,7 +3,9 @@
 package secretscan
 
 import (
+	"encoding/pem"
 	"errors"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -90,14 +92,33 @@ func TestDeepenCloneFetchesEveryBranchsHistoryP6L5(t *testing.T) {
 	if at("rev-parse", "--is-shallow-repository") != "true" {
 		t.Fatal("the clone is not shallow to begin with")
 	}
-	target := RepositoryTarget{Path: clone, Mode: "clone_url", Cleanup: func() {}}
-	if err := DeepenClone(t.Context(), target, RepositoryScanConfig{CloneURL: "file://" + origin}, nil); err != nil {
+	// Serve the same history through the local Git smart-HTTPS backend. The
+	// production fetch refuses file://; this fixture explicitly grants only
+	// its own loopback /32 and still exercises a real Git history fetch.
+	hosted := filepath.Join(t.TempDir(), "hosted")
+	if err := os.MkdirAll(hosted, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "clone", "--bare", "--", origin, filepath.Join(hosted, "repo.git")).CombinedOutput(); err != nil { // #nosec G204 -- local Git over this test's own repository (CWE-78)
+		t.Fatalf("host history: %v %s", err, out)
+	}
+	host := newGitStandIn(t, hosted, "fixture", "fixture", "")
+	ca := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: host.srv.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_SSL_CAINFO", ca)
+	cfg := RepositoryScanConfig{CloneURL: host.srv.URL + "/repo.git"}
+	cred := &RepositoryCredential{Username: "fixture", Secret: []byte("fixture")}
+	egress := RepositoryCloneEgress{allowPrivateCIDRs: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}}
+	target := RepositoryTarget{Path: clone, Mode: "clone_url", Cleanup: func() {}, Egress: egress}
+	if err := DeepenClone(t.Context(), target, cfg, cred); err != nil {
 		t.Fatal(err)
 	}
 	if at("rev-parse", "--is-shallow-repository") != "false" || at("rev-parse", "refs/remotes/origin/side") != first {
 		t.Fatalf("after deepening: shallow %q, side %q", at("rev-parse", "--is-shallow-repository"), at("rev-parse", "refs/remotes/origin/side"))
 	}
-	if err := DeepenClone(t.Context(), target, RepositoryScanConfig{CloneURL: "file://" + origin}, nil); err != nil {
+	if err := DeepenClone(t.Context(), target, cfg, cred); err != nil {
 		t.Fatalf("deepening a complete clone again: %v", err)
 	}
 	if err := DeepenClone(t.Context(), RepositoryTarget{Path: t.TempDir(), Mode: "checkout_path"}, RepositoryScanConfig{}, nil); err != nil {

@@ -68,13 +68,15 @@ type secretRepoScanGateResponse struct {
 }
 
 type secretRepoScanWebhookRequest struct {
-	Repository    string `json:"repository"`
-	CloneURL      string `json:"clone_url,omitempty"`
-	CheckoutPath  string `json:"checkout_path,omitempty"`
-	Ref           string `json:"ref,omitempty"`
-	CommitSHA     string `json:"commit_sha,omitempty"`
-	Event         string `json:"event,omitempty"`
-	CredentialRef string `json:"credential_ref,omitempty"`
+	Repository         string   `json:"repository"`
+	CloneURL           string   `json:"clone_url,omitempty"`
+	CheckoutPath       string   `json:"checkout_path,omitempty"`
+	Ref                string   `json:"ref,omitempty"`
+	CommitSHA          string   `json:"commit_sha,omitempty"`
+	Event              string   `json:"event,omitempty"`
+	CredentialRef      string   `json:"credential_ref,omitempty"`
+	AllowPrivateClone  bool     `json:"allow_private_clone,omitempty"`
+	PrivateEgressCIDRs []string `json:"private_egress_cidrs,omitempty"`
 	// CredentialUsername goes with credential_ref's token (OD-1); empty uses
 	// the provider's: x-access-token, oauth2 or x-token-auth.
 	CredentialUsername string `json:"credential_username,omitempty"`
@@ -100,6 +102,12 @@ type secretRepoScanWebhookResponse struct {
 	// RefsNotScanned counts the refs past the per-delivery bound.
 	Runs           []secretRepoScanQueuedRun `json:"runs,omitempty"`
 	RefsNotScanned int                       `json:"refs_not_scanned,omitempty"`
+}
+
+// WithSecretRepoPrivateEgressCeiling attaches the operator's network ceiling.
+// Tenant input can only select a subset after egress:private authorization.
+func WithSecretRepoPrivateEgressCeiling(cidrs []string) Option {
+	return func(c *config) { c.secretRepoPrivateCeiling = append([]string(nil), cidrs...) }
 }
 
 // secretRepoScanQueuedRun is one pushed ref's queued scan.
@@ -640,6 +648,16 @@ func (a *API) receiveSecretRepoWebhook(w http.ResponseWriter, r *http.Request) {
 		if err := a.requireAnnotationAllowed(ctx, tenantID, secretscan.RepositorySourceKind, req.Annotation); err != nil {
 			return 0, nil, err
 		}
+		if req.AllowPrivateClone {
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return 0, nil, err
+			}
+			if _, err := secretscan.RepositoryCloneEgressFromCIDRs(req.PrivateEgressCIDRs, a.secretRepoPrivateCeiling); err != nil {
+				return 0, nil, errStatus(http.StatusBadRequest, "private repository CIDRs exceed the operator egress ceiling")
+			}
+		} else if len(req.PrivateEgressCIDRs) != 0 {
+			return 0, nil, errStatus(http.StatusBadRequest, "private_egress_cidrs requires allow_private_clone")
+		}
 		if strings.TrimSpace(req.CredentialRef) != "" {
 			principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
 			if !ok || !principal.Can(authz.SecretsRead, authz.Scope{TenantID: tenantID}) {
@@ -664,16 +682,24 @@ func (a *API) queueSecretRepoScan(ctx context.Context, tenantID, provider string
 		if a.secretScanHookClone == nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "hook clone configuration is unavailable")
 		}
-		ref, _, origin := a.secretScanHookClone(req.configuredHookID)
+		ref, _, origin, privateCIDRs := a.secretScanHookClone(req.configuredHookID)
 		if ref != "" {
 			actual, err := secretscan.HTTPSCloneOrigin(cfg.CloneURL)
 			if err != nil || actual != origin {
 				return 0, nil, errStatus(http.StatusBadRequest, "push clone_url is outside the hook's configured clone_origin")
 			}
 			cfg.ConfiguredHookID = req.configuredHookID
+			if len(privateCIDRs) > 0 {
+				cfg.AllowPrivateClone = true
+				cfg.PrivateEgressCIDRs = append([]string(nil), privateCIDRs...)
+				cfg.PrivateEgressAdmissionVersion = 2 // operator-pinned signed hook
+			}
 		}
 	} else if cfg.CredentialRef != "" {
 		cfg.CredentialAdmissionVersion = 1
+	}
+	if cfg.AllowPrivateClone && cfg.ConfiguredHookID == "" {
+		cfg.PrivateEgressAdmissionVersion = 1 // authorized tenant ingress
 	}
 	if cfg.CheckoutPath != "" && a.secrets != nil {
 		if validator, ok := a.secrets.be.SecretScanner.(secretScannerPathValidator); ok {
@@ -930,9 +956,15 @@ func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (se
 		if err := secretscan.ValidateRepositoryRef(req.Ref, req.CommitSHA); err != nil {
 			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "ref must be a branch or tag name and commit_sha a hex commit ID")
 		}
-		if strings.HasPrefix(cloneURL, "-") {
-			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "clone_url must be a repository URL or path")
+		if err := secretscan.ValidateRepositoryCloneURL(cloneURL); err != nil {
+			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "clone_url must be an HTTPS repository URL")
 		}
+	}
+	if req.AllowPrivateClone && (checkoutPath != "" || len(req.PrivateEgressCIDRs) == 0) {
+		return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "private clone egress requires clone_url and private_egress_cidrs")
+	}
+	if !req.AllowPrivateClone && len(req.PrivateEgressCIDRs) != 0 {
+		return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "private_egress_cidrs requires allow_private_clone")
 	}
 	credentialRef, credentialUser := strings.TrimSpace(req.CredentialRef), strings.TrimSpace(req.CredentialUsername)
 	if credentialRef != "" {
@@ -959,6 +991,8 @@ func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (se
 		Event:              strings.TrimSpace(req.Event),
 		CredentialRef:      credentialRef,
 		CredentialUsername: credentialUser,
+		AllowPrivateClone:  req.AllowPrivateClone,
+		PrivateEgressCIDRs: cleanAPIStringList(req.PrivateEgressCIDRs),
 		Annotation:         req.Annotation,
 	}
 	// A174-L5: GitHub code scanning takes the findings back.

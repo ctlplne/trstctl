@@ -245,7 +245,8 @@ type issuanceDispatcher struct {
 	repoCredentials func(ctx context.Context, tenantID, ref string) (*secret.Buffer, error)
 	// repoHookClones contains operator-owned native hook credentials and their
 	// allowed HTTPS origins. Tenant discovery sources contain only the hook ID.
-	repoHookClones map[string]config.SecretScanWebhook
+	repoHookClones           map[string]config.SecretScanWebhook
+	repoPrivateEgressCeiling []string
 	// validity checks a found secret where the scan found it (P14).
 	validity *validity.Checker
 	// dns01 publishes and cleans ACME DNS-01 challenge records through tenant

@@ -2730,6 +2730,7 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_SECRETS_AUTH_TOKEN_SCOPES` | unset | Comma-separated least-privilege API permissions returned by the builtin token exchange, for example `secrets:read`. Required and non-empty with `TRSTCTL_SECRETS_AUTH_SECRET_FILE`; there is no implicit wildcard or inert empty grant. |
 | `TRSTCTL_SECRETS_GITLEAKS_BIN` | auto-detect | Path to the pinned Gitleaks `v8.27.2` binary used by `POST /api/v1/secrets/scans`. Empty resolves `TRSTCTL_GITLEAKS_BIN`, `tools/bin/gitleaks`, then `PATH`. Run `tools/gitleaks/install.sh` during image build or host provisioning to install the supported checksum-verified release tarball. A missing binary makes scan requests fail closed with `503`. |
 | `TRSTCTL_SECRETS_SCAN_ROOTS` | unset | Comma-separated paths to existing operator-mounted directories, also available as `secrets.scan_roots`. Empty disables served local paths, including repository `checkout_path`. The server rejects a filesystem root or any directory that contains its process temporary directory. Worker-owned clones use their individual checkout directory. |
+| `TRSTCTL_SECRETS_REPOSITORY_CLONE_PRIVATE_CIDRS` | unset | Comma-separated operator ceiling for private HTTPS Git clones, also available as `secrets.repository_clone_private_cidrs`. Empty means public HTTPS only. A normalized webhook must separately request exact CIDRs within this ceiling and its caller needs `egress:private`. Signed native hooks name their own exact `clone_private_egress_cidrs`. Link-local metadata addresses stay blocked. |
 | `TRSTCTL_SECRETS_DRIFT_ROOTS` | unset | Comma-separated operator-mounted directories that tenant-declared served `drift` sources may watch, also available as `secrets.drift_roots`. Empty refuses local drift sources. This grant is separate from `secrets.scan_roots`; never mount PIN, bind-password, device, or kernel trees beneath a drift root. Watched files must be regular and at most 1 MiB; each source accepts at most 128 distinct watched paths and 16 scope directories. |
 
 Every default-binary idempotency result is outer-sealed through the same
@@ -4235,6 +4236,12 @@ it clones as (default `x-access-token`, `oauth2` or `x-token-auth` by provider).
 refuses a duplicate id, a provider other than github, gitlab or bitbucket, an invalid
 reference, an absent or malformed `clone_origin` for a clone credential, or a
 `clone_credential_username` without a `clone_credential_ref`.
+An operator may set `clone_private_egress_cidrs` beside an exact `clone_origin`
+for a signed hook that clones from a private HTTPS host. These CIDRs come from
+operator configuration, and the worker checks them again for each run. The
+normalized webhook instead uses the deployment-wide ceiling above plus the
+caller permission. Git refuses redirects and proxies, and its DNS pin is
+recomputed before each network fetch.
 
 Leaked-secret validity checks (P14) are configured under `secrets.validity_checks`:
 `enabled` turns them on; `providers` names the providers whose checks run (`aws`,

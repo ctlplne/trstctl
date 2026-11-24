@@ -48,20 +48,9 @@ func TestServedGitLabAndBitbucketSecretScanHooksOD3(t *testing.T) {
 	}}
 	signingKey := []byte("od3-served-signing-key-32-bytes!")
 	const glShared, bbShared = "od3-gitlab-shared-value", "od3-bitbucket-shared-value"
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.SecretScanner = fake
-		d.SecretScanWebhooks = []config.SecretScanWebhook{
-			{ID: "gl-token", TenantID: servedTestTenant, Provider: "gitlab", SecretRef: writeServedCredentialFile(t, "od3-gl-token", glShared)},
-			{ID: "gl-signed", TenantID: servedTestTenant, Provider: "gitlab",
-				SecretRef: writeServedCredentialFile(t, "od3-gl-signed", "whsec_"+base64.StdEncoding.EncodeToString(signingKey))},
-			{ID: "bb", TenantID: servedTestTenant, Provider: "bitbucket", SecretRef: writeServedCredentialFile(t, "od3-bb", bbShared)},
-		}
-	})
-
 	// The pushed repository: main and feature, each naming itself in BRANCH.
-	// Its path ends in .git, which Bitbucket Cloud's html link plus ".git"
-	// names (the lab cannot reach the providers; a public https clone URL
-	// takes the same path).
+	// Its smart-HTTPS URL ends in .git, as Bitbucket Cloud's html link plus
+	// ".git" does. The test grants only its own loopback host.
 	origin := filepath.Join(t.TempDir(), "payments.git")
 	gitRun := func(args ...string) string {
 		t.Helper()
@@ -90,6 +79,23 @@ func TestServedGitLabAndBitbucketSecretScanHooksOD3(t *testing.T) {
 	gitRun("checkout", "-q", "-b", "feature")
 	featureSHA := commit("feature")
 	gitRun("checkout", "-q", "main")
+	cloneURL := serveTestGitHTTPS(t, origin)
+	cloneHost := strings.TrimSuffix(cloneURL, "/payments.git")
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.SecretScanner = fake
+		d.SecretScanWebhooks = []config.SecretScanWebhook{
+			{ID: "gl-token", TenantID: servedTestTenant, Provider: "gitlab", SecretRef: writeServedCredentialFile(t, "od3-gl-token", glShared),
+				CloneCredentialRef: writeServedCredentialFile(t, "od3-gl-clone", "fixture-token"), CloneOrigin: cloneHost,
+				ClonePrivateEgressCIDRs: []string{"127.0.0.1/32"}},
+			{ID: "gl-signed", TenantID: servedTestTenant, Provider: "gitlab",
+				SecretRef:          writeServedCredentialFile(t, "od3-gl-signed", "whsec_"+base64.StdEncoding.EncodeToString(signingKey)),
+				CloneCredentialRef: writeServedCredentialFile(t, "od3-gl-signed-clone", "fixture-token"), CloneOrigin: cloneHost,
+				ClonePrivateEgressCIDRs: []string{"127.0.0.1/32"}},
+			{ID: "bb", TenantID: servedTestTenant, Provider: "bitbucket", SecretRef: writeServedCredentialFile(t, "od3-bb", bbShared),
+				CloneCredentialRef: writeServedCredentialFile(t, "od3-bb-clone", "fixture-token"), CloneOrigin: cloneHost,
+				ClonePrivateEgressCIDRs: []string{"127.0.0.1/32"}},
+		}
+	})
 
 	deliver := func(hook string, headers map[string]string, body []byte) (int, []byte) {
 		t.Helper()
@@ -170,7 +176,7 @@ func TestServedGitLabAndBitbucketSecretScanHooksOD3(t *testing.T) {
 
 	// GitLab with a secret token: a push to feature, not the default branch.
 	glPush := []byte(`{"object_kind":"push","event_name":"push","ref":"refs/heads/feature","before":"` + mainSHA + `","after":"` + featureSHA +
-		`","checkout_sha":"` + featureSHA + `","project":{"path_with_namespace":"acme/payments","git_http_url":"` + origin + `"}}`)
+		`","checkout_sha":"` + featureSHA + `","project":{"path_with_namespace":"acme/payments","git_http_url":"` + cloneURL + `"}}`)
 	glHeaders := func(key, token string) map[string]string {
 		headers := map[string]string{"X-Gitlab-Event": "Push Hook", "Idempotency-Key": key, "X-Gitlab-Event-UUID": key + "-uuid"}
 		if token != "" {
@@ -198,7 +204,7 @@ func TestServedGitLabAndBitbucketSecretScanHooksOD3(t *testing.T) {
 		t.Fatalf("a GitLab redelivery queued again: %s (runs %d)", body, runs())
 	}
 	deleted := []byte(`{"object_kind":"push","ref":"refs/heads/feature","after":"0000000000000000000000000000000000000000","checkout_sha":null,` +
-		`"project":{"path_with_namespace":"acme/payments","git_http_url":"` + origin + `"}}`)
+		`"project":{"path_with_namespace":"acme/payments","git_http_url":"` + cloneURL + `"}}`)
 	status, body = deliver("gl-token", glHeaders("gl-4", glShared), deleted)
 	if r := read(status, body, http.StatusAccepted); r.Ignored == "" || runs() != 1 {
 		t.Fatalf("a deleted GitLab branch: %s (runs %d)", body, runs())
@@ -212,7 +218,7 @@ func TestServedGitLabAndBitbucketSecretScanHooksOD3(t *testing.T) {
 
 	// GitLab with a signing token (Standard Webhooks).
 	glMain := []byte(`{"object_kind":"push","ref":"refs/heads/main","after":"` + mainSHA + `","checkout_sha":"` + mainSHA +
-		`","project":{"path_with_namespace":"acme/payments","git_http_url":"` + origin + `"}}`)
+		`","project":{"path_with_namespace":"acme/payments","git_http_url":"` + cloneURL + `"}}`)
 	signed := func(id string, at time.Time, key []byte) map[string]string {
 		stamp := strconv.FormatInt(at.Unix(), 10)
 		mac := crypto.HMACSHA256(key, append([]byte(id+"."+stamp+"."), glMain...))
@@ -239,7 +245,7 @@ func TestServedGitLabAndBitbucketSecretScanHooksOD3(t *testing.T) {
 		`{"new":{"type":"branch","name":"main","target":{"hash":"` + mainSHA + `"}}},` +
 		`{"new":{"type":"branch","name":"feature","target":{"hash":"` + featureSHA + `"}}},` +
 		`{"new":null,"old":{"type":"branch","name":"gone","target":{"hash":"` + mainSHA + `"}}}]},` +
-		`"repository":{"full_name":"acme/payments","links":{"html":{"href":"` + strings.TrimSuffix(origin, ".git") + `"}}}}`)
+		`"repository":{"full_name":"acme/payments","links":{"html":{"href":"` + strings.TrimSuffix(cloneURL, ".git") + `"}}}}`)
 	if status, body := deliver("bb", map[string]string{"X-Event-Key": "repo:push", "X-Request-UUID": "bb-0", "X-Hub-Signature": "sha256=" + strings.Repeat("0", 64)}, cloud); status != http.StatusUnauthorized {
 		t.Fatalf("a Bitbucket push with a wrong signature: HTTP %d %s", status, body)
 	}
@@ -261,7 +267,7 @@ func TestServedGitLabAndBitbucketSecretScanHooksOD3(t *testing.T) {
 
 	// Bitbucket Data Center: refs_changed for feature, its http clone link.
 	dc := []byte(`{"eventKey":"repo:refs_changed","repository":{"slug":"payments","project":{"key":"ACME"},` +
-		`"links":{"clone":[{"href":"ssh://git@bitbucket.example.test:7999/acme/payments.git","name":"ssh"},{"href":"` + origin + `","name":"http"}]}},` +
+		`"links":{"clone":[{"href":"ssh://git@bitbucket.example.test:7999/acme/payments.git","name":"ssh"},{"href":"` + cloneURL + `","name":"http"}]}},` +
 		`"changes":[{"ref":{"id":"refs/heads/feature","displayId":"feature","type":"BRANCH"},"fromHash":"` + mainSHA + `","toHash":"` + featureSHA + `","type":"UPDATE"}]}`)
 	status, body = deliver("bb", map[string]string{"X-Event-Key": "repo:refs_changed", "X-Request-Id": "bb-dc-1", "X-Hub-Signature": bbSign(dc)}, dc)
 	finish(read(status, body, http.StatusAccepted).RunID)
@@ -276,7 +282,7 @@ func TestServedGitLabAndBitbucketSecretScanHooksOD3(t *testing.T) {
 
 	// A ref that git could read as an option is refused and scans nothing.
 	evil := []byte(`{"push":{"changes":[{"new":{"type":"branch","name":"--upload-pack=touch od3-pwned","target":{"hash":"` + mainSHA + `"}}}]},` +
-		`"repository":{"full_name":"acme/payments","links":{"html":{"href":"` + strings.TrimSuffix(origin, ".git") + `"}}}}`)
+		`"repository":{"full_name":"acme/payments","links":{"html":{"href":"` + strings.TrimSuffix(cloneURL, ".git") + `"}}}}`)
 	before = runs()
 	if status, body := deliver("bb", map[string]string{"X-Event-Key": "repo:push", "X-Request-UUID": "bb-evil", "X-Hub-Signature": bbSign(evil)}, evil); status != http.StatusBadRequest || runs() != before {
 		t.Fatalf("an option-shaped ref: HTTP %d %s (runs %d → %d)", status, body, before, runs())

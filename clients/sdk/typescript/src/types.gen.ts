@@ -28269,6 +28269,8 @@ export interface components {
             status: string;
         };
         SecretRepositoryWebhookRequest: {
+            /** @description Request an operator-approved private HTTPS Git host; requires egress:private and private_egress_cidrs. */
+            allow_private_clone?: boolean;
             /** @description A174-L5: GitHub only — write each finding back as a code scanning analysis of its own for the push's commit_sha and ref (refs/...), with a token reference that may upload code scanning results. */
             annotation?: {
                 allow_private_endpoint?: boolean;
@@ -28279,6 +28281,7 @@ export interface components {
                 token_ref: string;
             };
             checkout_path?: string;
+            /** @description HTTPS repository URL. Git resolves and pins every checked address, refuses redirects and proxies, and repeats the check before fetch. */
             clone_url?: string;
             commit_sha?: string;
             /** @description OD-1: a canonical tenant secret:// reference opened for one HTTPS clone; requires secrets:read as well as secrets:write and access to any restricted environment */
@@ -28286,6 +28289,8 @@ export interface components {
             /** @description the user name the credential_ref token clones with; default by provider: x-access-token (GitHub), oauth2 (GitLab), x-token-auth (Bitbucket) */
             credential_username?: string;
             event?: string;
+            /** @description Exact private clone CIDRs within secrets.repository_clone_private_cidrs. Empty grants no private address. */
+            private_egress_cidrs?: string[];
             ref?: string;
             repository: string;
         };

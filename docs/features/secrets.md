@@ -2695,6 +2695,16 @@ row. The outbox worker scans `checkout_path` directly, or clones `clone_url`;
 credential-bearing URLs are rejected, and private credentials stay secret references,
 never payload values.
 
+Every `clone_url` must use HTTPS. The worker resolves its hostname, refuses the
+clone if any answer is outside the approved egress network, and pins the checked
+addresses for Git. Git cannot follow a redirect, use a proxy, or switch to SSH,
+`git://`, a local path, or `file://`. The same check runs again before a pushed
+commit fetch or a history-deepening fetch. A scan of a private Git host needs
+`allow_private_clone: true`, `private_egress_cidrs` containing that host's exact
+network, the caller's `egress:private` permission, and an operator ceiling in
+`secrets.repository_clone_private_cidrs`. A private or loopback URL with no grant
+fails the run before Git connects. Link-local metadata destinations remain denied.
+
 A private repository clones with its `credential_ref` (OD-1): a canonical tenant
 `secret://` reference to the access token, for an https `clone_url` only. The caller
 needs both `secrets:write` and `secrets:read`, plus access to the referenced restricted
@@ -2725,6 +2735,12 @@ pushed repository's `clone_url` at the pushed commit. `X-GitHub-Delivery` is the
 idempotency key, so a redelivery returns the recorded answer and queues nothing new.
 The normalized route and scheduled polling stay for installs that cannot accept
 webhooks.
+
+For a signed hook that clones from a private host, the operator also sets
+`clone_private_egress_cidrs` on that hook. Each delivery must still match the
+hook's exact `clone_origin`; the worker rechecks the hook's current origin and
+network grant on every run, including a retry of a stored source. Hook network
+grants are operator configuration and do not come from the push body.
 
 GitLab and Bitbucket call trstctl the same way (OD-3), with `provider: gitlab` or
 `provider: bitbucket` on the hook:
