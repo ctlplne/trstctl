@@ -287,6 +287,9 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 			t.Errorf("%s restored rows = %d, want %d", table, dstCounts[table], srcCounts[table])
 		}
 	}
+	if quarantined, err := dst.ProjectionTenantQuarantined(ctx, tenantA); err != nil || !quarantined {
+		t.Fatalf("restored quarantine admission marker missing: quarantined=%v err=%v", quarantined, err)
+	}
 	// A restored row must still enforce one-use enrollment. Equal row counts
 	// alone would miss a bad hash, wrong tenant, or lost uniqueness authority.
 	if claimed, err := dst.ConsumeMDMSCEPNonce(ctx, tenantA, "full-dr-spent-mdm-scep-nonce", time.Now().UTC().Add(time.Hour)); err != nil || claimed {
@@ -1322,6 +1325,12 @@ func seedRecoveredFromPostgresTables(
 		return err
 	}); err != nil {
 		t.Fatalf("seed protected scheduler recovery authority: %v", err)
+	}
+	// A retained quarantine marker is independent PostgreSQL admission state.
+	// This fixture tests its backup/restore path; the historical replay suite
+	// separately proves why a poisoned event creates the marker.
+	if err := st.RecordProjectionTenantQuarantine(ctx, tenantA, registrationSequence, "nul_text"); err != nil {
+		t.Fatalf("seed durable projection quarantine: %v", err)
 	}
 	if _, err := st.SystemPool().Exec(ctx, `INSERT INTO federation_peer_checkpoints (peer_id, source_seq, updated_at) VALUES ($1, $2, $3)`, "full-dr-peer", int64(42), now); err != nil {
 		t.Fatalf("seed federation_peer_checkpoints: %v", err)
