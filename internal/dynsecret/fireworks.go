@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -34,14 +35,47 @@ type fireworksKey struct {
 }
 
 func (f fireworksVendor) list(ctx context.Context, api hostedAPI, binding string) ([]fireworksKey, error) {
-	var listed struct {
-		APIKeys uniqueVendorField[[]fireworksKey] `json:"apiKeys"`
+	const maxPages = 100
+	path := fireworksKeys(binding)
+	var keys []fireworksKey
+	seenTokens := make(map[string]bool)
+	pageToken := ""
+	for page := 0; page < maxPages; page++ {
+		query := "?pageSize=100"
+		if pageToken != "" {
+			query += "&pageToken=" + url.QueryEscape(pageToken)
+		}
+		var listed struct {
+			APIKeys       uniqueVendorField[[]fireworksKey] `json:"apiKeys"`
+			NextPageToken uniqueVendorField[string]         `json:"nextPageToken"`
+			TotalSize     uniqueVendorField[int]            `json:"totalSize"`
+		}
+		if _, err := hostedJSON(ctx, api, http.MethodGet, path+query, nil, bearerFrom(f.admin), &listed); err != nil {
+			wipeFireworksKeys(listed.APIKeys.value)
+			wipeFireworksKeys(keys)
+			return nil, err
+		}
+		if !listed.APIKeys.seen {
+			wipeFireworksKeys(keys)
+			return nil, errors.New("dynsecret fireworks: key listing omitted apiKeys")
+		}
+		keys = append(keys, listed.APIKeys.value...)
+		if listed.NextPageToken.value == "" {
+			if listed.TotalSize.seen && listed.TotalSize.value != len(keys) {
+				wipeFireworksKeys(keys)
+				return nil, errors.New("dynsecret fireworks: incomplete key listing")
+			}
+			return keys, nil
+		}
+		if len(listed.NextPageToken.value) > 4096 || seenTokens[listed.NextPageToken.value] {
+			wipeFireworksKeys(keys)
+			return nil, errors.New("dynsecret fireworks: repeated or oversized page token")
+		}
+		seenTokens[listed.NextPageToken.value] = true
+		pageToken = listed.NextPageToken.value
 	}
-	if _, err := hostedJSON(ctx, api, http.MethodGet, fireworksKeys(binding), nil, bearerFrom(f.admin), &listed); err != nil {
-		wipeFireworksKeys(listed.APIKeys.value)
-		return nil, err
-	}
-	return listed.APIKeys.value, nil
+	wipeFireworksKeys(keys)
+	return nil, errors.New("dynsecret fireworks: key listing exceeds page bound")
 }
 
 func wipeFireworksKeys(keys []fireworksKey) {
@@ -52,12 +86,23 @@ func wipeFireworksKeys(keys []fireworksKey) {
 }
 
 func (f fireworksVendor) mint(ctx context.Context, api hostedAPI, binding, name string) (string, []byte, error) {
+	return f.mintWithTTL(ctx, api, binding, name, 0)
+}
+
+func (f fireworksVendor) mintWithTTL(ctx context.Context, api hostedAPI, binding, name string, ttl time.Duration) (string, []byte, error) {
+	if ttl < 0 || ttl > 365*24*time.Hour {
+		return "", nil, errors.New("dynsecret fireworks: TTL must be within the vendor's one-year limit")
+	}
 	var created fireworksKey
 	defer func() {
 		secret.Wipe(created.Key.value)
 		secret.Wipe(created.KeyID.value)
 	}()
-	request := map[string]any{"apiKey": map[string]any{"displayName": name}}
+	key := map[string]any{"displayName": name}
+	if ttl > 0 {
+		key["expireTime"] = time.Now().Add(ttl).UTC().Format(time.RFC3339Nano)
+	}
+	request := map[string]any{"apiKey": key}
 	if _, err := hostedJSON(ctx, api, http.MethodPost, fireworksKeys(binding), request, bearerFrom(f.admin), &created); err != nil {
 		return "", nil, err
 	}

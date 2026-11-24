@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/hostedkey"
@@ -162,7 +163,15 @@ func (b *HostedKeyBackend) CreateCredential(ctx context.Context, req GenerateReq
 			return "", nil, fmt.Errorf("dynsecret %s: replace an earlier attempt's key: %w", b.provider, err)
 		}
 	}
-	id, credential, err := b.vendor.mint(ctx, b.api, binding, name)
+	var id string
+	var credential []byte
+	if expiring, ok := b.vendor.(interface {
+		mintWithTTL(context.Context, hostedAPI, string, string, time.Duration) (string, []byte, error)
+	}); ok && !req.Static {
+		id, credential, err = expiring.mintWithTTL(ctx, b.api, binding, name, req.TTL)
+	} else {
+		id, credential, err = b.vendor.mint(ctx, b.api, binding, name)
+	}
 	if err != nil {
 		return "", nil, err
 	}

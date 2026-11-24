@@ -1320,6 +1320,14 @@ rotation is two-phase: both keys work until the predecessor is retired.
 | `cloudflare` | an API token copying a template token | the template's policies and condition | Cloudflare's token verification route (`authenticated`) |
 | `cloudflare-r2` | an S3 key pair: the new token's ID and the SHA-256 of its value | the template's R2 policies | nothing: the pair carries no token and S3 is the account's host (`not_available`) |
 
+Fireworks key lookup requests every page and refuses to call a key absent if the
+listing is incomplete or exceeds its 100-page bound. A leased Fireworks key is
+created with a native `expireTime` at the lease's maximum renewal deadline
+(within Fireworks' one-year limit), so a missed deletion has a finite bound.
+The [Fireworks list API](https://docs.fireworks.ai/api-reference/list-api-keys)
+documents `nextPageToken` and `pageToken` but says pagination support is still
+to be added; the page-two behavior is verified with a local API stand-in.
+
 Where verification is `not_available`, retirement waits for the named consumers'
 adoption reports or the approved deadline. Cloudflare keys are new tokens beside the
 predecessor, not Cloudflare's roll, which would end the old value at once. All eight are
