@@ -87,17 +87,47 @@ func jsonBodyStringField(r *http.Request, field string) (string, error) {
 	if len(body) > defaultRESTJSONBodyLimit {
 		return "", errStatus(http.StatusRequestEntityTooLarge, "request body too large")
 	}
-	var payload map[string]json.RawMessage
-	if err := json.Unmarshal(body, &payload); err != nil {
+	// Decode the top-level keys in wire order. A map silently loses repeated
+	// keys, while a struct accepts case variants and lets the last one win.
+	// Refuse both so the profile used for admission is exactly the value the
+	// handler's ordinary struct decode will act on.
+	dec := json.NewDecoder(bytes.NewReader(body))
+	opening, err := dec.Token()
+	if err != nil || opening != json.Delim('{') {
 		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
 	}
-	raw, ok := payload[field]
-	if !ok || len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
-		return "", nil
-	}
 	var value string
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return "", errStatus(http.StatusBadRequest, field+" must be a string")
+	seen := false
+	for dec.More() {
+		keyToken, err := dec.Token()
+		if err != nil {
+			return "", errStatus(http.StatusBadRequest, "invalid JSON body")
+		}
+		key, ok := keyToken.(string)
+		if !ok {
+			return "", errStatus(http.StatusBadRequest, "invalid JSON body")
+		}
+		if strings.EqualFold(key, field) && (key != field || seen) {
+			return "", errStatus(http.StatusBadRequest, field+" must appear exactly once with canonical spelling")
+		}
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			return "", errStatus(http.StatusBadRequest, "invalid JSON body")
+		}
+		if key == field {
+			seen = true
+			if err := json.Unmarshal(raw, &value); err != nil {
+				return "", errStatus(http.StatusBadRequest, field+" must be a string")
+			}
+		}
+	}
+	closing, err := dec.Token()
+	if err != nil || closing != json.Delim('}') {
+		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
+	}
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
 	}
 	return strings.TrimSpace(value), nil
 }

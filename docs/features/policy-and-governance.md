@@ -698,6 +698,12 @@ immutable `policy.abac.decision` event. A practical change-window overlay — de
 `certs:issue` in `prod` outside a configured window — is shown in full under
 [Use it](#use-it).
 
+For profile-scoped routes, admission and the handler use the same canonical
+`profile_name` or `name` JSON field. A duplicate or differently cased copy is
+rejected with `400` before authorization or issuance. Decision events record the
+profile, issuer and project identifiers actually supplied to ABAC when present,
+so an operator can review which resource a rule evaluated.
+
 **Status:** served after RBAC on every guarded route when `auth.abac.enabled`, plus
 identity-attribute evaluation on issue/deploy/revoke.
 

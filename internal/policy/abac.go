@@ -154,9 +154,14 @@ func (e *ABACEngine) auditABAC(ctx context.Context, in ABACInput, d ABACDecision
 		Action     Action `json:"action,omitempty"`
 		Actor      string `json:"actor,omitempty"`
 		Subject    string `json:"subject,omitempty"`
+		Profile    string `json:"profile,omitempty"`
+		Issuer     string `json:"issuer,omitempty"`
+		Project    string `json:"project,omitempty"`
 		Deny       bool   `json:"deny"`
 		Reason     string `json:"reason,omitempty"`
 		Error      string `json:"error,omitempty"`
-	}{in.Permission, in.Action, in.Actor, in.Subject, d.Deny, d.Reason, errString(evalErr)})
+	}{in.Permission, in.Action, in.Actor, in.Subject,
+		in.Resource["profile"], in.Resource["issuer"], in.Resource["project"],
+		d.Deny, d.Reason, errString(evalErr)})
 	_, _ = e.log.Append(ctx, events.Event{Type: "policy.abac.decision", TenantID: in.TenantID, Data: payload})
 }
