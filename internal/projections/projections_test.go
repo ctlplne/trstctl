@@ -55,6 +55,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	testDSN = fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port)
+	if err := os.Setenv("TRSTCTL_STORE_TEST_DSN", testDSN); err != nil {
+		panic(err)
+	}
 	code := m.Run()
 	_ = pg.Stop()
 	_ = os.RemoveAll(dir)
@@ -96,7 +99,7 @@ func newStore(t *testing.T) *store.Store {
 		          secret_store_versions, secret_store,
 		          privacy_subject_erasure_preparations,
 		          operation_approval_decisions, operation_approval_requests,
-		          tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits, audit_checkpoints,
+		          tenants, tenant_key_domains, projection_tenant_quarantines, idempotency_keys, outbox, rate_limits, audit_checkpoints,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates, acme_upstream_ari, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,

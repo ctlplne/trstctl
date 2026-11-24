@@ -48,7 +48,7 @@ func (s *Store) TenantOffboardPending(ctx context.Context, tenantID string) (boo
 // authorize an old credential. This is independent of editions and does not
 // replace the operation lifetime that excludes concurrent lifecycle changes.
 func (s *Store) RequireLiveTenantService(ctx context.Context, tenantID string) error {
-	// The four conditions are read in one statement, in a read-only
+	// The five conditions are read in one statement, in a read-only
 	// transaction of its own sent as one round trip, and refused in the order
 	// they always were, each naming its own reason.
 	//
@@ -60,10 +60,11 @@ func (s *Store) RequireLiveTenantService(ctx context.Context, tenantID string) e
 	return s.tenantQueryRow(ctx, tenantID, `SELECT EXISTS (SELECT 1 FROM tenants WHERE tenant_id=$1),
 			EXISTS (SELECT 1 FROM provider_tenants WHERE tenant_id=$1 AND status IS DISTINCT FROM 'active'),
 			`+providerSuspendCommandActiveSQL+`,
-			`+tenantOffboardReceiverExistsSQL,
+			`+tenantOffboardReceiverExistsSQL+`,
+			EXISTS (SELECT 1 FROM projection_tenant_quarantines WHERE tenant_id=$1)`,
 		[]any{tenantID, TenantOffboardReceiverKeyPrefix + "%"}, func(row pgx.Row) error {
-			var registered, restricted, suspended, erasing bool
-			if err := row.Scan(&registered, &restricted, &suspended, &erasing); err != nil {
+			var registered, restricted, suspended, erasing, quarantined bool
+			if err := row.Scan(&registered, &restricted, &suspended, &erasing, &quarantined); err != nil {
 				return fmt.Errorf("store: inspect live tenant service: %w", err)
 			}
 			// Each refusal reads as ErrServiceUnavailable, as it always did, so
@@ -77,6 +78,8 @@ func (s *Store) RequireLiveTenantService(ctx context.Context, tenantID string) e
 				return tenancy.Refused("a provider suspension is pending or in force")
 			case erasing:
 				return tenancy.Refused("the tenant's erasure is pending")
+			case quarantined:
+				return tenancy.Refused("the tenant's projection is quarantined")
 			}
 			return nil
 		})

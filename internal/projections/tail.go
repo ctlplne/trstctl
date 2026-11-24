@@ -122,6 +122,7 @@ func (w *TailWorker) Run(ctx context.Context) error {
 	advance := func(ctx context.Context, e events.Event) error {
 		return retryWhileBusy(ctx, func() error { return w.proj.AdvanceCheckpoint(ctx, e.Sequence) })
 	}
+	quarantine := newTenantPoisonQuarantine(w.proj.store)
 	var batchEventStarted bool
 	var retryExclusive bool
 	tailErr := w.log.TailFromAdmitted(runCtx, w.proj.store.ProjectionCheckpoint,
@@ -175,6 +176,17 @@ func (w *TailWorker) Run(ctx context.Context) error {
 						return w.persistFailure(ownerCtx, e.Sequence, err)
 					}
 					if erased {
+						if err := advance(ownerCtx, e); err != nil {
+							return w.persistFailure(ownerCtx, e.Sequence, err)
+						}
+						w.applied.Store(e.Sequence)
+						return nil
+					}
+					quarantined, err := quarantine.skip(ownerCtx, e)
+					if err != nil {
+						return w.persistFailure(ownerCtx, e.Sequence, err)
+					}
+					if quarantined {
 						if err := advance(ownerCtx, e); err != nil {
 							return w.persistFailure(ownerCtx, e.Sequence, err)
 						}

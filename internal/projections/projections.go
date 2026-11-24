@@ -5769,6 +5769,7 @@ func (p *Projector) rebuildEventProjectionsThrough(
 	ctx context.Context,
 	log *events.Log,
 	replayHead uint64,
+	quarantine *tenantPoisonQuarantine,
 ) error {
 	if len(p.eventProjections) == 0 {
 		return nil
@@ -5780,6 +5781,11 @@ func (p *Projector) rebuildEventProjectionsThrough(
 		return nil
 	}
 	return replayProjectionThrough(ctx, log, 0, replayHead, func(e events.Event) error {
+		if skip, err := quarantine.skip(ctx, e); err != nil {
+			return err
+		} else if skip {
+			return nil
+		}
 		if isTenantLifecycleEventType(e.Type) {
 			return p.replayRetainedTenantLifecycleEventProjections(ctx, e)
 		}
@@ -11642,6 +11648,7 @@ func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 }
 
 func (p *Projector) projectFromPlannedHistory(ctx context.Context, log *events.Log) error {
+	quarantine := newTenantPoisonQuarantine(p.store)
 	if err := p.validateSecretSyncRetainedHistory(ctx, log, false, false); err != nil {
 		return err
 	}
@@ -11657,6 +11664,13 @@ func (p *Projector) projectFromPlannedHistory(ctx context.Context, log *events.L
 		return err
 	}
 	if err := replayProjection(ctx, log, 0, func(e events.Event) error {
+		quarantined, err := quarantine.skip(ctx, e)
+		if err != nil {
+			return err
+		}
+		if quarantined {
+			return nil
+		}
 		skip, err := secretAuthority.skip(e)
 		if err != nil {
 			return err
@@ -11752,6 +11766,7 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 }
 
 func (p *Projector) projectCatchUpFromPlannedHistory(ctx context.Context, log *events.Log) error {
+	quarantine := newTenantPoisonQuarantine(p.store)
 	if err := p.validateSecretSyncRetainedHistory(ctx, log, true, true); err != nil {
 		return err
 	}
@@ -11843,27 +11858,32 @@ func (p *Projector) projectCatchUpFromPlannedHistory(ctx context.Context, log *e
 			if err != nil {
 				return fmt.Errorf("projections: classify catch-up dynamic-secret lifecycle: %w", err)
 			}
-			if err := p.rebuildEventProjectionsThrough(readCtx, log, replayHead); err != nil {
+			if err := p.rebuildEventProjectionsThrough(readCtx, log, replayHead, quarantine); err != nil {
 				return err
 			}
 			var last uint64
 			sinceCheckpoint := 0
 			if from < replayHead {
 				err = replayProjectionThrough(readCtx, log, from+1, replayHead, func(e events.Event) error {
-					skip, err := secretAuthority.skip(e)
+					quarantined, err := quarantine.skip(readCtx, e)
 					if err != nil {
 						return err
 					}
-					skipDynamicSecret, err := dynamicSecretAuthority.skip(e)
-					if err != nil {
-						return err
-					}
-					skip = skip || skipDynamicSecret
-					if !skip {
-						err = p.applyCore(governanceDecisionHistoryReplay(readCtx), e)
-					}
-					if err != nil {
-						return err
+					if !quarantined {
+						skip, skipErr := secretAuthority.skip(e)
+						if skipErr != nil {
+							return skipErr
+						}
+						skipDynamicSecret, skipErr := dynamicSecretAuthority.skip(e)
+						if skipErr != nil {
+							return skipErr
+						}
+						skip = skip || skipDynamicSecret
+						if !skip {
+							if err := p.applyCore(governanceDecisionHistoryReplay(readCtx), e); err != nil {
+								return err
+							}
+						}
 					}
 					last = e.Sequence
 					sinceCheckpoint++
@@ -12009,6 +12029,7 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 			}
 		}
 		recoveryOperationID := ""
+		quarantine := newTenantPoisonQuarantine(p.store)
 		var verifier func(context.Context, string, ApplicationSecretMutation) error
 		var pairVerifier func(context.Context, string, []byte, []byte, []byte) (bool, error)
 		if p.applicationSecretRecoveryVerifierFactory != nil || p.rewrapRecoveryPairVerifierFactory != nil {
@@ -12063,6 +12084,13 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 			}
 			if err := replayProjectionThrough(readCtx, log, 0, replayHead, func(e events.Event) error {
 				applyCtx := readCtx
+				quarantined, err := quarantine.skip(applyCtx, e)
+				if err != nil {
+					return err
+				}
+				if quarantined {
+					return nil
+				}
 				if e.Sequence <= effectsQueuedThrough {
 					applyCtx = store.WithEffectsAlreadyQueued(readCtx)
 				}

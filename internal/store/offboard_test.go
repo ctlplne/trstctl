@@ -96,7 +96,7 @@ func newStore(t *testing.T) *store.Store {
 		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
 		          slack_installs, pam_recording_uploads, pam_session_recording_chunks, pam_session_recordings,
 		          secret_rotation_schedule_ticks, secret_static_rotation_commands,
-		          tenants, tenant_key_domains, deployment_kek_domain, idempotency_keys, outbox, rate_limits,
+		          tenants, tenant_key_domains, projection_tenant_quarantines, deployment_kek_domain, idempotency_keys, outbox, rate_limits,
 		          enrollment_diagnostic_observations, enrollment_diagnostics, migration_runs,
 		          audit_feed_deliveries, audit_feed_destinations,
 		          owners, issuers, identities, identity_transitions, deployment_targets,

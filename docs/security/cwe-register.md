@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3616 annotated sites across 35 rules. Each row is
+3617 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1137,7 +1137,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (563 sites)
+### G115 — CWE-190 Integer overflow or wraparound (564 sites)
 
 | Location | Reason |
 |---|---|
@@ -1422,10 +1422,10 @@ not this file.
 | `internal/projections/certificate_sct.go:105` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:8023` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8040` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:8053` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8088` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:8029` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8046` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:8059` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8094` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:46` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1631,6 +1631,7 @@ not this file.
 | `internal/store/projection_checkpoint.go:383` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:406` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:413` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_tenant_quarantine.go:32` | range checked above (CWE-190) |
 | `internal/store/provider_billing_sync.go:75` | bounded by the check above (CWE-190) |
 | `internal/store/provider_doc_records.go:56` | bounded by the check above (CWE-190) |
 | `internal/store/provider_psa_tickets.go:82` | bounded by the check above (CWE-190) |

@@ -607,6 +607,31 @@ func (l *Log) EnforceLegacySchedulerWriteFloor() {
 	}
 }
 
+// ValidateEventText applies the same PostgreSQL text safety check to newly
+// appended events and to retained pre-upgrade events during projection replay.
+// Opaque non-JSON Data remains opaque, as required by the event-log contract.
+func ValidateEventText(e Event) error {
+	for _, field := range []string{e.ID, e.Type, e.TenantID} {
+		if err := inputtext.ValidateString(field); err != nil {
+			return fmt.Errorf("events: unsafe envelope text: %w", err)
+		}
+	}
+	if e.Actor != nil {
+		if err := inputtext.ValidateString(e.Actor.Subject); err != nil {
+			return fmt.Errorf("events: unsafe actor subject: %w", err)
+		}
+		for _, role := range e.Actor.Roles {
+			if err := inputtext.ValidateString(role); err != nil {
+				return fmt.Errorf("events: unsafe actor role: %w", err)
+			}
+		}
+	}
+	if err := inputtext.ValidateJSONStrings(e.Data); err != nil {
+		return fmt.Errorf("events: unsafe payload text: %w", err)
+	}
+	return nil
+}
+
 func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (Event, error) {
 	if e.Protection != nil || e.SensitiveErased {
 		return Event{}, errors.New("events: append requires an original readable producer payload")
@@ -654,23 +679,8 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	// PostgreSQL cannot project U+0000 into text or jsonb. Validate the exact
 	// producer envelope before admission or JetStream publication; otherwise one
 	// rejected projection leaves an immutable poison event for every later replay.
-	for _, field := range []string{e.ID, e.Type, e.TenantID} {
-		if err := inputtext.ValidateString(field); err != nil {
-			return Event{}, fmt.Errorf("events: unsafe envelope text: %w", err)
-		}
-	}
-	if e.Actor != nil {
-		if err := inputtext.ValidateString(e.Actor.Subject); err != nil {
-			return Event{}, fmt.Errorf("events: unsafe actor subject: %w", err)
-		}
-		for _, role := range e.Actor.Roles {
-			if err := inputtext.ValidateString(role); err != nil {
-				return Event{}, fmt.Errorf("events: unsafe actor role: %w", err)
-			}
-		}
-	}
-	if err := inputtext.ValidateJSONStrings(e.Data); err != nil {
-		return Event{}, fmt.Errorf("events: unsafe payload text: %w", err)
+	if err := ValidateEventText(e); err != nil {
+		return Event{}, err
 	}
 	if l.appendAdmission != nil {
 		producerDigest, err := appendProducerDigest(e, explicitTime)

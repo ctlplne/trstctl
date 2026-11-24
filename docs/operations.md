@@ -153,6 +153,7 @@ without changing anything ([Database migrations & upgrades](migrations.md)).
 | [Upgrade and rollback](runbooks/upgrade-rollback.md) | the chart upgrade, the database preflight, both rollback methods |
 | [Disaster recovery drill](runbooks/disaster-recovery-drill.md) | backup, restore into an isolated target, the read-back checks |
 | [Failover](runbooks/failover.md) | replica, leader, datastore and signer failover |
+| [Poisoned historical event](runbooks/poisoned-event-quarantine.md) | a retained NUL/invalid-UTF-8 event, tenant quarantine, and safe recovery evidence |
 
 ## Bulkheads (isolation + backpressure)
 
