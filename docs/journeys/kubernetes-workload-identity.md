@@ -63,8 +63,12 @@ needs access, and gets a pass (an SVID) that expires in minutes.
        -d @-
    ```
 
-   You should see a trust-source id, rotation version `1`, and `enabled: true`. Rotate
-   the JWKS later with
+   You should see a trust-source id, rotation version `1`, and `enabled: true`.
+   The token used for trust-source create, rotate, revoke, and delete needs
+   `issuers:write`; workload issuance itself needs `certs:issue`. After an upgrade,
+   an existing source with `admin_review_required: true` cannot verify proofs
+   until an issuer administrator checks and replaces its configuration.
+   Rotate the JWKS later with
    `POST /api/v1/workloads/attester-trust-sources/{id}/rotate`; revoke and offboard old
    sources with `/revoke` and `DELETE /api/v1/workloads/attester-trust-sources/{id}`.
    The same lifecycle controls are available from the Workloads console.

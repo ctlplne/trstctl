@@ -41,7 +41,7 @@ func TestGitHubImmutablePinUpgradeRecoversLegacyAttempts(t *testing.T) {
 	})
 	const trustPath = "/api/v1/workloads/attester-trust-sources"
 	const issuePath = "/api/v1/workloads/attested-issuance"
-	apiToken := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")
+	apiToken := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "issuers:write")
 	trust := map[string]any{
 		"name": "upgrade-fixture", "method": "github_oidc", "audience": "trstctl", "jwks": crypto.JWKS{Keys: []crypto.JWK{jwk}},
 	}

@@ -53,11 +53,20 @@ and nothing else (fail-closed). Every attester must pass a conformance harness p
 it accepts a genuine proof and rejects a forgery.
 
 Served at `/api/v1/workloads/attester-trust-sources` and
-`POST /api/v1/workloads/attested-issuance`: workload owners with `certs:issue` manage
+`POST /api/v1/workloads/attested-issuance`: issuer administrators with `issuers:write` manage
 (create/replace/rotate/revoke/delete) tenant trust sources for `tpm`, `aws_iid`,
 `gcp_iit`, `azure_imds`, `k8s_sat`, and `github_oidc`, and the binary builds the
-verifier from those records plus any configured process defaults. It verifies the
-proof, signs an X.509-SVID through the isolated signer, records the certificate as
+verifier from those records plus any configured process defaults. Workload issuers
+use `certs:issue` for attested issuance; that permission cannot alter trusted
+issuer material. Sources created before this permission change are marked
+`admin_review_required` and excluded from verification after upgrade. An issuer
+administrator must inspect their public configuration and use the console's
+**Review configuration** action or replace the source with `PUT` to reapprove it.
+The console shows the full issuer, key, pin and saved enabled configuration and
+requires a second confirmation before approving it.
+Review preserves whether the source was enabled before the upgrade; a disabled
+source stays disabled.
+The issuance service verifies the proof, signs an X.509-SVID through the isolated signer, records the certificate as
 `certificate.recorded`, and binds the attestation with `attestation.bound` — or fails
 closed if no enabled trust source matches the method.
 

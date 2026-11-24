@@ -34,7 +34,7 @@ func TestServedGCPFederatedOutboxTenantIsolationTokenRedaction(t *testing.T) {
 	trust := servedDynamicK8sTrustFixture(t, "gcp-wif-k1")
 	h := newGCPFederatedServedHarness(t, fixture, nil)
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "gcp-wif-admin",
-		"secrets:read", "secrets:write", "certs:read", "certs:issue")
+		"secrets:read", "secrets:write", "certs:read", "certs:issue", "issuers:write")
 	sourceID := configureServedGCPFederatedSource(t, h, token, trust)
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs",
@@ -123,7 +123,7 @@ func TestServedGCPFederatedAirGapIsTerminalWithoutNetwork(t *testing.T) {
 	trust := servedDynamicK8sTrustFixture(t, "gcp-wif-airgap-k1")
 	h := newGCPFederatedServedHarness(t, fixture, guard)
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "gcp-wif-airgap-admin",
-		"secrets:read", "secrets:write", "certs:read", "certs:issue")
+		"secrets:read", "secrets:write", "certs:read", "certs:issue", "issuers:write")
 	sourceID := configureServedGCPFederatedSource(t, h, token, trust)
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs",
@@ -221,6 +221,11 @@ func configureServedGCPFederatedSource(t *testing.T, h *servedHarness, token str
 	}
 	if err := json.Unmarshal(body, &trustResponse); err != nil || trustResponse.ID == "" {
 		t.Fatalf("decode GCP trust source: err=%v body=%s", err, body)
+	}
+	effective, err := h.store.GetEffectiveWorkloadAttesterTrustSource(t.Context(), h.tenant, trustResponse.ID)
+	if err != nil || !effective.Enabled || effective.AdminReviewRequired || effective.AuthorityPending {
+		t.Fatalf("new GCP trust source is not eligible: enabled=%t review=%t pending=%t err=%v",
+			effective.Enabled, effective.AdminReviewRequired, effective.AuthorityPending, err)
 	}
 	status, body = secretsReqKey(t, h, http.MethodPost,
 		"/api/v1/secrets/syncs/workload-identity-sources",

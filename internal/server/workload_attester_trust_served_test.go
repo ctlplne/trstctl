@@ -144,7 +144,7 @@ func TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding(t *testing.T) {
 func TestWorkloadAttesterTrustSourceDuplicateNameFailsBeforeEventAppend(t *testing.T) {
 	fixture := servedDynamicK8sTrustFixture(t, "duplicate-name-k1")
 	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
-	token := seedScopedTokenSubject(t, h.store, h.tenant, "trust-admin@example.test", "certs:issue", "certs:read")
+	token := seedScopedTokenSubject(t, h.store, h.tenant, "trust-admin@example.test", "certs:issue", "certs:read", "issuers:write")
 	request := map[string]any{
 		"name": "Payments K8s", "method": "k8s_sat",
 		"issuer": "https://kubernetes.default.svc", "audience": "trstctl", "jwks": fixture.JWKS,

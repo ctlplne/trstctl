@@ -1,0 +1,1 @@
+import{m as s,t}from"./schemas-mC_4ML8M.js";function r(r){return s(t,r)}export{r as t};

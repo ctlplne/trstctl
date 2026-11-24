@@ -260,6 +260,12 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 		}
 		return req, err
 	}
+	if trust.AdminReviewRequired {
+		if trust.RequiresImmutableGitHubPin() {
+			return req, errStatus(http.StatusBadRequest, "issuer administrator must review the selected GitHub trust source and update it with an immutable pin")
+		}
+		return req, errStatus(http.StatusBadRequest, "issuer administrator must review and replace this historical trust source before use")
+	}
 	if trust.AuthorityPending || !trust.Enabled || trust.RevokedAt != nil {
 		return req, errStatus(http.StatusBadRequest, "trust_source_id must be enabled and not revoked")
 	}

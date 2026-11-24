@@ -70,7 +70,9 @@ type workloadAttesterTrustSourceResponse struct {
 	AllowedRepositoryIDs []string        `json:"allowed_repository_ids"`
 	ImmutablePinRequired bool            `json:"immutable_pin_required"`
 	Enabled              bool            `json:"enabled"`
+	ConfiguredEnabled    bool            `json:"configured_enabled"`
 	AuthorityPending     bool            `json:"authority_pending"`
+	AdminReviewRequired  bool            `json:"admin_review_required"`
 	RevokedAt            string          `json:"revoked_at,omitempty"`
 	RevokedReason        string          `json:"revoked_reason,omitempty"`
 	RotationVersion      int             `json:"rotation_version"`
@@ -138,6 +140,21 @@ func (a *API) replayWorkloadAttesterTrustSource(ctx context.Context, tenantID, s
 	}
 	if err := json.Unmarshal(receipt.Snapshot, &zero); err != nil {
 		return zero, false, err
+	}
+	// Receipts written before the upgrade lack the review flag. An unchanged
+	// idempotency retry must not present that old result as usable authority.
+	var snapshotFields map[string]json.RawMessage
+	if err := json.Unmarshal(receipt.Snapshot, &snapshotFields); err != nil {
+		return zero, false, err
+	}
+	if _, recorded := snapshotFields["AdminReviewRequired"]; !recorded {
+		zero.AdminReviewRequired = true
+	}
+	if _, recorded := snapshotFields["ConfiguredEnabled"]; !recorded {
+		zero.ConfiguredEnabled = zero.Enabled
+	}
+	if zero.AdminReviewRequired {
+		zero.Enabled = false
 	}
 	if zero.TenantID != tenantID || zero.ID != receipt.SourceID {
 		return store.WorkloadAttesterTrustSource{}, false, errors.New("api: attester trust receipt differs from source")
@@ -403,7 +420,7 @@ func (a *API) emitWorkloadAttesterTrustSource(ctx context.Context, tenantID, id,
 	payload, err := json.Marshal(projections.WorkloadAttesterTrustSourceUpserted{
 		ID: id, Name: req.Name, Method: req.Method, Issuer: req.Issuer, Audience: req.Audience,
 		JWKS: req.JWKS, RootCertsPEM: req.RootCertsPEM, ExpectedNonceBase64: req.ExpectedNonceBase64,
-		Enabled: *req.Enabled, RotationVersion: rotationVersion,
+		Enabled: *req.Enabled, IssuerAdminApproved: true, RotationVersion: rotationVersion,
 		SelfAuthenticating: req.SelfAuthenticating, AllowedOwners: req.AllowedOwners,
 		AllowedOwnerIDs: req.AllowedOwnerIDs, AllowedRepositoryIDs: req.AllowedRepositoryIDs,
 	})
@@ -444,8 +461,12 @@ func (a *API) appendAndProjectWorkloadAttesterTrustSource(ctx context.Context, t
 	}
 	defer secret.Wipe(bindingMaterial)
 	eventID := googleuuid.NewSHA1(tenantUUID, []byte("trstctl:workload-attester-trust-command:"+idempotencyKey)).String()
+	schemaVersion := events.DefaultSchemaVersion
+	if eventType == projections.EventWorkloadAttesterTrustSourceUpserted {
+		schemaVersion = 2
+	}
 	wanted := events.Event{ID: eventID, Type: eventType, TenantID: tenantID,
-		SchemaVersion: events.DefaultSchemaVersion,
+		SchemaVersion: schemaVersion,
 		Time:          time.Now().UTC().Truncate(time.Microsecond), Data: payload}
 	if actor, ok := events.ActorFromContext(ctx); ok {
 		wanted.Actor = &actor
@@ -715,10 +736,12 @@ func toWorkloadAttesterTrustSourceResponse(rec store.WorkloadAttesterTrustSource
 		ID: rec.ID, TenantID: rec.TenantID, Name: rec.Name, Method: rec.Method,
 		Issuer: rec.Issuer, Audience: rec.Audience, JWKS: jwks, RootCertsPEM: roots,
 		ExpectedNonceBase64: rec.ExpectedNonceBase64, Enabled: rec.Enabled,
+		ConfiguredEnabled:  rec.ConfiguredEnabled,
 		SelfAuthenticating: rec.SelfAuthenticating, AllowedOwners: owners,
 		AllowedOwnerIDs: ownerIDs, AllowedRepositoryIDs: repositoryIDs,
 		ImmutablePinRequired: rec.RequiresImmutableGitHubPin(),
 		AuthorityPending:     rec.AuthorityPending,
+		AdminReviewRequired:  rec.AdminReviewRequired,
 		RevokedReason:        rec.RevokedReason, RotationVersion: rec.RotationVersion,
 		CreatedAt: rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),

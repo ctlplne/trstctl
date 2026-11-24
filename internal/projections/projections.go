@@ -3353,7 +3353,10 @@ type WorkloadAttesterTrustSourceUpserted struct {
 	RootCertsPEM        []string        `json:"root_certs_pem,omitempty"`
 	ExpectedNonceBase64 string          `json:"expected_nonce_base64,omitempty"`
 	Enabled             bool            `json:"enabled"`
-	RotationVersion     int             `json:"rotation_version,omitempty"`
+	// V2 is emitted only after issuers:write admission. Historical V1 events
+	// remain replayable but cannot authorize attested issuance until reviewed.
+	IssuerAdminApproved bool `json:"issuer_admin_approved,omitempty"`
+	RotationVersion     int  `json:"rotation_version,omitempty"`
 	// A self-authenticating source can act as a bearer credential with an
 	// immutable pin. Historical events without pins remain replayable.
 	SelfAuthenticating   bool     `json:"self_authenticating,omitempty"`
@@ -6002,7 +6005,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventMDMSCEPPolicyUpserted:                    {1: true},
 	EventMDMSCEPPolicyDeleted:                     {1: true},
 	EventMDMSCEPChallengeRotated:                  {1: true},
-	EventWorkloadAttesterTrustSourceUpserted:      {1: true},
+	EventWorkloadAttesterTrustSourceUpserted:      {1: true, 2: true},
 	EventWorkloadAttesterTrustSourceRotated:       {1: true},
 	EventWorkloadAttesterTrustSourceRevoked:       {1: true},
 	EventWorkloadAttesterTrustSourceDeleted:       {1: true},
@@ -8594,7 +8597,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Method: pl.Method,
 			Issuer: pl.Issuer, Audience: pl.Audience, JWKS: pl.JWKS,
 			RootCertsPEM: pl.RootCertsPEM, ExpectedNonceBase64: pl.ExpectedNonceBase64,
-			Enabled: pl.Enabled, RotationVersion: pl.RotationVersion, CreatedAt: e.Time, UpdatedAt: e.Time,
+			Enabled: pl.Enabled, AdminReviewRequired: e.SchemaVersion < 2 || !pl.IssuerAdminApproved,
+			RotationVersion: pl.RotationVersion, CreatedAt: e.Time, UpdatedAt: e.Time,
 			SelfAuthenticating: pl.SelfAuthenticating, AllowedOwners: pl.AllowedOwners,
 			AllowedOwnerIDs: pl.AllowedOwnerIDs, AllowedRepositoryIDs: pl.AllowedRepositoryIDs,
 		}); err != nil {

@@ -30041,6 +30041,8 @@ export interface components {
             verify_server_name?: string;
         };
         WorkloadAttesterTrustSource: {
+            /** @description This historical trust source is denied until an issuers:write administrator reviews and replaces its configuration. */
+            admin_review_required: boolean;
             /** @description The GitHub owner ID pins configured for this issuer. Present in current reads; older replayed responses may omit it. */
             allowed_owner_ids?: string[];
             /** @description Lower-cased GitHub repository owner names checked alongside immutable pins. */
@@ -30050,8 +30052,11 @@ export interface components {
             audience?: string;
             /** @description An accepted trust change is awaiting projection; old proof is denied until recovery completes. */
             authority_pending?: boolean;
+            /** @description Saved enabled choice, retained while a trust change is pending or issuer review is required. */
+            configured_enabled: boolean;
             /** Format: date-time */
             created_at: string;
+            /** @description Effective enabled state. Pending or issuer-review-required sources are denied even when configured_enabled is true. */
             enabled: boolean;
             expected_nonce_base64?: string;
             /** Format: uuid */

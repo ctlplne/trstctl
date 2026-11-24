@@ -99,7 +99,7 @@ func TestServedGitHubActionIssuesOnTheAttestationAloneA84(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AttestedIssuance = AttestedIssuanceConfig{Enabled: true, TrustDomain: "ci.example.org", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour}
 	})
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a84-admin@example.test", "certs:issue", "certs:read", "audit:read")
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a84-admin@example.test", "certs:issue", "certs:read", "audit:read", "issuers:write")
 	publicKeyPEM := servedAttestedPublicKeyPEM(t)
 	upstream := githubWorkflowToken(t, signer, "gha-a84", "acme")
 
@@ -268,7 +268,7 @@ func TestShippedGitHubActionRunsWithoutAnAPITokenA84(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AttestedIssuance = AttestedIssuanceConfig{Enabled: true, TrustDomain: "ci.example.org", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour}
 	})
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a84-action-admin@example.test", "certs:issue", "certs:read")
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a84-action-admin@example.test", "certs:issue", "certs:read", "issuers:write")
 	if status, body := servedSelfAuthenticatingGitHubSource(t, h, admin, "a84-action", jwk, map[string]any{
 		"self_authenticating": true, "allowed_owners": []string{"acme"}, "allowed_owner_ids": []string{servedGitHubOwnerID},
 	}); status != http.StatusCreated {

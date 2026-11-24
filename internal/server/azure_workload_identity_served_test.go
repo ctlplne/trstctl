@@ -35,7 +35,7 @@ func TestServedAzureFederatedOutboxTenantIsolationTokenRedaction(t *testing.T) {
 	trust := servedDynamicK8sTrustFixture(t, "azure-wif-k1")
 	h := newAzureFederatedServedHarness(t, fixture, nil)
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "azure-wif-admin",
-		"secrets:read", "secrets:write", "certs:read", "certs:issue")
+		"secrets:read", "secrets:write", "certs:read", "certs:issue", "issuers:write")
 	sourceID := configureServedAzureFederatedSource(t, h, token, trust)
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs",
@@ -121,7 +121,7 @@ func TestServedAzureFederatedAirGapIsTerminalWithoutNetwork(t *testing.T) {
 	trust := servedDynamicK8sTrustFixture(t, "azure-wif-airgap-k1")
 	h := newAzureFederatedServedHarness(t, fixture, guard)
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "azure-wif-airgap-admin",
-		"secrets:read", "secrets:write", "certs:read", "certs:issue")
+		"secrets:read", "secrets:write", "certs:read", "certs:issue", "issuers:write")
 	sourceID := configureServedAzureFederatedSource(t, h, token, trust)
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs",
@@ -216,6 +216,11 @@ func configureServedAzureFederatedSource(t *testing.T, h *servedHarness, token s
 	}
 	if err := json.Unmarshal(body, &trustResponse); err != nil || trustResponse.ID == "" {
 		t.Fatalf("decode Azure trust source: err=%v body=%s", err, body)
+	}
+	effective, err := h.store.GetEffectiveWorkloadAttesterTrustSource(t.Context(), h.tenant, trustResponse.ID)
+	if err != nil || !effective.Enabled || effective.AdminReviewRequired || effective.AuthorityPending {
+		t.Fatalf("new Azure trust source is not eligible: enabled=%t review=%t pending=%t err=%v",
+			effective.Enabled, effective.AdminReviewRequired, effective.AuthorityPending, err)
 	}
 	status, body = secretsReqKey(t, h, http.MethodPost,
 		"/api/v1/secrets/syncs/workload-identity-sources",

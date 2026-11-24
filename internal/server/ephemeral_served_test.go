@@ -122,7 +122,7 @@ func TestServedEphemeralUsesTenantOwnedKubernetesTrustSource(t *testing.T) {
 		}
 	})
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-requester", "certs:request", "certs:read")
-	approver := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-approver", "certs:issue", "certs:read")
+	approver := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-approver", "certs:issue", "certs:read", "issuers:write")
 	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources",
 		approver, "ephemeral-trust-create", map[string]any{
 			"name": "ephemeral-k8s", "method": "k8s_sat",

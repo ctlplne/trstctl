@@ -2222,6 +2222,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventMDMSCEPPolicyDeleted, 1}:                                             privacyPayloadShape[MDMSCEPPolicyDeleted](),
 		{EventMDMSCEPChallengeRotated, 1}:                                          privacyPayloadShape[MDMSCEPChallengeRotated](),
 		{EventWorkloadAttesterTrustSourceUpserted, 1}:                              privacyPayloadShape[WorkloadAttesterTrustSourceUpserted](),
+		{EventWorkloadAttesterTrustSourceUpserted, 2}:                              privacyPayloadShape[WorkloadAttesterTrustSourceUpserted](),
 		{EventWorkloadAttesterTrustSourceRotated, 1}:                               privacyPayloadShape[WorkloadAttesterTrustSourceRotated](),
 		{EventWorkloadAttesterTrustSourceRevoked, 1}:                               privacyPayloadShape[WorkloadAttesterTrustSourceRevoked](),
 		{EventWorkloadAttesterTrustSourceDeleted, 1}:                               privacyPayloadShape[WorkloadAttesterTrustSourceDeleted](),

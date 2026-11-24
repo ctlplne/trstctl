@@ -47,7 +47,8 @@ token instead, set `token: ${{ secrets.TRSTCTL_CI_TOKEN }}` (scoped to
 
 1. Create a `github_oidc` trust source for the tenant
    (`POST /api/v1/workloads/attester-trust-sources`, or the console's
-   Workloads page): issuer `https://token.actions.githubusercontent.com`, the
+   Workloads page) using an issuer administrator token with `issuers:write`:
+   issuer `https://token.actions.githubusercontent.com`, the
    audience your workflows request, GitHub's JWKS, and
    `self_authenticating: true`. Set `allowed_owner_ids` to admit the owner's
    repositories, `allowed_repository_ids` to admit specific repositories, or

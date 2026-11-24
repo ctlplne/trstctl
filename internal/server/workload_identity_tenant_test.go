@@ -27,7 +27,7 @@ func TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated(t *testing.T) {
 	for _, tenant := range []string{h.tenant, tenantB} {
 		fixture := servedDynamicK8sTrustFixture(t, "independent-ephemeral-proof")
 		requester := seedScopedTokenSubject(t, h.store, tenant, "tenant-requester", "certs:request", "certs:read")
-		approver := seedScopedTokenSubject(t, h.store, tenant, "tenant-approver", "certs:issue", "certs:read")
+		approver := seedScopedTokenSubject(t, h.store, tenant, "tenant-approver", "certs:issue", "certs:read", "issuers:write")
 		otherTenant := tenantB
 		if tenant == tenantB {
 			otherTenant = h.tenant
@@ -91,7 +91,7 @@ func TestServedWorkloadIdentitiesAreTenantIsolated(t *testing.T) {
 	})
 	const tenantB = "22222222-2222-2222-2222-222222222222"
 	registerServedTenantID(t, h, tenantB, "Independent identity tenant")
-	tokenB := seedScopedToken(t, h.store, tenantB, "certs:issue", "certs:read", "identities:write")
+	tokenB := seedScopedToken(t, h.store, tenantB, "certs:issue", "certs:read", "identities:write", "issuers:write")
 	keyB, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)

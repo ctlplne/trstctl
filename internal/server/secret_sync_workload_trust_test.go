@@ -42,7 +42,7 @@ func TestCloudWorkloadWorkersEnforceEffectiveGitHubTrust(t *testing.T) {
 	const trustID = "00000000-0000-4000-8000-000000038411"
 	trust := projections.WorkloadAttesterTrustSourceUpserted{
 		ID: trustID, Name: "immutable-workflow-policy", Method: "github_oidc",
-		Audience: "trstctl", JWKS: jwks, Enabled: true,
+		Audience: "trstctl", JWKS: jwks, Enabled: true, IssuerAdminApproved: true,
 		AllowedOwnerIDs: []string{servedGitHubOwnerID}, AllowedRepositoryIDs: []string{"456"},
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
@@ -54,7 +54,7 @@ func TestCloudWorkloadWorkersEnforceEffectiveGitHubTrust(t *testing.T) {
 		}
 		return events.Event{
 			ID: id, Type: projections.EventWorkloadAttesterTrustSourceUpserted, TenantID: h.tenant,
-			Time: at, SchemaVersion: events.DefaultSchemaVersion, Data: data,
+			Time: at, SchemaVersion: 2, Data: data,
 		}
 	}
 	if _, err := h.log.Append(ctx, appendPolicy("", trust)); err != nil {

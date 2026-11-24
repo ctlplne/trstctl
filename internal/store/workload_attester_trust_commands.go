@@ -79,7 +79,7 @@ func (s *Store) WorkloadAttesterTrustReceiptByEventID(ctx context.Context, tenan
 }
 
 const workloadAttesterTrustCommandColumns = `tenant_id::text,source_id::text,
-	event_id::text,event_type,event_time,event_actor,event_payload,payload_sha256,
+	event_id::text,event_type,event_schema_version,event_time,event_actor,event_payload,payload_sha256,
 	binding_sha256,request_binding,target_disabled,status,projected_sequence`
 
 func scanWorkloadAttesterTrustCommand(row pgx.Row) (WorkloadAttesterTrustCommand, error) {
@@ -88,12 +88,11 @@ func scanWorkloadAttesterTrustCommand(row pgx.Row) (WorkloadAttesterTrustCommand
 	var digest *string
 	var sequence *int64
 	if err := row.Scan(&command.Event.TenantID, &command.SourceID,
-		&command.Event.ID, &command.Event.Type, &command.Event.Time,
+		&command.Event.ID, &command.Event.Type, &command.Event.SchemaVersion, &command.Event.Time,
 		&actor, &payload, &digest, &command.BindingSHA256, &command.RequestBinding,
 		&command.TargetDisabled, &command.Status, &sequence); err != nil {
 		return command, err
 	}
-	command.Event.SchemaVersion = events.DefaultSchemaVersion
 	command.Event.Data = payload
 	if len(actor) != 0 {
 		var a events.Actor
@@ -134,7 +133,8 @@ func (s *Store) ClaimWorkloadAttesterTrustCommand(ctx context.Context, candidate
 	var canonical WorkloadAttesterTrustCommand
 	if candidate.Event.TenantID == "" || candidate.SourceID == "" || candidate.Event.ID == "" ||
 		!validWorkloadAttesterTrustCommandType(candidate.Event.Type) ||
-		candidate.Event.SchemaVersion != events.DefaultSchemaVersion ||
+		(candidate.Event.SchemaVersion != events.DefaultSchemaVersion &&
+			(candidate.Event.Type != "workload.attester_trust_source.upserted" || candidate.Event.SchemaVersion != 2)) ||
 		candidate.Event.Time.IsZero() ||
 		!candidate.Event.Time.Equal(candidate.Event.Time.UTC().Truncate(time.Microsecond)) ||
 		len(candidate.Event.Data) == 0 || len(candidate.BindingSHA256) != 64 ||
@@ -210,6 +210,7 @@ func (s *Store) ClaimWorkloadAttesterTrustCommand(ctx context.Context, candidate
 						if canonical.BindingSHA256 != candidate.BindingSHA256 ||
 							canonical.RequestBinding != candidate.RequestBinding ||
 							canonical.Event.Type != candidate.Event.Type ||
+							canonical.Event.SchemaVersion != candidate.Event.SchemaVersion ||
 							canonical.TargetDisabled != candidate.TargetDisabled ||
 							(canonical.Status == "pending" && (!bytes.Equal(canonical.Event.Data, candidate.Event.Data) ||
 								!reflect.DeepEqual(canonical.Event.Actor, candidate.Event.Actor))) {
@@ -228,20 +229,22 @@ func (s *Store) ClaimWorkloadAttesterTrustCommand(ctx context.Context, candidate
 					_, err = tx.Exec(barrierCtx, `UPDATE workload_attester_trust_commands SET
 						event_id=$3,event_type=$4,event_time=$5,event_actor=$6,event_payload=$7,
 						payload_sha256=$8,binding_sha256=$9,request_binding=$10,target_disabled=$11,
+						event_schema_version=$12,
 						status='pending',projected_sequence=NULL,updated_at=now()
 						WHERE tenant_id=$1 AND source_id=$2`, candidate.Event.TenantID, candidate.SourceID,
 						candidate.Event.ID, candidate.Event.Type, candidate.Event.Time, actor,
 						candidate.Event.Data, crypto.SHA256Hex(candidate.Event.Data),
-						candidate.BindingSHA256, candidate.RequestBinding, candidate.TargetDisabled)
+						candidate.BindingSHA256, candidate.RequestBinding, candidate.TargetDisabled,
+						candidate.Event.SchemaVersion)
 				} else {
 					_, err = tx.Exec(barrierCtx, `INSERT INTO workload_attester_trust_commands
 						(tenant_id,source_id,event_id,event_type,event_time,event_actor,event_payload,
-						payload_sha256,binding_sha256,request_binding,target_disabled)
-						VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, candidate.Event.TenantID,
+						payload_sha256,binding_sha256,request_binding,target_disabled,event_schema_version)
+						VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, candidate.Event.TenantID,
 						candidate.SourceID, candidate.Event.ID, candidate.Event.Type,
 						candidate.Event.Time, actor, candidate.Event.Data,
 						crypto.SHA256Hex(candidate.Event.Data), candidate.BindingSHA256, candidate.RequestBinding,
-						candidate.TargetDisabled)
+						candidate.TargetDisabled, candidate.Event.SchemaVersion)
 				}
 				if err != nil {
 					return err
@@ -324,7 +327,8 @@ func (s *Store) CompleteWorkloadAttesterTrustCommandTx(ctx context.Context, tx p
 			`SELECT id::text,tenant_id::text,name,method,issuer,audience,jwks,
 			        root_certs_pem,expected_nonce_base64,enabled,revoked_at,revoked_reason,
 			        rotation_version,last_rotated_at,created_at,updated_at,
-			        self_authenticating,allowed_owners,allowed_owner_ids,allowed_repository_ids
+			        self_authenticating,allowed_owners,allowed_owner_ids,allowed_repository_ids,
+			        admin_review_required
 			   FROM workload_attester_trust_sources WHERE tenant_id=$1 AND id=$2`,
 			event.TenantID, sourceID), &source); err != nil {
 			return err

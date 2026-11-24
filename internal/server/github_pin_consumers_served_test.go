@@ -50,7 +50,7 @@ func TestServedGitHubPinConsumersRequireCurrentTrust(t *testing.T) {
 			TenantID: servedTestTenant, ID: "workflow-ssh", Host: "lab.example.test", Port: 22, Principals: []string{"acme"},
 		}}}
 	})
-	operator := seedScopedTokenSubject(t, h.store, h.tenant, "workflow-operator", "certs:issue", "certs:read")
+	operator := seedScopedTokenSubject(t, h.store, h.tenant, "workflow-operator", "certs:issue", "certs:read", "issuers:write")
 	const requesterSubject = "workflow-requester"
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, requesterSubject, "certs:request", "certs:read", "access:write")
 	reviewerOne := seedScopedTokenSubject(t, h.store, h.tenant, "workflow-reviewer-one", "access:approve")

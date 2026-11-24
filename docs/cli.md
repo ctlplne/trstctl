@@ -408,6 +408,11 @@ Plus `version`. `trstctl` (the server binary) additionally serves `token`,
 
 ### Add IDs to an existing GitHub OIDC trust source
 
+Use a token with `issuers:write` for create, update, rotate, revoke, and delete.
+`certs:issue` permits attested issuance but does not permit trust-source changes.
+After upgrade, `admin_review_required: true` means an old source is excluded from
+verification until an issuer administrator checks and replaces its configuration.
+
 List sources in the target tenant and look for `immutable_pin_required: true`.
 Obtain the owner or repository IDs from the administration records for the
 source's issuer. Put them in JSON as strings to preserve every digit.
@@ -435,6 +440,11 @@ replacement of a pinned source requires both arrays in the request. Use
 `[]` to remove a condition deliberately, with any remaining name or
 self-authentication rule still backed by an ID. Use the same JSON field names
 with `workloads attester-trust-sources create --file` for a new source.
+For a historical source marked `admin_review_required`, `enabled` is the
+effective state and is false until review completes. `configured_enabled` is
+the saved choice. Preserve `enabled: false` in the reviewed update body for a
+source that should stay disabled; set it to `true` only when it should serve
+proofs.
 Confirm the effective read shows the configured IDs and clears
 `immutable_pin_required`. Key or JWKS rollover within one issuer uses
 `rotate` and preserves the pins.

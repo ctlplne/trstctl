@@ -18978,11 +18978,13 @@ VerificationSuggestions = TypedDict(
 WorkloadAttesterTrustSource = TypedDict(
     'WorkloadAttesterTrustSource',
     {
+        'admin_review_required': bool,
         'allowed_owner_ids': list[str],
         'allowed_owners': list[str],
         'allowed_repository_ids': list[str],
         'audience': str,
         'authority_pending': bool,
+        'configured_enabled': bool,
         'created_at': str,
         'enabled': bool,
         'expected_nonce_base64': str,

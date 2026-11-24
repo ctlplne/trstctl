@@ -26,7 +26,7 @@ func TestServedBrokerPreviewIsExactEffectFreeAndNeverVerifiesTaskOrProof(t *test
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute,
 			MaxTTL: time.Hour, PolicyModule: servedBrokerAllowPolicy, Attestors: []attest.Attestor{attestor}}
 	})
-	owner := seedScopedTokenSubject(t, h.store, h.tenant, "broker-preview-owner", "certs:issue", "certs:read")
+	owner := seedScopedTokenSubject(t, h.store, h.tenant, "broker-preview-owner", "certs:issue", "certs:read", "issuers:write")
 	reader := seedScopedToken(t, h.store, h.tenant, "certs:read")
 	signer := &countingEphemeralDigestSigner{DigestSigner: h.srv.agentBroker.caSigner}
 	h.srv.agentBroker.caSigner = signer
@@ -139,7 +139,7 @@ func TestServedBrokerTenantTrustRotationRevocationAndRequesterCustody(t *testing
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}
 	})
-	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")
+	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "issuers:write")
 	const otherTenant = "22222222-2222-2222-2222-222222222222"
 	registerServedTenantID(t, h, otherTenant, "Broker neighbor")
 	neighbor := seedScopedToken(t, h.store, otherTenant, "certs:issue", "certs:read")

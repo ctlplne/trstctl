@@ -30,7 +30,7 @@ func TestServedCloudWorkloadSourceRequiresEffectiveGitHubTrust(t *testing.T) {
 	fixture := newAWSFederatedSecretSyncFixture(t)
 	h := newAWSFederatedServedHarness(t, fixture, nil)
 	operator := seedScopedTokenSubject(t, h.store, h.tenant, "workflow-trust-operator",
-		"secrets:read", "secrets:write", "certs:read", "certs:issue")
+		"secrets:read", "secrets:write", "certs:read", "certs:issue", "issuers:write")
 	const sourceID = "00000000-0000-4000-8000-000000038401"
 	data, err := json.Marshal(projections.WorkloadAttesterTrustSourceUpserted{
 		ID: sourceID, Name: "legacy-workflow", Method: "github_oidc", Audience: "trstctl",
@@ -74,7 +74,7 @@ func TestServedAWSFederatedOutboxTenantIsolationTokenRedaction(t *testing.T) {
 	trust := servedDynamicK8sTrustFixture(t, "aws-wif-k1")
 	h := newAWSFederatedServedHarness(t, fixture, nil)
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "aws-wif-admin",
-		"secrets:read", "secrets:write", "certs:read", "certs:issue")
+		"secrets:read", "secrets:write", "certs:read", "certs:issue", "issuers:write")
 	sourceID := configureServedAWSFederatedSource(t, h, token, trust)
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs",
@@ -160,7 +160,7 @@ func TestServedAWSFederatedAirGapIsTerminalWithoutNetwork(t *testing.T) {
 	trust := servedDynamicK8sTrustFixture(t, "aws-wif-airgap-k1")
 	h := newAWSFederatedServedHarness(t, fixture, guard)
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "aws-wif-airgap-admin",
-		"secrets:read", "secrets:write", "certs:read", "certs:issue")
+		"secrets:read", "secrets:write", "certs:read", "certs:issue", "issuers:write")
 	sourceID := configureServedAWSFederatedSource(t, h, token, trust)
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs",

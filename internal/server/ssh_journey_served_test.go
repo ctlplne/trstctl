@@ -38,7 +38,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	token := seedScopedToken(t, h.store, h.tenant,
 		"discovery:write", "discovery:read",
 		"agents:write", "agents:read",
-		"certs:issue", "certs:write", "certs:read",
+		"certs:issue", "certs:write", "certs:read", "issuers:write",
 		"identities:write", "identities:read",
 	)
 	// SSH fleet discovery is relay-owned. Bootstrap the prerequisite through the

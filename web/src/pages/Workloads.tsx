@@ -3,9 +3,11 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Ban, Network, Plus, RefreshCw, RotateCw, ServerOff, ShieldAlert, Trash2, Waypoints } from "lucide-react";
 import { z } from "zod";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useCan } from "@/components/rbac";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
@@ -42,7 +44,7 @@ import type { MessageKey } from "@/i18n/messages";
 type SafeAttestation = Pick<Attestation, "id" | "method" | "selectors" | "subject" | "verified_at">;
 type AttestedSVIDRow = Pick<AttestedSVID, "credential_id" | "not_after" | "subject"> & { attestation: SafeAttestation };
 type TrustSourceMethod = WorkloadAttesterTrustSourceRequest["method"];
-type TrustSourceStatusLabels = { pending: string; revoked: string; disabled: string; enabled: string; pinRequired: string };
+type TrustSourceStatusLabels = { pending: string; review: string; revoked: string; disabled: string; enabled: string; pinRequired: string };
 
 const githubPinFields = ["allowed_owner_ids", "allowed_repository_ids"] as const;
 const githubPinID = z.string().refine((id) => /^[1-9][0-9]{0,19}$/.test(id) && (id.length < 20 || id <= "18446744073709551615"));
@@ -136,6 +138,7 @@ const attesterMethods: Array<{ value: TrustSourceMethod; labelKey: MessageKey }>
 
 export function Workloads() {
   const { t, formatDateTime: formatDate } = useTranslation();
+  const canManageTrust = useCan("issuers:write");
   const [searchParams] = useSearchParams();
   const [overviewNow] = useState(() => Date.now());
   const [provider, setProvider] = useState("postgresql");
@@ -156,6 +159,7 @@ export function Workloads() {
   }, [leaseCredential]);
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
   const [attesterTrustSources, setAttesterTrustSources] = useState<WorkloadAttesterTrustSource[]>([]);
+  const [reviewTrustSource, setReviewTrustSource] = useState<WorkloadAttesterTrustSource | null>(null);
   const [trustSourceMethod, setTrustSourceMethod] = useState<TrustSourceMethod>("k8s_sat");
   const [githubPinErrors, setGitHubPinErrors] = useState<Partial<Record<keyof GitHubPinFields, string>>>({});
   const [rotateTrustSourceID, setRotateTrustSourceID] = useState("");
@@ -412,6 +416,36 @@ export function Workloads() {
     }
   }
 
+  async function reviewAttesterTrustSource(source: WorkloadAttesterTrustSource) {
+    setBusy(`trust-review:${source.id}`);
+    setTrustSourceError(null);
+    try {
+      // A deliberate issuer-admin replacement creates a v2 approval event.
+      // Include both GitHub ID arrays so a pinned source cannot lose its pins.
+      const reviewed = await api.updateWorkloadAttesterTrustSource(source.id, {
+        name: source.name,
+        method: source.method,
+        issuer: source.issuer,
+        audience: source.audience,
+        jwks: source.jwks,
+        root_certs_pem: source.root_certs_pem,
+        expected_nonce_base64: source.expected_nonce_base64,
+        enabled: source.configured_enabled,
+        self_authenticating: source.self_authenticating,
+        allowed_owners: source.allowed_owners,
+        allowed_owner_ids: source.allowed_owner_ids ?? [],
+        allowed_repository_ids: source.allowed_repository_ids ?? [],
+      });
+      upsertTrustSource(reviewed);
+      setReviewTrustSource(null);
+    } catch (err) {
+      setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.reviewErrorFallback")));
+      await readTrustSources().catch(() => undefined);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function revokeAttesterTrustSource(source: WorkloadAttesterTrustSource) {
     setBusy(`trust-revoke:${source.id}`);
     setTrustSourceError(null);
@@ -539,14 +573,16 @@ export function Workloads() {
         description={t("workloads.overview.answer")}
         technicalDetails={t("workloads.overview.details")}
         actions={
-          <Button
-            type="button"
-            aria-expanded={showTrustSourceSetup}
-            aria-controls="attester-trust-source-form"
-            onClick={() => setShowTrustSourceSetup((visible) => !visible)}
-          >
-            {t("workloads.page.setupAction")}
-          </Button>
+          canManageTrust ? (
+            <Button
+              type="button"
+              aria-expanded={showTrustSourceSetup}
+              aria-controls="attester-trust-source-form"
+              onClick={() => setShowTrustSourceSetup((visible) => !visible)}
+            >
+              {t("workloads.page.setupAction")}
+            </Button>
+          ) : null
         }
       />
 
@@ -1103,7 +1139,7 @@ export function Workloads() {
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             {t("workloads.attestation.refreshTrustSources")}
           </Button>
-          {attesterTrustSources.length > 0 ? (
+          {canManageTrust && attesterTrustSources.length > 0 ? (
             <Button
               type="button"
               variant="outline"
@@ -1125,7 +1161,7 @@ export function Workloads() {
           </Button>
         </div>
 
-        {showTrustSourceSetup ? (
+        {canManageTrust && showTrustSourceSetup ? (
           <form
             id="attester-trust-source-form"
             aria-labelledby="attester-trust-source-heading"
@@ -1216,7 +1252,7 @@ export function Workloads() {
           </form>
         ) : null}
 
-        {showTrustSourceRotation ? (
+        {canManageTrust && showTrustSourceRotation ? (
           <form
             id="attester-trust-rotate-form"
             aria-labelledby="attester-trust-rotate-heading"
@@ -1314,12 +1350,16 @@ export function Workloads() {
                       <div className="grid gap-1">
                         {trustSourceStatusBadge(source, {
                           pending: t("workloads.attestation.statusPending"),
+                          review: t("workloads.attestation.statusReviewRequired"),
                           revoked: t("workloads.attestation.statusRevoked"),
                           disabled: t("workloads.attestation.statusDisabled"),
                           enabled: t("workloads.attestation.statusEnabled"),
                           pinRequired: t("workloads.attestation.githubIDPinRequired"),
                         })}
-                        {source.immutable_pin_required && source.enabled && !source.revoked_at && !source.authority_pending ? (
+                        {source.admin_review_required ? (
+                          <span className="text-xs text-muted-foreground">{t("workloads.attestation.reviewRemediation")}</span>
+                        ) : null}
+                        {source.immutable_pin_required && !source.revoked_at && !source.authority_pending ? (
                           <span className="text-xs text-muted-foreground">{t("workloads.attestation.githubIDPinRemediation")}</span>
                         ) : null}
                         <span className="text-xs text-muted-foreground">
@@ -1329,28 +1369,41 @@ export function Workloads() {
                       </div>
                     </td>
                     <td>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busy === `trust-revoke:${source.id}` || Boolean(source.revoked_at)}
-                          onClick={() => void revokeAttesterTrustSource(source)}
-                        >
-                          <Ban className="h-4 w-4" aria-hidden="true" />
-                          {t("workloads.attestation.revokeButton")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busy === `trust-delete:${source.id}`}
-                          onClick={() => void deleteAttesterTrustSource(source)}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                          {t("workloads.attestation.offboardButton")}
-                        </Button>
-                      </div>
+                      {canManageTrust ? (
+                        <div className="flex flex-wrap gap-2">
+                          {source.admin_review_required && !source.immutable_pin_required && !source.revoked_at ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy === `trust-review:${source.id}`}
+                              onClick={() => setReviewTrustSource(source)}
+                            >
+                              {t("workloads.attestation.reviewButton")}
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy === `trust-revoke:${source.id}` || Boolean(source.revoked_at)}
+                            onClick={() => void revokeAttesterTrustSource(source)}
+                          >
+                            <Ban className="h-4 w-4" aria-hidden="true" />
+                            {t("workloads.attestation.revokeButton")}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy === `trust-delete:${source.id}`}
+                            onClick={() => void deleteAttesterTrustSource(source)}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            {t("workloads.attestation.offboardButton")}
+                          </Button>
+                        </div>
+                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -1358,6 +1411,58 @@ export function Workloads() {
             </tbody>
           </table>
         </ScrollableTableRegion>
+
+        {reviewTrustSource ? (
+          <Dialog
+            open
+            role="alertdialog"
+            titleId="attester-trust-review-heading"
+            descriptionId="attester-trust-review-description"
+            onClose={() => {
+              if (!busy) setReviewTrustSource(null);
+            }}
+            closeOnBackdropClick={false}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            overlayClassName="absolute inset-0 bg-black/55"
+            panelClassName="relative w-full max-w-2xl rounded-panel border border-border bg-card p-5 shadow-elevation2"
+          >
+            <h2 id="attester-trust-review-heading" className="text-title font-semibold">
+              {t("workloads.attestation.reviewHeading", { name: reviewTrustSource.name })}
+            </h2>
+            <p id="attester-trust-review-description" className="mt-1 text-sm text-muted-foreground">
+              {t("workloads.attestation.reviewDescription")}
+            </p>
+            <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-panel border border-border bg-muted p-3 text-xs">
+              {JSON.stringify(
+                {
+                  id: reviewTrustSource.id,
+                  name: reviewTrustSource.name,
+                  method: reviewTrustSource.method,
+                  issuer: reviewTrustSource.issuer,
+                  audience: reviewTrustSource.audience,
+                  jwks: reviewTrustSource.jwks,
+                  root_certs_pem: reviewTrustSource.root_certs_pem,
+                  expected_nonce_base64: reviewTrustSource.expected_nonce_base64,
+                  self_authenticating: reviewTrustSource.self_authenticating,
+                  allowed_owners: reviewTrustSource.allowed_owners,
+                  allowed_owner_ids: reviewTrustSource.allowed_owner_ids,
+                  allowed_repository_ids: reviewTrustSource.allowed_repository_ids,
+                  configured_enabled: reviewTrustSource.configured_enabled,
+                },
+                null,
+                2,
+              )}
+            </pre>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" disabled={busy !== null} onClick={() => void reviewAttesterTrustSource(reviewTrustSource)}>
+                {t("workloads.attestation.reviewConfirm")}
+              </Button>
+              <Button type="button" variant="outline" disabled={busy !== null} onClick={() => setReviewTrustSource(null)}>
+                {t("workloads.attestation.reviewCancel")}
+              </Button>
+            </div>
+          </Dialog>
+        ) : null}
 
         {!hasEnabledTrustSource ? <p className="text-sm text-muted-foreground">{t("workloads.attestation.addTrustBeforeIssue")}</p> : null}
 
@@ -1454,6 +1559,7 @@ function attestationMetadataOnly(attestation: Attestation): SafeAttestation {
 function trustSourceStatusBadge(source: WorkloadAttesterTrustSource, labels: TrustSourceStatusLabels) {
   if (source.authority_pending) return <StatusBadge value="pending" label={labels.pending} tone="warning" />;
   if (source.revoked_at) return <StatusBadge value="revoked" label={labels.revoked} tone="critical" />;
+  if (source.admin_review_required) return <StatusBadge value="review" label={labels.review} tone="warning" />;
   if (!source.enabled) return <StatusBadge value="disabled" label={labels.disabled} tone="neutral" />;
   if (source.immutable_pin_required) return <StatusBadge value="pin-required" label={labels.pinRequired} tone="warning" />;
   return <StatusBadge value="active" label={labels.enabled} tone="success" />;

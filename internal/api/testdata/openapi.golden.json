@@ -64793,6 +64793,10 @@
       },
       "WorkloadAttesterTrustSource": {
         "properties": {
+          "admin_review_required": {
+            "description": "This historical trust source is denied until an issuers:write administrator reviews and replaces its configuration.",
+            "type": "boolean"
+          },
           "allowed_owner_ids": {
             "description": "The GitHub owner ID pins configured for this issuer. Present in current reads; older replayed responses may omit it.",
             "items": {
@@ -64821,11 +64825,16 @@
             "description": "An accepted trust change is awaiting projection; old proof is denied until recovery completes.",
             "type": "boolean"
           },
+          "configured_enabled": {
+            "description": "Saved enabled choice, retained while a trust change is pending or issuer review is required.",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
           },
           "enabled": {
+            "description": "Effective enabled state. Pending or issuer-review-required sources are denied even when configured_enabled is true.",
             "type": "boolean"
           },
           "expected_nonce_base64": {
@@ -64902,6 +64911,8 @@
           "self_authenticating",
           "allowed_owners",
           "enabled",
+          "configured_enabled",
+          "admin_review_required",
           "rotation_version",
           "created_at",
           "updated_at"
@@ -118601,7 +118612,7 @@
           }
         ],
         "summary": "Create a tenant workload attester trust source",
-        "x-trstctl-permission": "certs:issue"
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/workloads/attester-trust-sources/{id}": {
@@ -118661,7 +118672,7 @@
           }
         ],
         "summary": "Delete a workload attester trust source",
-        "x-trstctl-permission": "certs:issue"
+        "x-trstctl-permission": "issuers:write"
       },
       "get": {
         "operationId": "getWorkloadAttesterTrustSource",
@@ -118792,7 +118803,7 @@
           }
         ],
         "summary": "Replace a tenant workload attester trust source",
-        "x-trstctl-permission": "certs:issue"
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/workloads/attester-trust-sources/{id}/revoke": {
@@ -118869,7 +118880,7 @@
           }
         ],
         "summary": "Revoke a workload attester trust source",
-        "x-trstctl-permission": "certs:issue"
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/workloads/attester-trust-sources/{id}/rotate": {
@@ -118946,7 +118957,7 @@
           }
         ],
         "summary": "Rotate public trust material for a workload attester trust source",
-        "x-trstctl-permission": "certs:issue"
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/workloads/jwt-keys": {

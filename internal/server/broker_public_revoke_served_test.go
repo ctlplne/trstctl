@@ -125,7 +125,7 @@ func servedPublicBrokerRevocationFixtureWithHistoryOptions(t *testing.T, eventOp
 	opts = append(opts, options...)
 	h := newServedHarnessWithEventOptions(t, config.Protocols{}, eventOptions, opts...)
 	registerServedTenant(t, h, "Public certificate revocation")
-	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "identities:write")
+	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "identities:write", "issuers:write")
 	return h, owner, servedBrokerAgentIssueBody(t, h, owner, "agent-7")
 }
 

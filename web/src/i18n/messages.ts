@@ -28897,6 +28897,39 @@ export const messages = {
     defaultMessage: "Could not rotate attester trust source",
     description: "Fallback error text when rotating a workload attester trust source fails.",
   },
+  "workloads.attestation.reviewErrorFallback": {
+    defaultMessage: "Could not approve attester trust source",
+    description: "Fallback error text when issuer-admin review of a historical trust source fails.",
+  },
+  "workloads.attestation.reviewButton": {
+    defaultMessage: "Review configuration",
+    description: "Issuer-admin action to reapprove a historical attester trust source after checking its public configuration.",
+  },
+  "workloads.attestation.reviewHeading": {
+    defaultMessage: "Review {name} trust configuration",
+    description: "Heading for the historical trust source review dialog.",
+  },
+  "workloads.attestation.reviewDescription": {
+    defaultMessage:
+      "Check the issuer, keys, pins, and saved enabled setting against your trusted records. Approving this configuration restores its saved setting.",
+    description: "Security review instructions before a historical trust source is reapproved.",
+  },
+  "workloads.attestation.reviewConfirm": {
+    defaultMessage: "Approve this configuration",
+    description: "Confirm an inspected historical attester trust source configuration.",
+  },
+  "workloads.attestation.reviewCancel": {
+    defaultMessage: "Cancel review",
+    description: "Close historical trust-source review without changing authority.",
+  },
+  "workloads.attestation.statusReviewRequired": {
+    defaultMessage: "Issuer review required",
+    description: "Historical attester trust source is denied until an issuer administrator approves its configuration.",
+  },
+  "workloads.attestation.reviewRemediation": {
+    defaultMessage: "An issuer administrator must verify this source and reapprove it before proof can be accepted.",
+    description: "Remediation for historical trust that may have been set by an issuance-only token.",
+  },
   "workloads.attestation.revokeErrorFallback": {
     defaultMessage: "Could not revoke attester trust source",
     description: "Fallback error text when revoking a workload attester trust source fails.",

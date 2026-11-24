@@ -28,7 +28,7 @@ func TestServedBrokerAndSVIDRejectUnusableJWTTimeWindowsBeforeSigning(t *testing
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}
 		d.AttestedIssuance = AttestedIssuanceConfig{Enabled: true, TrustDomain: "served.test"}
 	})
-	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")
+	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "issuers:write")
 	status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources", owner, "served-clock-trust", map[string]any{
 		"name": "served-clock-trust", "method": "k8s_sat", "issuer": "https://kubernetes.default.svc", "audience": "trstctl",
 		"jwks": crypto.JWKS{Keys: []crypto.JWK{jwk}},

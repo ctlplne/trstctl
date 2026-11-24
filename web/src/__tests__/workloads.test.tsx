@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
 import { kubernetesControllerBadgeValue } from "@/pages/workloads/KubernetesControllerState";
 import { AppQueryProvider } from "@/lib/query";
+import { RbacProvider } from "@/components/rbac";
 import { brokerHistoryPage } from "./support/brokerIdentity";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ const { apiMock } = vi.hoisted(() => ({
     sshStatus: vi.fn(),
     workloadAttesterTrustSources: vi.fn(),
     revokeWorkloadAttesterTrustSource: vi.fn(),
+    updateWorkloadAttesterTrustSource: vi.fn(),
     issueDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
@@ -35,12 +37,14 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-function renderWorkloads(route = "/workloads") {
+function renderWorkloads(route = "/workloads", permissions: readonly string[] | null = null) {
   return render(
     <MemoryRouter initialEntries={[route]}>
-      <AppQueryProvider>
-        <Workloads />
-      </AppQueryProvider>
+      <RbacProvider permissions={permissions}>
+        <AppQueryProvider>
+          <Workloads />
+        </AppQueryProvider>
+      </RbacProvider>
     </MemoryRouter>,
   );
 }
@@ -80,6 +84,7 @@ describe("workload identity disclosure surface", () => {
     apiMock.kubernetesTrustRollouts.mockReset().mockResolvedValue({ items: [] });
     apiMock.workloadAttesterTrustSources.mockReset().mockResolvedValue({ items: [] });
     apiMock.revokeWorkloadAttesterTrustSource.mockReset();
+    apiMock.updateWorkloadAttesterTrustSource.mockReset();
     apiMock.agents.mockReset().mockResolvedValue([
       {
         id: "agent-1",
@@ -448,6 +453,54 @@ describe("workload identity disclosure surface", () => {
     expect(
       screen.getByText("No tenant trust source is enabled. Preview also checks operator-managed trust; otherwise add a trust source before issuing."),
     ).toBeInTheDocument();
+  });
+
+  it("restricts trust administration and lets an issuer administrator review historical authority", async () => {
+    const source = {
+      id: "source-legacy",
+      tenant_id: "tenant-1",
+      name: "legacy-k8s",
+      method: "k8s_sat",
+      issuer: "https://kubernetes.default.svc",
+      audience: "trstctl",
+      jwks: { keys: [] },
+      root_certs_pem: [],
+      self_authenticating: false,
+      allowed_owners: [],
+      enabled: false,
+      configured_enabled: false,
+      admin_review_required: true,
+      rotation_version: 1,
+      created_at: "2026-10-14T00:00:00Z",
+      updated_at: "2026-10-14T00:00:00Z",
+    };
+    apiMock.workloadAttesterTrustSources.mockResolvedValue({ items: [source] });
+    const issuerOnly = renderWorkloads("/workloads", ["certs:read", "certs:issue"]);
+    expect(await screen.findByText("Issuer review required")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review configuration" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rotate trust material" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeInTheDocument();
+    issuerOnly.unmount();
+
+    apiMock.updateWorkloadAttesterTrustSource.mockResolvedValue({ ...source, admin_review_required: false });
+    renderWorkloads("/workloads", ["certs:read", "issuers:write"]);
+    await screen.findByText("Issuer review required");
+    await userEvent.click(screen.getByRole("button", { name: "Review configuration" }));
+    expect(apiMock.updateWorkloadAttesterTrustSource).not.toHaveBeenCalled();
+    const review = screen.getByRole("alertdialog", { name: "Review legacy-k8s trust configuration" });
+    expect(within(review).getByText(/"configured_enabled": false/)).toBeInTheDocument();
+    expect(within(review).getByText(/"issuer": "https:\/\/kubernetes.default.svc"/)).toBeInTheDocument();
+    await userEvent.click(within(review).getByRole("button", { name: "Approve this configuration" }));
+    expect(apiMock.updateWorkloadAttesterTrustSource).toHaveBeenCalledWith(
+      "source-legacy",
+      expect.objectContaining({
+        enabled: false,
+        issuer: "https://kubernetes.default.svc",
+        allowed_owner_ids: [],
+        allowed_repository_ids: [],
+      }),
+    );
   });
 
   it("reads the effective posture after an uncertain trust revocation", async () => {

@@ -13626,11 +13626,13 @@ export interface VerificationSuggestions {
 }
 
 export interface WorkloadAttesterTrustSource {
+  admin_review_required: boolean;
   allowed_owner_ids?: string[];
   allowed_owners: string[];
   allowed_repository_ids?: string[];
   audience?: string;
   authority_pending?: boolean;
+  configured_enabled: boolean;
   created_at: string;
   enabled: boolean;
   expected_nonce_base64?: string;

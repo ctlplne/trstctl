@@ -5667,15 +5667,17 @@ func componentSchemas() map[string]*Schema {
 		"allowed_owner_ids":      {Type: "array", Items: str(), Description: "The GitHub owner ID pins configured for this issuer. Present in current reads; older replayed responses may omit it."},
 		"allowed_repository_ids": {Type: "array", Items: str(), Description: "The GitHub repository ID pins configured for this issuer. Present in current reads; older replayed responses may omit it."},
 		"immutable_pin_required": {Type: "boolean", Description: "This GitHub source needs an immutable pin to verify proofs. Present in current reads; older replayed responses may omit it."},
-		"enabled":                {Type: "boolean"},
+		"enabled":                {Type: "boolean", Description: "Effective enabled state. Pending or issuer-review-required sources are denied even when configured_enabled is true."},
+		"configured_enabled":     {Type: "boolean", Description: "Saved enabled choice, retained while a trust change is pending or issuer review is required."},
 		"authority_pending":      {Type: "boolean", Description: "An accepted trust change is awaiting projection; old proof is denied until recovery completes."},
+		"admin_review_required":  {Type: "boolean", Description: "This historical trust source is denied until an issuers:write administrator reviews and replaces its configuration."},
 		"revoked_at":             timestamp(),
 		"revoked_reason":         str(),
 		"rotation_version":       {Type: "integer"},
 		"last_rotated_at":        timestamp(),
 		"created_at":             timestamp(),
 		"updated_at":             timestamp(),
-	}, "id", "tenant_id", "name", "method", "jwks", "root_certs_pem", "self_authenticating", "allowed_owners", "enabled", "rotation_version", "created_at", "updated_at")
+	}, "id", "tenant_id", "name", "method", "jwks", "root_certs_pem", "self_authenticating", "allowed_owners", "enabled", "configured_enabled", "admin_review_required", "rotation_version", "created_at", "updated_at")
 	workloadAttesterTrustSourceRotated := object(map[string]*Schema{
 		"trust_source": ref("WorkloadAttesterTrustSource"),
 	}, "trust_source")
