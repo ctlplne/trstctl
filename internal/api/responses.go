@@ -11,6 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/inputtext"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
@@ -51,6 +52,10 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 			p = p.WithExtension(k, v)
 		}
 		a.writeProblem(w, p)
+	case errors.Is(err, inputtext.ErrNUL), errors.Is(err, inputtext.ErrInvalidUTF8):
+		// A producer that bypasses the shared request decoder still receives a
+		// client refusal when the final event-log admission rejects unsafe text.
+		a.writeProblem(w, problem.New(http.StatusBadRequest, "request contains unsafe text"))
 	case a.writeExternalCAHeldError(w, err):
 	case a.writeExternalCAError(w, err):
 	case a.writeCAHierarchyError(w, err):

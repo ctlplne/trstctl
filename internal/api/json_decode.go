@@ -10,8 +10,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/inputtext"
 )
 
 func decodeJSON(r *http.Request, v any) error {
@@ -52,6 +54,12 @@ func decodeJSONWithLimitOptionsEmpty(r *http.Request, v any, limit int64, strict
 	}
 	if allowEmpty && len(body) == 0 {
 		return nil
+	}
+	if !utf8.Valid(body) {
+		return errStatus(http.StatusBadRequest, "JSON body must be valid UTF-8")
+	}
+	if err := inputtext.ValidateJSONStrings(body); err != nil {
+		return errStatus(http.StatusBadRequest, "JSON body contains unsafe text: "+err.Error())
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	if strict {

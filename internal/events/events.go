@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/eventprotect"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/inputtext"
 	"trstctl.com/trstctl/internal/schedulerhistory"
 	"trstctl.com/trstctl/internal/tenancy"
 )
@@ -649,6 +650,27 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 			actor := a
 			e.Actor = &actor
 		}
+	}
+	// PostgreSQL cannot project U+0000 into text or jsonb. Validate the exact
+	// producer envelope before admission or JetStream publication; otherwise one
+	// rejected projection leaves an immutable poison event for every later replay.
+	for _, field := range []string{e.ID, e.Type, e.TenantID} {
+		if err := inputtext.ValidateString(field); err != nil {
+			return Event{}, fmt.Errorf("events: unsafe envelope text: %w", err)
+		}
+	}
+	if e.Actor != nil {
+		if err := inputtext.ValidateString(e.Actor.Subject); err != nil {
+			return Event{}, fmt.Errorf("events: unsafe actor subject: %w", err)
+		}
+		for _, role := range e.Actor.Roles {
+			if err := inputtext.ValidateString(role); err != nil {
+				return Event{}, fmt.Errorf("events: unsafe actor role: %w", err)
+			}
+		}
+	}
+	if err := inputtext.ValidateJSONStrings(e.Data); err != nil {
+		return Event{}, fmt.Errorf("events: unsafe payload text: %w", err)
 	}
 	if l.appendAdmission != nil {
 		producerDigest, err := appendProducerDigest(e, explicitTime)

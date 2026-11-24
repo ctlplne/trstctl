@@ -46,6 +46,7 @@ import (
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
 	"trstctl.com/trstctl/internal/sshtrustrollout"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc"
@@ -64,6 +65,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/dependencyobs"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/inputtext"
 	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/plugincensus"
@@ -733,6 +735,9 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 }
 
 func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.HeartbeatRequest, info mtls.PeerCertInfo) (*transport.HeartbeatResponse, error) {
+	if req == nil || !validAgentHeartbeatText(req.Version, 128) || !validAgentHeartbeatText(req.Status, 64) {
+		return nil, status.Error(codes.InvalidArgument, "heartbeat version and status must be bounded printable UTF-8")
+	}
 	// The agent id/name is the certificate's common name — the attacker-proof
 	// identity — not the request's AgentID (which is advisory/observability only).
 	name := info.CommonName
@@ -881,6 +886,9 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
 	}
+	if err := inputtext.ValidateJSONStrings(payload); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "heartbeat report contains unsafe text")
+	}
 	ev, err := a.log.Append(ctx, events.Event{
 		Type: projections.EventAgentHeartbeat, TenantID: info.TenantID,
 		SchemaVersion: eventSchemaVersion, Data: payload,
@@ -892,6 +900,18 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 		return nil, status.Errorf(codes.Internal, "project agent heartbeat: %v", err)
 	}
 	return a.heartbeatResponse(ctx, info, req, ev), nil
+}
+
+func validAgentHeartbeatText(value string, maxBytes int) bool {
+	if len(value) > maxBytes || inputtext.ValidateString(value) != nil {
+		return false
+	}
+	for _, r := range value {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // heartbeatResponse answers a recorded heartbeat: the next-beat hint, the
@@ -1246,6 +1266,21 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 	}
 	if len(req.Findings) > agentMaxInventoryFindings {
 		return nil, status.Errorf(codes.InvalidArgument, "inventory report has %d findings; maximum is %d", len(req.Findings), agentMaxInventoryFindings)
+	}
+	if inputtext.ValidateString(req.SourceKind) != nil {
+		return nil, status.Error(codes.InvalidArgument, "inventory source kind must be valid UTF-8 without NUL")
+	}
+	for _, finding := range req.Findings {
+		for _, value := range []string{finding.Kind, finding.Ref, finding.Provenance, finding.Fingerprint} {
+			if inputtext.ValidateString(value) != nil {
+				return nil, status.Error(codes.InvalidArgument, "inventory finding text must be valid UTF-8 without NUL")
+			}
+		}
+		for key, value := range finding.Metadata {
+			if inputtext.ValidateString(key) != nil || inputtext.ValidateString(value) != nil {
+				return nil, status.Error(codes.InvalidArgument, "inventory metadata must be valid UTF-8 without NUL")
+			}
+		}
 	}
 	sourceKind := strings.TrimSpace(req.SourceKind)
 	// X1: what an observer saw on the wire is accepted only from an agent whose

@@ -4,10 +4,13 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/inputtext"
 )
 
 func TestRejectsOversizedJSONBody(t *testing.T) {
@@ -39,6 +42,17 @@ func TestRejectsOversizedJSONBody(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/problem+json") {
 		t.Fatalf("served oversized JSON content-type = %q, want problem+json", got)
+	}
+}
+
+func TestUnsafeEventTextMapsToClientError(t *testing.T) {
+	a := New(nil, nil, nil)
+	for _, cause := range []error{inputtext.ErrNUL, inputtext.ErrInvalidUTF8} {
+		rec := httptest.NewRecorder()
+		a.writeError(rec, fmt.Errorf("event admission: %w", cause))
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "unsafe text") {
+			t.Errorf("%v mapped to %d %s, want 400 unsafe text", cause, rec.Code, rec.Body.String())
+		}
 	}
 }
 

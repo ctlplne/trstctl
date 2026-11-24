@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/api"
@@ -21,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/inputtext"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -626,6 +628,11 @@ func readSCIMBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	if len(raw) > scimMaxBody {
 		secret.Wipe(raw)
 		writeSCIMError(w, http.StatusRequestEntityTooLarge, "tooLarge", "SCIM body exceeds size cap")
+		return nil, false
+	}
+	if !utf8.Valid(raw) || inputtext.ValidateJSONStrings(raw) != nil {
+		secret.Wipe(raw)
+		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "SCIM body contains unsafe text")
 		return nil, false
 	}
 	return raw, true

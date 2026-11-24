@@ -366,6 +366,10 @@ inline secret-looking metadata keys, caps batch size, and ingests in the bounded
 lane so a noisy fleet cannot starve the API. `GET /api/v1/agents` advertises the
 accepted source kinds for each enrolled endpoint, and the Agents console shows the same
 capability list.
+Heartbeat version and status are bounded printable UTF-8; inventory source, finding,
+and metadata strings must be valid UTF-8 without U+0000. Invalid reports receive
+gRPC `InvalidArgument` before the event log changes, so the agent can correct and
+retry the report.
 
 Only a completed inventory run whose recorded executing agent ID matches the
 receiver-stamped finding can create graph trust-store or service-dependency edges.

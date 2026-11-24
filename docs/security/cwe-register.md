@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3615 annotated sites across 35 rules. Each row is
+3616 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (919 sites)
+### G101 — CWE-798 Use of hardcoded credentials (920 sites)
 
 | Location | Reason |
 |---|---|
@@ -93,6 +93,7 @@ not this file.
 | `deploy/helm/helm_test.go:1599` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:1601` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/auth_kerberos_served_test.go:35` | fabricated fixture credential; the keytab is minted in-process (CWE-798) |
+| `ee/enterpriseauth/cr1003_scim_nul_served_test.go:28` | fabricated fixture credential/identifier |
 | `ee/enterpriseauth/scim_bulk_served_test.go:35` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_custom_roles_served_test.go:108` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_custom_roles_served_test.go:201` | fabricated fixture credentials (CWE-798) |
@@ -3063,7 +3064,7 @@ not this file.
 | `internal/server/agent_roles_served_test.go:535` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:539` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
-| `internal/server/agentchannel.go:148` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
+| `internal/server/agentchannel.go:150` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:181` | the test's own archive (CWE-22) |
 | `internal/server/audit_feed_index_template_lab_test.go:50` | the repository's own shipped content (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |

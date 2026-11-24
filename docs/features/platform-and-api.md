@@ -40,6 +40,10 @@ route checks RBAC first; when `auth.abac.enabled` is configured, a deny-only ABA
 overlay can then block the request using route, actor, environment, and time attributes.
 **Served.**
 
+REST JSON request strings and URL path values must be valid UTF-8 without U+0000.
+An invalid value returns `400` before a mutation is appended to the event log;
+other control characters remain subject to each route's own field rules.
+
 The CAP-API-07 receipt: the served `POST /api/v1/identities/{id}/transitions`
 route requires an `Idempotency-Key`, appends the lifecycle event once, and binds the
 matching `ca.issue` outbox row to that same key so a retry returns the first result
@@ -155,6 +159,8 @@ Browser sessions consult the current tenant-member roles on each API request, so
 SCIM provisioning and deprovisioning change real authorization, beyond an admin list.
 Supported IdP operations are SCIM Users create/get/list/put/patch/delete and Groups
 create/get/list/patch/delete. **Served with Enterprise SSO and `auth.scim.enabled` configured.**
+SCIM rejects U+0000 in any decoded request string, including nested Bulk operation
+data, with `400` and SCIM `invalidValue`. The IdP must correct the field and retry.
 
 Home's expanded metrics distinguish loading or unavailable reads from verified
 zero counts. Inventory, alert summaries, certificate charts, renewal trends, and

@@ -29,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/inputtext"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/outboundcred"
@@ -893,6 +894,10 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 
 // ServeHTTP implements http.Handler.
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if err := inputtext.ValidateString(r.URL.Path); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "URL path contains unsafe text: "+err.Error()))
+		return
+	}
 	if a.refusePublicHoneyTokenBearer(w, r) {
 		return
 	}
