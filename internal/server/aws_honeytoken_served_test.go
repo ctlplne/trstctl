@@ -92,7 +92,10 @@ func newServedAWSHoneyFixture(t *testing.T) *servedAWSHoneyFixture {
 		action, user := r.Form.Get("Action"), r.Form.Get("UserName")
 		f.actions = append(f.actions, action)
 		write := func(value string) { _, _ = w.Write([]byte(value)) }
-		missing := func() { http.Error(w, "NoSuchEntity", http.StatusNotFound) }
+		missing := func() {
+			w.WriteHeader(http.StatusNotFound)
+			write(`<ErrorResponse><Error><Code>NoSuchEntity</Code></Error></ErrorResponse>`)
+		}
 		arn := func() string { return "arn:aws:iam::123456789012:user/trstctl/honeytokens/" + user }
 		switch action {
 		case "GetUser":
@@ -109,7 +112,8 @@ func newServedAWSHoneyFixture(t *testing.T) *servedAWSHoneyFixture {
 			write("<ListUserTagsResponse><ListUserTagsResult><Tags><member><Key>trstctl-honeytoken-owner</Key><Value>" + f.owner + "</Value></member></Tags></ListUserTagsResult></ListUserTagsResponse>")
 		case "CreateUser":
 			if f.user != "" {
-				http.Error(w, "EntityAlreadyExists", http.StatusConflict)
+				w.WriteHeader(http.StatusConflict)
+				write(`<ErrorResponse><Error><Code>EntityAlreadyExists</Code></Error></ErrorResponse>`)
 				return
 			}
 			if r.Form.Get("Path") != "/trstctl/honeytokens/" || r.Form.Get("Tags.member.1.Key") != "trstctl-honeytoken-owner" {

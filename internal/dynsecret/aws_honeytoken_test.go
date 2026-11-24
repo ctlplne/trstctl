@@ -45,7 +45,10 @@ func newHoneyIAMFake(t *testing.T) *honeyIAMFake {
 		defer f.mu.Unlock()
 		f.actions = append(f.actions, action)
 		write := func(body string) { _, _ = w.Write([]byte(body)) }
-		missing := func() { http.Error(w, "NoSuchEntity", http.StatusNotFound) }
+		missing := func() {
+			w.WriteHeader(http.StatusNotFound)
+			write(`<ErrorResponse><Error><Code>NoSuchEntity</Code></Error></ErrorResponse>`)
+		}
 		arn := func() string { return "arn:aws:iam::" + f.accountID + ":user" + awsHoneyPath + user }
 		switch action {
 		case "GetUser":
@@ -68,7 +71,8 @@ func newHoneyIAMFake(t *testing.T) *honeyIAMFake {
 			write("<ListUserTagsResponse><ListUserTagsResult><Tags><member><Key>" + awsHoneyTagName + "</Key><Value>" + tag + "</Value></member></Tags></ListUserTagsResult></ListUserTagsResponse>")
 		case "CreateUser":
 			if _, ok := f.users[user]; ok {
-				http.Error(w, "EntityAlreadyExists", http.StatusConflict)
+				w.WriteHeader(http.StatusConflict)
+				write(`<ErrorResponse><Error><Code>EntityAlreadyExists</Code></Error></ErrorResponse>`)
 				return
 			}
 			if r.Form.Get("Path") != awsHoneyPath || r.Form.Get("Tags.member.1.Key") != awsHoneyTagName {

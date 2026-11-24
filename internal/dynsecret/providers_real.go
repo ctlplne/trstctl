@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
+
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/dbdsn"
@@ -2796,15 +2798,12 @@ func (b *AWSIAMBackend) callService(ctx context.Context, params map[string]strin
 		return nil, err
 	}
 	if resp.StatusCode/100 != 2 {
-		switch {
-		case containsASCIIFold(raw, []byte("entityalreadyexists")),
-			containsASCIIFold(raw, []byte("already exists")):
+		switch awsIAMErrorCode(raw) {
+		case "EntityAlreadyExists", "UserAlreadyExists", "UserAlreadyExistsFault":
 			return nil, errAWSIAMAlreadyExists
-		case containsASCIIFold(raw, []byte("nosuchentity")),
-			containsASCIIFold(raw, []byte("not found")),
-			containsASCIIFold(raw, []byte("notfound")):
+		case "NoSuchEntity":
 			return nil, errAWSIAMMissing
-		case containsASCIIFold(raw, []byte("limitexceeded")):
+		case "LimitExceeded":
 			// N3-L2: still the status error its callers classify, and the
 			// limit for the one that falls back.
 			return nil, fmt.Errorf("%w: %w", errAWSIAMLimitExceeded, &cloudhttp.StatusError{StatusCode: resp.StatusCode})
@@ -2815,8 +2814,31 @@ func (b *AWSIAMBackend) callService(ctx context.Context, params map[string]strin
 	return raw, nil
 }
 
-// containsASCIIFold classifies a bounded response without converting secret-bearing
-// bytes into an immutable string or allocating a lowercase copy.
+// AWS Query API errors are XML. Only its exact Code is an absence signal;
+// proxy text, transport errors and a bare 404 cannot prove the IAM user is gone.
+func awsIAMErrorCode(raw []byte) string {
+	var response struct {
+		XMLName xml.Name
+		Error   struct {
+			Code string `xml:"Code"`
+		} `xml:"Error"`
+		Code string `xml:"Code"`
+	}
+	if err := xml.Unmarshal(raw, &response); err != nil {
+		return ""
+	}
+	switch response.XMLName.Local {
+	case "ErrorResponse":
+		return response.Error.Code
+	case "Error":
+		return response.Code
+	default:
+		return ""
+	}
+}
+
+// containsASCIIFold checks bytes without converting secret-bearing material
+// into an immutable string or allocating a lowercase copy.
 func containsASCIIFold(body, needle []byte) bool {
 	for i := 0; i+len(needle) <= len(body); i++ {
 		if bytes.EqualFold(body[i:i+len(needle)], needle) {
@@ -2909,12 +2931,12 @@ func looksMissing(err error) bool {
 	if errors.Is(err, errAWSIAMMissing) {
 		return true
 	}
-	var se *cloudhttp.StatusError
-	if errors.As(err, &se) && se.StatusCode == http.StatusNotFound {
-		return true
+	var command mongo.CommandError
+	if errors.As(err, &command) {
+		return command.Code == 11 // MongoDB UserNotFound
 	}
-	s := strings.ToLower(err.Error())
-	return strings.Contains(s, "not found") || strings.Contains(s, "notfound") || strings.Contains(s, "no such") || strings.Contains(s, "nosuchentity")
+	var commandPtr *mongo.CommandError
+	return errors.As(err, &commandPtr) && commandPtr.Code == 11
 }
 
 func looksAlreadyExists(err error) bool {

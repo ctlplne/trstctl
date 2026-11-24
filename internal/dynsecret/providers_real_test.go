@@ -1108,7 +1108,8 @@ func newAWSIAMServer(t *testing.T) *awsIAMRecorder {
 			user := r.Form.Get("UserName")
 			if !a.users[user] {
 				a.mu.Unlock()
-				http.Error(w, "NoSuchEntity", http.StatusNotFound)
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`<ErrorResponse><Error><Code>NoSuchEntity</Code></Error></ErrorResponse>`))
 				return
 			}
 			members := ""
@@ -1158,7 +1159,7 @@ func TestAWSIAMErrorBodyIsClassifiedThenDestroyed(t *testing.T) {
 		body          string
 		alreadyExists bool
 	}{
-		{name: "closed semantic error", status: http.StatusConflict, body: `EntityAlreadyExists: ` + echoedSecret, alreadyExists: true},
+		{name: "closed semantic error", status: http.StatusConflict, body: `<ErrorResponse><Error><Code>EntityAlreadyExists</Code><Message>` + echoedSecret + `</Message></Error></ErrorResponse>`, alreadyExists: true},
 		{name: "generic status", status: http.StatusBadGateway, body: `upstream: ` + echoedSecret},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
