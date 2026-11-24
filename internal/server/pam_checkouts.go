@@ -39,10 +39,12 @@ import (
 // retires the revealed credential, and ends the check-out with that command.
 
 const (
-	pamCheckoutMinTTL      = time.Minute
-	pamCheckoutReasonMax   = 512
-	pamCheckoutExpiryBatch = 100
-	pamCheckoutExpiryActor = "pam-checkout-expiry"
+	pamCheckoutMinTTL          = time.Minute
+	pamCheckoutReasonMax       = 512
+	pamCheckoutExpiryBatch     = 100
+	pamCheckoutExpiryPerTenant = 25
+	pamCheckoutExpiryScanPages = 1
+	pamCheckoutExpiryActor     = "pam-checkout-expiry"
 )
 
 // pamAccountRotation reaches the static rotation engine that retires a
@@ -432,19 +434,53 @@ func (s *pamService) endCheckout(ctx context.Context, c store.PAMCheckout, statu
 	return s.store.WithTenant(ctx, c.TenantID, func(tx pgx.Tx) error { return s.projector.ApplyTx(ctx, tx, canonical) })
 }
 
-// expireCheckouts ends every check-out past its deadline at now, each with
-// the rotation that retires its revealed credential. One that cannot be
-// ended stays revealed, past its deadline, for the next tick, and raises one
-// critical alert (A261-L2): until it ends, its credential still signs in.
+// expireCheckouts gives each tenant a share of the first page, then advances
+// a bounded keyset scan across ticks. A failed rotation stays revealed and
+// raises a critical alert, but its row cannot pin the scan ahead of another
+// tenant's overdue credential.
 func (s *pamService) expireCheckouts(ctx context.Context, now time.Time) {
-	due, err := s.store.ListDuePAMCheckouts(ctx, now, pamCheckoutExpiryBatch)
+	fair, err := s.store.ListDuePAMCheckoutsFair(ctx, now, pamCheckoutExpiryBatch, pamCheckoutExpiryPerTenant)
 	if err != nil {
 		return
 	}
 	ctx = events.ContextWithActor(ctx, events.Actor{Subject: pamCheckoutExpiryActor, Roles: []string{"worker"}})
-	for _, c := range due {
+	seen := make(map[string]bool, len(fair)+pamCheckoutExpiryBatch*pamCheckoutExpiryScanPages)
+	attempt := func(c store.PAMCheckout) {
+		key := c.TenantID + "/" + c.RequestID
+		if seen[key] {
+			return
+		}
+		seen[key] = true
 		if err := s.endCheckout(ctx, c, "expired", pamCheckoutExpiryActor); err != nil {
 			s.alertCheckoutRotationBlocked(ctx, c, err)
+		}
+	}
+	for _, c := range fair {
+		if ctx.Err() != nil {
+			return
+		}
+		attempt(c)
+	}
+	for range pamCheckoutExpiryScanPages {
+		due, err := s.store.ListDuePAMCheckoutsAfter(ctx, now, s.checkoutExpiryCursor, pamCheckoutExpiryBatch)
+		if err != nil {
+			return
+		}
+		if len(due) == 0 {
+			s.checkoutExpiryCursor = nil
+			return
+		}
+		for _, c := range due {
+			if ctx.Err() != nil {
+				return
+			}
+			attempt(c)
+			last := c
+			s.checkoutExpiryCursor = &last
+		}
+		if len(due) < pamCheckoutExpiryBatch {
+			s.checkoutExpiryCursor = nil
+			return
 		}
 	}
 }

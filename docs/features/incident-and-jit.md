@@ -666,7 +666,10 @@ rotation provider was removed or no longer rotates the role, the check-out stays
 console shows it as rotation pending) and its credential still signs in. It raises one critical
 `pam.checkout.rotation_blocked` alert on the risk channel, naming the check-out, the target, who
 it was revealed to and why the rotation was refused; it never carries the credential. Restore
-the provider or role, or rotate the account, and the next expiry tick ends the check-out.
+the provider or role, or rotate the account, and a following expiry sweep ends the check-out.
+The worker gives each tenant a share of its first page and resumes a bounded scan across
+ticks. Failed check-outs keep their alert but cannot hold every later account behind them;
+large overdue queues can take more than one tick to drain.
 
 Group account targets into folders to give them the same access policy. The folder's
 template supplies the reason, number of approvals and longest session; requests cannot

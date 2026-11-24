@@ -247,6 +247,7 @@ type pamService struct {
 	defaultTTL                          time.Duration
 	maxTTL                              time.Duration
 	expiryInterval                      time.Duration
+	checkoutExpiryCursor                *store.PAMCheckout
 	// recordingStagingBytes and uploader (A278): staged recording bound and the
 	// eager per-process uploader.
 	recordingStagingBytes int64

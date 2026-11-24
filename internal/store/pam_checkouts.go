@@ -117,6 +117,66 @@ func (s *Store) ListDuePAMCheckouts(ctx context.Context, now time.Time, limit in
 		return nil, err
 	}
 	defer rows.Close()
+	return scanDuePAMCheckoutRows(rows)
+}
+
+// ListDuePAMCheckoutsAfter continues a bounded expiry sweep past the last row
+// attempted, even when that row stayed revealed because its rotation failed.
+// The worker retains this cursor across ticks so a large bad prefix cannot
+// permanently hide later tenants or accounts.
+func (s *Store) ListDuePAMCheckoutsAfter(ctx context.Context, now time.Time, after *PAMCheckout, limit int) ([]PAMCheckout, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 200
+	}
+	var expiresAt, tenantID, requestID any
+	if after != nil {
+		expiresAt, tenantID, requestID = after.ExpiresAt.UTC(), after.TenantID, after.RequestID
+	}
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — a bounded cross-tenant expiry scan; each row is processed under its own tenant's RLS context.
+		`SELECT tenant_id::text, `+pamCheckoutColumns+` FROM pam_checkouts
+		  WHERE status = 'revealed' AND expires_at <= $1
+		    AND ($2::timestamptz IS NULL OR (expires_at, tenant_id, request_id) > ($2, $3::uuid, $4::uuid))
+		  ORDER BY expires_at, tenant_id, request_id LIMIT $5`, now.UTC(), expiresAt, tenantID, requestID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanDuePAMCheckoutRows(rows)
+}
+
+// ListDuePAMCheckoutsFair takes at most perTenant rows from each tenant for
+// this tick's first page. A tenant with many unendable rows cannot fill the
+// whole page and hide another tenant's newly overdue credential.
+func (s *Store) ListDuePAMCheckoutsFair(ctx context.Context, now time.Time, limit, perTenant int) ([]PAMCheckout, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 200
+	}
+	if perTenant <= 0 || perTenant > 50 {
+		perTenant = 25
+	}
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant fair expiry selection by design; the lateral index seek bounds each registered tenant's sample before ranking, and every effect runs in its own tenant RLS context. The raw cursor also scans orphan rows.
+		`WITH sample AS (
+		   SELECT c.* FROM tenants t
+		   CROSS JOIN LATERAL (
+		     SELECT * FROM pam_checkouts c
+		      WHERE c.tenant_id = t.tenant_id AND c.status = 'revealed' AND c.expires_at <= $1
+		      ORDER BY c.expires_at, c.request_id LIMIT $2
+		   ) c
+		 ), due AS (
+		   SELECT *, ROW_NUMBER() OVER (PARTITION BY tenant_id ORDER BY expires_at, request_id) AS tenant_rank FROM sample
+		 )
+		 SELECT tenant_id::text, `+pamCheckoutColumns+` FROM due
+		 ORDER BY tenant_rank, expires_at, tenant_id, request_id LIMIT $3`, now.UTC(), perTenant, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanDuePAMCheckoutRows(rows)
+}
+
+func scanDuePAMCheckoutRows(rows pgx.Rows) ([]PAMCheckout, error) {
 	var out []PAMCheckout
 	for rows.Next() {
 		var c PAMCheckout
