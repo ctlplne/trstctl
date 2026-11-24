@@ -546,7 +546,7 @@ func providerSCIMMutationKey(r *http.Request, token SCIMToken, body []byte) stri
 	}
 	material := append([]byte(r.Method+"\x00"+r.URL.EscapedPath()+"\x00"), body...)
 	defer secret.Wipe(material)
-	return "scim:" + token.Name + ":" + crypto.SHA256Hex(material)
+	return "scim:auto:" + token.Name + ":" + crypto.SHA256Hex(material)
 }
 
 func providerSCIMBinding(r *http.Request, token SCIMToken, body []byte) string {

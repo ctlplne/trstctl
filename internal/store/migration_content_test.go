@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	508: true, // TestMigrationDataContentBackfills/0508_provider_operator_revision_starts_unknown
 	507: true, // TestMigrationDataContentBackfills/0507_recording_headers_start_empty
 	506: true, // TestMigrationDataContentBackfills/0506_switching_private_watch_starts_unattributed
 	505: true, // TestMigrationDataContentBackfills/0505_notification_channels_start_unattributed
@@ -2386,6 +2387,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0508_provider_operator_revision_starts_unknown", testMigration0508ProviderOperatorRevisionStartsUnknown)
 	t.Run("0507_recording_headers_start_empty", testMigration0507RecordingHeadersStartEmpty)
 	t.Run("0506_switching_private_watch_starts_unattributed", testMigration0506SwitchingPrivateWatchStartsUnattributed)
 	t.Run("0505_notification_channels_start_unattributed", testMigration0505NotificationChannelsStartUnattributed)
@@ -3428,6 +3430,38 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
 	t.Run("0136_fleet_reissuance_cursor_defaults", testMigration0136FleetReissuanceCursorDefaults)
 	t.Run("0137_relay_external_pollers", testMigration0137RelayExternalPollers)
+}
+
+func testMigration0508ProviderOperatorRevisionStartsUnknown(t *testing.T) {
+	const stable = `SELECT tenant_id::text, id, external_id, user_name, email, display_name,
+		role, active::text, source, created_at::text, updated_at::text,
+		COALESCE(deprovisioned_at::text, '') FROM provider_operators ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 508, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for i, tenantID := range []string{tenantA, tenantB} {
+				_, err := pool.Exec(ctx, `INSERT INTO provider_operators
+					(tenant_id, id, external_id, user_name, role, active, source, created_at, updated_at)
+					VALUES ($1,$2,$3,$4,'admin',true,'legacy',
+					'2026-11-01T00:00:00Z','2026-11-01T00:00:00Z')`,
+					tenantID, fmt.Sprintf("pre-0508-%d", i), fmt.Sprintf("external-%d", i),
+					fmt.Sprintf("pre-0508-%d@example.test", i))
+				if err != nil {
+					t.Fatalf("seed pre-0508 Provider operator for %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var unknown bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(revision_event_id = '')
+				FROM provider_operators WHERE tenant_id IN ($1,$2)`, tenantA, tenantB).
+				Scan(&rows, &unknown); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !unknown {
+				t.Fatalf("0508 changed legacy Provider operator revisions: rows=%d want=%d unknown=%t", rows, want, unknown)
+			}
+		})
 }
 
 func testMigration0507RecordingHeadersStartEmpty(t *testing.T) {

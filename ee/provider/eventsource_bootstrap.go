@@ -165,7 +165,7 @@ func (r *AuthorityRuntime) captureLegacyAuthority(ctx context.Context) error {
 func (r *AuthorityRuntime) bootstrapOperators(ctx context.Context, coverage authorityCoverage) error {
 	//trstctl:system-query — one-time fixed-tenant Provider-directory capture before projection reset.
 	rows, err := r.Projection.store.SystemPool().Query(ctx, `SELECT id, external_id, user_name, email,
-		display_name, role, active, source, created_at, updated_at, deprovisioned_at
+		display_name, role, active, source, created_at, updated_at, deprovisioned_at, revision_event_id
 		FROM provider_operators WHERE tenant_id = $1 ORDER BY id`, providerAuthorityTenant)
 	if err != nil {
 		return err

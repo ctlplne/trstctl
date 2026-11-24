@@ -696,6 +696,15 @@ workforce is available at `/provider/scim/v2` when enabled. Pushing an operator
 into the `provider-admin` or `provider-operator` group grants that role, and
 removing them from the group revokes it with an audit event.
 
+Provider workforce events use the reserved Provider authority partition, including
+after an upgrade from an earlier release. A SCIM `DELETE` deactivates the exact
+operator and the sign-in gate reads that projected state. Send a stable
+`Idempotency-Key` for each IdP operation when possible: retries of that key
+return its original event, even after the broker's duplicate window. For IdPs
+that omit the header, trstctl binds the derived key to the operator's latest
+authority event. A repeated request after a different state change therefore
+records a new decision; an immediate retry of the latest decision reuses it.
+
 ## See also
 
 - [Plan and license](../editions.md) — entitlement, the vendor key, delegation rules

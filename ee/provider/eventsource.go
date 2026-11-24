@@ -83,6 +83,8 @@ type AuthorityEvent struct {
 	Role                  *ProviderRole         `json:"role,omitempty"`
 	EffectiveAt           time.Time             `json:"effective_at,omitempty"`
 	RequestBinding        string                `json:"request_binding,omitempty"`
+	SCIMRequestBaseKey    string                `json:"scim_request_base_key,omitempty"`
+	SCIMRequestRevision   string                `json:"scim_request_revision,omitempty"`
 	Erasure               *TenantErasureRequest `json:"erasure,omitempty"`
 	Template              *TenantTemplate       `json:"template,omitempty"`
 	TemplateApplication   *TemplateApplication  `json:"template_application,omitempty"`
@@ -210,6 +212,34 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 	if payload.RequestBinding == "" {
 		payload.RequestBinding = mutationBindingFromContext(ctx)
 	}
+	if strings.HasPrefix(idempotencyKey, "scim:auto:") && payload.Operator != nil {
+		// A body hash alone describes the request, not the state it changes.
+		// The latest projected event is a durable revision. If that event came
+		// from this same request, reuse its prior revision so a retry replays.
+		// Otherwise the same IdP request is a fresh decision after a change.
+		current, err := NewPGAccessStore(s.projection.store).ResolveOperator(ctx, payload.Operator.ID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return eventspec.Event{}, fmt.Errorf("%w: read SCIM operator revision: %v", ErrMutationPersistence, err)
+		}
+		revision := current.RevisionEventID
+		if revision != "" {
+			previous, found, err := s.log.EventByID(ctx, revision)
+			if err != nil {
+				return eventspec.Event{}, fmt.Errorf("%w: read SCIM revision event: %v", ErrMutationPersistence, err)
+			}
+			if found && previous.Type == typ && previous.TenantID == tenantID {
+				var prior AuthorityEvent
+				if json.Unmarshal(previous.Data, &prior) == nil && prior.Operator != nil &&
+					prior.Operator.ID == payload.Operator.ID && prior.SCIMRequestBaseKey == idempotencyKey &&
+					prior.RequestBinding == payload.RequestBinding {
+					revision = prior.SCIMRequestRevision
+				}
+			}
+		}
+		payload.SCIMRequestBaseKey = idempotencyKey
+		payload.SCIMRequestRevision = revision
+		idempotencyKey += "\x00revision=" + revision
+	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return eventspec.Event{}, fmt.Errorf("provider: encode %s: %w", typ, err)
@@ -278,9 +308,28 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 			}
 		}
 	}
-	canonical, err := s.log.Append(ctx, wanted)
-	if err != nil {
-		return eventspec.Event{}, fmt.Errorf("%w: append %s: %v", ErrMutationPersistence, typ, err)
+	var canonical events.Event
+	if strings.HasPrefix(idempotencyKey, "scim:") {
+		// JetStream's duplicate window is finite. Retained event history, not
+		// a broker dedupe interval, owns an explicit or derived SCIM key.
+		retained, found, err := s.log.EventByID(ctx, eventID)
+		if err != nil {
+			return eventspec.Event{}, fmt.Errorf("%w: find SCIM command: %v", ErrMutationPersistence, err)
+		}
+		if found {
+			var prior AuthorityEvent
+			if payload.RequestBinding == "" || json.Unmarshal(retained.Data, &prior) != nil ||
+				prior.RequestBinding != payload.RequestBinding {
+				return eventspec.Event{}, ErrMutationConflict
+			}
+			canonical = retained
+		}
+	}
+	if canonical.ID == "" {
+		canonical, err = s.log.Append(ctx, wanted)
+		if err != nil {
+			return eventspec.Event{}, fmt.Errorf("%w: append %s: %v", ErrMutationPersistence, typ, err)
+		}
 	}
 	if canonical.ID != wanted.ID || canonical.Type != wanted.Type || canonical.TenantID != wanted.TenantID {
 		return eventspec.Event{}, ErrMutationConflict
@@ -854,11 +903,11 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 		if heldBy != "" {
 			//trstctl:system-query — exact fixed-tenant Provider operator projection; no customer-selected tenant enters this statement.
 			tag, err := tx.Exec(ctx, `UPDATE provider_operators SET external_id = $3, email = $4, display_name = $5,
-				role = $6, active = $7, source = $8, updated_at = $9, deprovisioned_at = $10
+				role = $6, active = $7, source = $8, updated_at = $9, deprovisioned_at = $10, revision_event_id = $11
 				WHERE tenant_id = $1 AND id = $2`, providerAuthorityTenant,
 				operator.ID, operator.ExternalID, operator.Email, operator.DisplayName,
 				string(operator.Role), operator.Active, operator.Source, operator.UpdatedAt.UTC(),
-				nullTime(operator.DeprovisionedAt))
+				nullTime(operator.DeprovisionedAt), event.ID)
 			if err != nil {
 				return err
 			}
@@ -869,16 +918,17 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			//trstctl:system-query — exact fixed-tenant Provider operator projection; no customer-selected tenant enters this statement.
 			if _, err := tx.Exec(ctx, `INSERT INTO provider_operators
 			(tenant_id, id, external_id, user_name, email, display_name, role, active, source,
-			 created_at, updated_at, deprovisioned_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			 created_at, updated_at, deprovisioned_at, revision_event_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 			ON CONFLICT (tenant_id, id) DO UPDATE SET external_id = EXCLUDED.external_id,
 			user_name = EXCLUDED.user_name, email = EXCLUDED.email, display_name = EXCLUDED.display_name,
 			role = EXCLUDED.role, active = EXCLUDED.active, source = EXCLUDED.source,
 			created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at,
-			deprovisioned_at = EXCLUDED.deprovisioned_at`, providerAuthorityTenant,
+			deprovisioned_at = EXCLUDED.deprovisioned_at,
+			revision_event_id = EXCLUDED.revision_event_id`, providerAuthorityTenant,
 				operator.ID, operator.ExternalID, operator.UserName, operator.Email, operator.DisplayName,
 				string(operator.Role), operator.Active, operator.Source, operator.CreatedAt.UTC(),
-				operator.UpdatedAt.UTC(), nullTime(operator.DeprovisionedAt)); err != nil {
+				operator.UpdatedAt.UTC(), nullTime(operator.DeprovisionedAt), event.ID); err != nil {
 				return err
 			}
 		}

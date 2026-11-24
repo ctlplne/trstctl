@@ -1880,7 +1880,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4430` | closed test table list above |
+| `internal/store/migration_content_test.go:4464` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -3429,7 +3429,7 @@ not this file.
 | `internal/kms/tpm/swtpm_services_l2_test.go:159` | the services' users read the provider config (CWE-276) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:200` | the container's stock apache2 site directory (CWE-276) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:276` | MariaDB reads its option file as its own user (CWE-276) |
-| `internal/projections/cbom_store_test.go:38` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/projections/cbom_store_test.go:39` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/discovery_store_test.go:93` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/discovery_store_test.go:96` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:225` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

@@ -34,6 +34,9 @@ type OperatorIdentity struct {
 	CreatedAt       time.Time    `json:"created_at"`
 	UpdatedAt       time.Time    `json:"updated_at"`
 	DeprovisionedAt time.Time    `json:"deprovisioned_at,omitzero"`
+	// RevisionEventID is projected from the immutable authority event. It is
+	// local read-model metadata, never caller-provided event payload.
+	RevisionEventID string `json:"-"`
 }
 
 // DelegationRecord is the inventory form of one exact authority row. Revoked
@@ -87,7 +90,7 @@ func (p *PGAccessStore) ResolveOperator(ctx context.Context, subject string) (Op
 	}
 	//trstctl:system-query — Provider-global authority is read before a customer tenant is selected; the fixed tenant_id is still explicit and the table is FORCE RLS.
 	row := p.store.SystemPool().QueryRow(ctx, `SELECT id, external_id, user_name, email, display_name,
-		role, active, source, created_at, updated_at, deprovisioned_at
+		role, active, source, created_at, updated_at, deprovisioned_at, revision_event_id
 		FROM provider_operators
 		WHERE tenant_id = $1 AND (id = $2 OR external_id = $2 OR user_name = $2)`,
 		providerAuthorityTenant, strings.TrimSpace(subject))
@@ -104,7 +107,7 @@ func (p *PGAccessStore) ListOperatorAccess(ctx context.Context) ([]OperatorAcces
 	}
 	//trstctl:system-query — Provider admins list the fixed Provider authority partition, never a caller-selected customer tenant.
 	rows, err := p.store.SystemPool().Query(ctx, `SELECT id, external_id, user_name, email, display_name,
-		role, active, source, created_at, updated_at, deprovisioned_at
+		role, active, source, created_at, updated_at, deprovisioned_at, revision_event_id
 		FROM provider_operators WHERE tenant_id = $1 ORDER BY user_name, id`, providerAuthorityTenant)
 	if err != nil {
 		return nil, err
@@ -159,7 +162,7 @@ func scanOperatorIdentity(row pgx.Row) (OperatorIdentity, error) {
 	var deprovisionedAt *time.Time
 	if err := row.Scan(&identity.ID, &identity.ExternalID, &identity.UserName, &identity.Email,
 		&identity.DisplayName, &role, &identity.Active, &identity.Source, &identity.CreatedAt,
-		&identity.UpdatedAt, &deprovisionedAt); err != nil {
+		&identity.UpdatedAt, &deprovisionedAt, &identity.RevisionEventID); err != nil {
 		return OperatorIdentity{}, err
 	}
 	identity.Role = OperatorRole(role)

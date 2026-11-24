@@ -55,10 +55,12 @@ type providerDelegationAuthorityPayload struct {
 }
 
 type providerOperatorAuthorityPayload struct {
-	Operator       *provider.OperatorIdentity `json:"operator,omitempty"`
-	EffectiveAt    time.Time                  `json:"effective_at,omitempty"`
-	RequestBinding string                     `json:"request_binding,omitempty"`
-	Audit          provider.AuditEvent        `json:"audit"`
+	Operator            *provider.OperatorIdentity `json:"operator,omitempty"`
+	EffectiveAt         time.Time                  `json:"effective_at,omitempty"`
+	RequestBinding      string                     `json:"request_binding,omitempty"`
+	SCIMRequestBaseKey  string                     `json:"scim_request_base_key,omitempty"`
+	SCIMRequestRevision string                     `json:"scim_request_revision,omitempty"`
+	Audit               provider.AuditEvent        `json:"audit"`
 }
 
 type providerRoleAuthorityPayload struct {
