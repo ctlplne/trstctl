@@ -82,6 +82,17 @@ func daytonaBinding(f []string) (Binding, error) {
 	return nil, errors.New("empty, or organization <ID>")
 }
 
+func rundeckBinding(f []string) (Binding, error) {
+	binding, err := pairs(pair{word: "folder", rule: rundeckFolder, what: "a Key Storage folder under keys/"})(f)
+	if err != nil {
+		return nil, err
+	}
+	if hasDotSegment(binding["folder"]) {
+		return nil, errors.New("folder cannot contain . or .. path segments")
+	}
+	return binding, nil
+}
+
 // onaBinding is "<organization|project|user> <ID>": the secrets' scope.
 func onaBinding(f []string) (Binding, error) {
 	if len(f) != 2 || !onaScopes[f[0]] || !uuidRule.MatchString(f[1]) {
@@ -174,7 +185,7 @@ func all() []Target {
 			parse: pairs(pair{word: "org", rule: lowerSlug, what: "an organization ID"}, pair{word: "app", rule: lowerSlug, what: "an application ID"})},
 		{Type: "rundeck", Name: "Rundeck", Platform: "rundeck", Grammar: "folder <keys/...>",
 			Keys: PathKeys, keyRule: rundeckKey, keyHelp: "a path of letters, digits, dots, underscores and hyphens", maxKey: 512,
-			parse: pairs(pair{word: "folder", rule: rundeckFolder, what: "a Key Storage folder under keys/"})},
+			parse: rundeckBinding},
 		{Type: "checkly", Name: "Checkly", Platform: "checkly", Grammar: "account <ID>",
 			Endpoint: "https://api.checklyhq.com", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
 			parse: pairs(pair{word: "account", rule: uuidRule, what: "a UUID"})},

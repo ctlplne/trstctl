@@ -69,6 +69,8 @@ func (t Target) ValidKey(key string) error {
 		return fmt.Errorf("%s keys are at most %d characters", t.Name, t.maxKey)
 	case t.keyRule != nil && !t.keyRule.MatchString(key):
 		return fmt.Errorf("%s keys are %s", t.Name, t.keyHelp)
+	case t.Keys == PathKeys && hasDotSegment(key):
+		return fmt.Errorf("%s keys cannot contain . or .. path segments", t.Name)
 	}
 	for _, prefix := range t.denyPrefix {
 		if strings.HasPrefix(key, prefix) {
@@ -76,6 +78,15 @@ func (t Target) ValidKey(key string) error {
 		}
 	}
 	return nil
+}
+
+func hasDotSegment(path string) bool {
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "." || segment == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 var targets = register(all()...)

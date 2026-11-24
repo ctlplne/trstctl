@@ -1702,7 +1702,15 @@ Humanitec, Rundeck, Checkly, Windmill, Zabbix, Portainer, Devin, Daytona, Ona,
 Trigger.dev, Cloudflare Workers, Cloudflare Pages, Cloudflare Secrets Store, Azure App
 Configuration, OCI Vault, OVHcloud Secret Manager, Databricks, Supabase, Camunda and Chef
 Infra Server; see
-[configuration](../configuration.md#hosted-sync-targets-a241)). Each catalog row says
+[configuration](../configuration.md#hosted-sync-targets-a241)).
+
+For path-based targets such as Rundeck and OVHcloud Secret Manager, every remote
+key segment must be a name, not `.` or `..`. Rundeck's configured `keys/...`
+folder follows the same rule. Preview blocks an invalid key; execution rejects
+it before recording an event or outbox intent, and the worker checks again
+before any receiver request.
+
+Each catalog row says
 whether a scoped sync can target it, its `qualification` on the A242 ladder (`served`,
 or `locally-proven` for KV v2; the integration catalog's unbuilt targets are listed as
 `discovered`, each with a `note` on what it waits for), whether it is `generic` (the

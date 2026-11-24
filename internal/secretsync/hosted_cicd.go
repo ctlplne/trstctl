@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -477,8 +478,11 @@ var rundeckVendor = &hostedVendor{
 		req.Header.Set("X-Rundeck-Auth-Token", secrettext.String(p.token.Bytes()))
 	},
 	put: func(ctx context.Context, p *HostedSyncPusher, key string, value []byte) error {
-		path := rundeckPath(p, key)
-		err := rundeckWrite(ctx, p, http.MethodPut, path, value)
+		path, err := rundeckPath(p, key)
+		if err != nil {
+			return err
+		}
+		err = rundeckWrite(ctx, p, http.MethodPut, path, value)
 		if notFound(err) {
 			err = rundeckWrite(ctx, p, http.MethodPost, path, value)
 		}
@@ -488,18 +492,30 @@ var rundeckVendor = &hostedVendor{
 		return rundeckWalk(ctx, p, "", 0)
 	},
 	remove: func(ctx context.Context, p *HostedSyncPusher, key string) error {
-		return hostedError(p, "delete password", ignoreNotFound(p.send(ctx, http.MethodDelete, rundeckPath(p, key), nil, nil)))
+		path, err := rundeckPath(p, key)
+		if err != nil {
+			return err
+		}
+		return hostedError(p, "delete password", ignoreNotFound(p.send(ctx, http.MethodDelete, path, nil, nil)))
 	},
 }
 
 const rundeckAPI = "/api/41/storage/"
 
-func rundeckPath(p *HostedSyncPusher, key string) string {
+func rundeckPath(p *HostedSyncPusher, key string) (string, error) {
+	if key != "" {
+		if err := p.target.ValidKey(key); err != nil {
+			return "", fmt.Errorf("secretsync: %w", err)
+		}
+	}
+	if p.binding["folder"] == "" || strings.Contains(p.binding["folder"], "//") || strings.HasPrefix(p.binding["folder"], "/") {
+		return "", errors.New("secretsync: Rundeck folder is invalid")
+	}
 	parts := strings.Split(strings.Trim(p.binding["folder"]+"/"+key, "/"), "/")
 	for i, part := range parts {
 		parts[i] = pathEscape(part)
 	}
-	return rundeckAPI + strings.Join(parts, "/")
+	return rundeckAPI + strings.Join(parts, "/"), nil
 }
 
 func rundeckWrite(ctx context.Context, p *HostedSyncPusher, method, path string, value []byte) error {
@@ -525,7 +541,11 @@ func rundeckWalk(ctx context.Context, p *HostedSyncPusher, rel string, depth int
 			} `json:"meta"`
 		} `json:"resources"`
 	}
-	err := p.send(ctx, http.MethodGet, rundeckPath(p, rel)+"/", nil, &dir)
+	path, err := rundeckPath(p, rel)
+	if err != nil {
+		return nil, err
+	}
+	err = p.send(ctx, http.MethodGet, path+"/", nil, &dir)
 	if notFound(err) && rel == "" {
 		return nil, nil
 	}

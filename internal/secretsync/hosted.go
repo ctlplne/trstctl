@@ -237,6 +237,9 @@ func (p *HostedSyncPusher) ListKeys(ctx context.Context, prefix string, limit in
 // ReadDigest reports whether key exists and the digest of what it holds; a
 // receipt-only destination answers presence with an empty digest.
 func (p *HostedSyncPusher) ReadDigest(ctx context.Context, key string) (bool, string, error) {
+	if err := p.target.ValidKey(key); err != nil {
+		return false, "", fmt.Errorf("secretsync: %w", err)
+	}
 	if p.vendor.readBack == ReadBackReceiptOnly {
 		names, err := p.vendor.list(ctx, p)
 		if err != nil {
@@ -258,6 +261,9 @@ func (p *HostedSyncPusher) ReadDigest(ctx context.Context, key string) (bool, st
 
 // Delete removes key; one already gone is not an error.
 func (p *HostedSyncPusher) Delete(ctx context.Context, key string) error {
+	if err := p.target.ValidKey(key); err != nil {
+		return fmt.Errorf("secretsync: %w", err)
+	}
 	return p.vendor.remove(ctx, p, key)
 }
 

@@ -388,8 +388,10 @@ func (a *API) previewSecretSync(w http.ResponseWriter, r *http.Request) {
 	if a.secrets.be.QueueSecretSync == nil {
 		plan.Blockers = append(plan.Blockers, "event-backed secret sync queue is not configured")
 	}
-	if a.secrets.syncTargets(tenantID)[req.Target] == nil {
+	if target := a.secrets.syncTargets(tenantID)[req.Target]; target == nil {
 		plan.Blockers = append(plan.Blockers, "secret sync target is not configured")
+	} else if err := target.ValidateKey(req.RemoteKey); err != nil {
+		plan.Blockers = append(plan.Blockers, "remote_key is outside the configured target's key grammar: "+err.Error())
 	}
 	record, err := a.secrets.be.Store.GetSecret(r.Context(), tenantID, req.Name)
 	if err != nil {
@@ -493,6 +495,9 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 		target := a.secrets.syncTargets(tenantID)[req.Target]
 		if target == nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret sync target is not configured")
+		}
+		if err := target.ValidateKey(req.RemoteKey); err != nil {
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		rec, err := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name)
 		if err != nil {

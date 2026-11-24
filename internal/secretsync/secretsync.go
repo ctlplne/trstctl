@@ -122,6 +122,18 @@ func (t *Target) WorkloadIdentityEnabled() bool { return t.workloadIdentityEnabl
 // Name returns the target name.
 func (t *Target) Name() string { return t.name }
 
+// ValidateKey lets API admission use the receiver's exact key grammar before
+// it records an immutable sync intent. Push still checks again at dispatch.
+func (t *Target) ValidateKey(key string) error {
+	if t == nil || t.pusher == nil {
+		return errors.New("secretsync: target is not configured")
+	}
+	if validator, ok := t.pusher.(interface{ ValidKey(string) error }); ok {
+		return validator.ValidKey(key)
+	}
+	return nil
+}
+
 // Deliver performs one outbox-owned delivery. It is exported so the production
 // dispatcher can drain secret.sync.* rows without reconstructing a registry or
 // reaching into Target's private pusher field.

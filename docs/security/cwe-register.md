@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3614 annotated sites across 35 rules. Each row is
+3615 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (918 sites)
+### G101 — CWE-798 Use of hardcoded credentials (919 sites)
 
 | Location | Reason |
 |---|---|
@@ -206,8 +206,8 @@ not this file.
 | `internal/api/secret_reference_scope_test.go:27` | fabricated invalid reference fixture, no credential value (CWE-798) |
 | `internal/api/secret_scan_hooks_od3_test.go:26` | fabricated fixture signing token (CWE-798) |
 | `internal/api/secret_scan_known_decoy_test.go:18` | fabricated decoy fixture; no value is real (CWE-798) |
-| `internal/api/secrets_posture.go:1169` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_posture.go:1317` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_posture.go:1174` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_posture.go:1322` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:50` | public MAC domain label, not a credential |
 | `internal/api/secrets_scanning.go:751` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:775` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -605,6 +605,7 @@ not this file.
 | `internal/server/cr048_repository_credential_served_test.go:32` | test canary (CWE-798) |
 | `internal/server/cr048_repository_credential_served_test.go:33` | test canary (CWE-798) |
 | `internal/server/cr048_repository_credential_served_test.go:150` | the fabricated file reference is a test selector, not secret material (CWE-798) |
+| `internal/server/cr277_secret_sync_served_test.go:20` | fabricated fixture credential, never a real service token (CWE-798) |
 | `internal/server/cr394_399_reference_shape_served_test.go:22` | fabricated invalid reference fixture, no credential value (CWE-798) |
 | `internal/server/cr394_399_reference_shape_served_test.go:32` | fabricated invalid reference fixture, no credential value (CWE-798) |
 | `internal/server/cr394_399_reference_shape_served_test.go:39` | fabricated invalid reference fixture, no credential value (CWE-798) |
