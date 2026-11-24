@@ -16,6 +16,11 @@ import (
 
 const EventKeyDestructionDestination = "eventprivacy.destroy"
 
+// ErrPendingEventKeyDestructionResidue means a protected tenant's pending
+// destruction row coexists with data the committed offboard should have erased.
+// A replay must refuse rather than delete that data on an idempotent retry.
+var ErrPendingEventKeyDestructionResidue = errors.New("store: pending event key destruction has unexpected residue")
+
 func EventKeyDestructionOutboxKey(operationID string) string {
 	return EventKeyDestructionDestination + ":" + operationID
 }
@@ -96,7 +101,7 @@ func (s *Store) OffboardTenantForEventKeyDestructionTx(ctx context.Context, tx p
 			expected = 1
 		}
 		if count != expected {
-			return att, fmt.Errorf("store: pending event key destruction has unexpected %s residue: %d", table, count)
+			return att, fmt.Errorf("%w: %s: %d", ErrPendingEventKeyDestructionResidue, table, count)
 		}
 		if count != 0 {
 			att.Residue[table] = count
@@ -130,7 +135,7 @@ func verifyNoOffboardOIDCLocatorsTx(ctx context.Context, tx pgx.Tx, tenantID str
 		return err
 	}
 	if count != 0 {
-		return errors.New("store: pending event key destruction has unexpected browser locator residue")
+		return fmt.Errorf("%w: browser locator", ErrPendingEventKeyDestructionResidue)
 	}
 	return nil
 }

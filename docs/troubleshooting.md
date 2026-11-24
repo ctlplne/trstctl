@@ -102,6 +102,33 @@ authoritative and the tail advances to later events. A different approver's new
 decision after a terminal request still fails closed. Never acknowledge the
 consumer message or move the checkpoint by hand to clear this condition.
 
+### Pending event key destruction replay recovery
+
+A protected tenant's offboard can commit inline while the durable projection
+consumer is still reading older events. The pending `eventprivacy.destroy` outbox
+row is the commit witness. The consumer skips that tenant's earlier events and
+verifies the exact pending row when it reaches the offboard. A repeated
+`pending event key destruction has unexpected residue` error means another row
+exists where the completed offboard requires none; the retry refuses to erase it.
+
+Preserve PostgreSQL, JetStream, and the key custody files. Record the failed
+sequence from `/readyz` or startup logs, the tenant ID and table named in the
+error, and the current backup set. Do not delete the outbox row, remove the
+residue by SQL, or advance the consumer cursor. Check whether the deployment is
+using external PostgreSQL **and** external NATS. If it is, stop every control
+plane replica and run `trstctl --rebuild` with the existing configuration and
+original event history; the atomic read-model replay restores the prior
+offboard without re-dispatching the pending destruction. Restart the replicas
+and verify `/readyz`, projection lag, the tenant's absence, the healthy neighbors,
+and the original pending destruction row. A rebuild needs the full retained log
+and the independent PostgreSQL state; it is not an event-only restore.
+
+The bundled evaluation stack does not support `--rebuild`. Preserve its volumes
+and capture a support bundle for a supported recovery or migration to external
+datastores. Repeated restarts alone do not remove unexpected residue. For the
+normal inline-offboard replay with no unexpected residue, the consumer advances
+without manual recovery.
+
 ## CLI commands return 401 or 403
 
 - **401** — the token is missing or unknown. Set `TRSTCTL_TOKEN` (or `--token`)

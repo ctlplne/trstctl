@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
@@ -75,6 +76,17 @@ func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.
 	}
 	textErr := events.ValidateEventText(e)
 	if textErr == nil {
+		if tx == nil && e.Type != EventTenantOffboarded && uuid.Validate(e.TenantID) == nil {
+			// A protected offboard can commit inline ahead of this replay. Its
+			// exact pending destruction row proves all earlier tenant rows and
+			// effects were erased in that commit. Reapplying them would create
+			// residue that the offboard's strict retry must refuse. The offboard
+			// itself still runs and verifies the sole pending row and no residue.
+			skip, err := q.store.PendingEventKeyDestructionAfter(ctx, e.TenantID, e.Sequence)
+			if err != nil || skip {
+				return skip, err
+			}
+		}
 		if e.Type != EventSecretSyncWorkloadIdentityUpserted {
 			return false, nil
 		}

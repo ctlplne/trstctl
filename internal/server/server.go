@@ -1631,6 +1631,9 @@ func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, erro
 		return nil, fmt.Errorf("server: restore read model from snapshot: %w", err)
 	}
 	if err := proj.ProjectCatchUp(ctx, d.Log); err != nil {
+		if errors.Is(err, store.ErrPendingEventKeyDestructionResidue) {
+			return nil, fmt.Errorf("server: project event log: %w; preserve PostgreSQL and NATS and follow docs/troubleshooting.md#pending-event-key-destruction-replay-recovery (external datastores: trstctl --rebuild)", err)
+		}
 		return nil, fmt.Errorf("server: project event log: %w", err)
 	}
 	if err := d.Store.ValidateSecretRotationScheduleStartupAuthority(ctx,
@@ -4006,6 +4009,8 @@ func (s *Server) RunProjectionTail(ctx context.Context) {
 			msg := "projection tail worker stopped; retrying"
 			if errors.Is(err, bulkhead.ErrRejected) {
 				msg = "projection tail bulkhead saturated; retrying"
+			} else if errors.Is(err, store.ErrPendingEventKeyDestructionResidue) {
+				msg = "projection tail refused pending event key destruction residue; preserve PostgreSQL and NATS, follow docs/troubleshooting.md#pending-event-key-destruction-replay-recovery"
 			}
 			s.logger.Warn(msg, slog.String("error", err.Error()))
 			select {
