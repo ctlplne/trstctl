@@ -4,6 +4,7 @@ package projections
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -16,9 +17,9 @@ import (
 
 // tenantPoisonQuarantine caches positive durable lookups during an ordered
 // replay. A healthy answer is checked again on the next event, because a peer
-// projector may quarantine that tenant between events. Only a
-// known, deterministic text encoding failure is quarantined; transport, custody,
-// and unknown projection errors still stop replay instead of being hidden.
+// projector may quarantine that tenant between events. Only known,
+// deterministic text or workload-target uniqueness failures are quarantined;
+// transport, custody, and unknown projection errors still stop replay.
 type tenantPoisonQuarantine struct {
 	store *store.Store
 	known map[string]bool
@@ -74,7 +75,30 @@ func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.
 	}
 	textErr := events.ValidateEventText(e)
 	if textErr == nil {
-		return false, nil
+		if e.Type != EventSecretSyncWorkloadIdentityUpserted {
+			return false, nil
+		}
+		var source SecretSyncWorkloadIdentitySourceUpserted
+		if err := json.Unmarshal(e.Data, &source); err != nil || source.ID == "" || source.Provider == "" || source.TargetID == "" {
+			// Leave malformed payloads to the normal schema projector. Only an
+			// exact occupied target is a known, tenant-confined failure.
+			return false, nil
+		}
+		var owner string
+		var err error
+		if tx == nil {
+			owner, err = q.store.SecretSyncWorkloadIdentitySourceTargetOwner(ctx, e.TenantID, source.Provider, source.TargetID)
+		} else {
+			owner, err = q.store.SecretSyncWorkloadIdentitySourceTargetOwnerTx(ctx, tx, e.TenantID, source.Provider, source.TargetID)
+		}
+		if err != nil || owner == "" || owner == source.ID {
+			return false, err
+		}
+		if err := q.record(ctx, tx, e.TenantID, e.Sequence, "workload_source_target_conflict"); err != nil {
+			return false, err
+		}
+		q.known[e.TenantID] = true
+		return true, nil
 	}
 	if isKeyStateMutationEventType(e.Type) {
 		return false, fmt.Errorf("projections: key-state event %d cannot be quarantined: %w", e.Sequence, textErr)

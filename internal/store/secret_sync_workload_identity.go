@@ -5,12 +5,44 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
 var ErrSecretSyncWorkloadIdentitySourceNotFound = errors.New("store: secret-sync workload identity source not found")
+
+// SecretSyncWorkloadIdentitySourceTargetOwner returns the ID currently occupying
+// the tenant/provider/target uniqueness coordinate. Disabled sources still own
+// that coordinate. The API checks it under a target-scoped admission fence
+// before publishing an event; replay uses it to identify old poison events.
+func (s *Store) SecretSyncWorkloadIdentitySourceTargetOwner(ctx context.Context, tenantID, provider, targetID string) (string, error) {
+	var owner string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var queryErr error
+		owner, queryErr = s.SecretSyncWorkloadIdentitySourceTargetOwnerTx(ctx, tx, tenantID, provider, targetID)
+		return queryErr
+	})
+	return owner, err
+}
+
+// SecretSyncWorkloadIdentitySourceTargetOwnerTx also sees rows staged inside an
+// atomic rebuild transaction, which an independent read could not observe.
+func (s *Store) SecretSyncWorkloadIdentitySourceTargetOwnerTx(ctx context.Context, tx pgx.Tx, tenantID, provider, targetID string) (string, error) {
+	var owner string
+	err := tx.QueryRow(ctx,
+		`SELECT id::text FROM secret_sync_workload_identity_sources
+		  WHERE tenant_id=$1 AND provider=$2 AND target_id=$3`,
+		tenantID, provider, targetID).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("store: read workload identity target owner: %w", err)
+	}
+	return owner, nil
+}
 
 const (
 	SecretSyncWorkloadIdentityReady           = "ready"

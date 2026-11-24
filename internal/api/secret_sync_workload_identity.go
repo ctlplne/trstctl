@@ -12,6 +12,7 @@ import (
 
 	googleuuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretsync"
@@ -301,6 +302,9 @@ func secretSyncWorkloadIdentityTargetMatches(target *secretsync.Target, provider
 }
 
 func (a *API) emitSecretSyncWorkloadIdentitySource(ctx context.Context, tenantID, id string, req secretSyncWorkloadIdentitySourceRequest) error {
+	if a.store == nil || a.log == nil {
+		return errStatus(http.StatusServiceUnavailable, "secret-sync workload identity management is not configured")
+	}
 	data, err := json.Marshal(projections.SecretSyncWorkloadIdentitySourceUpserted{
 		ID: id, Name: req.Name, Provider: req.Provider, RoleARN: req.RoleARN,
 		ServiceAccount: req.ServiceAccount,
@@ -313,7 +317,24 @@ func (a *API) emitSecretSyncWorkloadIdentitySource(ctx context.Context, tenantID
 	if err != nil {
 		return err
 	}
-	return a.appendAndProjectSecretSyncWorkloadIdentitySource(ctx, tenantID, projections.EventSecretSyncWorkloadIdentityUpserted, data)
+	// Different Idempotency-Keys can race for the same target. Hold a session
+	// fence through read, immutable append, and projection so a peer sees the
+	// first writer or gets a retryable conflict before either can append twice.
+	resource := crypto.SHA256Hex([]byte("secret-sync-workload-source\x00" + req.Provider + "\x00" + req.TargetID))
+	err = a.store.WithTenantResourceCreation(ctx, tenantID, resource, func(work context.Context) error {
+		owner, err := a.store.SecretSyncWorkloadIdentitySourceTargetOwner(work, tenantID, req.Provider, req.TargetID)
+		if err != nil {
+			return err
+		}
+		if owner != "" && owner != id {
+			return errStatus(http.StatusConflict, "a workload identity source already owns this provider and target")
+		}
+		return a.appendAndProjectSecretSyncWorkloadIdentitySource(work, tenantID, projections.EventSecretSyncWorkloadIdentityUpserted, data)
+	})
+	if errors.Is(err, store.ErrResourceAdmissionBusy) {
+		return errStatus(http.StatusConflict, "another workload identity source for this target is being admitted; retry the request")
+	}
+	return err
 }
 
 func (a *API) appendAndProjectSecretSyncWorkloadIdentitySource(ctx context.Context, tenantID, eventType string, data []byte) error {

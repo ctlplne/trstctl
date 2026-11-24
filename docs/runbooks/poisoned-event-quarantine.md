@@ -1,8 +1,10 @@
 # Runbook: a historical event cannot be projected
 
 New event appends reject NUL and invalid UTF-8 in text before publishing to
-JetStream. An older release may already have stored such an event. The event is
-still the source of truth; the control plane does not edit or discard it.
+JetStream. Workload identity source creation and retargeting also refuse an
+occupied provider/target before publishing. An older release may already have
+stored either kind of event. The event is still the source of truth; the control
+plane does not edit or discard it.
 
 On catch-up, live tail, full replay, or atomic rebuild, the projector records the first
 affected sequence in `projection_tenant_quarantines`. It advances the global
@@ -20,7 +22,8 @@ SELECT tenant_id, first_failed_seq, reason_code, recorded_at
  ORDER BY recorded_at, tenant_id;
 ```
 
-`reason_code` is `nul_text` or `invalid_utf8`. The sequence is an event-log
+`reason_code` is `nul_text`, `invalid_utf8`, or
+`workload_source_target_conflict`. The sequence is an event-log
 coordinate, not proof that the event was applied. A green global `/readyz` and
 an advanced checkpoint mean the healthy tenants can progress; they do not mean
 the quarantined tenant's inventory is complete.
