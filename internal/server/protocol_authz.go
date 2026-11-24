@@ -81,11 +81,11 @@ func ProtocolAuthzManifest() []ProtocolAuthzEntry {
 			// certs:issue and /ssh/revoke requires certs:write, as the product
 			// revoke route does. They were once public on the rationale that
 			// "principals are constrained by the served SSH profile", which was
-			// not true; direct user certificates are now limited to
-			// protocols.ssh_user_principals.
+			// not true; direct user and host certificates are now limited to
+			// their separate operator-approved principal lists.
 			Permission:          authz.CertsIssue,
 			TenantMapping:       "tenant is fixed by protocols.ssh.tenant_id or the server default tenant when the signer-backed SSH CA is built; the authenticated caller must belong to that same tenant.",
-			PrincipalMapping:    "principal is the authenticated trstctl caller (API token or session), which must grant " + string(authz.CertsIssue) + " to issue and " + string(authz.CertsWrite) + " to revoke; ABAC deny rules and the per-tenant rate limit apply, direct user certificate principals must be listed in protocols.ssh_user_principals, and the ssh.cert.issued and ssh.cert.revoked events record the caller as actor with the principal names and validity.",
+			PrincipalMapping:    "principal is the authenticated trstctl caller (API token or session), which must grant " + string(authz.CertsIssue) + " to issue and " + string(authz.CertsWrite) + " to revoke; ABAC deny rules and the per-tenant rate limit apply, direct user certificate principals must be listed in protocols.ssh_user_principals and host certificate principals in protocols.ssh_host_principals, and the ssh.cert.issued and ssh.cert.revoked events record the caller as actor with the principal names and validity.",
 			EnablementAuthority: "operator/admin configuration enables the mount; issuance requires " + string(authz.CertsIssue) + " and revocation requires " + string(authz.CertsWrite) + ".",
 			DefaultDenyTest:     "internal/server/protocols_served_spiffe_ssh_test.go",
 		},

@@ -246,10 +246,13 @@ func TestServedRawSSHRevokeRequiresCertsWrite(t *testing.T) {
 	}
 }
 
-// F259: with no principal allowlist configured, direct user certificates are
-// refused on every path, including for root; host certificates still issue.
+// F259: with no user principal allowlist configured, direct user certificates
+// are refused on every path, including for root. The separately approved host
+// name remains issuable.
 func TestServedDirectSSHUserCertsNeedPrincipalAllowlist(t *testing.T) {
-	h := newOperatingServedHarness(t, sshServedProtocols())
+	protocols := sshServedProtocols()
+	protocols.SSHHostPrincipals = []string{"web-1.internal"}
+	h := newOperatingServedHarness(t, protocols)
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "ssh-issuer", []string{"certs:issue"})
 	pub := sshTestPublicKey(t)
 	raw := map[string]any{"public_key": pub, "key_id": "f259", "principals": []string{"root"}, "ttl_seconds": 600}
@@ -275,7 +278,9 @@ func TestServedDirectSSHUserCertsNeedPrincipalAllowlist(t *testing.T) {
 
 // RV-08d: raw host certificates get the product option checks.
 func TestServedRawSSHHostCertRejectsUserOptions(t *testing.T) {
-	h := newOperatingServedHarness(t, sshServedProtocols())
+	protocols := sshServedProtocols()
+	protocols.SSHHostPrincipals = []string{"web-1"}
+	h := newOperatingServedHarness(t, protocols)
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "ssh-issuer", []string{"certs:issue"})
 	pub := sshTestPublicKey(t)
 	for name, body := range map[string]map[string]any{
@@ -325,7 +330,9 @@ func TestServedRawSSHRoutesUseTheAPIGuard(t *testing.T) {
 		}
 	})
 	t.Run("idempotency and actor", func(t *testing.T) {
-		h := newOperatingServedHarness(t, sshServedProtocols())
+		protocols := sshServedProtocols()
+		protocols.SSHHostPrincipals = []string{"web-1.internal"}
+		h := newOperatingServedHarness(t, protocols)
 		token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "ssh-issuer", []string{"certs:issue"})
 		pub := sshTestPublicKey(t)
 		if code, body := sshPost(t, h.ts, "/ssh/issue/host", token, "", host(pub, "rv08e-nokey")); code != http.StatusBadRequest {

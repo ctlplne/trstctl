@@ -1126,10 +1126,18 @@ type Protocols struct {
 	// user certificate may carry (F259). A certificate's principals are the
 	// accounts sshd accepts it for, so without a list any certs:issue caller
 	// could mint `root` for every host that trusts the CA. Matching is exact;
-	// empty refuses direct user certificates. Host certificates and attested user
-	// certificates (principals bound to verified evidence) are unaffected. The
-	// eval profile defaults it to DefaultEvalSSHUserPrincipal.
+	// empty refuses direct user certificates. The eval profile defaults it to
+	// DefaultEvalSSHUserPrincipal.
 	SSHUserPrincipals []string `json:"ssh_user_principals,omitempty"`
+	// SSHHostPrincipals is the operator-approved exact set of host identities
+	// this CA may certify. Empty disables host certificates. Pattern syntax is
+	// refused even if the operator accidentally lists it.
+	SSHHostPrincipals []string `json:"ssh_host_principals,omitempty"`
+	// SSHAttestedPrincipalClaims names the proof claim keys an operator allows
+	// to become SSH user principals, as method:key entries (for example
+	// k8s_sat:sa). A claim value must also appear in SSHUserPrincipals.
+	// Empty permits only a verified attestation subject that the operator lists.
+	SSHAttestedPrincipalClaims []string `json:"ssh_attested_principal_claims,omitempty"`
 	// SCEPIntuneChallenge pins Microsoft Intune Connector challenge-signing
 	// certificates. Served SCEP always wires this validator; without anchors the
 	// validator fails closed rather than accepting unauthenticated CSRs.
@@ -4491,6 +4499,8 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &p.SSH.TenantID)
 	setCSV(getenv, "TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS", &p.SSHUserPrincipals)
+	setCSV(getenv, "TRSTCTL_PROTOCOLS_SSH_HOST_PRINCIPALS", &p.SSHHostPrincipals)
+	setCSV(getenv, "TRSTCTL_PROTOCOLS_SSH_ATTESTED_PRINCIPAL_CLAIMS", &p.SSHAttestedPrincipalClaims)
 }
 
 // applyTelemetryEnv is the usage-telemetry and OpenTelemetry-export stage of
@@ -5600,6 +5610,60 @@ func validateSSHUserPrincipals(principals []string) []error {
 	return errs
 }
 
+// ValidSSHHostPrincipal refuses OpenSSH pattern tokens. A host certificate
+// carrying one of these is trusted for more than one literal host by clients.
+// ASCII DNS names (including punycode), simple names and IP literals remain
+// available for exact operator approval.
+func ValidSSHHostPrincipal(principal string) bool {
+	if principal == "" || len(principal) > 256 || strings.TrimSpace(principal) != principal || !utf8.ValidString(principal) {
+		return false
+	}
+	return strings.IndexFunc(principal, func(r rune) bool {
+		return r > 127 || unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune("*?[]!,\\", r)
+	}) < 0
+}
+
+func validateSSHHostPrincipals(principals []string) []error {
+	var errs []error
+	const maxSSHHostPrincipals = 256
+	if len(principals) > maxSSHHostPrincipals {
+		errs = append(errs, fmt.Errorf("protocols.ssh_host_principals lists %d names; at most %d are allowed", len(principals), maxSSHHostPrincipals))
+	}
+	seen := make(map[string]bool, len(principals))
+	for i, principal := range principals {
+		if !ValidSSHHostPrincipal(principal) {
+			errs = append(errs, fmt.Errorf("protocols.ssh_host_principals[%d] must be one literal ASCII host name or IP address without patterns", i))
+		} else if seen[principal] {
+			errs = append(errs, fmt.Errorf("protocols.ssh_host_principals lists %q more than once", principal))
+		}
+		seen[principal] = true
+	}
+	return errs
+}
+
+func validateSSHAttestedPrincipalClaims(claims []string) []error {
+	var errs []error
+	if len(claims) > 64 {
+		errs = append(errs, fmt.Errorf("protocols.ssh_attested_principal_claims lists %d keys; at most 64 are allowed", len(claims)))
+	}
+	seen := make(map[string]bool, len(claims))
+	for i, claim := range claims {
+		method, key, ok := strings.Cut(claim, ":")
+		if !ok || method == "" || key == "" || strings.Contains(key, ":") ||
+			strings.IndexFunc(claim, func(r rune) bool {
+				return !strings.ContainsRune("abcdefghijklmnopqrstuvwxyz0123456789_:", r)
+			}) >= 0 {
+			errs = append(errs, fmt.Errorf("protocols.ssh_attested_principal_claims[%d] must be a method:claim_key pair of lowercase ASCII letters, digits and underscores", i))
+		} else if method == "github_oidc" && (key == "repository_id" || key == "repository_owner_id") {
+			errs = append(errs, fmt.Errorf("protocols.ssh_attested_principal_claims[%d] cannot use GitHub repository ID evidence as a login principal", i))
+		} else if seen[claim] {
+			errs = append(errs, fmt.Errorf("protocols.ssh_attested_principal_claims lists %q more than once", claim))
+		}
+		seen[claim] = true
+	}
+	return errs
+}
+
 func validateServedSurfaces(c *Config) []error {
 	var errs []error
 	errs = append(errs, validateEphemeralIssuance(c.EphemeralIssuance)...)
@@ -5709,6 +5773,8 @@ func validateServedSurfaces(c *Config) []error {
 		errs = append(errs, effectiveProtocols.ValidateTenantBindings("")...)
 	}
 	errs = append(errs, validateSSHUserPrincipals(c.Protocols.SSHUserPrincipals)...)
+	errs = append(errs, validateSSHHostPrincipals(c.Protocols.SSHHostPrincipals)...)
+	errs = append(errs, validateSSHAttestedPrincipalClaims(c.Protocols.SSHAttestedPrincipalClaims)...)
 	errs = append(errs, c.Protocols.ACMEQuota.validate()...)
 	errs = append(errs, validateACMEEAB(c.Protocols.ACMEEAB)...)
 	errs = append(errs, validateACMEDNSPersist(c.Protocols.ACMEDNSPersist)...)

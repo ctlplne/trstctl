@@ -3750,8 +3750,10 @@ plane's own SSH CA, so it takes no endpoint and no credential, and the served SS
 (`protocols.ssh`) must be on for the same tenant. `ssh_roles` gives every allowed role the
 certificate its leases carry: `principals` (the login or host names, one per entry),
 `certificate_type` (`user`, the default, or `host`), and optional `extensions` and
-`critical_options`. A user principal must also be listed in `protocols.ssh_user_principals`,
-which bounds every user certificate the CA signs; a lease for one that isn't fails. Each
+`critical_options`. A user principal must also be listed in `protocols.ssh_user_principals`;
+a host principal must be a literal name listed in `protocols.ssh_host_principals`.
+These lists bound every direct user and host certificate the CA signs, including
+leases; a lease for an unlisted principal fails. Each
 lease gets a fresh Ed25519 key pair, prepared and sealed before the CA signs (a retry
 certifies the same key), and a certificate valid for the lease's lifetime, keyed
 `trstctl-<lease ID>`. Its credential is JSON with `private_key` (OpenSSH form),

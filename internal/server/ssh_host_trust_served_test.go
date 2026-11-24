@@ -74,7 +74,10 @@ func sshFleetHostTrust(t *testing.T, h *servedHarness, token string) (hostTrustV
 // list another one until it reports again, and the newest report wins.
 func TestServedSSHFleetJudgesEachHostsSSHDTrust(t *testing.T) {
 	ctx := context.Background()
-	h := newServedHarnessWithEventOptions(t, config.Protocols{SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+	h := newServedHarnessWithEventOptions(t, config.Protocols{
+		SSH:               config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SSHHostPrincipals: []string{"edge-1.example.test"},
+	},
 		nil, withAgentChannel)
 	registerServedTenant(t, h, "SSH host trust tenant")
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

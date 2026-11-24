@@ -20,6 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/sshkeys"
 	"trstctl.com/trstctl/internal/events"
@@ -217,18 +218,29 @@ func (s *Server) IssueSSHCertificate(ctx context.Context, tenantID, idempotencyK
 	}, nil
 }
 
-// allowUserPrincipals enforces protocols.ssh_user_principals for a direct user
-// certificate (F259). A certificate's principals are the login names sshd will
-// accept it for, so without a list any certs:issue caller could mint `root` for
-// every host that trusts this CA. Matching is exact; an empty list refuses direct
-// user certificates and says how to enable them.
+// allowUserPrincipals enforces protocols.ssh_user_principals for direct and
+// attested user certificates. A certificate's principals are the login names
+// sshd will accept it for, so without a list any certs:issue caller could mint
+// `root` for every host that trusts this CA. Matching is exact.
 func (p *sshProtocol) allowUserPrincipals(principals []string) error {
 	if len(p.userPrincipals) == 0 {
-		return fmt.Errorf("%w: direct SSH user certificates are disabled until protocols.ssh_user_principals (TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS) lists the login names this CA may certify; attested user certificates are unaffected", api.ErrSSHWorkflowRejected)
+		return fmt.Errorf("%w: SSH user certificates are disabled until protocols.ssh_user_principals (TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS) lists the login names this CA may certify", api.ErrSSHWorkflowRejected)
 	}
 	for _, principal := range principals {
 		if !slices.Contains(p.userPrincipals, principal) {
 			return fmt.Errorf("%w: principal %q is not listed in protocols.ssh_user_principals", api.ErrSSHWorkflowRejected, principal)
+		}
+	}
+	return nil
+}
+
+func (p *sshProtocol) allowHostPrincipals(principals []string) error {
+	if len(p.hostPrincipals) == 0 {
+		return fmt.Errorf("%w: SSH host certificates are disabled until protocols.ssh_host_principals (TRSTCTL_PROTOCOLS_SSH_HOST_PRINCIPALS) lists exact host names this CA may certify", api.ErrSSHWorkflowRejected)
+	}
+	for _, principal := range principals {
+		if !config.ValidSSHHostPrincipal(principal) || !slices.Contains(p.hostPrincipals, principal) {
+			return fmt.Errorf("%w: host principal %q is not a literal name listed in protocols.ssh_host_principals", api.ErrSSHWorkflowRejected, principal)
 		}
 	}
 	return nil
@@ -281,6 +293,10 @@ func (s *Server) normalizeSSHCertificate(tenantID string, req api.SSHCertificate
 	}
 	if typ == "user" {
 		if err := sp.allowUserPrincipals(principals); err != nil {
+			return normalizedSSHCertificate{}, nil, err
+		}
+	} else {
+		if err := sp.allowHostPrincipals(principals); err != nil {
 			return normalizedSSHCertificate{}, nil, err
 		}
 	}
@@ -565,6 +581,13 @@ func (s *Server) normalizeAttestedSSHUserCert(ctx context.Context, tenantID stri
 		plan.blockers = append(plan.blockers, "Principals must contain at most 64 unique values; each value must be at most 256 characters with no control characters.")
 	} else {
 		plan.principals = principals
+		if len(plan.principals) > 0 {
+			if err := sp.allowUserPrincipals(plan.principals); err != nil {
+				return normalizedAttestedSSHUserCert{}, err
+			}
+		} else if len(sp.userPrincipals) == 0 {
+			return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: attested SSH user certificates are disabled until protocols.ssh_user_principals lists approved login names", api.ErrSSHWorkflowRejected)
+		}
 	}
 	if len(req.SourceAddresses) > 0 {
 		sourceAddress, sourceErr := normalizeSSHSourceAddresses(strings.Join(req.SourceAddresses, ","))
@@ -626,9 +649,11 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: verifier is invalid: %v", api.ErrSSHWorkflowInvalid, err)
 	}
 	issuer, err := sshca.NewAttestedUserCertIssuer(sshca.AttestedConfig{
-		TenantID: tenantID,
-		CA:       plan.sp.CA(),
-		Verifier: verifier,
+		TenantID:               tenantID,
+		CA:                     plan.sp.CA(),
+		Verifier:               verifier,
+		AllowedPrincipals:      plan.sp.userPrincipals,
+		AllowedPrincipalClaims: plan.sp.attestedPrincipalClaims,
 		Profile: sshca.Profile{
 			Name:           "served-ssh-attested",
 			MaxTTL:         time.Hour,

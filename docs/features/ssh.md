@@ -60,8 +60,15 @@ Direct user certificates may carry only the login names listed in
 `protocols.ssh_user_principals` (`TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS`,
 comma-separated). Matching is exact, so `root` is allowed only if you list it. With the
 list empty, direct user certificates are refused with a message saying how to enable
-them. Host certificates and attested user certificates, whose principals are bound to
-verified evidence, are unaffected. The eval profile defaults the list to `eval-user`.
+them. The eval profile defaults the user list to `eval-user`.
+
+Host certificates require a separate operator list:
+`protocols.ssh_host_principals` (`TRSTCTL_PROTOCOLS_SSH_HOST_PRINCIPALS`,
+comma-separated). Every requested host principal must match one literal name in
+that list. An empty list disables host issuance. OpenSSH pattern syntax such as
+`*`, `?`, brackets, `!`, commas and backslashes is refused even if it appears
+in the configured list. Approve the exact DNS names or IP addresses that this
+CA is allowed to certify before using either the product or raw host route.
 
 The direct user-certificate path allowlists only `source-address` and `force-command`
 critical options plus known OpenSSH session extensions. Host certificates reject all
@@ -190,11 +197,18 @@ control plane names each host from the agent's certificate, never from the repor
 
 The most powerful pattern: issue an SSH user certificate only to a caller who proves
 identity first. This issuer runs an [attestation](workload-identity.md) check (the same
-chain used for workload identity), then derives principals from the verified attestation
-and calls the SSH CA. The authenticated `certs:issue` caller is recorded as the issuer
-and must differ from the attested subject. This request does not collect a second
-person's approval. It rejects
-unbound principals, supports OpenSSH `source-address` and `force-command` critical
+chain used for workload identity), then checks the requested login against two
+operator choices: `protocols.ssh_user_principals` must list the login, and the login
+must equal the verified attestation subject or a claim value whose method-qualified
+key is listed in `protocols.ssh_attested_principal_claims`
+(`TRSTCTL_PROTOCOLS_SSH_ATTESTED_PRINCIPAL_CLAIMS`, comma-separated). For example,
+`k8s_sat:sa` permits the verified Kubernetes service-account name to supply a
+login if that login is also approved. An empty claim-key list permits only an
+approved exact subject. Names such as a Kubernetes pod or a cloud instance name
+are never implicit login authority. The authenticated `certs:issue` caller is
+recorded as the issuer and must differ from the attested subject. This request
+does not collect a second person's approval. It rejects unbound principals,
+supports OpenSSH `source-address` and `force-command` critical
 options, fails closed on attestation failure, defaults to a 15-minute TTL (capped by the
 profile), and binds the attestation via an immutable `ssh.attested_cert.issued` event:
 access short-lived and provably tied to a specific CI job or cloud instance — no standing
@@ -326,6 +340,8 @@ trusted identity source:
 TRSTCTL_PROTOCOLS_SSH_ENABLED=true
 TRSTCTL_PROTOCOLS_SSH_TENANT_ID=11111111-1111-4111-8111-111111111111
 TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS=deploy,oncall
+TRSTCTL_PROTOCOLS_SSH_HOST_PRINCIPALS=edge-1.internal
+TRSTCTL_PROTOCOLS_SSH_ATTESTED_PRINCIPAL_CLAIMS=k8s_sat:sa
 TRSTCTL_ATTESTED_ISSUANCE_ENABLED=true
 TRSTCTL_ATTESTED_ISSUANCE_TRUST_DOMAIN=example.org
 TRSTCTL_ATTESTED_ISSUANCE_DEFAULT_TTL=10m

@@ -26,7 +26,11 @@ import (
 func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	trust := servedDynamicK8sTrustFixture(t, "journey-ssh-k1")
 	h := newServedHarness(t,
-		config.Protocols{SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		config.Protocols{
+			SSH:                        config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+			SSHUserPrincipals:          []string{"web", "ns/default/sa/web"},
+			SSHAttestedPrincipalClaims: []string{"k8s_sat:sa"},
+		},
 		func(d *Deps) {
 			d.AttestedIssuance = AttestedIssuanceConfig{
 				Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,

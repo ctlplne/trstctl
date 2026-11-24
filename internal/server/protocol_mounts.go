@@ -203,7 +203,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 
 	if cfg.SSH.Enabled {
 		sshTenant := firstNonEmpty(cfg.SSH.TenantID, tenantFallback)
-		sshCA, err := s.buildSSHCA(ctx, sshTenant, pool, cfg.SSHUserPrincipals)
+		sshCA, err := s.buildSSHCA(ctx, sshTenant, pool, cfg.SSHUserPrincipals, cfg.SSHHostPrincipals, cfg.SSHAttestedPrincipalClaims)
 		if err != nil {
 			return nil, fmt.Errorf("server: build SSH CA: %w", err)
 		}
@@ -1071,10 +1071,9 @@ func decodeProtocolTransportKey(b []byte) (certDER, keyPKCS8 []byte, err error) 
 }
 
 // buildSSHCA provisions the SSH CA key in the signer (its own handle, constrained to
-// PurposeSSHCert) and returns the served SSH protocol surface. userPrincipals is
-// protocols.ssh_user_principals, the only login names a direct user certificate
-// may carry.
-func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead.Pool, userPrincipals []string) (*sshProtocol, error) {
+// PurposeSSHCert) and returns the served SSH protocol surface. The operator
+// principal lists bound direct user and host issuance to approved identities.
+func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead.Pool, userPrincipals, hostPrincipals, attestedClaims []string) (*sshProtocol, error) {
 	c := s.signer.Client()
 	if c == nil {
 		return nil, fmt.Errorf("server: signer unavailable for SSH CA")
@@ -1106,6 +1105,8 @@ func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead
 		return nil, err
 	}
 	protocol.userPrincipals = slices.Clone(userPrincipals)
+	protocol.hostPrincipals = slices.Clone(hostPrincipals)
+	protocol.attestedPrincipalClaims = slices.Clone(attestedClaims)
 	if err := protocol.restoreRevocations(ctx, s.log); err != nil {
 		return nil, err
 	}

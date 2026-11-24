@@ -24,14 +24,31 @@ func TestGitHubRepositoryIDEvidenceDoesNotGrantAnSSHPrincipal(t *testing.T) {
 		Claims: map[string]string{"repository_owner_id": "123", "repository_id": "456", "owner": "acme"},
 	}
 	for _, principal := range []string{"123", "456"} {
-		if attestationAllowsSSHPrincipal(proof, principal) {
+		if attestationAllowsSSHPrincipal(proof, principal, []string{"github_oidc:repository_id", "github_oidc:repository_owner_id"}) {
 			t.Error("repository ID evidence was accepted as a requested principal")
 		}
 	}
-	for _, principal := range []string{"workflow", "acme"} {
-		if !attestationAllowsSSHPrincipal(proof, principal) {
-			t.Errorf("existing attestation field %q lost its principal match", principal)
-		}
+	if !attestationAllowsSSHPrincipal(proof, "workflow", nil) {
+		t.Error("verified subject lost its principal match")
+	}
+	if attestationAllowsSSHPrincipal(proof, "acme", nil) || !attestationAllowsSSHPrincipal(proof, "acme", []string{"github_oidc:owner"}) {
+		t.Error("owner claim did not require an operator-selected key")
+	}
+}
+
+func TestCR193UnselectedAttestationClaimCannotBecomeSSHLogin(t *testing.T) {
+	proof := attest.Attestation{
+		Method: "k8s_sat", Subject: "ns/dev/sa/builder",
+		Claims: map[string]string{"sa": "builder", "pod": "root"},
+	}
+	if attestationAllowsSSHPrincipal(proof, "root", []string{"k8s_sat:sa"}) {
+		t.Error("pod name became root despite operator selecting only the service-account claim")
+	}
+	if attestationAllowsSSHPrincipal(proof, "builder", []string{"gcp_iit:sa"}) {
+		t.Error("claim key selected for another attestation method was accepted")
+	}
+	if !attestationAllowsSSHPrincipal(proof, "builder", []string{"k8s_sat:sa"}) {
+		t.Error("selected service-account claim was refused")
 	}
 }
 
@@ -52,6 +69,7 @@ func newAttestedIssuer(t *testing.T, rec auditsink.Auditor) (*AttestedUserCertIs
 	}
 	iss, err := NewAttestedUserCertIssuer(AttestedConfig{
 		TenantID: "t1", CA: ca, Verifier: v,
+		AllowedPrincipals: []string{"web"}, AllowedPrincipalClaims: []string{"k8s_sat:sa"},
 		Profile: Profile{Name: "attested-user", MaxTTL: time.Hour, AllowUserCerts: true},
 		TTL:     10 * time.Minute,
 		Principals: func(a attest.Attestation) []string {

@@ -59,6 +59,12 @@ type sshProtocol struct {
 	// direct (non-attested) user certificate may carry. Empty refuses direct user
 	// certificates.
 	userPrincipals []string
+	// hostPrincipals is protocols.ssh_host_principals: exact operator-approved
+	// host identities. Empty refuses host certificates on both served routes.
+	hostPrincipals []string
+	// attestedPrincipalClaims lists method-qualified verified claim keys the
+	// operator permits to become a user principal after the user allowlist gate.
+	attestedPrincipalClaims []string
 
 	// krlVersion is the monotonic OpenSSH KRL version a host uses to reject an older
 	// KRL; it counts the tenant revocation events applied, so replicas at the same

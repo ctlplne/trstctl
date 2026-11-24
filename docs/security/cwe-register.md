@@ -248,8 +248,8 @@ not this file.
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
-| `internal/config/config.go:3829` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4677` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3837` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4687` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -2908,9 +2908,9 @@ not this file.
 | `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3924` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:5335` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5354` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3932` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:5345` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5364` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:340` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -3152,7 +3152,7 @@ not this file.
 | `internal/server/protocol_mounts.go:764` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:879` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:996` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1409` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:1410` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:602` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:240` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:244` | test reads its own tempdir fixture (CWE-22) |
@@ -3479,7 +3479,7 @@ not this file.
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_certificate_lease_served_test.go:76` | public CA/KRL fixture in a test tempdir (CWE-276) |
 | `internal/server/ssh_certificate_lease_served_test.go:107` | a public certificate in a test tempdir (CWE-276) |
-| `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/ssh_journey_served_test.go:281` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/tenant_key_domain_kms_served_test.go:156` | fixture script in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/keystore_test.go:274` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/signauth_secret_test.go:47` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -3766,8 +3766,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/cli/pcas_succession_approval_test.go:58` | test writes under t.TempDir |
 | `internal/cli/pcas_succession_approval_test.go:129` | test writes under t.TempDir |
-| `internal/config/config.go:5335` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5354` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5345` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5364` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |

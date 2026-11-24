@@ -11,7 +11,8 @@ import (
 )
 
 // WithoutGitHubRepositoryIDEvidence returns the historical authorization view.
-// Existing command bindings and implicit SSH principal matching use this view.
+// Existing command bindings and operator-selected SSH principal matching use
+// this view, so GitHub's immutable repository IDs remain evidence only.
 // The caller's evidence, including its map and selector order, stays intact.
 func (a Attestation) WithoutGitHubRepositoryIDEvidence() Attestation {
 	if a.Method != "github_oidc" {

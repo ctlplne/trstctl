@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,6 +25,12 @@ type AttestedConfig struct {
 	Verifier *attest.Verifier
 	Profile  Profile
 	TTL      time.Duration
+	// AllowedPrincipals is the operator-approved set of SSH login names.
+	// Empty disables this issuer, including subject-derived certificates.
+	AllowedPrincipals []string
+	// AllowedPrincipalClaims contains method:claim_key entries chosen by the
+	// operator. A claim value also has to be in AllowedPrincipals.
+	AllowedPrincipalClaims []string
 	// Principals derives the certificate principals from the verified identity.
 	// If nil, the attestation subject is used as the sole principal.
 	Principals func(attest.Attestation) []string
@@ -46,6 +53,9 @@ func NewAttestedUserCertIssuer(cfg AttestedConfig) (*AttestedUserCertIssuer, err
 	}
 	if !cfg.Profile.AllowUserCerts {
 		return nil, fmt.Errorf("ssh: profile must allow user certificates")
+	}
+	if len(cfg.AllowedPrincipals) == 0 {
+		return nil, fmt.Errorf("ssh: operator-approved user principals required")
 	}
 	if cfg.TTL <= 0 {
 		cfg.TTL = 15 * time.Minute
@@ -88,10 +98,13 @@ func (i *AttestedUserCertIssuer) Issue(ctx context.Context, req AttestedRequest)
 		if len(principals) == 0 {
 			return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: principal required")
 		}
-		for _, principal := range principals {
-			if !attestationAllowsSSHPrincipal(att, principal) {
-				return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: requested principal %q is not bound to attested subject", principal)
-			}
+	}
+	for _, principal := range principals {
+		if !slices.Contains(i.cfg.AllowedPrincipals, principal) {
+			return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: principal %q is not listed in the operator-approved SSH user principals", principal)
+		}
+		if !attestationAllowsSSHPrincipal(att, principal, i.cfg.AllowedPrincipalClaims) {
+			return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: requested principal %q is not bound to an operator-approved attestation claim or subject", principal)
 		}
 	}
 	approver := strings.TrimSpace(req.Approver)
@@ -146,12 +159,14 @@ func compactSSHStrings(in []string) []string {
 	return out
 }
 
-func attestationAllowsSSHPrincipal(att attest.Attestation, principal string) bool {
-	if principal == att.Subject {
+func attestationAllowsSSHPrincipal(att attest.Attestation, principal string, allowedClaims []string) bool {
+	if principal != "" && principal == att.Subject {
 		return true
 	}
-	for _, value := range att.WithoutGitHubRepositoryIDEvidence().Claims {
-		if value == principal {
+	claims := att.WithoutGitHubRepositoryIDEvidence().Claims
+	for _, name := range allowedClaims {
+		method, key, ok := strings.Cut(name, ":")
+		if ok && method == att.Method && key != "" && principal != "" && claims[key] == principal {
 			return true
 		}
 	}
