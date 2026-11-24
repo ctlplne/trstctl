@@ -6,6 +6,35 @@ package events
 // It is retained verbatim for historical evidence, never assigned to a customer.
 const LegacyProviderGlobalAuditScope = "provider-control-plane"
 
+// ProviderAuthorityTenantID is the reserved UUID partition for Provider
+// operators and roles. It is never a customer tenant or a key-custody tenant.
+const ProviderAuthorityTenantID = "00000000-0000-0000-0000-000000000000"
+
+// This is the closed set of Provider-global commands currently projected in
+// the reserved partition. Customer-scoped Provider commands use their customer
+// tenant ID. A new command must be reviewed here before protected-log append.
+var providerAuthorityPublicControlTypes = map[string]struct{}{
+	"provider.operator.upserted":     {},
+	"provider.operator.offboarded":   {},
+	"provider.operator.role_revoked": {},
+	"provider.role.upserted":         {},
+	"provider.role.deleted":          {},
+	"provider.template.recorded":     {},
+	"provider.isolation.drill":       {},
+}
+
+// IsProviderAuthorityPublicControl admits only an unaltered schema-one
+// Provider-global command into the public control partition. Unknown event
+// types, erased payloads and pre-wrapped envelopes retain normal refusal.
+func IsProviderAuthorityPublicControl(event Event) bool {
+	if event.TenantID != ProviderAuthorityTenantID || event.SchemaVersion != 1 ||
+		event.Protection != nil || event.SensitiveErased {
+		return false
+	}
+	_, known := providerAuthorityPublicControlTypes[event.Type]
+	return known
+}
+
 // These are the Provider audit types emitted before the authority partition
 // received a UUID. Keep the list explicit: a future provider.* command under
 // the textual partition must not silently bypass core replay or outbox work.

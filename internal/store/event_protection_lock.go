@@ -32,12 +32,16 @@ func (s *Store) WithKeyLock(ctx context.Context, ref eventprotect.KeyRef, fn fun
 	if err != nil || key == uuid.Nil {
 		return errors.New("event protection: key UUID is required")
 	}
+	tenant, err := uuid.Parse(ref.TenantID)
+	if err != nil || tenant == uuid.Nil {
+		return errors.New("event protection: key custody needs a non-reserved tenant")
+	}
 	return s.WithTenantEventProtection(ctx, ref.TenantID, fn)
 }
 
 func (s *Store) WithTenantEventProtection(ctx context.Context, tenantID string, fn func(context.Context) error) error {
 	tenant, err := uuid.Parse(tenantID)
-	if s == nil || err != nil || tenant == uuid.Nil || fn == nil {
+	if s == nil || err != nil || fn == nil {
 		return errors.New("event protection: tenant and callback are required")
 	}
 	if err := ctx.Err(); err != nil {

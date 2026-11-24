@@ -55,6 +55,9 @@ func (admission SourceAdmission) EventProtectionFor(ctx context.Context, event e
 	if event.Protection == nil && !event.SensitiveErased && event.SchemaVersion == 1 && events.IsLegacyProviderGlobalAudit(event) {
 		return events.EventProtectionDecision{Mode: events.EventProtectionLegacy}, nil
 	}
+	if events.IsProviderAuthorityPublicControl(event) {
+		return events.EventProtectionDecision{Mode: events.EventProtectionPublicControl}, nil
+	}
 	tenant, err := uuid.Parse(event.TenantID)
 	if err != nil || tenant == uuid.Nil || event.Protection != nil || event.SensitiveErased {
 		return events.EventProtectionDecision{}, ErrSource
