@@ -52,7 +52,7 @@ function mount() {
   render(
     <MemoryRouter>
       <AppQueryProvider>
-        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write"] }} />
+        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write", "secrets:read"] }} />
       </AppQueryProvider>
     </MemoryRouter>,
   );

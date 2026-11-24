@@ -59,7 +59,7 @@ describe("ticket-intake relay visibility", () => {
     const user = userEvent.setup();
     render(
       <AppQueryProvider>
-        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write"] }} />
+        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write", "secrets:read"] }} />
       </AppQueryProvider>,
     );
 
@@ -112,12 +112,23 @@ describe("ticket-intake relay visibility", () => {
     expect(screen.queryByRole("button", { name: "Edit ticket intake schedule" })).not.toBeInTheDocument();
   });
 
+  it("does not offer schedule setup to a certificate writer without secret reference access", async () => {
+    apiMock.ticketIntakeSchedules.mockResolvedValue({ items: [{ configured: true, name: "default", system: "servicenow", enabled: false, guidance: "" }] });
+    render(
+      <AppQueryProvider>
+        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write"] }} />
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByText((_, node) => node?.tagName === "P" && node.textContent?.includes("servicenow · Disabled") === true)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Configure ticket intake" })).not.toBeInTheDocument();
+  });
+
   it("reviews the closed ServiceNow table and field mapping before any write", async () => {
     apiMock.ticketIntakeSchedules.mockResolvedValue({ items: [] });
     const user = userEvent.setup();
     render(
       <AppQueryProvider>
-        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write"] }} />
+        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write", "secrets:read"] }} />
       </AppQueryProvider>,
     );
     await user.click(await screen.findByRole("button", { name: "Configure ticket intake" }));
