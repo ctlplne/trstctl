@@ -145,6 +145,8 @@ type Deps struct {
 	// SecretRepoPrivateEgressCIDRs is the operator ceiling for SCIM-independent
 	// tenant repository clones; the source still needs egress:private admission.
 	SecretRepoPrivateEgressCIDRs []string
+	// ACMEDNS01PrivateEgressCIDRs is the operator ceiling for DNS-01 providers.
+	ACMEDNS01PrivateEgressCIDRs []string
 	// CBOMHostRoots are the operator-approved directories for served host-config scans.
 	// An empty set refuses all tenant-selected control-plane file reads.
 	CBOMHostRoots    []string
@@ -1210,6 +1212,11 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			return nil, fmt.Errorf("server: repository clone private egress ceiling: %w", err)
 		}
 	}
+	for _, raw := range d.ACMEDNS01PrivateEgressCIDRs {
+		if _, err := netsec.ParsePrivateEgressPrefix(raw); err != nil {
+			return nil, fmt.Errorf("server: DNS-01 private egress ceiling: %w", err)
+		}
+	}
 	approvedCBOMRoots, err := safefile.HostRoots(d.CBOMHostRoots)
 	if err != nil {
 		return nil, fmt.Errorf("server: CBOM host roots: %w", err)
@@ -2078,6 +2085,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithServiceNowBindings(d.ServiceNowBindings...),
 		api.WithOutboundEnvCredentialBindings(s.outboundCredentials),
 		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
+		api.WithACMEDNS01PrivateEgressCeiling(d.ACMEDNS01PrivateEgressCIDRs),
 		api.WithACMEDNS01TXTResolver(net.DefaultResolver),
 		api.WithACMEARIPosture(s.ACMEARIPosture),
 		api.WithLifecycleAutomationPlan(s),
@@ -2400,6 +2408,7 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 	}
 	if d.Store != nil && d.Log != nil && s.outbox != nil {
 		s.acmeDNS01 = newServedACMEDNS01Automation(d.Store, d.Log, s.outbox, d.KEK, s.plugins, d.TenantCrypto)
+		s.acmeDNS01.privateEgressCeiling = append([]string(nil), d.ACMEDNS01PrivateEgressCIDRs...)
 		if d.Protocols.ACMEEmail.From != "" {
 			s.acmeEmail = &servedACMEEmailMailer{store: d.Store, outbox: s.outbox, wake: s.wakeOutbox, cfg: d.Protocols.ACMEEmail,
 				tenantID: d.Protocols.ACME.TenantID, resolver: integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}}

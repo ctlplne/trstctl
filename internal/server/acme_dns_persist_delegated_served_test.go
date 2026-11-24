@@ -24,13 +24,13 @@ import (
 // anywhere else is refused before anything is written.
 func TestServedDelegatedConfigPublishesThePersistRecordAtItsOwnTargetP1L4(t *testing.T) {
 	dns := newServedDNSWebhookFixture(t, "p1l4-delegated-token")
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), withDNS01LoopbackEgress)
 	registerServedTenant(t, h, "P1-L4 delegated persist tenant")
 	h.srv.acmeDNS01.cnameResolver = dns
 	h.srv.acmeDNS01.caaResolver = dns
 	h.srv.acmeDNS01.txtResolvers = []acmesrv.Resolver{dns}
 	startServedDirectOutboxPump(t, h.srv)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
 		"name": "dns/p1l4/bearer-token", "value": "p1l4-delegated-token",
 	}); status != http.StatusCreated {
@@ -46,7 +46,8 @@ func TestServedDelegatedConfigPublishesThePersistRecordAtItsOwnTargetP1L4(t *tes
 	providerConfig := func(name, zone, delegation, persist string) map[string]any {
 		body := map[string]any{"name": name, "provider": "webhook", "zone": zone, "delegation_target": delegation,
 			"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/p1l4/bearer-token"}, // #nosec G101 -- a secret:// reference, no credential value (CWE-798)
-			"config":          map[string]any{"endpoint": dns.URL()}, "allowed_methods": []string{"dns-01"}, "allow_upstream_dv": true}
+			"config":          map[string]any{"endpoint": dns.URL()}, "allowed_methods": []string{"dns-01"}, "allow_upstream_dv": true,
+			"allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, dns.URL())}}
 		if persist != "" {
 			body["persist_delegation_target"] = persist
 		}

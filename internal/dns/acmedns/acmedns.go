@@ -106,7 +106,7 @@ func New(subdomain string, creds Credentials, opts ...Option) *Provider {
 	p := &Provider{
 		subdomain: subdomain,
 		creds:     creds,
-		doer:      netsec.HardenedClient(30 * time.Second),
+		doer:      netsec.SafeClient(30 * time.Second),
 	}
 	p.setEndpoint(defaultEndpoint)
 	for _, o := range opts {

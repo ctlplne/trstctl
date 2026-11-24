@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -1112,6 +1113,7 @@ export function Protocols() {
                             <li>{(config.allowed_methods ?? []).join(", ") || t("protocols.dns01.noMethodPolicy")}</li>
                             <li>{config.allow_wildcards ? t("protocols.dns01.wildcardsAllowed") : t("protocols.dns01.wildcardsDenied")}</li>
                             <li>{config.allow_upstream_dv ? t("protocols.dns01.upstreamDVAllowed") : t("protocols.dns01.upstreamDVDenied")}</li>
+                            <li>{config.allow_private_endpoint ? t("protocols.dns01.privateEgressAllowed") : t("protocols.dns01.publicEgressOnly")}</li>
                             {config.caa_issuer_domain && (
                               <li>
                                 {translateNow("source.caa.084696b5b2")} {config.caa_issuer_domain}
@@ -1684,6 +1686,8 @@ function DNS01ConfigDialog({
   // anything else on the config — and the next renewal cycle would then need a
   // human nobody knew to expect.
   const [allowUpstreamDV, setAllowUpstreamDV] = useState(config?.allow_upstream_dv ?? false);
+  const [allowPrivateEndpoint, setAllowPrivateEndpoint] = useState(config?.allow_private_endpoint ?? false);
+  const [privateCIDRs, setPrivateCIDRs] = useState((config?.private_egress_cidrs ?? []).join("\n"));
   const [allowedMethods, setAllowedMethods] = useState<ACMEChallengeMethod[]>(() => (config?.allowed_methods ?? []).filter(isACMEChallengeMethod));
   // A165-L4: the propagation budget has its own field; the JSON box holds the
   // provider's other settings.
@@ -1737,12 +1741,22 @@ function DNS01ConfigDialog({
       }
       providerConfig = { ...(providerConfig ?? {}), propagation_timeout_seconds: seconds };
     }
+    const requestedPrivateCIDRs = privateCIDRs
+      .split(/[\n,]/)
+      .map((cidr) => cidr.trim())
+      .filter(Boolean);
+    if (allowPrivateEndpoint && requestedPrivateCIDRs.length === 0) {
+      setError(t("protocols.dns01.privateCIDRsRequired"));
+      return;
+    }
     const input: ACMEDNS01ProviderConfigRequest = {
       name: name.trim(),
       provider: provider.trim(),
       allow_wildcards: allowWildcards,
       allow_upstream_dv: allowUpstreamDV,
+      allow_private_endpoint: allowPrivateEndpoint,
     };
+    if (allowPrivateEndpoint) input.private_egress_cidrs = requestedPrivateCIDRs;
     if (zone.trim()) input.zone = zone.trim();
     if (challengeDomain.trim()) input.challenge_domain = challengeDomain.trim();
     if (delegationTarget.trim()) input.delegation_target = delegationTarget.trim();
@@ -1880,6 +1894,31 @@ function DNS01ConfigDialog({
             <span className="mt-1 block text-caption font-normal text-muted-foreground">{t("protocols.dns01.allowUpstreamDVHelp")}</span>
           </span>
         </label>
+        <label className="flex items-start gap-2 text-body font-medium">
+          <Checkbox
+            className="mt-1"
+            aria-label={t("protocols.dns01.allowPrivateEndpoint")}
+            checked={allowPrivateEndpoint}
+            onChange={(event) => setAllowPrivateEndpoint(event.target.checked)}
+          />
+          <span>
+            {t("protocols.dns01.allowPrivateEndpoint")}
+            <span className="mt-1 block text-caption font-normal text-muted-foreground">{t("protocols.dns01.allowPrivateEndpointHelp")}</span>
+          </span>
+        </label>
+        {allowPrivateEndpoint && (
+          <Field label={t("protocols.dns01.privateCIDRs")} description={t("protocols.dns01.privateCIDRsHelp")}>
+            {(control) => (
+              <Textarea
+                {...control}
+                rows={2}
+                value={privateCIDRs}
+                onChange={(event) => setPrivateCIDRs(event.target.value)}
+                className="min-h-16 font-mono text-xs"
+              />
+            )}
+          </Field>
+        )}
         <Field label={t("protocols.dns01.propagationBudget")} description={t("protocols.dns01.propagationBudgetHelp")}>
           {(control) => (
             <Input

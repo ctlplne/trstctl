@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	509: true, // TestMigrationDataContentBackfills/0509_dns01_private_egress_starts_unadmitted
 	508: true, // TestMigrationDataContentBackfills/0508_provider_operator_revision_starts_unknown
 	507: true, // TestMigrationDataContentBackfills/0507_recording_headers_start_empty
 	506: true, // TestMigrationDataContentBackfills/0506_switching_private_watch_starts_unattributed
@@ -2387,6 +2388,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0509_dns01_private_egress_starts_unadmitted", testMigration0509DNS01PrivateEgressStartsUnadmitted)
 	t.Run("0508_provider_operator_revision_starts_unknown", testMigration0508ProviderOperatorRevisionStartsUnknown)
 	t.Run("0507_recording_headers_start_empty", testMigration0507RecordingHeadersStartEmpty)
 	t.Run("0506_switching_private_watch_starts_unattributed", testMigration0506SwitchingPrivateWatchStartsUnattributed)
@@ -3430,6 +3432,37 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
 	t.Run("0136_fleet_reissuance_cursor_defaults", testMigration0136FleetReissuanceCursorDefaults)
 	t.Run("0137_relay_external_pollers", testMigration0137RelayExternalPollers)
+}
+
+func testMigration0509DNS01PrivateEgressStartsUnadmitted(t *testing.T) {
+	const stable = `SELECT tenant_id::text, id::text, name, provider, config::text
+		FROM acme_dns01_provider_configs ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 509, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for i, tenantID := range []string{tenantA, tenantB} {
+				_, err := pool.Exec(ctx, `INSERT INTO acme_dns01_provider_configs
+					(id, tenant_id, name, provider, config, created_at, updated_at)
+					VALUES ($1,$2,$3,'webhook',$4,'2026-11-01T00:00:00Z','2026-11-01T00:00:00Z')`,
+					fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1), tenantID,
+					fmt.Sprintf("pre-0509-%d", i), `{"endpoint":"http://127.0.0.1:8000","allow_private_endpoint":true}`)
+				if err != nil {
+					t.Fatalf("seed pre-0509 DNS-01 config for %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var unadmitted bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(NOT allow_private_endpoint
+				AND cardinality(private_egress_cidrs) = 0 AND private_egress_admission_version = 0)
+				FROM acme_dns01_provider_configs WHERE tenant_id IN ($1,$2)`, tenantA, tenantB).
+				Scan(&rows, &unadmitted); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !unadmitted {
+				t.Fatalf("0509 legacy DNS-01 configs gained private authority: rows=%d want=%d unadmitted=%t", rows, want, unadmitted)
+			}
+		})
 }
 
 func testMigration0508ProviderOperatorRevisionStartsUnknown(t *testing.T) {

@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	dnsakamai "trstctl.com/trstctl/internal/dns/akamai"
 	dnsazuredns "trstctl.com/trstctl/internal/dns/azuredns"
 	dnscloudflare "trstctl.com/trstctl/internal/dns/cloudflare"
+	"trstctl.com/trstctl/internal/dns/egress"
 	dnsgoogledns "trstctl.com/trstctl/internal/dns/googledns"
 	dnsns1 "trstctl.com/trstctl/internal/dns/ns1"
 	dnsrfc2136 "trstctl.com/trstctl/internal/dns/rfc2136"
@@ -27,6 +30,7 @@ import (
 	dnsultradns "trstctl.com/trstctl/internal/dns/ultradns"
 	dnswebhook "trstctl.com/trstctl/internal/dns/webhook"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/acme"
@@ -51,12 +55,13 @@ const (
 )
 
 type servedACMEDNS01Automation struct {
-	store   *store.Store
-	log     *events.Log
-	outbox  *orchestrator.Outbox
-	kek     sealKeyWrapper
-	crypto  tenantseal.Access
-	plugins *PluginManager
+	store                *store.Store
+	log                  *events.Log
+	outbox               *orchestrator.Outbox
+	kek                  sealKeyWrapper
+	crypto               tenantseal.Access
+	plugins              *PluginManager
+	privateEgressCeiling []string
 
 	cnameResolver acme.CNAMEResolver
 	caaResolver   acme.CAAResolver
@@ -67,26 +72,30 @@ type servedACMEDNS01Automation struct {
 }
 
 type acmeDNS01OutboxPayload struct {
-	ConfigID            string          `json:"config_id"`
-	ConfigName          string          `json:"config_name,omitempty"`
-	Provider            string          `json:"provider"`
-	Domain              string          `json:"domain"`
-	Zone                string          `json:"zone,omitempty"`
-	ChallengeDomain     string          `json:"challenge_domain,omitempty"`
-	DelegationTarget    string          `json:"delegation_target,omitempty"`
-	RecordName          string          `json:"record_name"`
-	Value               string          `json:"value"`
-	CredentialRefs      json.RawMessage `json:"credential_refs,omitempty"`
-	Config              json.RawMessage `json:"config,omitempty"`
-	QualificationID     string          `json:"qualification_id,omitempty"`
-	QualificationStatus string          `json:"qualification_status,omitempty"`
-	PropagationStatus   string          `json:"propagation_status,omitempty"`
-	FailureStage        string          `json:"failure_stage,omitempty"`
-	ErrorCategory       string          `json:"error_category,omitempty"`
-	RecoveryOf          string          `json:"recovery_of,omitempty"`
+	ConfigID                      string          `json:"config_id"`
+	ConfigName                    string          `json:"config_name,omitempty"`
+	Provider                      string          `json:"provider"`
+	Domain                        string          `json:"domain"`
+	Zone                          string          `json:"zone,omitempty"`
+	ChallengeDomain               string          `json:"challenge_domain,omitempty"`
+	DelegationTarget              string          `json:"delegation_target,omitempty"`
+	RecordName                    string          `json:"record_name"`
+	Value                         string          `json:"value"`
+	CredentialRefs                json.RawMessage `json:"credential_refs,omitempty"`
+	Config                        json.RawMessage `json:"config,omitempty"`
+	AllowPrivateEndpoint          bool            `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs            []string        `json:"private_egress_cidrs,omitempty"`
+	PrivateEgressAdmissionVersion int             `json:"private_egress_admission_version,omitempty"`
+	QualificationID               string          `json:"qualification_id,omitempty"`
+	QualificationStatus           string          `json:"qualification_status,omitempty"`
+	PropagationStatus             string          `json:"propagation_status,omitempty"`
+	FailureStage                  string          `json:"failure_stage,omitempty"`
+	ErrorCategory                 string          `json:"error_category,omitempty"`
+	RecoveryOf                    string          `json:"recovery_of,omitempty"`
 	// PersistDelegationTarget (P1-L4) is the CNAME target the config's
 	// _validation-persist names point at, when it is not DelegationTarget.
 	PersistDelegationTarget string `json:"persist_delegation_target,omitempty"`
+	egressOptions           netsec.SafeClientOptions
 }
 
 type acmeDNS01RecordEvent struct {
@@ -145,16 +154,19 @@ func (a *servedACMEDNS01Automation) Present(ctx context.Context, tenantID, domai
 // would be the one that runs unattended every validation cycle.
 func (a *servedACMEDNS01Automation) presentRecord(ctx context.Context, tenantID string, cfg store.ACMEDNS01ProviderConfig, domain, recordName, value string) (func(context.Context) error, error) {
 	payload := acmeDNS01OutboxPayload{
-		ConfigID:         cfg.ID,
-		Provider:         cfg.Provider,
-		Domain:           domain,
-		Zone:             cfg.Zone,
-		ChallengeDomain:  cfg.ChallengeDomain,
-		DelegationTarget: cfg.DelegationTarget,
-		RecordName:       recordName,
-		Value:            value,
-		CredentialRefs:   cfg.CredentialRefs,
-		Config:           cfg.Config,
+		ConfigID:                      cfg.ID,
+		Provider:                      cfg.Provider,
+		Domain:                        domain,
+		Zone:                          cfg.Zone,
+		ChallengeDomain:               cfg.ChallengeDomain,
+		DelegationTarget:              cfg.DelegationTarget,
+		RecordName:                    recordName,
+		Value:                         value,
+		CredentialRefs:                cfg.CredentialRefs,
+		Config:                        cfg.Config,
+		AllowPrivateEndpoint:          cfg.AllowPrivateEndpoint,
+		PrivateEgressCIDRs:            append([]string(nil), cfg.PrivateEgressCIDRs...),
+		PrivateEgressAdmissionVersion: cfg.PrivateEgressAdmissionVersion,
 	}
 	payload.PersistDelegationTarget = cfg.PersistDelegationTarget
 	// The key carries a per-publish nonce, and it has to.
@@ -486,6 +498,38 @@ func (a *servedACMEDNS01Automation) outboxRecord(ctx context.Context, tenantID, 
 }
 
 func (a *servedACMEDNS01Automation) providerForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	if a.store == nil {
+		return nil, errors.New("server: DNS-01 store is unavailable")
+	}
+	current, err := a.store.GetACMEDNS01ProviderConfig(ctx, tenantID, payload.ConfigID)
+	if err != nil {
+		return nil, fmt.Errorf("server: DNS-01 provider config is unavailable: %w", err)
+	}
+	// A queued intent cannot borrow a later private grant or keep using a
+	// removed one. Compare the exact projected config and recheck today's
+	// operator ceiling on every attempt, before any credential is redeemed.
+	if current.Provider != payload.Provider || !sameDNS01JSON(current.Config, payload.Config) ||
+		!sameDNS01JSON(current.CredentialRefs, payload.CredentialRefs) ||
+		current.AllowPrivateEndpoint != payload.AllowPrivateEndpoint ||
+		!slices.Equal(current.PrivateEgressCIDRs, payload.PrivateEgressCIDRs) ||
+		current.PrivateEgressAdmissionVersion != payload.PrivateEgressAdmissionVersion {
+		return nil, errors.New("server: DNS-01 provider config changed after enqueue")
+	}
+	if current.AllowPrivateEndpoint {
+		if current.PrivateEgressAdmissionVersion != 1 {
+			return nil, errors.New("server: DNS-01 private egress has no admitted authority")
+		}
+		prefixes, err := netsec.PrivateEgressWithinCeiling(current.PrivateEgressCIDRs, a.privateEgressCeiling)
+		if err != nil {
+			return nil, errors.New("server: DNS-01 private egress exceeds the current operator ceiling")
+		}
+		payload.egressOptions.AllowPrivateCIDRs = prefixes
+	} else if len(current.PrivateEgressCIDRs) != 0 || current.PrivateEgressAdmissionVersion != 0 {
+		return nil, errors.New("server: DNS-01 private egress has inconsistent authority")
+	}
+	if err := egress.Validate(payload.Provider, payload.Config, payload.egressOptions); err != nil {
+		return nil, err
+	}
 	switch payload.Provider {
 	case "route53":
 		return a.route53ProviderForPayload(ctx, tenantID, payload)
@@ -513,6 +557,11 @@ func (a *servedACMEDNS01Automation) providerForPayload(ctx context.Context, tena
 		}
 		return nil, fmt.Errorf("server: acme dns-01 provider %q is not wired for order-time automation", payload.Provider)
 	}
+}
+
+func sameDNS01JSON(a, b json.RawMessage) bool {
+	var first, second any
+	return json.Unmarshal(a, &first) == nil && json.Unmarshal(b, &second) == nil && reflect.DeepEqual(first, second)
 }
 
 func (a *servedACMEDNS01Automation) route53ProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
@@ -551,7 +600,7 @@ func (a *servedACMEDNS01Automation) route53ProviderForPayload(ctx context.Contex
 	if len(secretAccessKey) == 0 {
 		return nil, errors.New("server: route53 dns-01 credential ref aws_secret_key_ref is required")
 	}
-	opts := []dnsroute53.Option{}
+	opts := []dnsroute53.Option{dnsroute53.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions))}
 	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
 		opts = append(opts, dnsroute53.WithEndpoint(endpoint))
 	}
@@ -580,7 +629,7 @@ func (a *servedACMEDNS01Automation) googleDNSProviderForPayload(ctx context.Cont
 	if len(token) == 0 {
 		return nil, errors.New("server: googledns dns-01 credential ref oauth_token_ref is required")
 	}
-	opts := []dnsgoogledns.Option{}
+	opts := []dnsgoogledns.Option{dnsgoogledns.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions))}
 	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
 		opts = append(opts, dnsgoogledns.WithEndpoint(endpoint))
 	}
@@ -611,7 +660,7 @@ func (a *servedACMEDNS01Automation) azureDNSProviderForPayload(ctx context.Conte
 	if len(token) == 0 {
 		return nil, errors.New("server: azuredns dns-01 credential ref aad_token_ref is required")
 	}
-	opts := []dnsazuredns.Option{}
+	opts := []dnsazuredns.Option{dnsazuredns.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions))}
 	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
 		opts = append(opts, dnsazuredns.WithEndpoint(endpoint))
 	}
@@ -637,7 +686,7 @@ func (a *servedACMEDNS01Automation) cloudflareProviderForPayload(ctx context.Con
 	if len(token) == 0 {
 		return nil, errors.New("server: cloudflare dns-01 credential ref api_token_ref is required")
 	}
-	opts := []dnscloudflare.Option{}
+	opts := []dnscloudflare.Option{dnscloudflare.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions))}
 	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
 		opts = append(opts, dnscloudflare.WithEndpoint(endpoint))
 	}
@@ -665,7 +714,7 @@ func (a *servedACMEDNS01Automation) rfc2136ProviderForPayload(ctx context.Contex
 	if err := requireACMEDNS01Fields("rfc2136", map[string]string{"server": cfg.Server, "zone": cfg.Zone}); err != nil {
 		return nil, err
 	}
-	opts := []dnsrfc2136.Option{}
+	opts := []dnsrfc2136.Option{dnsrfc2136.WithEgressPolicy(payload.egressOptions)}
 	if cfg.TTL > 0 {
 		opts = append(opts, dnsrfc2136.WithTTL(cfg.TTL))
 	}
@@ -687,7 +736,7 @@ func (a *servedACMEDNS01Automation) webhookProviderForPayload(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	provider := dnswebhook.New(cfg.Endpoint, dnswebhook.Credentials{BearerToken: token})
+	provider := dnswebhook.New(cfg.Endpoint, dnswebhook.Credentials{BearerToken: token}, dnswebhook.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions)))
 	secret.Wipe(token)
 	return provider, nil
 }
@@ -714,7 +763,7 @@ func (a *servedACMEDNS01Automation) ns1ProviderForPayload(ctx context.Context, t
 	if len(apiKey) == 0 {
 		return nil, errors.New("server: ns1 dns-01 credential ref api_key_ref is required")
 	}
-	opts := []dnsns1.Option{}
+	opts := []dnsns1.Option{dnsns1.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions))}
 	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
 		opts = append(opts, dnsns1.WithEndpoint(endpoint))
 	}
@@ -755,7 +804,7 @@ func (a *servedACMEDNS01Automation) akamaiProviderForPayload(ctx context.Context
 	}
 	return dnsakamai.New(cfg.Zone, dnsakamai.Credentials{
 		ClientToken: clientToken, ClientSecret: clientSecret, AccessToken: accessToken,
-	}, dnsakamai.WithEndpoint(cfg.Endpoint)), nil
+	}, dnsakamai.WithEndpoint(cfg.Endpoint), dnsakamai.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions))), nil
 }
 
 func (a *servedACMEDNS01Automation) ultradnsProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
@@ -780,7 +829,7 @@ func (a *servedACMEDNS01Automation) ultradnsProviderForPayload(ctx context.Conte
 	if len(token) == 0 {
 		return nil, errors.New("server: ultradns dns-01 credential ref bearer_token_ref is required")
 	}
-	opts := []dnsultradns.Option{}
+	opts := []dnsultradns.Option{dnsultradns.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions))}
 	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
 		opts = append(opts, dnsultradns.WithEndpoint(endpoint))
 	}
@@ -810,7 +859,7 @@ func (a *servedACMEDNS01Automation) acmeDNSProviderForPayload(ctx context.Contex
 	if username == "" || len(password) == 0 {
 		return nil, errors.New("server: acmedns dns-01 credential refs username_ref and password_ref are required")
 	}
-	opts := []dnsacmedns.Option{}
+	opts := []dnsacmedns.Option{dnsacmedns.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions))}
 	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
 		opts = append(opts, dnsacmedns.WithEndpoint(endpoint))
 	}
@@ -832,7 +881,7 @@ func (a *servedACMEDNS01Automation) pluginProviderForPayload(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	provider := dnswebhook.New(cfg.Endpoint, dnswebhook.Credentials{BearerToken: token})
+	provider := dnswebhook.New(cfg.Endpoint, dnswebhook.Credentials{BearerToken: token}, dnswebhook.WithHTTPClient(netsec.SafeClientWithOptions(30*time.Second, payload.egressOptions)))
 	secret.Wipe(token)
 	return &dns01PluginProvider{
 		plugins: a.plugins, log: a.log, tenantID: tenantID, provider: payload.Provider,

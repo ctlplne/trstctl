@@ -1095,6 +1095,9 @@ type Protocols struct {
 	// ACMEDNSPersist offers dns-persist-01 (P1) for standing records that name
 	// one of these issuer domain names; empty keeps it off.
 	ACMEDNSPersist ACMEDNSPersist `json:"acme_dns_persist,omitempty"`
+	// ACMEDNS01PrivateEgressCIDRs is the operator ceiling for tenant DNS-01
+	// provider endpoints. An empty list refuses all private destinations.
+	ACMEDNS01PrivateEgressCIDRs []string `json:"acme_dns01_private_egress_cidrs,omitempty"`
 	// ACMEEmail offers S/MIME certificates over ACME (RFC 8823, P15); an empty
 	// from keeps it off.
 	ACMEEmail ACMEEmail `json:"acme_email,omitempty"`
@@ -4439,6 +4442,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 		p.ACMEEAB.Keys = []ACMEExternalAccountBindingKey{eabKey}
 	}
 	setCSV(getenv, "TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ISSUER_DOMAINS", &p.ACMEDNSPersist.IssuerDomainNames)
+	setCSV(getenv, "TRSTCTL_PROTOCOLS_ACME_DNS01_PRIVATE_EGRESS_CIDRS", &p.ACMEDNS01PrivateEgressCIDRs)
 	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ACCOUNTURI_FORM", &p.ACMEDNSPersist.AccountURIForm)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NONCES", &p.ACMEQuota.MaxNonces)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS", &p.ACMEQuota.MaxAccounts)
@@ -5708,6 +5712,11 @@ func validateServedSurfaces(c *Config) []error {
 	errs = append(errs, c.Protocols.ACMEQuota.validate()...)
 	errs = append(errs, validateACMEEAB(c.Protocols.ACMEEAB)...)
 	errs = append(errs, validateACMEDNSPersist(c.Protocols.ACMEDNSPersist)...)
+	for _, raw := range c.Protocols.ACMEDNS01PrivateEgressCIDRs {
+		if _, err := netsec.ParsePrivateEgressPrefix(raw); err != nil {
+			errs = append(errs, fmt.Errorf("protocols.acme_dns01_private_egress_cidrs: %w", err))
+		}
+	}
 	errs = append(errs, validateACMEEmail(c.Protocols.ACMEEmail)...)
 	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must
 	// name a directory and at least one trusted key, so the binary never serves an

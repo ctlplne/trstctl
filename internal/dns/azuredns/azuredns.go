@@ -111,7 +111,7 @@ func New(subscriptionID, resourceGroup, zone string, creds Credentials, opts ...
 		resourceGroup:  resourceGroup,
 		zone:           strings.TrimSuffix(zone, "."),
 		creds:          creds,
-		doer:           netsec.HardenedClient(30 * time.Second),
+		doer:           netsec.SafeClient(30 * time.Second),
 	}
 	p.setEndpoint(defaultEndpoint)
 	for _, o := range opts {

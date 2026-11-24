@@ -2143,6 +2143,46 @@ describe("protocol surface", () => {
     expect(screen.getAllByText("prod-cloudflare-next").length).toBeGreaterThan(0);
   });
 
+  it("keeps an admitted private DNS endpoint grant when editing another field (CR-062)", async () => {
+    const user = userEvent.setup();
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValueOnce({
+      items: [
+        {
+          id: "01900000-0000-7000-8000-000000000062",
+          tenant_id: "11111111-1111-1111-1111-111111111111",
+          name: "private-rfc2136",
+          provider: "rfc2136",
+          zone: "example.test",
+          credential_refs: {},
+          config: { server: "127.0.0.1:53" },
+          allowed_methods: ["dns-01"],
+          allow_wildcards: false,
+          allow_upstream_dv: false,
+          allow_private_endpoint: true,
+          private_egress_cidrs: ["127.0.0.1/32"],
+          secret_handling: "credential_refs_only",
+          created_at: "2026-11-24T00:00:00Z",
+          updated_at: "2026-11-24T00:00:00Z",
+        },
+      ],
+    });
+    apiMock.updateACMEDNS01ProviderConfig.mockResolvedValueOnce({ id: "01900000-0000-7000-8000-000000000062", name: "private-rfc2136-updated" });
+    await renderProtocols();
+    await user.click(screen.getByRole("button", { name: "Edit DNS-01 config private-rfc2136" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit DNS-01 provider config: private-rfc2136" });
+    expect(within(dialog).getByRole("checkbox", { name: "Allow private DNS endpoint" })).toBeChecked();
+    expect(within(dialog).getByRole("textbox", { name: "Private egress CIDRs" })).toHaveValue("127.0.0.1/32");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Config name" }), { target: { value: "private-rfc2136-updated" } });
+    await user.click(within(dialog).getByRole("button", { name: "Save config" }));
+    expect(apiMock.updateACMEDNS01ProviderConfig).toHaveBeenCalledWith(
+      "01900000-0000-7000-8000-000000000062",
+      expect.objectContaining({
+        allow_private_endpoint: true,
+        private_egress_cidrs: ["127.0.0.1/32"],
+      }),
+    );
+  });
+
   it("previews and saves an edited MDM SCEP policy without rendering secret reference values", async () => {
     const user = userEvent.setup();
     await renderProtocols();

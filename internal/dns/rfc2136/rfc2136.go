@@ -12,10 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/secrettext"
@@ -73,6 +75,16 @@ type Option func(*Provider)
 // WithExchange injects the DNS exchange seam.
 func WithExchange(ex Exchanger) Option {
 	return func(p *Provider) { p.ex = ex }
+}
+
+// WithEgressPolicy applies an operator-approved private CIDR allowance to
+// the UDP dial. Every actual resolved address is still checked before send.
+func WithEgressPolicy(opts netsec.SafeClientOptions) Option {
+	return func(p *Provider) {
+		p.ex = udpExchange{server: p.server, opts: netsec.SafeClientOptions{
+			AllowPrivateCIDRs: append([]netip.Prefix(nil), opts.AllowPrivateCIDRs...),
+		}}
+	}
 }
 
 // WithNow injects a clock for deterministic TSIG tests.
@@ -187,11 +199,12 @@ func (p *Provider) buildUpdate(class uint16, ttl uint32, name, value string) ([]
 
 type udpExchange struct {
 	server string
+	opts   netsec.SafeClientOptions
 }
 
 func (e udpExchange) Exchange(ctx context.Context, msg []byte) ([]byte, error) {
 	server := hostPort(e.server)
-	var d net.Dialer
+	d := net.Dialer{Control: netsec.SafeDialControlWithOptions(e.opts)}
 	conn, err := d.DialContext(ctx, "udp", server)
 	if err != nil {
 		return nil, err

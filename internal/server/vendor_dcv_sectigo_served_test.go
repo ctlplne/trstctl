@@ -65,10 +65,11 @@ func TestServedSectigoDomainValidationCompletesUnattendedA165L1(t *testing.T) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = upstreams
 		d.UpstreamDV = holder
+		withDNS01LoopbackEgress(d)
 	})
 	h.srv.acmeDNS01.caaResolver = dns
 	startServedExternalCADispatcher(t, h)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 	issue := func(name, key string) (int, []byte) {
 		t.Helper()
 		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: externalCACSR(t, name)})
@@ -97,9 +98,11 @@ func TestServedSectigoDomainValidationCompletesUnattendedA165L1(t *testing.T) {
 	}
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 		"name": "a165l1-dcv-webhook", "provider": "webhook", "zone": "dcv.test",
-		"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
-		"config":          map[string]any{"endpoint": dns.URL()},
-		"allowed_methods": []string{"dns-01"}, "allow_upstream_dv": true,
+		"credential_refs":        map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
+		"config":                 map[string]any{"endpoint": dns.URL()},
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
+		"allowed_methods":        []string{"dns-01"}, "allow_upstream_dv": true,
 	}); status != http.StatusCreated {
 		t.Fatalf("create the consenting DNS-01 provider config: %d %s", status, body)
 	}

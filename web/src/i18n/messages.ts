@@ -24683,6 +24683,34 @@ export const messages = {
     defaultMessage: "Allow upstream domain validation",
     description: "B7: consent for trstctl to publish challenge records into this zone for an external CA.",
   },
+  "protocols.dns01.allowPrivateEndpoint": {
+    defaultMessage: "Allow private DNS endpoint",
+    description: "CR-062: explicit request to send DNS-01 updates to an operator-approved private address.",
+  },
+  "protocols.dns01.allowPrivateEndpointHelp": {
+    defaultMessage: "Requires egress:private and CIDRs inside the operator's DNS-01 network ceiling. The worker checks the current grant before each update.",
+    description: "CR-062: explain the permission and operator ceiling for DNS-01 egress.",
+  },
+  "protocols.dns01.privateCIDRs": {
+    defaultMessage: "Private egress CIDRs",
+    description: "CR-062: CIDR list for the tenant DNS-01 provider endpoint.",
+  },
+  "protocols.dns01.privateCIDRsHelp": {
+    defaultMessage: "One CIDR per line or separated by commas. Use the narrowest range that contains the provider endpoint.",
+    description: "CR-062: format and least-privilege guidance for DNS-01 private egress.",
+  },
+  "protocols.dns01.privateCIDRsRequired": {
+    defaultMessage: "Enter at least one private CIDR to allow this endpoint.",
+    description: "CR-062: private DNS-01 egress needs a requested range.",
+  },
+  "protocols.dns01.privateEgressAllowed": {
+    defaultMessage: "Private endpoint requested",
+    description: "CR-062: saved DNS-01 provider config requests private egress; the current operator ceiling still applies.",
+  },
+  "protocols.dns01.publicEgressOnly": {
+    defaultMessage: "Public endpoints only",
+    description: "CR-062: saved DNS-01 provider config has no private egress grant.",
+  },
   "protocols.dns01.propagationBudget": {
     defaultMessage: "Propagation budget (seconds)",
     description: "A165-L4: how long a DigiCert or Sectigo validation waits for this provider's record to appear in DNS.",

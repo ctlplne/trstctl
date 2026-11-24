@@ -54,12 +54,12 @@ func TestServedACMEDNS01RequiresActiveIdentifierScopeForPublication(t *testing.T
 	h := newServedHarness(t, config.Protocols{
 		ACME:    config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		ACMEEAB: config.ACMEExternalAccountBinding{Keys: keys},
-	}, withSecretsEnabled(t, nil), func(d *Deps) { d.ACMEValidators = &validators })
+	}, withSecretsEnabled(t, nil), func(d *Deps) { d.ACMEValidators = &validators }, withDNS01LoopbackEgress)
 	registerServedTenant(t, h, "ACME managed DNS tenant")
 	h.srv.acmeDNS01.caaResolver = dns
 	dns.setCAA(zone, []acmesrv.CAARecord{{Tag: "issue", Value: issuer}})
 	startServedDirectOutboxPump(t, h.srv)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
 		"name": "dns/managed/fixture", "value": "managed-dns-fixture",
 	})
@@ -68,9 +68,11 @@ func TestServedACMEDNS01RequiresActiveIdentifierScopeForPublication(t *testing.T
 	}
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 		"name": "managed-dns", "provider": "webhook", "zone": zone,
-		"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/managed/fixture"}, // #nosec G101 -- logical fixture reference (CWE-798)
-		"config":          map[string]any{"endpoint": dns.URL()},
-		"allowed_methods": []string{"dns-01"}, "allow_wildcards": true, "caa_issuer_domain": issuer,
+		"credential_refs":        map[string]any{"bearer_token_ref": "secret://dns/managed/fixture"}, // #nosec G101 -- logical fixture reference (CWE-798)
+		"config":                 map[string]any{"endpoint": dns.URL()},
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
+		"allowed_methods":        []string{"dns-01"}, "allow_wildcards": true, "caa_issuer_domain": issuer,
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("configure DNS webhook fixture: %d %s", status, body)

@@ -72,6 +72,7 @@ func TestServedACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 		},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) { d.ACMEValidators = &validators },
+		withDNS01LoopbackEgress,
 	)
 	startServedOutboxPump(t, h.srv)
 	seedServedCertbotDNSPolicyAUD73(t, h, dns, domain, dnsWebhookToken)
@@ -182,7 +183,7 @@ func seedServedCertbotDNSPolicyAUD73(t *testing.T, h *servedHarness, dns *served
 	// fixtures alone authenticate a caller but do not create that event-sourced
 	// lifecycle root, so assemble it before either production mutation.
 	registerServedTenant(t, h, "Certbot DNS policy tenant")
-	token := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	token := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token, map[string]any{
 		"name":  "dns/certbot-aud73/bearer-token",
 		"value": bearerToken,
@@ -200,8 +201,10 @@ func seedServedCertbotDNSPolicyAUD73(t *testing.T, h *servedHarness, dns *served
 		"config": map[string]any{
 			"endpoint": dns.URL(),
 		},
-		"allowed_methods": []string{acmesrv.ChallengeDNS01},
-		"allow_wildcards": false,
+		"allowed_methods":        []string{acmesrv.ChallengeDNS01},
+		"allow_wildcards":        false,
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("create Certbot DNS-01 provider policy: status %d body %s", status, body)

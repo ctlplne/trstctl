@@ -649,6 +649,9 @@
       },
       "ACMEDNS01ProviderConfig": {
         "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
           "allow_upstream_dv": {
             "type": "boolean"
           },
@@ -690,6 +693,12 @@
           "persist_delegation_target": {
             "description": "the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4)",
             "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "provider": {
             "type": "string"
@@ -739,6 +748,10 @@
       },
       "ACMEDNS01ProviderConfigRequest": {
         "properties": {
+          "allow_private_endpoint": {
+            "description": "Requires egress:private; private_egress_cidrs must fit the operator DNS-01 ceiling.",
+            "type": "boolean"
+          },
           "allow_upstream_dv": {
             "type": "boolean"
           },
@@ -778,6 +791,12 @@
           "persist_delegation_target": {
             "description": "with delegation_target: the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4)",
             "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "provider": {
             "type": "string"

@@ -106,7 +106,7 @@ func New(project, zone string, creds Credentials, opts ...Option) *Provider {
 		project: project,
 		zone:    zone,
 		creds:   creds,
-		doer:    netsec.HardenedClient(30 * time.Second),
+		doer:    netsec.SafeClient(30 * time.Second),
 	}
 	p.setEndpoint(defaultEndpoint)
 	for _, o := range opts {

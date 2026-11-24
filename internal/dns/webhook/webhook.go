@@ -59,7 +59,7 @@ func WithHTTPClient(d HTTPDoer) Option {
 // provider calls /present and /cleanup below it.
 func New(endpoint string, creds Credentials, opts ...Option) *Provider {
 	creds.BearerToken = secrettext.Clone(creds.BearerToken)
-	p := &Provider{creds: creds, doer: netsec.HardenedClient(30 * time.Second)}
+	p := &Provider{creds: creds, doer: netsec.SafeClient(30 * time.Second)}
 	p.setEndpoint(endpoint)
 	for _, o := range opts {
 		o(p)

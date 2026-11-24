@@ -88,7 +88,7 @@ func New(zone string, creds Credentials, opts ...Option) *Provider {
 	p := &Provider{
 		zone:  zone,
 		creds: creds,
-		doer:  netsec.HardenedClient(30 * time.Second),
+		doer:  netsec.SafeClient(30 * time.Second),
 	}
 	p.setEndpoint("https://api.ultradns.com")
 	for _, o := range opts {

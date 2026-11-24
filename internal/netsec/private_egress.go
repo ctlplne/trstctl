@@ -32,3 +32,39 @@ func ParsePrivateEgressPrefix(raw string) (netip.Prefix, error) {
 	}
 	return netip.Prefix{}, fmt.Errorf("%w: egress allowlist entry %q must stay inside a private or loopback range", ErrSSRFBlocked, raw)
 }
+
+// PrivateEgressWithinCeiling accepts only narrow, private tenant ranges that
+// fit inside an operator-owned ceiling. The returned prefixes may be handed to
+// SafeClientWithOptions or SafeDialControlWithOptions after this check.
+func PrivateEgressWithinCeiling(requested, ceiling []string) ([]netip.Prefix, error) {
+	if len(requested) == 0 || len(requested) > 64 || len(ceiling) == 0 {
+		return nil, ErrSSRFBlocked
+	}
+	allowed := make([]netip.Prefix, 0, len(ceiling))
+	for _, raw := range ceiling {
+		prefix, err := ParsePrivateEgressPrefix(raw)
+		if err != nil {
+			return nil, err
+		}
+		allowed = append(allowed, prefix)
+	}
+	out := make([]netip.Prefix, 0, len(requested))
+	for _, raw := range requested {
+		prefix, err := ParsePrivateEgressPrefix(raw)
+		if err != nil {
+			return nil, err
+		}
+		inside := false
+		for _, limit := range allowed {
+			if prefix.Addr().Is4() == limit.Addr().Is4() && prefix.Bits() >= limit.Bits() && limit.Contains(prefix.Addr()) {
+				inside = true
+				break
+			}
+		}
+		if !inside {
+			return nil, ErrSSRFBlocked
+		}
+		out = append(out, prefix)
+	}
+	return out, nil
+}

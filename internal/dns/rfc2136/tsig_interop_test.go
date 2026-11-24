@@ -6,12 +6,15 @@ import (
 	"context"
 	"encoding/base64"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/miekg/dns"
 
 	"trstctl.com/trstctl/internal/dns/rfc2136"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // An authoritative server checks an update's TSIG with its own
@@ -56,23 +59,35 @@ func TestProviderTSIGVerifiesAtAStandardsServer(t *testing.T) {
 	<-started
 	t.Cleanup(func() { _ = server.Shutdown() })
 	addr := pc.LocalAddr().String()
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ownedLoopback := rfc2136.WithEgressPolicy(netsec.SafeClientOptions{AllowPrivateCIDRs: []netip.Prefix{
+		netip.MustParsePrefix("127.0.0.1/32"),
+	}})
+	statusOnError := func() any {
+		select {
+		case status := <-statuses:
+			return status
+		default:
+			return "server received no packet"
+		}
+	}
 
-	p := rfc2136.New(addr, "example.test.", rfc2136.Credentials{KeyName: "update-key.example.test", Secret: secret})
+	p := rfc2136.New(addr, "example.test.", rfc2136.Credentials{KeyName: "update-key.example.test", Secret: secret}, ownedLoopback)
 	if err := p.PresentTXT(ctx, "_acme-challenge.app.example.test", "token-digest"); err != nil {
-		t.Fatalf("present: %v (server: %v)", err, <-statuses)
+		t.Fatalf("present: %v (server: %v)", err, statusOnError())
 	}
 	if status := <-statuses; status != nil {
 		t.Fatalf("the server refused the add's TSIG: %v", status)
 	}
 	if err := p.CleanupTXT(ctx, "_acme-challenge.app.example.test", "token-digest"); err != nil {
-		t.Fatalf("cleanup: %v (server: %v)", err, <-statuses)
+		t.Fatalf("cleanup: %v (server: %v)", err, statusOnError())
 	}
 	if status := <-statuses; status != nil {
 		t.Fatalf("the server refused the delete's TSIG: %v", status)
 	}
 
-	wrong := rfc2136.New(addr, "example.test.", rfc2136.Credentials{KeyName: "update-key.example.test", Secret: []byte("not-the-secret")})
+	wrong := rfc2136.New(addr, "example.test.", rfc2136.Credentials{KeyName: "update-key.example.test", Secret: []byte("not-the-secret")}, ownedLoopback)
 	if err := wrong.PresentTXT(ctx, "_acme-challenge.app.example.test", "token-digest"); err == nil || !strings.Contains(err.Error(), "rcode 9") {
 		t.Fatalf("an update signed with the wrong secret: %v", err)
 	}

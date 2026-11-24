@@ -14,7 +14,9 @@ import (
 
 	googleuuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/dns/egress"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/projections"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/store"
@@ -40,17 +42,27 @@ type dns01ProviderCatalogResponse struct {
 	Items []ACMEDNS01ProviderCatalogItem `json:"items"`
 }
 
+// WithACMEDNS01PrivateEgressCeiling supplies the operator's maximum private
+// DNS-01 destination range. A tenant still needs egress:private and an exact
+// requested subset for each provider config.
+func WithACMEDNS01PrivateEgressCeiling(cidrs []string) Option {
+	return func(c *config) { c.dns01PrivateEgressCeiling = append([]string(nil), cidrs...) }
+}
+
 type dns01ProviderConfigRequest struct {
-	Name             string          `json:"name"`
-	Provider         string          `json:"provider"`
-	Zone             string          `json:"zone,omitempty"`
-	ChallengeDomain  string          `json:"challenge_domain,omitempty"`
-	DelegationTarget string          `json:"delegation_target,omitempty"`
-	CredentialRefs   json.RawMessage `json:"credential_refs,omitempty"`
-	Config           json.RawMessage `json:"config,omitempty"`
-	CAAIssuerDomain  string          `json:"caa_issuer_domain,omitempty"`
-	AllowedMethods   []string        `json:"allowed_methods,omitempty"`
-	AllowWildcards   bool            `json:"allow_wildcards,omitempty"`
+	Name                          string          `json:"name"`
+	Provider                      string          `json:"provider"`
+	Zone                          string          `json:"zone,omitempty"`
+	ChallengeDomain               string          `json:"challenge_domain,omitempty"`
+	DelegationTarget              string          `json:"delegation_target,omitempty"`
+	CredentialRefs                json.RawMessage `json:"credential_refs,omitempty"`
+	Config                        json.RawMessage `json:"config,omitempty"`
+	AllowPrivateEndpoint          bool            `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs            []string        `json:"private_egress_cidrs,omitempty"`
+	privateEgressAdmissionVersion int
+	CAAIssuerDomain               string   `json:"caa_issuer_domain,omitempty"`
+	AllowedMethods                []string `json:"allowed_methods,omitempty"`
+	AllowWildcards                bool     `json:"allow_wildcards,omitempty"`
 	// AllowUpstreamDV permits this config to publish challenge records for
 	// UPSTREAM domain validation against an external CA (epic B7). Off unless
 	// an operator sets it: credentials given so trstctl could verify a
@@ -65,22 +77,24 @@ type dns01ProviderConfigRequest struct {
 }
 
 type dns01ProviderConfigResponse struct {
-	ID               string          `json:"id"`
-	TenantID         string          `json:"tenant_id"`
-	Name             string          `json:"name"`
-	Provider         string          `json:"provider"`
-	Zone             string          `json:"zone,omitempty"`
-	ChallengeDomain  string          `json:"challenge_domain,omitempty"`
-	DelegationTarget string          `json:"delegation_target,omitempty"`
-	CredentialRefs   json.RawMessage `json:"credential_refs"`
-	Config           json.RawMessage `json:"config"`
-	CAAIssuerDomain  string          `json:"caa_issuer_domain,omitempty"`
-	AllowedMethods   []string        `json:"allowed_methods"`
-	AllowWildcards   bool            `json:"allow_wildcards"`
-	AllowUpstreamDV  bool            `json:"allow_upstream_dv"`
-	SecretHandling   string          `json:"secret_handling"`
-	CreatedAt        string          `json:"created_at"`
-	UpdatedAt        string          `json:"updated_at"`
+	ID                   string          `json:"id"`
+	TenantID             string          `json:"tenant_id"`
+	Name                 string          `json:"name"`
+	Provider             string          `json:"provider"`
+	Zone                 string          `json:"zone,omitempty"`
+	ChallengeDomain      string          `json:"challenge_domain,omitempty"`
+	DelegationTarget     string          `json:"delegation_target,omitempty"`
+	CredentialRefs       json.RawMessage `json:"credential_refs"`
+	Config               json.RawMessage `json:"config"`
+	AllowPrivateEndpoint bool            `json:"allow_private_endpoint"`
+	PrivateEgressCIDRs   []string        `json:"private_egress_cidrs"`
+	CAAIssuerDomain      string          `json:"caa_issuer_domain,omitempty"`
+	AllowedMethods       []string        `json:"allowed_methods"`
+	AllowWildcards       bool            `json:"allow_wildcards"`
+	AllowUpstreamDV      bool            `json:"allow_upstream_dv"`
+	SecretHandling       string          `json:"secret_handling"`
+	CreatedAt            string          `json:"created_at"`
+	UpdatedAt            string          `json:"updated_at"`
 	// PersistDelegationTarget is where the config's _validation-persist names
 	// point, when not at DelegationTarget (P1-L4).
 	PersistDelegationTarget string `json:"persist_delegation_target,omitempty"`
@@ -272,6 +286,9 @@ func (a *API) createACMEDNS01ProviderConfig(w http.ResponseWriter, r *http.Reque
 		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "credential_refs", req.CredentialRefs, req.Config); err != nil {
 			return 0, nil, err
 		}
+		if err := a.admitDNS01PrivateEgress(ctx, tenantID, &req); err != nil {
+			return 0, nil, err
+		}
 		id := googleuuid.NewString()
 		if err := a.emitACMEDNS01ProviderConfig(ctx, tenantID, id, req); err != nil {
 			return 0, nil, err
@@ -336,6 +353,9 @@ func (a *API) updateACMEDNS01ProviderConfig(w http.ResponseWriter, r *http.Reque
 		// webhook provider's bearer token goes to config.endpoint); a caller
 		// may name only secrets it could read.
 		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "credential_refs", req.CredentialRefs, req.Config); err != nil {
+			return 0, nil, err
+		}
+		if err := a.admitDNS01PrivateEgress(ctx, tenantID, &req); err != nil {
 			return 0, nil, err
 		}
 		if err := a.emitACMEDNS01ProviderConfig(ctx, tenantID, id, req); err != nil {
@@ -409,7 +429,10 @@ func (a *API) emitACMEDNS01ProviderConfig(ctx context.Context, tenantID, id stri
 		ChallengeDomain: req.ChallengeDomain, DelegationTarget: req.DelegationTarget, PersistDelegationTarget: req.PersistDelegationTarget,
 		CredentialRefs: req.CredentialRefs, Config: req.Config, CAAIssuerDomain: req.CAAIssuerDomain,
 		AllowedMethods: req.AllowedMethods, AllowWildcards: req.AllowWildcards,
-		AllowUpstreamDV: req.AllowUpstreamDV,
+		AllowUpstreamDV:               req.AllowUpstreamDV,
+		AllowPrivateEndpoint:          req.AllowPrivateEndpoint,
+		PrivateEgressCIDRs:            req.PrivateEgressCIDRs,
+		PrivateEgressAdmissionVersion: req.privateEgressAdmissionVersion,
 	})
 	if err != nil {
 		return err
@@ -490,6 +513,25 @@ func (a *API) decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01Provid
 	if err := validateDNS01PropagationBudget(cfg); err != nil {
 		return dns01ProviderConfigRequest{}, err
 	}
+	if !req.AllowPrivateEndpoint && len(req.PrivateEgressCIDRs) != 0 {
+		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "private_egress_cidrs requires allow_private_endpoint")
+	}
+	if req.AllowPrivateEndpoint && len(req.PrivateEgressCIDRs) == 0 {
+		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "private_egress_cidrs is required")
+	}
+	opts := netsec.SafeClientOptions{}
+	if req.AllowPrivateEndpoint {
+		for _, raw := range req.PrivateEgressCIDRs {
+			prefix, err := netsec.ParsePrivateEgressPrefix(raw)
+			if err != nil {
+				return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "invalid private_egress_cidrs")
+			}
+			opts.AllowPrivateCIDRs = append(opts.AllowPrivateCIDRs, prefix)
+		}
+	}
+	if err := egress.Validate(req.Provider, cfg, opts); err != nil {
+		return dns01ProviderConfigRequest{}, errStatusFrom(http.StatusBadRequest, err)
+	}
 	methods, err := normalizeDNS01Methods(req.AllowedMethods)
 	if err != nil {
 		return dns01ProviderConfigRequest{}, err
@@ -498,6 +540,20 @@ func (a *API) decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01Provid
 	req.Config = cfg
 	req.AllowedMethods = methods
 	return req, nil
+}
+
+func (a *API) admitDNS01PrivateEgress(ctx context.Context, tenantID string, req *dns01ProviderConfigRequest) error {
+	if !req.AllowPrivateEndpoint {
+		return nil
+	}
+	if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+		return err
+	}
+	if _, err := netsec.PrivateEgressWithinCeiling(req.PrivateEgressCIDRs, a.dns01PrivateEgressCeiling); err != nil {
+		return errStatus(http.StatusBadRequest, "private DNS-01 endpoint exceeds the operator egress ceiling")
+	}
+	req.privateEgressAdmissionVersion = 1
+	return nil
 }
 
 // validateDNS01PropagationBudget checks config.propagation_timeout_seconds,
@@ -594,10 +650,12 @@ func toDNS01ProviderConfigResponse(rec store.ACMEDNS01ProviderConfig) dns01Provi
 		Zone: rec.Zone, ChallengeDomain: rec.ChallengeDomain, DelegationTarget: rec.DelegationTarget, PersistDelegationTarget: rec.PersistDelegationTarget,
 		CredentialRefs: refs, Config: cfg, CAAIssuerDomain: rec.CAAIssuerDomain,
 		AllowedMethods: methods, AllowWildcards: rec.AllowWildcards,
-		AllowUpstreamDV: rec.AllowUpstreamDV,
-		SecretHandling:  "credential_refs_only",
-		CreatedAt:       rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:       rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		AllowUpstreamDV:      rec.AllowUpstreamDV,
+		AllowPrivateEndpoint: rec.AllowPrivateEndpoint,
+		PrivateEgressCIDRs:   append([]string{}, rec.PrivateEgressCIDRs...),
+		SecretHandling:       "credential_refs_only",
+		CreatedAt:            rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:            rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 

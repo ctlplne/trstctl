@@ -519,7 +519,7 @@ func TestServedACMEDNS01ProviderConfigDuplicateNameDoesNotPoisonEventTail(t *tes
 			"provider":        "webhook",
 			"zone":            zone,
 			"credential_refs": map[string]any{},
-			"config":          map[string]any{"endpoint": "http://127.0.0.1:18082"},
+			"config":          map[string]any{"endpoint": "https://dns.example.test"},
 			"allowed_methods": []string{"dns-01"},
 		}
 	}
@@ -664,10 +664,11 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 		},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) { d.ACMEValidators = &validators },
+		withDNS01LoopbackEgress,
 	)
 	registerServedTenant(t, h, "ACME DNS webhook tenant")
 	startServedOutboxPump(t, h.srv)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
 		"name":  "dns/webhook/bearer-token",
@@ -687,8 +688,10 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 		"config": map[string]any{
 			"endpoint": dns.URL(),
 		},
-		"allowed_methods": []string{"dns-01"},
-		"allow_wildcards": true,
+		"allowed_methods":        []string{"dns-01"},
+		"allow_wildcards":        true,
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("create DNS-01 provider config: status %d body %s", status, body)
@@ -767,10 +770,11 @@ func TestServedACMEDNS01ProviderQualificationF69(t *testing.T) {
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) { d.ACMEValidators = &validators },
+		withDNS01LoopbackEgress,
 	)
 	registerServedTenant(t, h, "F69 DNS qualification tenant")
 	startServedOutboxPump(t, h.srv)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
 		"name":  "dns/qualification/bearer-token",
@@ -786,9 +790,11 @@ func TestServedACMEDNS01ProviderQualificationF69(t *testing.T) {
 		"credential_refs": map[string]any{ // #nosec G101 -- fabricated secret reference, never raw credential material (CWE-798)
 			"bearer_token_ref": "secret://dns/qualification/bearer-token",
 		},
-		"config":          map[string]any{"endpoint": dns.URL()},
-		"allowed_methods": []string{"dns-01"},
-		"allow_wildcards": true,
+		"config":                 map[string]any{"endpoint": dns.URL()},
+		"allowed_methods":        []string{"dns-01"},
+		"allow_wildcards":        true,
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("create DNS qualification provider config: status %d body %s", status, body)
@@ -1015,11 +1021,12 @@ func TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014(t *tes
 	h := newServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		withSecretsEnabled(t, nil),
+		withDNS01LoopbackEgress,
 	)
 	registerServedTenant(t, h, "ACME delegated DNS tenant")
 	h.srv.acmeDNS01.cnameResolver = dns
 	startServedDirectOutboxPump(t, h.srv)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
 		"name":  "dns/delegated/bearer-token",
@@ -1041,8 +1048,10 @@ func TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014(t *tes
 		"config": map[string]any{
 			"endpoint": dns.URL(),
 		},
-		"allowed_methods": []string{"dns-01"},
-		"allow_wildcards": true,
+		"allowed_methods":        []string{"dns-01"},
+		"allow_wildcards":        true,
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("create delegated DNS-01 provider config: status %d body %s", status, body)
@@ -1090,6 +1099,7 @@ func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
 	h := newServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		withSecretsEnabled(t, nil),
+		withDNS01LoopbackEgress,
 		func(d *Deps) {
 			d.APIOptions = append(d.APIOptions, api.WithACMEDNS01CAAResolver(dns))
 		},
@@ -1097,7 +1107,7 @@ func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
 	registerServedTenant(t, h, "ACME live CAA tenant")
 	h.srv.acmeDNS01.caaResolver = dns
 	startServedDirectOutboxPump(t, h.srv)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
 		"name":  "dns/caa/bearer-token",
@@ -1108,10 +1118,12 @@ func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
 	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
-		"name":              "trace015-caa-webhook",
-		"provider":          "webhook",
-		"zone":              "trace015.test",
-		"caa_issuer_domain": "trstctl.example",
+		"name":                   "trace015-caa-webhook",
+		"provider":               "webhook",
+		"zone":                   "trace015.test",
+		"caa_issuer_domain":      "trstctl.example",
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
 		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"bearer_token_ref": "secret://dns/caa/bearer-token",
 		},
@@ -1258,6 +1270,7 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 	h := newServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		withSecretsEnabled(t, nil),
+		withDNS01LoopbackEgress,
 		func(d *Deps) {
 			d.ACMEValidators = &validators
 			d.Plugins = PluginConfig{
@@ -1269,7 +1282,7 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 	)
 	registerServedTenant(t, h, "ACME DNS plugin tenant")
 	startServedDirectOutboxPump(t, h.srv)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/dns-01/providers", tok, nil)
 	if status != http.StatusOK {
@@ -1309,9 +1322,11 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 		t.Fatalf("create DNS plugin bearer secret: status %d body %s", status, body)
 	}
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
-		"name":     "trace013-plugin",
-		"provider": "reference-dns",
-		"zone":     "trace013.test",
+		"name":                   "trace013-plugin",
+		"provider":               "reference-dns",
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
+		"zone":                   "trace013.test",
 		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"bearer_token_ref": "secret://dns/plugin/bearer-token",
 		},
@@ -1497,6 +1512,12 @@ func newServedDNSWebhookFixture(t *testing.T, bearerToken string) *servedDNSWebh
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.srv.Close)
 	return f
+}
+
+// DNS webhook fixtures are owned loopback targets. Each exercised tenant
+// config must still opt in and carry egress:private.
+func withDNS01LoopbackEgress(d *Deps) {
+	d.ACMEDNS01PrivateEgressCIDRs = []string{"127.0.0.1/32", "::1/128"}
 }
 
 func (f *servedDNSWebhookFixture) URL() string { return f.srv.URL }

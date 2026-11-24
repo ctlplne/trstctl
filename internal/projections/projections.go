@@ -3195,7 +3195,10 @@ type ACMEDNS01ProviderConfigUpserted struct {
 	// before epic B7 replays as false, which is the correct default — an
 	// operator who configured this before upstream DV existed cannot have
 	// consented to it.
-	AllowUpstreamDV bool `json:"allow_upstream_dv,omitempty"`
+	AllowUpstreamDV               bool     `json:"allow_upstream_dv,omitempty"`
+	AllowPrivateEndpoint          bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs            []string `json:"private_egress_cidrs,omitempty"`
+	PrivateEgressAdmissionVersion int      `json:"private_egress_admission_version,omitempty"`
 	// PersistDelegationTarget (P1-L4) is the CNAME target of a delegated
 	// config's _validation-persist names, when it is not DelegationTarget.
 	PersistDelegationTarget string `json:"persist_delegation_target,omitempty"`
@@ -8399,8 +8402,11 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Zone: pl.Zone, ChallengeDomain: pl.ChallengeDomain, DelegationTarget: pl.DelegationTarget,
 			CredentialRefs: pl.CredentialRefs, Config: pl.Config, CAAIssuerDomain: pl.CAAIssuerDomain,
 			AllowedMethods: pl.AllowedMethods, AllowWildcards: pl.AllowWildcards,
-			AllowUpstreamDV: pl.AllowUpstreamDV,
-			CreatedAt:       e.Time, UpdatedAt: e.Time,
+			AllowUpstreamDV:               pl.AllowUpstreamDV,
+			AllowPrivateEndpoint:          pl.AllowPrivateEndpoint,
+			PrivateEgressCIDRs:            pl.PrivateEgressCIDRs,
+			PrivateEgressAdmissionVersion: pl.PrivateEgressAdmissionVersion,
+			CreatedAt:                     e.Time, UpdatedAt: e.Time,
 			PersistDelegationTarget: pl.PersistDelegationTarget,
 		})
 	case EventACMEDNS01ProviderConfigDeleted:

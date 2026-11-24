@@ -211,6 +211,7 @@ ACMEDNS01ProviderCatalogItem = TypedDict(
 ACMEDNS01ProviderConfig = TypedDict(
     'ACMEDNS01ProviderConfig',
     {
+        'allow_private_endpoint': bool,
         'allow_upstream_dv': bool,
         'allow_wildcards': bool,
         'allowed_methods': list[str],
@@ -223,6 +224,7 @@ ACMEDNS01ProviderConfig = TypedDict(
         'id': str,
         'name': str,
         'persist_delegation_target': str,
+        'private_egress_cidrs': list[str],
         'provider': str,
         'secret_handling': str,
         'tenant_id': str,
@@ -243,6 +245,7 @@ ACMEDNS01ProviderConfigList = TypedDict(
 ACMEDNS01ProviderConfigRequest = TypedDict(
     'ACMEDNS01ProviderConfigRequest',
     {
+        'allow_private_endpoint': bool,
         'allow_upstream_dv': bool,
         'allow_wildcards': bool,
         'allowed_methods': list[str],
@@ -253,6 +256,7 @@ ACMEDNS01ProviderConfigRequest = TypedDict(
         'delegation_target': str,
         'name': str,
         'persist_delegation_target': str,
+        'private_egress_cidrs': list[str],
         'provider': str,
         'zone': str,
     },

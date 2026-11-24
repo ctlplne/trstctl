@@ -42,9 +42,12 @@ type ACMEDNS01ProviderConfig struct {
 	// domain validation against an external CA (epic B7). Off by default:
 	// credentials supplied so trstctl could VERIFY a challenge are not consent
 	// to PUBLISH into the zone whenever a public CA asks.
-	AllowUpstreamDV bool
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	AllowUpstreamDV               bool
+	AllowPrivateEndpoint          bool
+	PrivateEgressCIDRs            []string
+	PrivateEgressAdmissionVersion int
+	CreatedAt                     time.Time
+	UpdatedAt                     time.Time
 	// PersistDelegationTarget (P1-L4) is where a delegated config's
 	// _validation-persist names point (their CNAME target); empty means they
 	// point at DelegationTarget, as _acme-challenge does.
@@ -63,6 +66,9 @@ func (s *Store) ApplyACMEDNS01ProviderConfigUpsertedTx(ctx context.Context, tx p
 	}
 	if c.AllowedMethods == nil {
 		c.AllowedMethods = []string{}
+	}
+	if c.PrivateEgressCIDRs == nil {
+		c.PrivateEgressCIDRs = []string{}
 	}
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = time.Now().UTC()
@@ -107,8 +113,9 @@ func (s *Store) ApplyACMEDNS01ProviderConfigUpsertedTx(ctx context.Context, tx p
 		        (id, tenant_id, name, provider, zone, challenge_domain, delegation_target,
 		         credential_refs, config, caa_issuer_domain, allowed_methods, allow_wildcards,
 		         allow_upstream_dv,
-		         created_at, updated_at, persist_delegation_target)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		         created_at, updated_at, persist_delegation_target,
+		         allow_private_endpoint, private_egress_cidrs, private_egress_admission_version)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		 ON CONFLICT (tenant_id, id) DO UPDATE SET
 		     name = EXCLUDED.name,
 		     provider = EXCLUDED.provider,
@@ -121,12 +128,16 @@ func (s *Store) ApplyACMEDNS01ProviderConfigUpsertedTx(ctx context.Context, tx p
 		     allowed_methods = EXCLUDED.allowed_methods,
 		     allow_wildcards = EXCLUDED.allow_wildcards,
 		     allow_upstream_dv = EXCLUDED.allow_upstream_dv,
+		     allow_private_endpoint = EXCLUDED.allow_private_endpoint,
+		     private_egress_cidrs = EXCLUDED.private_egress_cidrs,
+		     private_egress_admission_version = EXCLUDED.private_egress_admission_version,
 		     persist_delegation_target = EXCLUDED.persist_delegation_target,
 		     created_at = acme_dns01_provider_configs.created_at,
 		     updated_at = EXCLUDED.updated_at`,
 		c.ID, c.TenantID, c.Name, c.Provider, c.Zone, c.ChallengeDomain, c.DelegationTarget,
 		jsonbOrEmpty(c.CredentialRefs), jsonbOrEmpty(c.Config), c.CAAIssuerDomain,
-		c.AllowedMethods, c.AllowWildcards, c.AllowUpstreamDV, c.CreatedAt, c.UpdatedAt, c.PersistDelegationTarget)
+		c.AllowedMethods, c.AllowWildcards, c.AllowUpstreamDV, c.CreatedAt, c.UpdatedAt, c.PersistDelegationTarget,
+		c.AllowPrivateEndpoint, c.PrivateEgressCIDRs, c.PrivateEgressAdmissionVersion)
 	return err
 }
 
@@ -147,7 +158,8 @@ func (s *Store) GetACMEDNS01ProviderConfig(ctx context.Context, tenantID, id str
 			`SELECT id::text, tenant_id::text, name, provider, zone, challenge_domain,
 			        delegation_target, credential_refs, config, caa_issuer_domain,
 			        allowed_methods, allow_wildcards, allow_upstream_dv, created_at, updated_at,
-			        persist_delegation_target
+			        persist_delegation_target, allow_private_endpoint, private_egress_cidrs,
+			        private_egress_admission_version
 			   FROM acme_dns01_provider_configs
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id), &out)
@@ -188,7 +200,8 @@ func (s *Store) ListACMEDNS01ProviderConfigs(ctx context.Context, tenantID strin
 			`SELECT id::text, tenant_id::text, name, provider, zone, challenge_domain,
 			        delegation_target, credential_refs, config, caa_issuer_domain,
 			        allowed_methods, allow_wildcards, allow_upstream_dv, created_at, updated_at,
-			        persist_delegation_target
+			        persist_delegation_target, allow_private_endpoint, private_egress_cidrs,
+			        private_egress_admission_version
 			   FROM acme_dns01_provider_configs
 			  WHERE tenant_id = $1
 			  ORDER BY name, id`,
@@ -213,7 +226,8 @@ func scanACMEDNS01ProviderConfig(row pgx.Row, c *ACMEDNS01ProviderConfig) error 
 	return row.Scan(&c.ID, &c.TenantID, &c.Name, &c.Provider, &c.Zone, &c.ChallengeDomain,
 		&c.DelegationTarget, &c.CredentialRefs, &c.Config, &c.CAAIssuerDomain,
 		&c.AllowedMethods, &c.AllowWildcards, &c.AllowUpstreamDV, &c.CreatedAt, &c.UpdatedAt,
-		&c.PersistDelegationTarget)
+		&c.PersistDelegationTarget, &c.AllowPrivateEndpoint, &c.PrivateEgressCIDRs,
+		&c.PrivateEgressAdmissionVersion)
 }
 
 // Upstream authorization staleness (epic B7).

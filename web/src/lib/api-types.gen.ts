@@ -155,6 +155,7 @@ export interface ACMEDNS01ProviderCatalogItem {
 }
 
 export interface ACMEDNS01ProviderConfig {
+  allow_private_endpoint?: boolean;
   allow_upstream_dv?: boolean;
   allow_wildcards?: boolean;
   allowed_methods: string[];
@@ -167,6 +168,7 @@ export interface ACMEDNS01ProviderConfig {
   id: string;
   name: string;
   persist_delegation_target?: string;
+  private_egress_cidrs?: string[];
   provider: string;
   secret_handling: string;
   tenant_id: string;
@@ -179,6 +181,7 @@ export interface ACMEDNS01ProviderConfigList {
 }
 
 export interface ACMEDNS01ProviderConfigRequest {
+  allow_private_endpoint?: boolean;
   allow_upstream_dv?: boolean;
   allow_wildcards?: boolean;
   allowed_methods?: ("http-01" | "dns-01" | "tls-alpn-01" | "dns-persist-01")[];
@@ -189,6 +192,7 @@ export interface ACMEDNS01ProviderConfigRequest {
   delegation_target?: string;
   name: string;
   persist_delegation_target?: string;
+  private_egress_cidrs?: string[];
   provider: string;
   zone?: string;
 }

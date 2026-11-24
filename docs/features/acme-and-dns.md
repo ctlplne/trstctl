@@ -278,6 +278,17 @@ zone/delegation policy, CAA issuer policy, allowed methods, wildcard policy, and
 reference field in provider `config` must be a canonical tenant `secret://`
 reference. A raw
 provider token is refused before an event or read-model row is written.
+Provider HTTP calls and RFC 2136 UDP updates check the resolved address at dial
+time; HTTP calls ignore process proxy settings and refuse redirects to another
+origin. A private endpoint needs `allow_private_endpoint: true` plus
+`private_egress_cidrs` on the provider config, an `egress:private` grant for the
+writer, and a matching operator ceiling in
+`protocols.acme_dns01_private_egress_cidrs`. Link-local metadata, CGNAT,
+unspecified, and multicast addresses remain blocked. The outbox worker checks
+the current config and ceiling again before it sends; removing a grant or
+changing a config stops queued retries. Existing configs do not acquire a
+private grant during upgrade, so update a legitimate private provider config
+explicitly before its next publish. Use HTTPS for providers that receive tokens.
 When configs overlap, served ACME chooses the most specific matching zone or
 challenge name before checking DNS-01 methods, wildcard permission, or upstream
 domain-validation consent. A broad parent config cannot override a narrower

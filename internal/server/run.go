@@ -803,6 +803,7 @@ func buildRunDepsWithCustody(ctx context.Context, cfg *config.Config, st *store.
 		CBOMTLSProbeOpenSSL:          cfg.CBOM.TLSProbeOpenSSL,
 		CBOMPrivateEgressCIDRs:       append([]string(nil), cfg.CBOM.PrivateEgressCIDRs...),
 		SecretRepoPrivateEgressCIDRs: append([]string(nil), cfg.Secrets.RepositoryClonePrivateCIDRs...),
+		ACMEDNS01PrivateEgressCIDRs:  append([]string(nil), cfg.Protocols.ACMEDNS01PrivateEgressCIDRs...),
 		CBOMHostRoots:                append([]string(nil), cfg.CBOM.HostRoots...),
 		// J2: keep the DSN inside the drill closure. Nil means no operator-chosen
 		// backup directory exists, so a nightly drill would be meaningless.

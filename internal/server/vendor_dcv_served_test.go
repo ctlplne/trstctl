@@ -66,10 +66,11 @@ func TestServedDigiCertDomainValidationCompletesUnattended(t *testing.T) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = upstreams
 		d.UpstreamDV = holder
+		withDNS01LoopbackEgress(d)
 	})
 	h.srv.acmeDNS01.caaResolver = dns
 	startServedExternalCADispatcher(t, h)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 	issue := func(name, key string) (int, []byte) {
 		t.Helper()
 		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: externalCACSR(t, name)})
@@ -91,9 +92,11 @@ func TestServedDigiCertDomainValidationCompletesUnattended(t *testing.T) {
 	}
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 		"name": "a165-dcv-webhook", "provider": "webhook", "zone": "dcv.test",
-		"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
-		"config":          map[string]any{"endpoint": dns.URL()},
-		"allowed_methods": []string{"dns-01"}, "allow_upstream_dv": true,
+		"credential_refs":        map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
+		"config":                 map[string]any{"endpoint": dns.URL()},
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
+		"allowed_methods":        []string{"dns-01"}, "allow_upstream_dv": true,
 	}); status != http.StatusCreated {
 		t.Fatalf("create the consenting DNS-01 provider config: %d %s", status, body)
 	}
@@ -198,10 +201,11 @@ func TestServedDigiCertWildcardValidatesTheBaseNameUnderWildcardRulesA165L3(t *t
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = upstreams
 		d.UpstreamDV = holder
+		withDNS01LoopbackEgress(d)
 	})
 	h.srv.acmeDNS01.caaResolver = dns
 	startServedExternalCADispatcher(t, h)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
 		"name": "dns/dcv/bearer-token", "value": "dcv-webhook-token",
 	}); status != http.StatusCreated {
@@ -213,9 +217,11 @@ func TestServedDigiCertWildcardValidatesTheBaseNameUnderWildcardRulesA165L3(t *t
 	}{{"nowild.dcv.test", false}, {"wild.dcv.test", true}} {
 		if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 			"name": "a165l3-" + strings.Split(zone.name, ".")[0], "provider": "webhook", "zone": zone.name,
-			"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
-			"config":          map[string]any{"endpoint": dns.URL()},
-			"allowed_methods": []string{"dns-01"}, "allow_upstream_dv": true, "allow_wildcards": zone.wildcards,
+			"credential_refs":        map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
+			"config":                 map[string]any{"endpoint": dns.URL()},
+			"allow_private_endpoint": true,
+			"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
+			"allowed_methods":        []string{"dns-01"}, "allow_upstream_dv": true, "allow_wildcards": zone.wildcards,
 		}); status != http.StatusCreated {
 			t.Fatalf("create the provider config for %s: %d %s", zone.name, status, body)
 		}
@@ -316,13 +322,14 @@ func TestServedVendorValidationWaitsForPropagationA165L4(t *testing.T) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = upstreams
 		d.UpstreamDV = holder
+		withDNS01LoopbackEgress(d)
 	})
 	view := &slowTXTView{inner: dns, lookups: map[string]int{}, hideUnder: map[string]int{".slow.dcv.test": 3, ".never.dcv.test": -1}}
 	h.srv.acmeDNS01.caaResolver = dns
 	h.srv.acmeDNS01.txtResolvers = []acmesrv.Resolver{view}
 	h.srv.acmeDNS01.dcvPropagationInterval = 20 * time.Millisecond
 	startServedExternalCADispatcher(t, h)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write", "egress:private")
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
 		"name": "dns/dcv/bearer-token", "value": "dcv-webhook-token",
 	}); status != http.StatusCreated {
@@ -331,9 +338,11 @@ func TestServedVendorValidationWaitsForPropagationA165L4(t *testing.T) {
 	providerConfig := func(name, zone string, budget any) (int, []byte) {
 		return secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 			"name": name, "provider": "webhook", "zone": zone,
-			"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
-			"config":          map[string]any{"endpoint": dns.URL(), "propagation_timeout_seconds": budget},
-			"allowed_methods": []string{"dns-01"}, "allow_upstream_dv": true,
+			"credential_refs":        map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
+			"config":                 map[string]any{"endpoint": dns.URL(), "propagation_timeout_seconds": budget},
+			"allow_private_endpoint": true,
+			"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, dns.URL())},
+			"allowed_methods":        []string{"dns-01"}, "allow_upstream_dv": true,
 		})
 	}
 	for _, bad := range []any{0, 3601, "120"} {

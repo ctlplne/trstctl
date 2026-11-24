@@ -12535,6 +12535,7 @@ export interface components {
             served: boolean;
         };
         ACMEDNS01ProviderConfig: {
+            allow_private_endpoint?: boolean;
             allow_upstream_dv?: boolean;
             allow_wildcards?: boolean;
             allowed_methods: string[];
@@ -12550,6 +12551,7 @@ export interface components {
             name: string;
             /** @description the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4) */
             persist_delegation_target?: string;
+            private_egress_cidrs?: string[];
             provider: string;
             secret_handling: string;
             /** Format: uuid */
@@ -12562,6 +12564,8 @@ export interface components {
             items: components["schemas"]["ACMEDNS01ProviderConfig"][];
         };
         ACMEDNS01ProviderConfigRequest: {
+            /** @description Requires egress:private; private_egress_cidrs must fit the operator DNS-01 ceiling. */
+            allow_private_endpoint?: boolean;
             allow_upstream_dv?: boolean;
             allow_wildcards?: boolean;
             allowed_methods?: ("http-01" | "dns-01" | "tls-alpn-01" | "dns-persist-01")[];
@@ -12573,6 +12577,7 @@ export interface components {
             name: string;
             /** @description with delegation_target: the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4) */
             persist_delegation_target?: string;
+            private_egress_cidrs?: string[];
             provider: string;
             zone?: string;
         };

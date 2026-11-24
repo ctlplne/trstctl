@@ -153,7 +153,9 @@ func (s *Server) RunACMEDNS01Qualification(ctx context.Context, tenantID, config
 		ConfigID: cfg.ID, ConfigName: cfg.Name, Provider: cfg.Provider, Domain: preview.Domain,
 		Zone: cfg.Zone, ChallengeDomain: cfg.ChallengeDomain, DelegationTarget: cfg.DelegationTarget,
 		RecordName: preview.RecordName, Value: value, CredentialRefs: cfg.CredentialRefs, Config: cfg.Config,
-		QualificationID: runID, QualificationStatus: "running", PropagationStatus: "pending",
+		AllowPrivateEndpoint: cfg.AllowPrivateEndpoint, PrivateEgressCIDRs: append([]string(nil), cfg.PrivateEgressCIDRs...),
+		PrivateEgressAdmissionVersion: cfg.PrivateEgressAdmissionVersion,
+		QualificationID:               runID, QualificationStatus: "running", PropagationStatus: "pending",
 	}
 	presentKey := acmeDNS01IdempotencyKey(destinationACMEDNS01Present, cfg.ID, preview.RecordName, value+"#qualification#"+runID)
 	presentRec, presentErr := s.acmeDNS01.enqueueAndWaitRecord(ctx, tenantID, destinationACMEDNS01Present, presentKey, payload)
