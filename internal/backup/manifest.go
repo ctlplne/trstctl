@@ -37,6 +37,11 @@ var RecoveredByLogRebuild = append([]string(nil), store.ReadModelTables...)
 // PostgreSQL dump in the backup set.
 var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
+	// A quarantine is a durable service-admission denial. Full log replay may
+	// rediscover a poison event, but retained history can be privacy-erased;
+	// restore the marker with PostgreSQL so service never opens on an unsafe
+	// partial read model after a backup restore.
+	"projection_tenant_quarantines",
 	// CA signer-handle first-writer claims and retired digests are independent
 	// security authority. A log replay cannot reconstruct a reservation that
 	// committed before its CA event append.

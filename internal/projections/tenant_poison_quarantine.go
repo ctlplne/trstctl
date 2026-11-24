@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/inputtext"
 	"trstctl.com/trstctl/internal/store"
@@ -27,6 +29,10 @@ func newTenantPoisonQuarantine(st *store.Store) *tenantPoisonQuarantine {
 }
 
 func (q *tenantPoisonQuarantine) skip(ctx context.Context, e events.Event) (bool, error) {
+	return q.skipWithReplayTx(ctx, e, nil)
+}
+
+func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.Event, tx pgx.Tx) (bool, error) {
 	// Historical Provider audit has a textual pre-UUID partition. It is not a
 	// customer tenant and must keep its existing replay path. There is no
 	// tenant-scoped quarantine row to write for this legacy scope.
@@ -36,7 +42,11 @@ func (q *tenantPoisonQuarantine) skip(ctx context.Context, e events.Event) (bool
 	quarantined, seen := q.known[e.TenantID]
 	if !seen {
 		var err error
-		quarantined, err = q.store.ProjectionTenantQuarantined(ctx, e.TenantID)
+		if tx == nil {
+			quarantined, err = q.store.ProjectionTenantQuarantined(ctx, e.TenantID)
+		} else {
+			quarantined, err = q.store.ProjectionTenantQuarantinedTx(ctx, tx, e.TenantID)
+		}
 		if err != nil {
 			return false, err
 		}
@@ -49,7 +59,16 @@ func (q *tenantPoisonQuarantine) skip(ctx context.Context, e events.Event) (bool
 		// destruction, and other custody changes still need replay. If one
 		// cannot be projected safely, stop instead of pretending it ran.
 		if isKeyStateMutationEventType(e.Type) {
-			return false, events.ValidateEventText(e)
+			if err := events.ValidateEventText(e); err != nil {
+				return false, err
+			}
+			if e.Type == EventTenantOffboarded {
+				// OffboardTenant deletes the durable marker. A later registration
+				// of the same UUID must query it again rather than inherit this
+				// replay worker's positive cache from the prior lifecycle.
+				delete(q.known, e.TenantID)
+			}
+			return false, nil
 		}
 		return true, nil
 	}
@@ -69,9 +88,16 @@ func (q *tenantPoisonQuarantine) skip(ctx context.Context, e events.Event) (bool
 	default:
 		return false, textErr
 	}
-	if err := q.store.RecordProjectionTenantQuarantine(ctx, e.TenantID, e.Sequence, reasonCode); err != nil {
+	if err := q.record(ctx, tx, e.TenantID, e.Sequence, reasonCode); err != nil {
 		return false, err
 	}
 	q.known[e.TenantID] = true
 	return true, nil
+}
+
+func (q *tenantPoisonQuarantine) record(ctx context.Context, tx pgx.Tx, tenantID string, seq uint64, reasonCode string) error {
+	if tx != nil {
+		return q.store.RecordProjectionTenantQuarantineTx(ctx, tx, tenantID, seq, reasonCode)
+	}
+	return q.store.RecordProjectionTenantQuarantine(ctx, tenantID, seq, reasonCode)
 }

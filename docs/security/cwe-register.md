@@ -1631,7 +1631,7 @@ not this file.
 | `internal/store/projection_checkpoint.go:383` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:406` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:413` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_tenant_quarantine.go:32` | range checked above (CWE-190) |
+| `internal/store/projection_tenant_quarantine.go:72` | range checked above (CWE-190) |
 | `internal/store/provider_billing_sync.go:75` | bounded by the check above (CWE-190) |
 | `internal/store/provider_doc_records.go:56` | bounded by the check above (CWE-190) |
 | `internal/store/provider_psa_tickets.go:82` | bounded by the check above (CWE-190) |

@@ -12084,7 +12084,7 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 			}
 			if err := replayProjectionThrough(readCtx, log, 0, replayHead, func(e events.Event) error {
 				applyCtx := readCtx
-				quarantined, err := quarantine.skip(applyCtx, e)
+				quarantined, err := quarantine.skipWithReplayTx(applyCtx, e, tx)
 				if err != nil {
 					return err
 				}
@@ -12398,6 +12398,9 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 		// The rebuild owns exactly the event-sourced read model, so it erases this
 		// tenant's read-model rows here (the equivalent, within the rebuild's scope, of
 		// the live OffboardTenant) rather than re-running the full cross-table erase.
+		if err := p.store.DeleteProjectionTenantQuarantineTx(ctx, tx, e.TenantID); err != nil {
+			return err
+		}
 		return p.store.DeleteTenantReadModelTx(ctx, tx, e.TenantID)
 	default:
 		storageTenant := e.TenantID

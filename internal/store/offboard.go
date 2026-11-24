@@ -106,6 +106,9 @@ const tenantOffboardReceiverExistsSQL = `EXISTS (SELECT 1 FROM idempotency_keys 
 // test) guards that this set stays in sync with the schema.
 var TenantScopedTables = []string{
 	// Children first (foreign keys point "up" to the tables below them).
+	// This operational denial belongs to the tenant's lifecycle and must be
+	// erased before a later registration can start a fresh epoch for the UUID.
+	"projection_tenant_quarantines",
 	"attestations",
 	"discovery_coverage",
 	"discovery_findings",

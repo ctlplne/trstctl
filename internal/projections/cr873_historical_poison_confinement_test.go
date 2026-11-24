@@ -111,6 +111,21 @@ func TestCR873HistoricalPoisonConfinesTenantDuringCatchUp(t *testing.T) {
 	if quarantined, err := st.ProjectionTenantQuarantined(ctx, tenantA); err != nil || !quarantined {
 		t.Fatalf("durable quarantine missing before offboard: quarantined=%v err=%v", quarantined, err)
 	}
+	// A restored database can lack the quarantine row while retaining the old
+	// JetStream event. Rebuild must rediscover it before tenant offboarding.
+	if _, err := st.SystemPool().Exec(ctx,
+		`DELETE FROM projection_tenant_quarantines WHERE tenant_id=$1`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Rebuild(ctx, log); err != nil {
+		t.Fatalf("rebuild without preexisting quarantine: %v", err)
+	}
+	if quarantined, err := st.ProjectionTenantQuarantined(ctx, tenantA); err != nil || !quarantined {
+		t.Errorf("rebuild did not rediscover quarantine: quarantined=%v err=%v", quarantined, err)
+	}
+	if count := ownerCount(t, st, tenantB); count != 1 {
+		t.Errorf("healthy owner after fresh quarantine discovery = %d, want 1", count)
+	}
 	// Quarantine cannot suppress a later key-custody event. The tenant still
 	// needs to erase its state while other tenants continue to project.
 	offboard, err := json.Marshal(map[string]int{"rows_deleted": 1})
@@ -126,6 +141,9 @@ func TestCR873HistoricalPoisonConfinesTenantDuringCatchUp(t *testing.T) {
 	if _, err := st.GetTenant(ctx, tenantA); !store.IsNotFound(err) {
 		t.Errorf("quarantined tenant offboard did not erase registration: %v", err)
 	}
+	if quarantined, err := st.ProjectionTenantQuarantined(ctx, tenantA); err != nil || quarantined {
+		t.Errorf("offboard retained prior lifecycle quarantine: quarantined=%v err=%v", quarantined, err)
+	}
 	if count := ownerCount(t, st, tenantB); count != 1 {
 		t.Errorf("healthy tenant owner count after offboard = %d, want 1", count)
 	}
@@ -138,25 +156,37 @@ func TestCR873HistoricalPoisonConfinesTenantDuringCatchUp(t *testing.T) {
 	if err := st.RequireLiveTenantService(ctx, tenantA); !errors.Is(err, tenancy.ErrServiceUnavailable) {
 		t.Errorf("poisoned tenant admission after rebuild = %v, want refusal", err)
 	}
-	// A restored database can lack the quarantine row while retaining the old
-	// JetStream event. Rebuild must rediscover it without exposing tenant A.
-	if _, err := st.SystemPool().Exec(ctx,
-		`DELETE FROM projection_tenant_quarantines WHERE tenant_id=$1`, tenantA); err != nil {
+	if quarantined, err := st.ProjectionTenantQuarantined(ctx, tenantA); err != nil || quarantined {
+		t.Errorf("atomic rebuild retained offboarded lifecycle quarantine: quarantined=%v err=%v", quarantined, err)
+	}
+	// A later registration with the same UUID is a new lifecycle. The old
+	// poison was quarantined and then erased by the retained offboard event.
+	if _, err := log.Append(ctx, events.Event{Type: projections.EventTenantRegistered, TenantID: tenantA,
+		Data: tenantRegistered("New lifecycle")}); err != nil {
 		t.Fatal(err)
 	}
+	if err := projections.New(st).ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("new lifecycle catch-up after old poison: %v", err)
+	}
+	if err := st.RequireLiveTenantService(ctx, tenantA); err != nil {
+		t.Errorf("new lifecycle refused after old poison: %v", err)
+	}
 	if err := projections.New(st).Rebuild(ctx, log); err != nil {
-		t.Fatalf("rebuild without preexisting quarantine: %v", err)
+		t.Fatalf("new lifecycle atomic rebuild after old poison: %v", err)
 	}
-	if quarantined, err := st.ProjectionTenantQuarantined(ctx, tenantA); err != nil || !quarantined {
-		t.Errorf("rebuild did not rediscover quarantine: quarantined=%v err=%v", quarantined, err)
+	if err := st.RequireLiveTenantService(ctx, tenantA); err != nil {
+		t.Errorf("new lifecycle refused after atomic rebuild: %v", err)
 	}
-	if count := ownerCount(t, st, tenantB); count != 1 {
-		t.Errorf("healthy owner after fresh quarantine discovery = %d, want 1", count)
-	}
-	if err := projections.New(st).Project(ctx, log); err != nil {
+	// Project is the from-scratch replay entry point; use an empty read model
+	// after checking the in-place atomic rebuild above.
+	fresh := newStore(t)
+	if err := projections.New(fresh).Project(ctx, log); err != nil {
 		t.Fatalf("explicit full replay blocked healthy tenant on old poison: %v", err)
 	}
-	if count := ownerCount(t, st, tenantB); count != 1 {
+	if err := fresh.RequireLiveTenantService(ctx, tenantA); err != nil {
+		t.Errorf("new lifecycle refused after full replay: %v", err)
+	}
+	if count := ownerCount(t, fresh, tenantB); count != 1 {
 		t.Errorf("healthy owner after full replay = %d, want 1", count)
 	}
 }
