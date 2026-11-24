@@ -53,7 +53,7 @@ type CertificateProfile struct {
 	AllowedDNSSuffixes    []string                    `json:"allowed_dns_suffixes"`              // name constraint; empty = unconstrained
 	AllowedIPCIDRs        []string                    `json:"allowed_ip_cidrs"`                  // IP SAN ranges; set to permit IP SANs under a SAN policy
 	AllowedEmailDomains   []string                    `json:"allowed_email_domains"`             // rfc822Name domains; set to permit email SANs under a SAN policy
-	AllowedURIPrefixes    []string                    `json:"allowed_uri_prefixes"`              // URI string prefixes; set to permit URI SANs under a SAN policy
+	AllowedURIPrefixes    []string                    `json:"allowed_uri_prefixes"`              // URI authority and whole-path-segment prefixes; set to permit URI SANs under a SAN policy
 	ACMEDeviceAttestation ACMEDeviceAttestationPolicy `json:"acme_device_attestation,omitempty"` // explicit, default-off device-attest-01 policy
 	// HostKeyAttestation makes a host-generated renewal under this profile
 	// keep its key in the host's TPM and prove it (TPM-O1).
@@ -229,6 +229,11 @@ func (p CertificateProfile) ValidateDefinition() error {
 	for _, eku := range p.AllowedEKUs {
 		if crypto.LeafForbiddenExtKeyUsage(eku) {
 			return fmt.Errorf("%s allowed_ekus: %q is never issued on a leaf certificate", id, eku)
+		}
+	}
+	for i, prefix := range p.AllowedURIPrefixes {
+		if err := crypto.ValidateURIPrefix(prefix); err != nil {
+			return fmt.Errorf("%s allowed_uri_prefixes[%d]: %w", id, i, err)
 		}
 	}
 	if p.PublicTLS && !p.AllowsServerAuth() {
@@ -529,13 +534,7 @@ func emailAllowed(email string, domains []string) bool {
 }
 
 func uriPrefixAllowed(uri string, prefixes []string) bool {
-	for _, prefix := range prefixes {
-		prefix = strings.TrimSpace(prefix)
-		if prefix != "" && strings.HasPrefix(uri, prefix) {
-			return true
-		}
-	}
-	return false
+	return crypto.URIPrefixPermitted(uri, prefixes)
 }
 
 // Duration is a JSON-friendly time.Duration that (un)marshals as a Go duration

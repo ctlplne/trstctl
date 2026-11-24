@@ -6,6 +6,13 @@ enrollment protocols may use the profile. Every issuance path validates a reques
 against its bound profile **before anything is signed**, so a non-compliant request is
 rejected with a clear reason rather than minting an out-of-policy certificate.
 
+`allowed_uri_prefixes` selects a URI scheme, host and optional port, followed by
+complete path segments. For example, `spiffe://td.example/ns/prod` permits that
+exact ID and IDs below `/ns/prod/`, but never `/ns/production`. A trailing `/`
+requires a child path. Prefixes with userinfo, a query, a fragment, or a path
+containing encoded separators or `.`/`..` segments are refused when saved.
+Issuance checks the same boundary again before signing.
+
 Profiles are **tenant-scoped**, **versioned**, and **event-sourced**:
 editing a profile appends a full profile event, projects a new active read-model
 version, and leaves prior versions resolvable for audit and for certificates issued

@@ -903,13 +903,7 @@ func emailDomainPermitted(email string, domains []string) bool {
 }
 
 func uriPrefixPermitted(uri string, prefixes []string) bool {
-	for _, prefix := range prefixes {
-		prefix = strings.TrimSpace(prefix)
-		if prefix != "" && strings.HasPrefix(uri, prefix) {
-			return true
-		}
-	}
-	return false
+	return URIPrefixPermitted(uri, prefixes)
 }
 
 // VerifyLeafSignedByCA reports whether leafDER was signed by the CA in caDER. It
