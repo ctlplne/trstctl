@@ -15506,8 +15506,14 @@ export const messages = {
   "discovery.setup.labelKey": { defaultMessage: "Optional Google Cloud label key", description: "Google Secret Manager metadata label-key filter." },
   "discovery.setup.labelValue": { defaultMessage: "Optional Google Cloud label value", description: "Google Secret Manager metadata label-value filter." },
   "discovery.setup.tokenRef": { defaultMessage: "Token reference", description: "Provider token-reference field." },
-  "discovery.setup.writeTokenRef": { defaultMessage: "Key Vault disable token reference", description: "Optional separate Azure Key Vault credential reference for disabling a certificate version." },
-  "discovery.setup.writeTokenRefDescription": { defaultMessage: "Use a separate env: reference. Discovery only reads certificates; a reviewed disable uses this credential.", description: "Explains that the optional write credential is used only for an authorized Key Vault disable." },
+  "discovery.setup.writeTokenRef": {
+    defaultMessage: "Key Vault disable token reference",
+    description: "Optional separate Azure Key Vault credential reference for disabling a certificate version.",
+  },
+  "discovery.setup.writeTokenRefDescription": {
+    defaultMessage: "Use a separate env: reference. Discovery only reads certificates; a reviewed disable uses this credential.",
+    description: "Explains that the optional write credential is used only for an authorized Key Vault disable.",
+  },
   "discovery.setup.tokenRefDescription": {
     defaultMessage: "Reference only. The source configuration never contains the token value.",
     description: "Provider token-reference safety explanation.",

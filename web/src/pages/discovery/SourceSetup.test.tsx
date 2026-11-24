@@ -61,7 +61,13 @@ const catalog: DiscoveryCapabilityCatalog = {
     capability("adcs"),
     capability("cloud_certificate", [
       { id: "aws-acm", label: "AWS Certificate Manager", least_privilege: "List certificates", preferred_credential: "env: references", fields: [] },
-      { id: "azure-keyvault", label: "Azure Key Vault certificates", least_privilege: "List certificates", preferred_credential: "env: references", fields: ["vault_url", "token_ref", "write_token_ref"] },
+      {
+        id: "azure-keyvault",
+        label: "Azure Key Vault certificates",
+        least_privilege: "List certificates",
+        preferred_credential: "env: references",
+        fields: ["vault_url", "token_ref", "write_token_ref"],
+      },
     ]),
     capability("cloud_secret", [
       {
@@ -487,12 +493,22 @@ describe("typed discovery source setup", () => {
     await user.type(screen.getByRole("textbox", { name: "Key Vault disable token reference" }), "env:DISABLE_WRITER");
     await user.click(screen.getByRole("button", { name: "Review exact plan" }));
     await user.click(await screen.findByRole("button", { name: "Save source" }));
-    await waitFor(() => expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(expect.objectContaining({
-      kind: "cloud_certificate",
-      config: { providers: [expect.objectContaining({
-        provider: "azure-keyvault", token_ref: "env:DISCOVERY_READER", write_token_ref: "env:DISABLE_WRITER",
-      })] },
-    })));
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "cloud_certificate",
+          config: {
+            providers: [
+              expect.objectContaining({
+                provider: "azure-keyvault",
+                token_ref: "env:DISCOVERY_READER",
+                write_token_ref: "env:DISABLE_WRITER",
+              }),
+            ],
+          },
+        }),
+      ),
+    );
   });
 
   it("configures a code-host secret store and refuses GitHub content inspection", async () => {

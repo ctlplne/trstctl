@@ -1070,7 +1070,11 @@ function CloudFields({ form, providers }: { form: ReturnType<typeof useForm<Setu
         </Field>
       ) : null}
       {provider === "azure-keyvault" && form.watch("kind") === "cloud_certificate" ? (
-        <Field label={t("discovery.setup.writeTokenRef")} description={t("discovery.setup.writeTokenRefDescription")} error={form.formState.errors.writeTokenRef?.message}>
+        <Field
+          label={t("discovery.setup.writeTokenRef")}
+          description={t("discovery.setup.writeTokenRefDescription")}
+          error={form.formState.errors.writeTokenRef?.message}
+        >
           {(control) => <Input {...control} {...form.register("writeTokenRef")} className="font-mono text-xs" placeholder={examples.discoveryTokenRef} />}
         </Field>
       ) : null}
@@ -1293,7 +1297,12 @@ function buildConfig(values: SetupValues): Record<string, unknown> {
       tag_value: values.tagValue,
     });
   } else if (values.provider === "azure-keyvault" || values.provider === "azure-key-vault") {
-    provider = compact({ ...providerBase, vault_url: values.vaultURL, token_ref: values.tokenRef, ...(values.provider === "azure-keyvault" && values.kind === "cloud_certificate" ? { write_token_ref: values.writeTokenRef } : {}) });
+    provider = compact({
+      ...providerBase,
+      vault_url: values.vaultURL,
+      token_ref: values.tokenRef,
+      ...(values.provider === "azure-keyvault" && values.kind === "cloud_certificate" ? { write_token_ref: values.writeTokenRef } : {}),
+    });
   } else if (values.provider === "gcp-certmanager") {
     provider = compact({ ...providerBase, project: values.project, location: values.location, token_ref: values.tokenRef });
   } else if (values.provider === "gcp-secret-manager") {
