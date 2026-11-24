@@ -1958,7 +1958,7 @@ func redactDiscoveryConfigValue(value any, evidence bool) {
 	case map[string]any:
 		for key, child := range x {
 			refField := strings.HasSuffix(strings.ToLower(strings.ReplaceAll(key, "-", "_")), "_ref")
-			if inlineSecretKey(key) || ((refField || credentialReferenceField(key)) && !(evidence && key == "credential_ref")) {
+			if inlineSecretKey(key) || ((refField || credentialReferenceField(key)) && (!evidence || key != "credential_ref")) {
 				delete(x, key)
 				continue
 			}
