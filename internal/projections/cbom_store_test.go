@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/cbom/hostsource"
 	"trstctl.com/trstctl/internal/cbom/tlssource"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/graph"
 )
 
@@ -39,10 +40,16 @@ func TestCBOMScanPopulatesInventoryAndGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// This test owns the loopback listener. Production's default TLS source
+	// correctly refuses loopback through SafeDialControl; the fixture injects
+	// a real handshake without that network egress guard.
+	localProbe := func(ctx context.Context, address string) (tlsprobe.Result, error) {
+		return tlsprobe.Probe(ctx, address)
+	}
 	scanner := cbom.NewScanner(cbom.NewStoreSink(s, tenantA), cbom.WithWorkers(2))
 	defer scanner.Close()
 	rep := scanner.Scan(ctx, []cbom.Source{
-		tlssource.New([]string{addr}),
+		tlssource.New([]string{addr}, tlssource.WithProber(localProbe)),
 		hostsource.New(conf).WithAllowedRoots(dir),
 	})
 
