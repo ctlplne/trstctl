@@ -175,8 +175,50 @@ func (s *Server) verifyFactoryProof(r *http.Request, tenantID string, renewal bo
 		if err != nil || !current.NotAfter.After(now) {
 			return factoryProof{}, http.StatusForbidden, errors.New("the operational certificate has expired")
 		}
+		if status, err := s.factoryOperationalCertificateAllowed(ctx, tenantID, birth, current); err != nil {
+			return factoryProof{}, status, err
+		}
 	}
 	return factoryProof{birth: birth, batch: batch, renewal: renewal, csrSHA256: digest}, 0, nil
+}
+
+// factoryOperationalCertificateAllowed binds renewal authority to the exact
+// current certificate, its tenant's issuance record, and its revocation state.
+// A valid signature from a compromised operational key is insufficient.
+func (s *Server) factoryOperationalCertificateAllowed(ctx context.Context, tenantID string, birth store.FactoryBirth, current certinfo.Info) (int, error) {
+	if birth.OperationalFingerprint == "" || birth.OperationalSerial == "" ||
+		!strings.EqualFold(birth.OperationalFingerprint, current.SHA256Fingerprint) ||
+		!strings.EqualFold(birth.OperationalSerial, current.SerialNumber) {
+		return http.StatusForbidden, errors.New("the operational certificate is not the device's current issued certificate")
+	}
+	recorded, err := s.store.GetCertificateByFingerprint(ctx, tenantID, current.SHA256Fingerprint)
+	if store.IsNotFound(err) {
+		return http.StatusForbidden, errors.New("the operational certificate has no platform issuance record")
+	}
+	if err != nil {
+		return http.StatusInternalServerError, errors.New("the operational certificate status could not be read")
+	}
+	if recorded.Status != "active" || recorded.RevokedAt != nil ||
+		!strings.EqualFold(recorded.Serial, current.SerialNumber) || recorded.Issuer != current.Issuer {
+		return http.StatusForbidden, errors.New("the operational certificate is revoked or no longer current")
+	}
+	pending, err := s.store.PendingCertificateRevocationFingerprints(ctx, tenantID, []string{current.SHA256Fingerprint})
+	if err != nil {
+		return http.StatusInternalServerError, errors.New("the operational certificate revocation status could not be read")
+	}
+	if pending[current.SHA256Fingerprint] {
+		return http.StatusForbidden, errors.New("the operational certificate has a pending revocation")
+	}
+	if recorded.IssuingExternalCAID == "" {
+		issued, found, err := s.store.LookupIssuedCert(ctx, tenantID, IssuingCAID(), current.SerialNumber)
+		if err != nil {
+			return http.StatusInternalServerError, errors.New("the operational certificate issuer status could not be read")
+		}
+		if !found || issued.Revoked() {
+			return http.StatusForbidden, errors.New("the operational certificate is revoked or unknown to its issuing CA")
+		}
+	}
+	return 0, nil
 }
 
 // factoryProofAuth admits exactly the requests the gate verified.

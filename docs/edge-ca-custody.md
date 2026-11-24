@@ -407,8 +407,11 @@ certificate on its first boot.
    answered with the same certificate).
 5. The device renews in the field the same way at `.../simplereenroll`, with a
    proof signed by its current operational key (`kid` = that certificate's
-   SHA-256, `purpose` `trstctl-factory-renewal`). A superseded operational
-   certificate cannot renew again.
+   SHA-256, `purpose` `trstctl-factory-renewal`). Renewal requires the exact
+   current operational certificate to remain active and unrevoked in the
+   tenant's issuance and revocation records. A superseded, revoked, pending
+   revocation, or unknown certificate cannot renew again, even if its old key
+   still signs the proof.
 
 `trstctl edge factory-batches show <batch>` lists each birth certificate with
 whether it is over the quota, enrolled, its current operational serial and its

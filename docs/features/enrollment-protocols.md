@@ -303,6 +303,12 @@ first boot at `/.well-known/est/factory/simpleenroll` and renew at
 proof signed by the device's birth key or its current operational key and bound
 to the exact CSR. The proof rides in a header, so it crosses the relay
 enrollment proxy where a TLS client certificate would not.
+Renewal also checks that the proof-signing operational certificate is the
+device's current certificate, is active in the tenant inventory, and has no
+pending revocation. For the built-in CA, its exact CA and serial must still be
+present and unrevoked in the issuance ledger. An unknown or revoked certificate
+cannot authorize a fresh key's certificate, even if its private key can still
+sign a valid proof. A failed status lookup refuses renewal rather than issuing.
 
 ### Intune / MDM enrollment (F56)
 
