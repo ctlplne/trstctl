@@ -1,0 +1,33 @@
+# OPT-IN: copy this Role and RoleBinding once per trust-bundle target namespace.
+# Change BOTH metadata.namespace values to that exact namespace before applying.
+# Never apply it to kube-system unless a cluster administrator explicitly chose
+# that target. The default rbac.yaml only covers the agent's trstctl namespace.
+# Create cannot be resourceNames-bound in Kubernetes RBAC, so keep this grant
+# namespaced and give it only to namespaces that receive public CA bundles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trstctl-agent-trust-configmaps
+  namespace: default
+  labels:
+    app.kubernetes.io/name: trstctl-agent
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trstctl-agent-trust-configmaps
+  namespace: default
+  labels:
+    app.kubernetes.io/name: trstctl-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trstctl-agent-trust-configmaps
+subjects:
+  - kind: ServiceAccount
+    name: trstctl-agent
+    namespace: trstctl

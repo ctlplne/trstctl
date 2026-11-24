@@ -21,8 +21,8 @@ metadata:
 # --inventory-k8s-namespaces, whose read-only cluster grant lives in the
 # separate rbac-inventory-namespaces.yaml and is never applied by default.
 #
-# ConfigMaps are NOT in this Role, and that distinction is load-bearing —
-# see the ClusterRole below.
+# Public trust-bundle ConfigMap writes stay in this namespace. Other target
+# namespaces need an explicit Role + RoleBinding, not the default ClusterRole.
 #
 # Deployments that fulfill certificates in additional namespaces should copy this
 # Role + RoleBinding into each of those namespaces rather than promoting it back
@@ -38,6 +38,9 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -61,13 +64,10 @@ subjects:
 # ConfigMaps. It reads requests and updates only their status. No delete, no
 # unrelated resources.
 #
-# ConfigMaps stay cluster-wide on purpose, unlike Secrets. Trust-bundle
-# distribution (CAP-K8S-07) is a genuine fan-out: distributeTrustBundle reads
-# spec.target.namespaces off each TrustBundle CR and writes a ConfigMap into
-# every namespace listed, which is not the single namespace Reconcile was called
-# with. Narrowing this to a namespaced Role silently stops trust bundles reaching
-# every namespace but the agent's own — the resources here carry no private key
-# material, which is what made the Secret grant the dangerous one.
+# Trust-bundle ConfigMap targets outside trstctl need a namespaced opt-in grant
+# for each chosen namespace (rbac-trust-configmaps.yaml). A node-wide agent
+# must never receive a default write grant over kube-system or every tenant's
+# application configuration.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -75,9 +75,6 @@ metadata:
   labels:
     app.kubernetes.io/name: trstctl-agent
 rules:
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
   # Leader election for the cluster-scoped issuer controller: the agent is a
   # DaemonSet, so one Lease elects a single reconciler instead of every node
   # reconciling the same cluster-scoped objects. Deliberately without delete.

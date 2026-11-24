@@ -16,8 +16,12 @@ in-cluster CA — no `client-go` dependency.
 - `namespace.yaml` — creates the `trstctl` namespace.
 - `certmanager-issuer-crds.yaml` — the trstctl `Issuer`, `ClusterIssuer`,
   `Certificate`, and `TrustBundle` CRDs.
-- `rbac.yaml` — the agent's `ServiceAccount` and least-privilege `ClusterRole`
-  (write Secrets; read and status-update only on CSRs and trstctl CRDs).
+- `rbac.yaml` — the agent's `ServiceAccount`, a `trstctl` namespace Role for
+  Secret and ConfigMap writes, and a ClusterRole for controller reads and
+  status updates. The default ClusterRole cannot write ConfigMaps.
+- `rbac-trust-configmaps.yaml` — opt-in namespaced Role and RoleBinding for
+  TrustBundle ConfigMap targets outside `trstctl`. Copy it for each approved
+  target namespace and set both `metadata.namespace` values before applying.
 - `rbac-inventory-namespaces.yaml` — opt-in, read-only cluster grant (list
   namespaces, list Secrets) for `--inventory-k8s-namespaces`; apply it only
   when one agent should inventory TLS Secrets across the whole cluster.
@@ -130,11 +134,15 @@ put on the command line or in an environment variable. The agent sends a stable
 certificates.
 
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and
-validated in tests. The `ClusterRole` grants least privilege: write Secrets, and
+validated in tests. The `trstctl` namespace Role permits the agent to write its
+local Secrets and public trust-bundle ConfigMaps. The ClusterRole permits it to
 read cert-manager `CertificateRequest`s, native Kubernetes
 `CertificateSigningRequest`s, and trstctl `Issuer`/`ClusterIssuer`/`Certificate`
 resources; it updates only status subresources for request/controller resources
-and writes Secrets for issued workload certificates — nothing else.
+and cannot write ConfigMaps in other namespaces. To distribute a bundle into
+another namespace, apply a copy of `rbac-trust-configmaps.yaml` there. A missing
+grant leaves that target failed with a Kubernetes authorization error; it does
+not justify a cluster-wide default grant.
 
 The DaemonSet runs `trstctl-agent --k8s`, which:
 

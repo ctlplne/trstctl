@@ -44,6 +44,7 @@ type KubernetesCSRSupportRule struct {
 	APIGroup string   `json:"api_group"`
 	Resource string   `json:"resource"`
 	Verbs    []string `json:"verbs"`
+	Scope    string   `json:"scope,omitempty"` // namespaced when this is a Role grant, never a default ClusterRole grant
 }
 
 type KubernetesPostureSummary struct {
@@ -281,7 +282,7 @@ func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *htt
 		RBACRules: []KubernetesCSRSupportRule{
 			{APIGroup: "trstctl.com", Resource: "trustbundles", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
 			{APIGroup: "trstctl.com", Resource: "trustbundles/status", Verbs: []string{"update", "patch"}},
-			{APIGroup: "", Resource: "configmaps", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
+			{APIGroup: "", Resource: "configmaps", Verbs: []string{"get", "create", "update", "patch"}, Scope: "namespaced"},
 			{APIGroup: "certificates.k8s.io", Resource: "clustertrustbundles", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
 		},
 		StatusFields:           []string{"status.targets", "status.secretTargets", "status.clusterTrustBundle", "status.bundleSHA256", "status.conditions[type=Ready]"},

@@ -291,6 +291,14 @@ existing object before it can be updated. Other data keys are preserved. The
 controller rewrites an edited or missing owned copy on a watch event or resync.
 An already matching copy is left alone.
 
+The shipped DaemonSet can write ConfigMaps only in its own `trstctl` namespace.
+For each `apps` or `payments` target in this example, copy
+`deploy/kubernetes/rbac-trust-configmaps.yaml`, set both Role and RoleBinding
+`metadata.namespace` values to that exact namespace, and apply that copy.
+The opt-in grant has `get`, `create`, `update` and `patch` on ConfigMaps only
+within its namespace. Without it, distribution reports an authorization
+failure for that target; the default agent cannot write `kube-system`.
+
 Use exact Kubernetes names for namespaces and targets. A TrustBundle name
 must fit in its 63-character ownership label. The target names
 `trstctl-ca-bundle` and `trstctl-secrets-csi` are reserved, including when they

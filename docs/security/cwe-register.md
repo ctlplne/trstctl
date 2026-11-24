@@ -1945,8 +1945,8 @@ not this file.
 | `deploy/helm/helm_test.go:1188` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/signer_hsm_test.go:53` | the chart test's own helm template invocation (CWE-78) |
 | `deploy/helm/signer_serviceaccount_test.go:30` | the chart test's own helm template invocation (CWE-78) |
-| `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/kubernetes/manifests_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/kubernetes/manifests_test.go:445` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/kubernetes/manifests_test.go:463` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:112` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:300` | arguments are fixed checked-in scripts (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:514` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
@@ -2644,8 +2644,8 @@ not this file.
 | `deploy/helm/helm_test.go:1211` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/signer_hsm_test.go:152` | the test's own golden file (CWE-22) |
 | `deploy/iac/iac_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/kubernetes/manifests_test.go:495` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/kubernetes/manifests_test.go:512` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/kubernetes/manifests_test.go:506` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/kubernetes/manifests_test.go:523` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/local-oidc/oidc_test.go:309` | paths are exact children of t.TempDir (CWE-22) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/aud56_test.go:62` | name comes from the fixed documentation manifest in this test (CWE-22). |

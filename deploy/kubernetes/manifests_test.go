@@ -182,12 +182,23 @@ func TestAgentRBACAllowsNativeKubernetesCSRStatusUpdates(t *testing.T) {
 
 func TestAgentRBACAllowsTrustBundleDistribution(t *testing.T) {
 	role := clusterRole(t)
+	local := namedDoc(t, "Role", "trstctl-agent")
+	optIn := namedDoc(t, "Role", "trstctl-agent-trust-configmaps")
+	for name, grant := range map[string]map[string]any{"agent namespace": local, "opt-in target namespace": optIn} {
+		if !hasClusterRoleRule(grant, "", "configmaps", "get", "create", "update", "patch") {
+			t.Fatalf("%s Role lacks namespaced ConfigMap distribution verbs", name)
+		}
+	}
+	for _, verb := range []string{"create", "update", "patch"} {
+		if hasClusterRoleRule(role, "", "configmaps", verb) {
+			t.Fatalf("default ClusterRole grants cluster-wide ConfigMap %s", verb)
+		}
+	}
 	for _, tc := range []struct {
 		group    string
 		resource string
 		verbs    []string
 	}{
-		{group: "", resource: "configmaps", verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
 		{group: "trstctl.com", resource: "trustbundles", verbs: []string{"get", "list", "watch"}},
 		{group: "trstctl.com", resource: "trustbundles/status", verbs: []string{"update", "patch"}},
 	} {

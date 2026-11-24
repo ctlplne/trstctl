@@ -9077,6 +9077,7 @@ KubernetesCSRSupportRule = TypedDict(
     {
         'api_group': str,
         'resource': str,
+        'scope': str,
         'verbs': list[str],
     },
     total=False,

@@ -6537,6 +6537,7 @@ export interface KubernetesCSRSupport {
 export interface KubernetesCSRSupportRule {
   api_group: string;
   resource: string;
+  scope?: string;
   verbs: string[];
 }
 

@@ -8013,7 +8013,7 @@ func componentSchemas() map[string]*Schema {
 		"parent_name":      str(),
 	}, "controller_id", "cluster_id", "name", "uid", "resource_version", "state", "reason")
 	kubernetesCSRSupportRule := object(map[string]*Schema{
-		"api_group": str(), "resource": str(), "verbs": {Type: "array", Items: str()},
+		"api_group": str(), "resource": str(), "verbs": {Type: "array", Items: str()}, "scope": str(),
 	}, "api_group", "resource", "verbs")
 	kubernetesCertManagerRequests := object(map[string]*Schema{
 		"capability": str(), "served": {Type: "boolean"}, "generated_at": timestamp(), "last_sync": timestamp(),

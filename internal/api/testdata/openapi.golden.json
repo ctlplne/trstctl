@@ -32372,6 +32372,9 @@
           "resource": {
             "type": "string"
           },
+          "scope": {
+            "type": "string"
+          },
           "verbs": {
             "items": {
               "type": "string"

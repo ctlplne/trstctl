@@ -21155,6 +21155,7 @@ export interface components {
         KubernetesCSRSupportRule: {
             api_group: string;
             resource: string;
+            scope?: string;
             verbs: string[];
         };
         /** @description Latest enrolled-controller cert-manager CertificateRequest observations. A ready object includes its issued leaf hash and exact parent Certificate UID; this does not prove Secret delivery or listener state. */
