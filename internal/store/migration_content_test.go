@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	511: true, // TestMigrationDataContentBackfills/0511_legacy_attester_trust_requires_admin_review
 	509: true, // TestMigrationDataContentBackfills/0509_dns01_private_egress_starts_unadmitted
 	508: true, // TestMigrationDataContentBackfills/0508_provider_operator_revision_starts_unknown
 	507: true, // TestMigrationDataContentBackfills/0507_recording_headers_start_empty
@@ -2388,6 +2389,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0511_legacy_attester_trust_requires_admin_review", testMigration0511LegacyAttesterTrustRequiresAdminReview)
 	t.Run("0509_dns01_private_egress_starts_unadmitted", testMigration0509DNS01PrivateEgressStartsUnadmitted)
 	t.Run("0508_provider_operator_revision_starts_unknown", testMigration0508ProviderOperatorRevisionStartsUnknown)
 	t.Run("0507_recording_headers_start_empty", testMigration0507RecordingHeadersStartEmpty)
@@ -3432,6 +3434,58 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
 	t.Run("0136_fleet_reissuance_cursor_defaults", testMigration0136FleetReissuanceCursorDefaults)
 	t.Run("0137_relay_external_pollers", testMigration0137RelayExternalPollers)
+}
+
+func testMigration0511LegacyAttesterTrustRequiresAdminReview(t *testing.T) {
+	const stable = `SELECT tenant_id::text, 'source', id::text, name, method, issuer,
+			audience, enabled::text, '' AS event_id, '' AS status
+		FROM workload_attester_trust_sources
+		UNION ALL
+		SELECT tenant_id::text, 'command', source_id::text, event_type, event_time::text,
+			encode(event_payload, 'hex'), request_binding, target_disabled::text,
+			event_id::text, status
+		FROM workload_attester_trust_commands
+		ORDER BY 1, 2, 3`
+	runPopulatedDefaultMigrationHarness(t, 511, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for i, tenantID := range []string{tenantA, tenantB} {
+				sourceID := fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1)
+				eventID := fmt.Sprintf("00000000-0000-4000-8001-%012d", i+1)
+				if _, err := pool.Exec(ctx, `INSERT INTO workload_attester_trust_sources
+					(id, tenant_id, name, method, issuer, audience, enabled, created_at, updated_at)
+					VALUES ($1,$2,$3,'k8s_sat','https://kubernetes.default.svc','trstctl',true,
+						'2026-11-01T00:00:00Z','2026-11-01T00:00:00Z')`,
+					sourceID, tenantID, fmt.Sprintf("pre-0511-%d", i)); err != nil {
+					t.Fatalf("seed legacy attester trust source for %s: %v", tenantID, err)
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO workload_attester_trust_commands
+					(tenant_id, source_id, event_id, event_type, event_time, event_payload,
+						payload_sha256, binding_sha256, request_binding, target_disabled)
+					VALUES ($1,$2,$3,'workload.attester_trust_source.upserted',
+						'2026-11-01T00:00:00Z',$4,$5,$5,$5,false)`,
+					tenantID, sourceID, eventID, []byte(`{}`), strings.Repeat("a", 64)); err != nil {
+					t.Fatalf("seed legacy attester trust command for %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var sources, commands int
+			var reviewRequired, versionOne bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(admin_review_required)
+				FROM workload_attester_trust_sources WHERE tenant_id IN ($1,$2)`, tenantA, tenantB).
+				Scan(&sources, &reviewRequired); err != nil {
+				t.Fatal(err)
+			}
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(event_schema_version = 1)
+				FROM workload_attester_trust_commands WHERE tenant_id IN ($1,$2)`, tenantA, tenantB).
+				Scan(&commands, &versionOne); err != nil {
+				t.Fatal(err)
+			}
+			if sources != want/2 || commands != want/2 || !reviewRequired || !versionOne {
+				t.Fatalf("0511 legacy trust authority changed: sources=%d commands=%d want_each=%d review=%t version_one=%t",
+					sources, commands, want/2, reviewRequired, versionOne)
+			}
+		})
 }
 
 func testMigration0509DNS01PrivateEgressStartsUnadmitted(t *testing.T) {
