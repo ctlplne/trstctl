@@ -367,7 +367,7 @@ func (a *API) vaultAuthorizeOperation(w http.ResponseWriter, r *http.Request, pe
 		writeVaultError(w, http.StatusForbidden, "permission denied")
 		return false
 	}
-	target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
+	target := authz.Scope{TenantID: principal.TenantID}
 	if !principal.Can(permission, target) {
 		writeVaultError(w, http.StatusForbidden, "permission denied")
 		return false

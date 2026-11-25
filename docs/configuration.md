@@ -2587,8 +2587,19 @@ Active Directory groups too large to return in one search response.
 ABAC is an optional deny-only overlay on top of RBAC. RBAC must grant the permission
 first; the ABAC Rego module can then block the request using request attributes,
 identity tags, operator-provided environment state, and time. This is useful for rules
-such as "prod certs may issue only during change windows" or "break-glass actions may
-run only from the platform project."
+such as "prod certs may issue only during change windows" or "break-glass
+actions require an active incident."
+
+`input.resource.project` is present only when the request names a secrets
+project or targets a secret in a registered project. The API uses the project
+route slug or the backing secret's
+registered project and environment; Vault-compatible KV uses the same backing
+secret lookup. The caller's `X-Project` header never sets this attribute or
+the RBAC project scope. Routes without a verifiable project, including
+break-glass routes, omit it. On those routes, write rules against the action,
+request path, actor, time, or an operator-provided `input.env` value. Profile
+and issuer attributes come from the route's named target or the validated
+request body; a caller-supplied header does not set either attribute.
 
 The module must declare `package trstctl.abac`, define boolean `deny`, and may define
 string `reason`. Bad Rego fails startup. Runtime evaluation errors deny the request, and

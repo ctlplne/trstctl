@@ -2111,7 +2111,7 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 		if !a.enforceCSRF(w, r) {
 			return
 		}
-		target, err := requestTargetScope(principal, r, scope)
+		target, err := a.requestTargetScope(principal, r, scope)
 		if err != nil {
 			a.writeError(w, err)
 			return

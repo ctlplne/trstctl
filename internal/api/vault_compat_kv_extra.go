@@ -275,11 +275,15 @@ func (a *API) vaultCapabilitiesSelf(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, "paths is required")
 		return
 	}
-	scope := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
 	data := map[string]any{}
 	var first []string
 	for _, raw := range paths {
 		path := strings.Trim(strings.TrimSpace(raw), "/")
+		scope, err := a.vaultTargetScope(r.Context(), principal, path)
+		if err != nil {
+			writeVaultError(w, vaultHTTPStatus(err), "secret project scope unavailable")
+			return
+		}
 		caps := vaultPathCapabilities(path, func(perm authz.Permission) bool { return principal.Can(perm, scope) })
 		granted := make([]string, 0, len(caps))
 		for _, capability := range caps {

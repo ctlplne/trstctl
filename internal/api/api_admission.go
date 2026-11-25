@@ -63,26 +63,54 @@ func (a *API) writeRateLimitExceeded(w http.ResponseWriter, retryAfter time.Dura
 	a.writeProblem(w, problem.New(http.StatusTooManyRequests, "rate limit exceeded for this tenant"))
 }
 
-func requestTargetScope(principal authz.Principal, r *http.Request, scope routeScope) (authz.Scope, error) {
-	target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
-	if scope == nil {
-		return target, nil
-	}
-	scoped, err := scope(r)
-	if err != nil {
-		return authz.Scope{}, err
-	}
-	if scoped.TenantID != "" && scoped.TenantID != principal.TenantID {
-		return authz.Scope{}, errStatus(http.StatusForbidden, "forbidden: cross-tenant scope")
-	}
-	if scoped.Project != "" {
+func (a *API) requestTargetScope(principal authz.Principal, r *http.Request, scope routeScope) (authz.Scope, error) {
+	target := authz.Scope{TenantID: principal.TenantID}
+	if scope != nil {
+		scoped, err := scope(r)
+		if err != nil {
+			return authz.Scope{}, err
+		}
+		if scoped.TenantID != "" && scoped.TenantID != principal.TenantID {
+			return authz.Scope{}, errStatus(http.StatusForbidden, "forbidden: cross-tenant scope")
+		}
 		target.Project = scoped.Project
-	}
-	if scoped.Profile != "" {
 		target.Profile = scoped.Profile
-	}
-	if scoped.Issuer != "" {
 		target.Issuer = scoped.Issuer
+	}
+	// A project is an attribute of the targeted resource. The X-Project
+	// header is caller-controlled and cannot grant RBAC scope or satisfy ABAC.
+	if strings.HasPrefix(r.URL.Path, "/api/v1/secrets/projects/") {
+		target.Project = strings.TrimSpace(r.PathValue("project"))
+	} else if r.Method == http.MethodPost && r.URL.Path == "/api/v1/secrets/projects" {
+		project, err := jsonBodyStringField(r, "slug")
+		if err != nil {
+			return authz.Scope{}, err
+		}
+		target.Project = project
+	} else if a.store != nil && strings.HasPrefix(r.URL.Path, "/api/v1/secrets/store/") {
+		name := strings.TrimSpace(r.PathValue("name"))
+		if name != "" {
+			project, err := a.store.SecretScopeFor(r.Context(), principal.TenantID, name, principal.Subject)
+			if err != nil {
+				return authz.Scope{}, err
+			}
+			if project.InProject {
+				target.Project = project.Project
+			}
+		}
+	} else if a.store != nil && r.Method == http.MethodPost &&
+		(r.URL.Path == "/api/v1/secrets/store" || r.URL.Path == "/api/v1/secrets/store/preview") {
+		name, err := jsonBodyStringField(r, "name")
+		if err != nil {
+			return authz.Scope{}, err
+		}
+		project, err := a.store.SecretScopeFor(r.Context(), principal.TenantID, name, principal.Subject)
+		if err != nil {
+			return authz.Scope{}, err
+		}
+		if project.InProject {
+			target.Project = project.Project
+		}
 	}
 	return target, nil
 }

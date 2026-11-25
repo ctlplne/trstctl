@@ -346,7 +346,7 @@ func (a *API) vaultMountedSign(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusForbidden, "permission denied")
 		return
 	}
-	target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
+	target := authz.Scope{TenantID: principal.TenantID}
 	authorize := func(permission authz.Permission) bool {
 		if !principal.Can(permission, target) {
 			writeVaultError(w, http.StatusForbidden, "permission denied")

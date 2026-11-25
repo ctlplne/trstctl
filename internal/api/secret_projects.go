@@ -172,7 +172,7 @@ func (a *API) secretProjectMemberManagerOf(ctx context.Context, r *http.Request,
 	if !ok {
 		return secretProjectMemberManager{}, errStatus(http.StatusUnauthorized, "an authenticated principal is required")
 	}
-	target, err := requestTargetScope(principal, r, nil)
+	target, err := a.requestTargetScope(principal, r, nil)
 	if err != nil {
 		return secretProjectMemberManager{}, err
 	}

@@ -247,7 +247,11 @@ func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerF
 			return
 		}
 		if perm != "" {
-			target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
+			target, err := a.vaultTargetScope(r.Context(), principal, strings.TrimPrefix(strings.Trim(r.URL.Path, "/"), "v1/"))
+			if err != nil {
+				writeVaultError(w, vaultHTTPStatus(err), "secret project scope unavailable")
+				return
+			}
 			if !principal.Can(perm, target) {
 				writeVaultError(w, http.StatusForbidden, "permission denied")
 				return
