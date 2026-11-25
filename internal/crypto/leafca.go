@@ -623,7 +623,7 @@ func SignAgentClientCSR(
 	now := time.Now()
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               csr.Subject,
+		Subject:               pkix.Name{CommonName: csr.Subject.CommonName},
 		URIs:                  uris,
 		NotBefore:             IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),

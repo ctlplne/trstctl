@@ -10,6 +10,8 @@ import (
 	"crypto/x509/pkix"
 	"testing"
 	"time"
+
+	boundary "trstctl.com/trstctl/internal/crypto"
 )
 
 func TestAgentCredentialUsesOnlyTheEnrolledSubjectName(t *testing.T) {
@@ -27,10 +29,33 @@ func TestAgentCredentialUsesOnlyTheEnrolledSubjectName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, err := ca.SignClientCSRWithTenant(csr, "tenant-a", []string{AgentRoleHost}, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Run("in-process issuer", func(t *testing.T) {
+		chain, err := ca.SignClientCSRWithTenant(csr, "tenant-a", []string{AgentRoleHost}, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkEnrolledAgentSubject(t, chain)
+	})
+	t.Run("digest signer used on the agent channel", func(t *testing.T) {
+		key, err := boundary.GenerateLockedKey(boundary.ECDSAP256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(key.Destroy)
+		caDER, err := boundary.SelfSignedCACert(key, "agent channel authority", time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		chain, err := boundary.SignAgentClientCSR(caDER, key, csr, AgentSPIFFEID("tenant-a", "printer-1"), []string{AgentRoleSPIFFEID("tenant-a", "printer-1", AgentRoleHost)}, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkEnrolledAgentSubject(t, chain)
+	})
+}
+
+func checkEnrolledAgentSubject(t *testing.T, chain []byte) {
+	t.Helper()
 	der, err := FirstCertDER(chain)
 	if err != nil {
 		t.Fatal(err)
