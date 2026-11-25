@@ -31,7 +31,7 @@ type a258Session struct {
 func TestServedTemplatesAndEmergencyAccessA258(t *testing.T) {
 	f := startGatewayFixture(t, gatewayFixtureOptions{})
 	h := f.h
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a258-admin", "access:read", "access:write", "access:targets.write")
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a258-admin", "access:read", "access:write", "access:targets.write", "access:approve")
 	reviewerThree := seedScopedTokenSubject(t, h.store, h.tenant, "pam-reviewer-three", "access:approve")
 	responder := seedScopedTokenSubject(t, h.store, h.tenant, "oncall@ops.example", "access:read", "access:sessions.open")
 	attestation := base64.StdEncoding.EncodeToString([]byte("genuine"))

@@ -744,6 +744,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Approval requested")
 	case KindEmergencyAccess:
 		b.WriteString("Emergency access opened without approval")
+	case KindEmergencyRespondersChanged:
+		b.WriteString("Emergency responders changed")
 	case KindSessionRiskAlert:
 		b.WriteString("Risky command in a privileged session")
 	case KindRecordingIncomplete:

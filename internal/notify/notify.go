@@ -105,6 +105,9 @@ const (
 	// without waiting for approval (A258). It goes to the approval channels,
 	// so every approver hears of it, and names no credential.
 	KindEmergencyAccess = "access.emergency_opened"
+	// KindEmergencyRespondersChanged reports a replacement of the principals
+	// who can bypass ordinary access review. It carries identities only.
+	KindEmergencyRespondersChanged = "access.emergency_responders_changed"
 	// KindCAHorizon marks a CA authority crossing into a tighter expiry band
 	// (H5). Replacing a trust anchor is a quarters-long program, so this fires
 	// years ahead and again at each tightening.

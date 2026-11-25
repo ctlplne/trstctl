@@ -346,6 +346,19 @@ func SameApprovalPrincipal(requester, reviewer string) bool {
 	return requester == reviewer
 }
 
+// SameEmergencyPrincipal is deliberately conservative for a quorum-free
+// grant: identity casing and surrounding whitespace cannot let a list author
+// name themselves. Existing bundle-run aliases are unwrapped as well.
+func SameEmergencyPrincipal(author, responder string) bool {
+	if principal, ok := BundleRunPrincipal(strings.TrimSpace(author)); ok {
+		author = principal
+	}
+	if principal, ok := BundleRunPrincipal(strings.TrimSpace(responder)); ok {
+		responder = principal
+	}
+	return strings.EqualFold(strings.TrimSpace(author), strings.TrimSpace(responder))
+}
+
 // Principal is an authenticated caller with its resolved grants.
 type Principal struct {
 	TenantID string

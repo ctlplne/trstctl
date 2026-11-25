@@ -69822,7 +69822,17 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Replace the named responders who may open emergency access",
+        "summary": "Replace named emergency responders as an independent access approver and target custodian; the author cannot name themselves",
+        "x-trstctl-also-requires": [
+          {
+            "permission": "access:approve",
+            "when": "every responder-list replacement: the author must have approval authority, be an independent person and use their own token"
+          },
+          {
+            "permission": "access:targets.write",
+            "when": "every responder-list replacement: the author must also be trusted to configure privileged targets"
+          }
+        ],
         "x-trstctl-permission": "access:write"
       }
     },

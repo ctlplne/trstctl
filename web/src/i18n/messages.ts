@@ -759,7 +759,7 @@ export const messages = {
   "admin.access.responders.heading": { defaultMessage: "Emergency responders", description: "Emergency access (A258)." },
   "admin.access.responders.description": {
     defaultMessage:
-      "The named people who may open emergency access — an emergency session or a break-glass release — at once, without review. Every approver is notified when one does.",
+      "Named people may open an emergency session or release a break-glass credential without review. Only an access approver with target-setting authority may change this list, and they cannot name themselves. Approval channels are notified of changes and emergency use.",
     description: "Emergency access (A258).",
   },
   "admin.access.responders.failed": { defaultMessage: "The responders could not be saved", description: "Emergency access (A258)." },

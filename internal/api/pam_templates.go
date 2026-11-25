@@ -10,6 +10,7 @@ import (
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
 	"trstctl.com/trstctl/internal/accessweb"
+	"trstctl.com/trstctl/internal/api/problem"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/store"
@@ -91,6 +92,10 @@ type PAMEmergencyService interface {
 
 func (a *API) pamTemplateRoutes() []route {
 	idPath := []param{pathUUID("id")}
+	responderAuthority := []conditionalPermission{
+		{Permission: authz.AccessApprove, When: "every responder-list replacement: the author must have approval authority, be an independent person and use their own token"},
+		{Permission: authz.AccessTargetsWrite, When: "every responder-list replacement: the author must also be trusted to configure privileged targets"},
+	}
 	return []route{
 		{method: "GET", path: "/api/v1/access/templates", opID: "listPAMTemplates", summary: "List access templates: the reason, approvals and maximum length a session request can take from one", handler: a.listPAMTemplates, resSchema: "PAMAccessTemplateList", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/access/templates", opID: "createPAMTemplate", summary: "Create an access template", handler: a.savePAMTemplate, reqSchema: "PAMAccessTemplateRequest", resSchema: "PAMAccessTemplate", successCode: "201", mutation: true, perm: authz.AccessTargetsWrite},
@@ -98,7 +103,7 @@ func (a *API) pamTemplateRoutes() []route {
 		{method: "PUT", path: "/api/v1/access/templates/{id}", opID: "updatePAMTemplate", summary: "Replace an access template at the revision you read; requests already under review keep what they were reviewed with", handler: a.savePAMTemplate, pathParams: idPath, reqSchema: "PAMAccessTemplateRequest", resSchema: "PAMAccessTemplate", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "DELETE", path: "/api/v1/access/templates/{id}", opID: "deletePAMTemplate", summary: "Delete an access template; requests naming it are refused from then on", handler: a.deletePAMTemplate, pathParams: idPath, resSchema: "PAMAccessTemplateDeleted", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "GET", path: "/api/v1/access/emergency/responders", opID: "listPAMEmergencyResponders", summary: "List the named responders who may open emergency access", handler: a.listPAMEmergencyResponders, resSchema: "PAMEmergencyResponders", successCode: "200", perm: authz.AccessRead},
-		{method: "PUT", path: "/api/v1/access/emergency/responders", opID: "setPAMEmergencyResponders", summary: "Replace the named responders who may open emergency access", handler: a.setPAMEmergencyResponders, reqSchema: "PAMEmergencyResponders", resSchema: "PAMEmergencyResponders", successCode: "200", mutation: true, perm: authz.AccessWrite},
+		{method: "PUT", path: "/api/v1/access/emergency/responders", opID: "setPAMEmergencyResponders", summary: "Replace named emergency responders as an independent access approver and target custodian; the author cannot name themselves", handler: a.setPAMEmergencyResponders, reqSchema: "PAMEmergencyResponders", resSchema: "PAMEmergencyResponders", successCode: "200", mutation: true, perm: authz.AccessWrite, alsoRequires: responderAuthority},
 		{method: "POST", path: "/api/v1/access/emergency-sessions", opID: "openPAMEmergencySession", summary: "Open a privileged session at once as a named responder: every approver is notified, it ends at its short deadline and requires a post-incident review", handler: a.openPAMEmergencySession, reqSchema: "PAMEmergencySessionRequest", resSchema: "PAMSession", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessSessionsOpen},
 		{method: "GET", path: "/api/v1/access/emergency-sessions", opID: "listPAMEmergencyGrants", summary: "List emergency access grants, newest first, with their post-incident reviews", handler: a.listPAMEmergencyGrants, resSchema: "PAMEmergencyGrantList", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/access/emergency-sessions/{id}/review", opID: "reviewPAMEmergencyGrant", summary: "Record an emergency grant's post-incident review; its responder cannot review it", handler: a.reviewPAMEmergencyGrant, pathParams: idPath, reqSchema: "PAMEmergencyReviewRequest", resSchema: "PAMEmergencyGrant", successCode: "200", mutation: true, perm: authz.AccessApprove},
@@ -227,6 +232,9 @@ func (a *API) listPAMEmergencyResponders(w http.ResponseWriter, r *http.Request)
 
 //trstctl:mutation
 func (a *API) setPAMEmergencyResponders(w http.ResponseWriter, r *http.Request) {
+	if !a.admitEmergencyResponderAuthor(w, r) {
+		return
+	}
 	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
 		svc, err := a.emergency()
 		if err != nil {
@@ -239,12 +247,49 @@ func (a *API) setPAMEmergencyResponders(w http.ResponseWriter, r *http.Request) 
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		for _, subject := range body.Subjects {
+			if authz.SameEmergencyPrincipal(principal.Subject, subject) {
+				w.Header().Set("X-Trstctl-Audit-Status", a.denialAudit.recordReason(r, principal, authz.AccessApprove, "responder-list author cannot name themselves"))
+				return 0, nil, errStatus(http.StatusForbidden, "you cannot name yourself as an emergency responder")
+			}
+		}
 		subjects, err := svc.SetPAMEmergencyResponders(ctx, tenantID, principal.Subject, body.Subjects)
 		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusOK, map[string]any{"subjects": subjects}, nil
 	})
+}
+
+func (a *API) admitEmergencyResponderAuthor(w http.ResponseWriter, r *http.Request) bool {
+	principal, ok := r.Context().Value(principalCtxKey).(authz.Principal)
+	if !ok || principal.TenantID == "" || principal.Subject == "" {
+		a.writeProblem(w, problemUnauthorized())
+		return false
+	}
+	var permission authz.Permission
+	var detail string
+	switch {
+	case principal.Delegated:
+		permission, detail = authz.AccessApprove, "a token minted for another subject cannot change emergency responders"
+	case principal.RunID != "":
+		permission, detail = authz.AccessApprove, "an access bundle run cannot change emergency responders"
+	case !principal.Can(authz.AccessApprove, authz.Scope{TenantID: principal.TenantID}):
+		permission, detail = authz.AccessApprove, "changing emergency responders needs access:approve as well as access:write"
+	case !principal.Can(authz.AccessTargetsWrite, authz.Scope{TenantID: principal.TenantID}):
+		permission, detail = authz.AccessTargetsWrite, "changing emergency responders needs access:targets.write as well as access:approve and access:write"
+	default:
+		for _, extra := range []authz.Permission{authz.AccessApprove, authz.AccessTargetsWrite} {
+			if err := a.checkABAC(r.Context(), r, principal, extra, authz.Scope{TenantID: principal.TenantID}); err != nil {
+				a.writeError(w, err)
+				return false
+			}
+		}
+		return true
+	}
+	w.Header().Set("X-Trstctl-Audit-Status", a.denialAudit.recordReason(r, principal, permission, detail))
+	a.writeProblem(w, problem.New(http.StatusForbidden, detail))
+	return false
 }
 
 //trstctl:mutation

@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -131,12 +130,8 @@ func (s *pamService) OpenPAMEmergencyCheckout(ctx context.Context, tenantID, ide
 	case ttl < pamCheckoutMinTTL || ttl > pamEmergencyMaxTTL:
 		return nil, fmt.Errorf("%w: ttl_seconds must be %d-%d", api.ErrPAMInvalid, int(pamCheckoutMinTTL.Seconds()), int(pamEmergencyMaxTTL.Seconds()))
 	}
-	responders, err := s.store.ListPAMEmergencyResponders(ctx, tenantID)
-	if err != nil {
+	if err := s.requireIndependentEmergencyResponder(ctx, tenantID, responder); err != nil {
 		return nil, err
-	}
-	if !slices.Contains(responders, responder) {
-		return nil, fmt.Errorf("%w: %s is not a named emergency responder", api.ErrPAMRejected, responder)
 	}
 	rec, err := s.store.GetPAMTarget(ctx, tenantID, pamTargetBreakGlass, req.TargetID)
 	if err != nil {

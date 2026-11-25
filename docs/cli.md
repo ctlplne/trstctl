@@ -751,7 +751,11 @@ a provider-backed target's provider holds, read-only, and prints the target with
 retry a refused credential on their own). `access templates list|create|get|update|delete`
 keep access templates (`{"name", "reason", "required_approvals", "max_ttl_seconds", "require_recording"}`); a
 session request names one with `template_id`. `access emergency set-responders -f` names
-the emergency responders (`{"subjects": [...]}`), `access emergency open -f` opens emergency
+the emergency responders (`{"subjects": [...]}`): the caller needs `access:write`,
+`access:approve` and `access:targets.write`, must use their own token, and cannot
+name themselves. The replacement is audited and notifies approval channels;
+responders named by their own account in an older list are refused when they try
+to use emergency access. `access emergency open -f` opens emergency
 access as one of them (`target_type`, `target_id`, `role`, `reason`, `method`,
 `payload_base64`, `ttl_seconds` up to 3600), `access emergency list` shows the grants and
 `access emergency review <session-id> -f` records the post-incident review

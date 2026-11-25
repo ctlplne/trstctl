@@ -959,7 +959,7 @@ export interface paths {
         };
         /** List the named responders who may open emergency access */
         get: operations["listPAMEmergencyResponders"];
-        /** Replace the named responders who may open emergency access */
+        /** Replace named emergency responders as an independent access approver and target custodian; the author cannot name themselves */
         put: operations["setPAMEmergencyResponders"];
         post?: never;
         delete?: never;

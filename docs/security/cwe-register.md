@@ -426,7 +426,7 @@ not this file.
 | `internal/mdm/jamf_client_test.go:110` | a stand-in response with no token in it (CWE-798) |
 | `internal/notify/notify.go:69` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/notify.go:95` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/notify/notify.go:161` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/notify/notify.go:164` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/webhook/webhook_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/oauthrevoke/oauthrevoke_test.go:14` | fabricated fixture credential (CWE-798) |
 | `internal/operator/client.go:39` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -1777,7 +1777,7 @@ not this file.
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/vcenter_sso.go:133` | the rotated SSO credential; the rotation seals it before storage (CWE-200) |
 | `internal/server/dynamic_secret_oracle_lab_test.go:276` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
-| `internal/server/pam_breakglass.go:187` | the one-time break-glass release the responder asked for; returned as wiped bytes, never stored (CWE-200) |
+| `internal/server/pam_breakglass.go:182` | the one-time break-glass release the responder asked for; returned as wiped bytes, never stored (CWE-200) |
 | `internal/server/pam_desktop_served_test.go:192` | byte-backed fixture credential goes only to the encrypted secret store and private native pipe (CWE-200) |
 | `internal/server/pam_directory_health_served_test.go:75` | a test's own fixture credential, to the encrypted secret store (CWE-200) |
 | `internal/server/pam_gateway_aws_console_standin_test.go:122` | native federation protocol returns its owned issued sign-in token (CWE-200) |

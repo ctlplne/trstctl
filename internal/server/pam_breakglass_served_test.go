@@ -87,7 +87,7 @@ func TestServedBreakGlassEmergencyCheckoutA272(t *testing.T) {
 	})
 	sh := h.servedHarness
 	registerServedTenantID(t, sh, tenant, "A272 break-glass accounts")
-	admin := seedScopedTokenSubject(t, sh.store, tenant, "a272-admin", "access:read", "access:write", "access:targets.write", "secrets:read", "secrets:write")
+	admin := seedScopedTokenSubject(t, sh.store, tenant, "a272-admin", "access:read", "access:write", "access:targets.write", "access:approve", "secrets:read", "secrets:write")
 	responder := seedScopedTokenSubject(t, sh.store, tenant, "oncall@ops.example", "access:read", "access:sessions.open")
 	bystander := seedScopedTokenSubject(t, sh.store, tenant, "dev@ops.example", "access:read", "access:sessions.open")
 	reviewer := seedScopedTokenSubject(t, sh.store, tenant, "a272-reviewer", "access:read", "access:approve")

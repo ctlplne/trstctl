@@ -999,7 +999,12 @@ export function AdminAccess() {
                 />
               ) : null}
               {pamRows ? (
-                <PAMEmergencyRespondersPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")} />
+                <PAMEmergencyRespondersPanel
+                  canManage={
+                    !!user?.permissions?.includes("*") ||
+                    ["access:write", "access:approve", "access:targets.write"].every((permission) => user?.permissions?.includes(permission))
+                  }
+                />
               ) : null}
               {pamRows ? (
                 <PAMBreakGlassPanel

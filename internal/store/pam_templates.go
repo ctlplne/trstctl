@@ -186,6 +186,23 @@ func (s *Store) ListPAMEmergencyResponders(ctx context.Context, tenantID string)
 	return out, err
 }
 
+// EmergencyResponderAuthor reads the author attached to the current list
+// projection. Missing entries are distinct from an empty author and fail
+// closed when an emergency grant is requested.
+func (s *Store) EmergencyResponderAuthor(ctx context.Context, tenantID, subject string) (string, bool, error) {
+	var author string
+	var found bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT set_by FROM pam_emergency_responders WHERE tenant_id = $1 AND subject = $2`, tenantID, subject).Scan(&author)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		found = err == nil
+		return err
+	})
+	return author, found, err
+}
+
 // ApplyPAMEmergencyOpenedTx projects pam.emergency.opened.
 func (s *Store) ApplyPAMEmergencyOpenedTx(ctx context.Context, tx pgx.Tx, tenantID string, g PAMEmergencyGrant) error {
 	notified := g.NotifiedApprovers

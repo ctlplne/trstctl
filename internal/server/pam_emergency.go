@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -254,11 +255,17 @@ func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.
 }
 
 func (s *pamService) SetPAMEmergencyResponders(ctx context.Context, tenantID, actor string, subjects []string) ([]string, error) {
+	if strings.TrimSpace(actor) == "" {
+		return nil, fmt.Errorf("%w: a named list author is required", api.ErrPAMInvalid)
+	}
 	clean := make([]string, 0, len(subjects))
 	for _, subject := range subjects {
 		subject = strings.TrimSpace(subject)
 		if subject == "" || len(subject) > 320 || strings.ContainsAny(subject, "\r\n") || strings.HasPrefix(subject, orchestrator.BundleRunSubjectPrefix) {
 			return nil, fmt.Errorf("%w: a responder is a named principal (not a bundle run), 1-320 characters", api.ErrPAMInvalid)
+		}
+		if authz.SameEmergencyPrincipal(actor, subject) {
+			return nil, fmt.Errorf("%w: a responder-list author cannot name themselves", api.ErrPAMRejected)
 		}
 		if !slices.Contains(clean, subject) {
 			clean = append(clean, subject)
@@ -268,11 +275,73 @@ func (s *pamService) SetPAMEmergencyResponders(ctx context.Context, tenantID, ac
 		return nil, fmt.Errorf("%w: at most %d responders", api.ErrPAMInvalid, pamEmergencyMaxResponder)
 	}
 	slices.Sort(clean)
-	if err := s.appendProject(ctx, tenantID, projections.EventPAMEmergencyRespondersSet, projections.PAMEmergencyRespondersSet{
-		Subjects: clean, Actor: actor, At: s.clock().UTC()}); err != nil {
+	data, err := json.Marshal(projections.PAMEmergencyRespondersSet{Subjects: clean, Actor: actor, At: s.clock().UTC()})
+	if err != nil {
+		return nil, err
+	}
+	named, err := s.namedApprovers(ctx, tenantID, actor)
+	if err != nil {
+		return nil, err
+	}
+	e, err := s.log.Append(ctx, events.Event{Type: projections.EventPAMEmergencyRespondersSet, TenantID: tenantID, Data: data})
+	if err != nil {
+		return nil, err
+	}
+	entries, err := emergencyResponderNotices(tenantID, e.ID, actor, clean, named)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := s.projector.ApplyTx(ctx, tx, e); err != nil {
+			return err
+		}
+		if s.outbox == nil {
+			return nil
+		}
+		for _, entry := range entries {
+			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	return s.store.ListPAMEmergencyResponders(ctx, tenantID)
+}
+
+func emergencyResponderNotices(tenantID, eventID, actor string, subjects []string, named []store.TenantMember) ([]orchestrator.Entry, error) {
+	list := strings.Join(subjects, ", ")
+	if list == "" {
+		list = "(none)"
+	}
+	detail := fmt.Sprintf("%s replaced the emergency responder list with: %s. Review this change before emergency access is needed.", actor, list)
+	makeEntry := func(recipient *notify.AlertRecipient, suffix string) (orchestrator.Entry, error) {
+		alert, err := json.Marshal(notify.Alert{Kind: notify.KindEmergencyRespondersChanged, TenantID: tenantID,
+			OperationID: "emergency-responders-" + eventID, Subject: "emergency/responders", Detail: detail,
+			Severity: notify.AlertSeverityCritical, Recipient: recipient})
+		if err != nil {
+			return orchestrator.Entry{}, err
+		}
+		return orchestrator.Entry{TenantID: tenantID, Destination: notify.DestinationApproval,
+			IdempotencyKey: "emergency-responders:" + eventID + suffix,
+			EffectLane:     notify.DestinationApproval + ":emergency-responders:" + eventID + suffix,
+			Payload:        alert}, nil
+	}
+	group, err := makeEntry(nil, "")
+	if err != nil {
+		return nil, err
+	}
+	entries := []orchestrator.Entry{group}
+	for _, member := range named {
+		entry, err := makeEntry(&notify.AlertRecipient{Kind: "approver", Subject: member.Subject,
+			DisplayName: member.DisplayName, Email: member.Email}, ":approver:"+member.Subject)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
 }
 
 func (s *pamService) ListPAMEmergencyResponders(ctx context.Context, tenantID string) ([]string, error) {
@@ -290,16 +359,12 @@ func (s *pamService) OpenPAMEmergencySession(ctx context.Context, tenantID, idem
 	if strings.TrimSpace(req.Reason) == "" {
 		return api.PAMSession{}, fmt.Errorf("%w: emergency access needs a reason", api.ErrPAMInvalid)
 	}
-	responders, err := s.store.ListPAMEmergencyResponders(ctx, tenantID)
-	if err != nil {
+	if err := s.requireIndependentEmergencyResponder(ctx, tenantID, responder); err != nil {
 		return api.PAMSession{}, err
-	}
-	if !slices.Contains(responders, responder) {
-		return api.PAMSession{}, fmt.Errorf("%w: %s is not a named emergency responder", api.ErrPAMRejected, responder)
 	}
 	// Emergency authority skips the ordinary quorum, never the account's
 	// required recording, lifetime policy or fresh sign-in (A277).
-	req, _, _, err = s.withTemplate(ctx, tenantID, req)
+	req, _, _, err := s.withTemplate(ctx, tenantID, req)
 	if err != nil {
 		return api.PAMSession{}, err
 	}
@@ -354,6 +419,20 @@ func (s *pamService) OpenPAMEmergencySession(ctx context.Context, tenantID, idem
 	view := emergencyView(grant)
 	session.Emergency = &view
 	return session, nil
+}
+
+func (s *pamService) requireIndependentEmergencyResponder(ctx context.Context, tenantID, responder string) error {
+	author, found, err := s.store.EmergencyResponderAuthor(ctx, tenantID, responder)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("%w: %s is not a named emergency responder", api.ErrPAMRejected, responder)
+	}
+	if author == "" || authz.SameEmergencyPrincipal(author, responder) {
+		return fmt.Errorf("%w: emergency access requires a responder named by another custodian", api.ErrPAMRejected)
+	}
+	return nil
 }
 
 // recordEmergency appends the grant, then projects it and queues its notice

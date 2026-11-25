@@ -24,7 +24,7 @@ import (
 func TestServedFolderTemplatesApplyToEveryAccountA261(t *testing.T) {
 	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true})
 	h := f.h
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a261-folder-admin", "access:read", "access:write", "access:targets.write")
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a261-folder-admin", "access:read", "access:write", "access:targets.write", "access:approve")
 	custodian := seedScopedTokenSubject(t, h.store, h.tenant, "a261-folder-custodian", "secrets:read", "secrets:write")
 	call := func(method, path, key string, body any) (int, []byte) {
 		t.Helper()
