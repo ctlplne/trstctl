@@ -21,7 +21,9 @@ func TestESTAuditDoesNotSilentlyDropAppendFailures(t *testing.T) {
 	s := &Server{log: &events.Log{}}
 	before := auditsink.DroppedEvents()
 
-	s.audit(context.Background(), "simpleenroll", "allow", "")
+	if err := s.audit(context.Background(), "simpleenroll", "allow", ""); err == nil {
+		t.Fatal("expected the append failure")
+	}
 
 	if got, want := auditsink.DroppedEvents(), before+1; got != want {
 		t.Fatalf("DroppedEvents = %d; want %d: a failed EST audit append must be counted, not swallowed (CORRECT-004)", got, want)

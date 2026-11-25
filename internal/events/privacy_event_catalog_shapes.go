@@ -458,7 +458,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "protocol.cmp.enroll", "protocol.scep.enroll":
 		return shape(`{"op":"","decision":"","reason":"","transaction_id":"","profile":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/reason", "/transaction_id", "/profile"}}), true
-	case "protocol.est.cacerts", "protocol.est.serverkeygen", "protocol.est.simpleenroll", "protocol.est.simplereenroll":
+	case "protocol.est.cacerts", "protocol.est.serverkeygen", "protocol.est.simpleenroll", "protocol.est.simplereenroll",
+		"protocol.est.est-enroll", "protocol.est.est-reenroll", "protocol.est.est-serverkeygen":
 		return shape(`{"op":"","decision":"","reason":"","profile":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/reason", "/profile"}}), true
 	case "protocol.eval_profile.activated":

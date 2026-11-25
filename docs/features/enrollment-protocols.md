@@ -50,6 +50,11 @@ tokens without enrollment scope receive `insufficient_scope`. A Basic-authentica
 deployment still advertises Basic because the authenticator, not the EST handler,
 owns the challenge.
 
+EST records enrollment, renewal, and server-side key generation decisions in the
+tenant event log before sending a certificate or an encrypted key. If the log
+cannot acknowledge the decision, the endpoint returns HTTP 503. Retry the same
+CSR with the same idempotency key after the event log recovers.
+
 #### Device TLS floor
 
 The served listener negotiates TLS 1.3 only. Many device enrollment stacks cap at

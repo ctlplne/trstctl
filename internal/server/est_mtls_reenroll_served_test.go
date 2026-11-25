@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"io"
 	"net"
@@ -21,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // EST /simplereenroll on the dedicated mutual-TLS listener authenticates the
@@ -105,6 +107,30 @@ func TestServedESTReenrollAuthenticatesByClientCertificate(t *testing.T) {
 	// The main listener still asks for a token on re-enrollment and never
 	// requests a client certificate, so browsers are not prompted.
 	estEnroll(t, main.Client(), main.URL+"/.well-known/est/simplereenroll", "", renewCSR, http.StatusUnauthorized)
+
+	// Replay the same tenant's durable decisions, including the identity refusal.
+	decisions := map[string]int{}
+	if err := h.log.Replay(t.Context(), 1, func(e events.Event) error {
+		if e.TenantID != servedTestTenant || !strings.HasPrefix(e.Type, "protocol.est.") {
+			return nil
+		}
+		var record struct{ Op, Decision string }
+		if err := json.Unmarshal(e.Data, &record); err != nil {
+			return err
+		}
+		if e.Type != "protocol.est."+record.Op {
+			t.Errorf("event type %s disagrees with operation %s", e.Type, record.Op)
+		}
+		decisions[record.Op+"/"+record.Decision]++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"est-enroll/allow", "est-reenroll/allow", "est-reenroll/deny"} {
+		if decisions[want] == 0 {
+			t.Errorf("missing durable EST decision %s", want)
+		}
+	}
 
 	if bin := os.Getenv("EST_LIBEST"); bin != "" {
 		dir := t.TempDir()

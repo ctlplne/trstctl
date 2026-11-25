@@ -2177,7 +2177,7 @@ not this file.
 | `internal/server/dynamic_secret_totp_lab_test.go:82` | fixed lab image, arguments built by the test (CWE-78) |
 | `internal/server/enrollment_relay_served_test.go:107` | fixed current test binary and fixed test selector (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/est_mtls_reenroll_served_test.go:169` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/esxi_vcsim_served_test.go:70` | the stock simulator on PATH with fixed arguments (CWE-78) |
 | `internal/server/github_action_served_test.go:259` | the test deliberately executes a generated copy of the fixed shipped action script (CWE-78). |
 | `internal/server/java_sdk_served_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -3136,7 +3136,7 @@ not this file.
 | `internal/server/distrust_removal_served_test.go:184` | the test's own temporary file (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:76` | parent-created public CA fixture (CWE-22) |
 | `internal/server/dynamic_secret_failure_epoch_guard_test.go:22` | closed sibling-source fixture list. |
-| `internal/server/est_mtls_reenroll_served_test.go:150` | test reads its own tempdir path (CWE-22) |
+| `internal/server/est_mtls_reenroll_served_test.go:176` | test reads its own tempdir path (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:23` | exact artifact in this test's owned fixture (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:33` | exact artifact in this test's owned fixture (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:49` | exact original artifact in this test's owned fixture (CWE-22) |
@@ -3709,7 +3709,7 @@ not this file.
 | `internal/server/decoy_files_container_lab_q6o1_test.go:44` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:148` | kind and kubectl with the lab's own arguments (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/est_mtls_reenroll_served_test.go:169` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_command_clickhouse_served_test.go:67` | stock curl against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mongo_served_test.go:71` | stock Mongo shell against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mysql_served_test.go:66` | stock client against this test's owned tunnel (CWE-78) |

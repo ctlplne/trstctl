@@ -310,13 +310,17 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 		csrDER, err := parseEnrollBodyWithVerifier(r.Body, s.verifyCSR)
 		if err != nil {
 			if errors.Is(err, bodylimit.ErrTooLarge) {
-				s.audit(r.Context(), opType, "deny", "request body too large")
+				if !s.recordDecision(w, r, opType, "deny", "request body too large") {
+					return
+				}
 				http.Error(w, "est: request body too large", http.StatusRequestEntityTooLarge)
 				return
 			}
-			s.audit(r.Context(), opType, "deny", err.Error())
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepOrder, http.StatusBadRequest, err),
 				r.Method+" "+r.URL.Path, "")
+			if !s.recordDecision(w, r, opType, "deny", err.Error()) {
+				return
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -328,32 +332,40 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 		// (the hole H1 closed for CMP, generalized here; AUD-201 follow-up).
 		if opType == estOpReenroll && isMTLSRoute(r.Context()) {
 			if err := crypto.CSRBoundToTLSClientIdentity(r.TLS, csrDER); err != nil {
-				s.audit(r.Context(), opType, "deny", err.Error())
 				s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusForbidden, err),
 					estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+				if !s.recordDecision(w, r, opType, "deny", err.Error()) {
+					return
+				}
 				http.Error(w, "est: CSR identity is not bound to the authenticated certificate", http.StatusForbidden)
 				return
 			}
 		}
 		if err := s.verifyChannelBinding(csrDER); err != nil {
-			s.audit(r.Context(), opType, "deny", err.Error())
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusBadRequest, err),
 				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+			if !s.recordDecision(w, r, opType, "deny", err.Error()) {
+				return
+			}
 			writeChannelBindingError(w, err)
 			return
 		}
 		allowed, err := s.allowPrincipalEnrollment(r, csrDER)
 		if err != nil {
-			s.audit(r.Context(), opType, "deny", err.Error())
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusBadRequest, err),
 				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+			if !s.recordDecision(w, r, opType, "deny", err.Error()) {
+				return
+			}
 			http.Error(w, "est: invalid CSR principal", http.StatusBadRequest)
 			return
 		}
 		if !allowed {
-			s.audit(r.Context(), opType, "shed", "principal enrollment limit reached")
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepOrder, http.StatusTooManyRequests, nil),
 				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+			if !s.recordDecision(w, r, opType, "shed", "principal enrollment limit reached") {
+				return
+			}
 			http.Error(w, "est: principal enrollment rate limit", http.StatusTooManyRequests)
 			return
 		}
@@ -379,23 +391,29 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 			return
 		}
 		if errors.Is(rerr, bulkhead.ErrRejected) {
-			s.audit(r.Context(), opType, "shed", "bulkhead full")
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepIssue, http.StatusServiceUnavailable, rerr),
 				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+			if !s.recordDecision(w, r, opType, "shed", "bulkhead full") {
+				return
+			}
 			http.Error(w, "busy", http.StatusServiceUnavailable)
 			return
 		}
 		if detail := crypto.SubjectKeyRefusalDetail(rerr); detail != "" {
-			s.audit(r.Context(), opType, "deny", detail)
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepIssue, http.StatusBadRequest, rerr),
 				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+			if !s.recordDecision(w, r, opType, "deny", detail) {
+				return
+			}
 			http.Error(w, "est: enrollment refused: "+detail, http.StatusBadRequest)
 			return
 		}
 		if rerr != nil {
-			s.audit(r.Context(), opType, "deny", rerr.Error())
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusForbidden, rerr),
 				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+			if !s.recordDecision(w, r, opType, "deny", rerr.Error()) {
+				return
+			}
 			http.Error(w, "enrollment refused", http.StatusForbidden)
 			return
 		}
@@ -404,7 +422,9 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 			http.Error(w, "encode error", http.StatusInternalServerError)
 			return
 		}
-		s.audit(r.Context(), opType, "allow", "")
+		if !s.recordDecision(w, r, opType, "allow", "") {
+			return
+		}
 		writePKCS7(w, p7)
 	}
 }
@@ -471,7 +491,9 @@ func (s *Server) serverKeygenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.serverKeygenEnabled || s.serverKeygen == nil {
-		s.audit(r.Context(), opType, "deny", "serverkeygen disabled")
+		if !s.recordDecision(w, r, opType, "deny", "serverkeygen disabled") {
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -481,11 +503,15 @@ func (s *Server) serverKeygenHandler(w http.ResponseWriter, r *http.Request) {
 	csrDER, err := parseEnrollBodyWithVerifier(r.Body, s.verifyCSR)
 	if err != nil {
 		if errors.Is(err, bodylimit.ErrTooLarge) {
-			s.audit(r.Context(), opType, "deny", "request body too large")
+			if !s.recordDecision(w, r, opType, "deny", "request body too large") {
+				return
+			}
 			http.Error(w, "est: request body too large", http.StatusRequestEntityTooLarge)
 			return
 		}
-		s.audit(r.Context(), opType, "deny", err.Error())
+		if !s.recordDecision(w, r, opType, "deny", err.Error()) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -497,22 +523,30 @@ func (s *Server) serverKeygenHandler(w http.ResponseWriter, r *http.Request) {
 		return s.serverKeygen.ServerKeygen(ctx, csrDER, s.profile, opType, idem)
 	})
 	if errors.Is(rerr, bulkhead.ErrRejected) {
-		s.audit(r.Context(), opType, "shed", "bulkhead full")
+		if !s.recordDecision(w, r, opType, "shed", "bulkhead full") {
+			return
+		}
 		http.Error(w, "busy", http.StatusServiceUnavailable)
 		return
 	}
 	if rerr != nil {
-		s.audit(r.Context(), opType, "deny", rerr.Error())
+		if !s.recordDecision(w, r, opType, "deny", rerr.Error()) {
+			return
+		}
 		http.Error(w, "serverkeygen refused", http.StatusForbidden)
 		return
 	}
 	if len(result.CertificateDER) == 0 || len(result.EnvelopedKeyDER) == 0 {
-		s.audit(r.Context(), opType, "deny", "empty serverkeygen result")
+		if !s.recordDecision(w, r, opType, "deny", "empty serverkeygen result") {
+			return
+		}
 		http.Error(w, "serverkeygen unavailable", http.StatusInternalServerError)
 		return
 	}
 	if err := crypto.IsEnvelopedData(result.EnvelopedKeyDER); err != nil {
-		s.audit(r.Context(), opType, "deny", "invalid CMS envelope")
+		if !s.recordDecision(w, r, opType, "deny", "invalid CMS envelope") {
+			return
+		}
 		http.Error(w, "serverkeygen encode error", http.StatusInternalServerError)
 		return
 	}
@@ -521,7 +555,9 @@ func (s *Server) serverKeygenHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "encode error", http.StatusInternalServerError)
 		return
 	}
-	s.audit(r.Context(), opType, "allow", "")
+	if !s.recordDecision(w, r, opType, "allow", "") {
+		return
+	}
 	if err := writeServerKeygenMultipart(w, certsOnly, result.EnvelopedKeyDER); err != nil {
 		http.Error(w, "encode error", http.StatusInternalServerError)
 		return
@@ -537,9 +573,11 @@ type limitedAuthenticator interface {
 // refuseMTLSEnrollment answers an enrollment or server-side keygen on the
 // mutual-TLS listener, which serves re-enrollment only (CR-059).
 func (s *Server) refuseMTLSEnrollment(w http.ResponseWriter, r *http.Request, opType string) {
-	s.audit(r.Context(), opType, "deny", "the mutual-TLS listener serves re-enrollment only")
 	s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusForbidden, nil),
 		r.Method+" "+r.URL.Path, "mtls:reenroll-only")
+	if !s.recordDecision(w, r, opType, "deny", "the mutual-TLS listener serves re-enrollment only") {
+		return
+	}
 	http.Error(w, "the mutual-TLS listener serves re-enrollment only; enroll on the main listener", http.StatusForbidden)
 }
 
@@ -549,9 +587,11 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 	if isMTLSRoute(r.Context()) {
 		leafDER, err := crypto.VerifyTLSClientCertificate(r.TLS, s.mtlsClientCAsDER)
 		if err != nil {
-			s.audit(r.Context(), opType, "deny", "mTLS client certificate rejected")
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusUnauthorized, err),
 				r.Method+" "+r.URL.Path, "client-certificate:rejected")
+			if !s.recordDecision(w, r, opType, "deny", "mTLS client certificate rejected") {
+				return nil, false
+			}
 			http.Error(w, "mTLS client certificate required", http.StatusUnauthorized)
 			return nil, false
 		}
@@ -569,9 +609,11 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 		return leafDER, true
 	}
 	if limiter, ok := s.auth.(limitedAuthenticator); ok && limiter.TooManyFailures(r) {
-		s.audit(r.Context(), opType, "shed", "basic auth failures over limit")
 		s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusTooManyRequests, nil),
 			r.Method+" "+r.URL.Path, "principal:rate-limited")
+		if !s.recordDecision(w, r, opType, "shed", "basic auth failures over limit") {
+			return nil, false
+		}
 		http.Error(w, "too many failed enrollment attempts", http.StatusTooManyRequests)
 		return nil, false
 	}
@@ -600,9 +642,11 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 }
 
 func (s *Server) denyMTLSClientCertificate(w http.ResponseWriter, r *http.Request, opType string, err error) {
-	s.audit(r.Context(), opType, "deny", "mTLS client certificate is not an active certificate of this tenant")
 	s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusForbidden, err),
 		r.Method+" "+r.URL.Path, "client-certificate:not-active")
+	if !s.recordDecision(w, r, opType, "deny", "mTLS client certificate is not an active certificate of this tenant") {
+		return
+	}
 	http.Error(w, "client certificate is not an active certificate of this mount's tenant", http.StatusForbidden)
 }
 
@@ -654,11 +698,20 @@ func (s *Server) runServerKeygenBounded(ctx context.Context, fn func(context.Con
 	return r.result, r.err
 }
 
+// recordDecision withholds the normal response until the configured log has acknowledged it.
+func (s *Server) recordDecision(w http.ResponseWriter, r *http.Request, opType, decision, reason string) bool {
+	if err := s.audit(r.Context(), opType, decision, reason); err != nil {
+		http.Error(w, "est: audit unavailable", http.StatusServiceUnavailable)
+		return false
+	}
+	return true
+}
+
 // audit emits an AN-2 enrollment event (actor attached from ctx). A nil log is a
 // no-op.
-func (s *Server) audit(ctx context.Context, opType, decision, reason string) {
+func (s *Server) audit(ctx context.Context, opType, decision, reason string) error {
 	if s.log == nil {
-		return
+		return nil
 	}
 	payload, _ := json.Marshal(struct {
 		Op       string `json:"op"`
@@ -668,7 +721,7 @@ func (s *Server) audit(ctx context.Context, opType, decision, reason string) {
 	}{opType, decision, reason, s.profile})
 	// CORRECT-004: account for a dropped audit emit (metric + WARN) instead of
 	// swallowing the append error with `_, _ =`.
-	_ = auditsink.Emit(ctx, auditsink.AuditorFunc(func(ctx context.Context, et, tid string, d []byte) error {
+	return auditsink.Emit(ctx, auditsink.AuditorFunc(func(ctx context.Context, et, tid string, d []byte) error {
 		_, err := s.log.Append(ctx, events.Event{Type: et, TenantID: tid, Data: d})
 		return err
 	}), nil, "protocol.est."+opType, tenantFromCtx(ctx), payload)

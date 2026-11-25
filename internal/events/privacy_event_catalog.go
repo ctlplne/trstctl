@@ -64,6 +64,11 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			Policy: PrivacyEventPolicy{PayloadShape: shape, RejectSubjectData: true},
 		}
 	}
+	estDecision := func(eventType string) productionPrivacyEventPolicy {
+		return entry(eventType,
+			catalogPrivacyRule("/op", opaque), catalogPrivacyRule("/decision", opaque),
+			catalogPrivacyRule("/reason", clear), catalogPrivacyRule("/profile", opaque))
+	}
 	catalog := []productionPrivacyEventPolicy{
 		// The root attestation covers every genesis field. Privacy rewrite must
 		// refuse the signed artifact instead of silently breaking its signature.
@@ -471,18 +476,13 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/op", opaque), catalogPrivacyRule("/decision", opaque),
 			catalogPrivacyRule("/reason", clear), catalogPrivacyRule("/transaction_id", opaque),
 			catalogPrivacyRule("/profile", opaque)),
-		entry("protocol.est.cacerts",
-			catalogPrivacyRule("/op", opaque), catalogPrivacyRule("/decision", opaque),
-			catalogPrivacyRule("/reason", clear), catalogPrivacyRule("/profile", opaque)),
-		entry("protocol.est.serverkeygen",
-			catalogPrivacyRule("/op", opaque), catalogPrivacyRule("/decision", opaque),
-			catalogPrivacyRule("/reason", clear), catalogPrivacyRule("/profile", opaque)),
-		entry("protocol.est.simpleenroll",
-			catalogPrivacyRule("/op", opaque), catalogPrivacyRule("/decision", opaque),
-			catalogPrivacyRule("/reason", clear), catalogPrivacyRule("/profile", opaque)),
-		entry("protocol.est.simplereenroll",
-			catalogPrivacyRule("/op", opaque), catalogPrivacyRule("/decision", opaque),
-			catalogPrivacyRule("/reason", clear), catalogPrivacyRule("/profile", opaque)),
+		estDecision("protocol.est.cacerts"),
+		estDecision("protocol.est.serverkeygen"),
+		estDecision("protocol.est.simpleenroll"),
+		estDecision("protocol.est.simplereenroll"),
+		estDecision("protocol.est.est-enroll"),
+		estDecision("protocol.est.est-reenroll"),
+		estDecision("protocol.est.est-serverkeygen"),
 		entry("protocol.eval_profile.activated",
 			catalogPrivacyRule("/profile", opaque), catalogPrivacyRule("/protocols/*", opaque)),
 		entry("protocol.issued",
