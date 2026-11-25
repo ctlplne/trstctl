@@ -8,7 +8,15 @@ import (
 	"time"
 )
 
-func cmpCRLFixture(t testing.TB) (chain [][]byte, caDER []byte, caKey *LockedSigner, serial string) {
+// ClusterFuzzLite's *testing.F shim has these fixture methods, but does not
+// implement the full testing.TB interface.
+type cmpCRLFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Cleanup(func())
+}
+
+func cmpCRLFixture(t cmpCRLFixtureTB) (chain [][]byte, caDER []byte, caKey *LockedSigner, serial string) {
 	t.Helper()
 	var err error
 	caKey, err = GenerateLockedKey(ECDSAP256)
