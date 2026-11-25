@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"reflect"
 	"strings"
 
 	"trstctl.com/trstctl/internal/config"
@@ -234,7 +235,8 @@ func buildLocalConnector(r nativeConnectorRuntime, ctx context.Context, name str
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID}
+	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID,
+		targetID: payload.TargetID, targetRevision: payload.TargetRevision, targetConfig: payload.TargetConfig, connectorName: name}
 	credentials := map[string][]byte{}
 	built, destroy, err := native.Build(name, target, lease.requirer(ctx, credentials))
 	if err != nil {
@@ -255,7 +257,8 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID}
+	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID,
+		targetID: payload.TargetID, targetRevision: payload.TargetRevision, targetConfig: payload.TargetConfig, connectorName: name}
 	credentials := map[string][]byte{}
 	built, destroy, err := native.Build(name, target, lease.requirer(ctx, credentials))
 	if err != nil {
@@ -338,16 +341,26 @@ func connectorLoopbackHost(host string) bool {
 }
 
 type connectorCredentialLease struct {
-	store    *store.Store
-	kek      seal.KeyWrapper
-	crypto   tenantseal.Access
-	tenantID string
-	buffers  []*secret.Buffer
+	store          *store.Store
+	kek            seal.KeyWrapper
+	crypto         tenantseal.Access
+	tenantID       string
+	targetID       string
+	targetRevision string
+	targetConfig   json.RawMessage
+	connectorName  string
+	buffers        []*secret.Buffer
 }
 
 func (l *connectorCredentialLease) require(ctx context.Context, ref string) ([]byte, error) {
 	reference, err := credref.Parse(ref)
 	if err != nil {
+		return nil, err
+	}
+	if l.store == nil || l.kek == nil || strings.TrimSpace(l.tenantID) == "" {
+		return nil, errors.New("tenant secret-store runtime is unavailable")
+	}
+	if err := l.requireCurrentTargetReferenceRead(ctx, ref); err != nil {
 		return nil, err
 	}
 	return l.openReference(ctx, reference)
@@ -372,6 +385,52 @@ func (l *connectorCredentialLease) openReference(ctx context.Context, reference 
 	}
 	l.buffers = append(l.buffers, buffer)
 	return buffer.Bytes(), nil
+}
+
+func (l *connectorCredentialLease) requireCurrentTargetReferenceRead(ctx context.Context, ref string) error {
+	if l.targetID == "" || l.targetRevision == "" || len(l.targetConfig) == 0 {
+		return credref.ErrReadAuthorityRevoked
+	}
+	revision, err := l.store.GetDeploymentTargetRevision(ctx, l.tenantID, l.targetID, l.targetRevision)
+	if err != nil || !revision.Enabled || revision.Type != l.connectorName || revision.ConfiguredBy == "" ||
+		!sameConnectorTargetConfig(revision.Config, l.targetConfig) ||
+		!connectorTargetContainsRef(revision.Config, ref) {
+		return credref.ErrReadAuthorityRevoked
+	}
+	return (integrationCredentialResolver{store: l.store}).requireCurrentSecretReferenceRead(ctx, l.tenantID, ref, revision.ConfiguredBy)
+}
+
+func sameConnectorTargetConfig(left, right json.RawMessage) bool {
+	var a, b any
+	return json.Unmarshal(left, &a) == nil && json.Unmarshal(right, &b) == nil && reflect.DeepEqual(a, b)
+}
+
+func connectorTargetContainsRef(raw json.RawMessage, ref string) bool {
+	var value any
+	if json.Unmarshal(raw, &value) != nil {
+		return false
+	}
+	var contains func(any) bool
+	contains = func(item any) bool {
+		switch current := item.(type) {
+		case string:
+			return current == ref
+		case map[string]any:
+			for _, child := range current {
+				if contains(child) {
+					return true
+				}
+			}
+		case []any:
+			for _, child := range current {
+				if contains(child) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return contains(value)
 }
 
 // requirer adapts the lease to native.Require: each reference is resolved from

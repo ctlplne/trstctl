@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/egress"
@@ -253,7 +254,12 @@ func connectorRightSizeHandler(cfg config.Connectors, st *store.Store, kek seal.
 		client:   client,
 		credential: func(ctx context.Context, tenantID, ref string) ([]byte, func(), error) {
 			lease := &connectorCredentialLease{store: st, kek: kek, crypto: access, tenantID: tenantID}
-			value, err := lease.require(ctx, ref)
+			reference, err := credref.Parse(ref)
+			if err != nil {
+				lease.Close()
+				return nil, nil, err
+			}
+			value, err := lease.openReference(ctx, reference)
 			if err != nil {
 				lease.Close()
 				return nil, nil, err

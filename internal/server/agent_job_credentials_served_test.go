@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Just-in-time credential redemption, proven on the assembled binary (epic A3).
@@ -206,9 +207,16 @@ func TestServedConnectorTestRedeemsTheExactTargetReference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	const configurer = "relay-preview-author"
+	_ = seedScopedTokenSubject(t, h.store, h.tenant, configurer, "secrets:read", "connectors:write")
+	target, err := h.srv.orch.UpsertDeploymentTarget(events.ContextWithActor(ctx, events.Actor{Subject: configurer}),
+		h.tenant, store.DeploymentTarget{Name: "edge-f5", Type: "f5", Config: targetConfig, Enabled: true, EnabledSet: true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	payload, err := json.Marshal(connector.DeployPayload{
-		Connector: "f5", Target: "edge-f5", TargetID: "target-f5",
-		TargetRevision: "revision-f5", TargetConfig: targetConfig,
+		Connector: "f5", Target: "edge-f5", TargetID: target.ID,
+		TargetRevision: target.RevisionID, TargetConfig: targetConfig,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -274,13 +282,22 @@ func seedSealedRelayJob(t *testing.T, ctx context.Context, h *roleHarness) int64
 	if cfgErr != nil {
 		t.Fatal(cfgErr)
 	}
+	const configurer = "relay-credential-author"
+	_ = seedScopedTokenSubject(t, h.store, h.tenant, configurer, "secrets:read", "connectors:write")
+	target, err := h.srv.orch.UpsertDeploymentTarget(events.ContextWithActor(ctx, events.Actor{Subject: configurer}),
+		h.tenant, store.DeploymentTarget{Name: "edge-f5", Type: "f5", Config: targetConfig, Enabled: true, EnabledSet: true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	raw, marshalErr := json.Marshal(connector.DeployPayload{
-		Connector:    "f5",
-		Target:       "edge-f5",
-		TargetConfig: targetConfig,
-		CertPEM:      []byte("-----BEGIN CERTIFICATE-----\nZmFrZQ==\n-----END CERTIFICATE-----"),
-		KeyPEM:       []byte(canaryKeyPEM),
-		Fingerprint:  "ff00",
+		Connector:      "f5",
+		Target:         "edge-f5",
+		TargetID:       target.ID,
+		TargetRevision: target.RevisionID,
+		TargetConfig:   targetConfig,
+		CertPEM:        []byte("-----BEGIN CERTIFICATE-----\nZmFrZQ==\n-----END CERTIFICATE-----"),
+		KeyPEM:         []byte(canaryKeyPEM),
+		Fingerprint:    "ff00",
 	})
 	if marshalErr != nil {
 		t.Fatal(marshalErr)

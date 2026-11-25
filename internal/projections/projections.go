@@ -9077,9 +9077,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.Enabled != nil {
 			enabled = *pl.Enabled
 		}
+		configuredByRef := ""
+		if e.Actor.Subject != "" {
+			configuredByRef = privacyref.SubjectRef(e.TenantID, e.Actor.Subject)
+		}
 		return p.store.ApplyDeploymentTargetUpsertedTx(ctx, tx, store.DeploymentTarget{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Type: pl.Connector, Config: pl.Config,
-			Enabled: enabled, EnabledSet: true,
+			Enabled: enabled, EnabledSet: true, ConfiguredBy: e.Actor.Subject, ConfiguredByRef: configuredByRef,
 		}, e.ID, e.Time)
 	case EventDeploymentTargetDeleted:
 		var pl DeploymentTargetDeleted

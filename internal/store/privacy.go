@@ -67,6 +67,7 @@ var privacyReadModelSelectorTables = map[string]struct{}{
 	"pam_sessions":                     {}, "discovery_sources": {}, "discovery_findings": {},
 	"dynamic_secret_leases": {},
 	"notification_channels": {},
+	"deployment_targets":    {}, "deployment_target_revisions": {},
 	"pam_discovery_sources": {}, "pam_discovery_runs": {}, "pam_discovered_accounts": {}, "pam_imported_accounts": {},
 	"notification_threshold_deliveries": {}, "incident_executions": {},
 	"nhi_access_review_campaigns": {}, "nhi_access_review_items": {},
@@ -1068,6 +1069,14 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		WHERE tenant_id = $1 AND configured_by_ref = $2 AND configured_by <> $3`,
 		e.TenantID, e.SubjectRef, placeholder); err != nil {
 		return err
+	}
+	for _, table := range []string{"deployment_targets", "deployment_target_revisions"} {
+		if _, err := tx.Exec(ctx, `UPDATE `+table+`
+			SET configured_by = $3
+			WHERE tenant_id = $1 AND configured_by_ref = $2 AND configured_by <> $3`,
+			e.TenantID, e.SubjectRef, placeholder); err != nil {
+			return err
+		}
 	}
 	if e.SourceSequence > 1<<63-1 {
 		return errors.New("store: privacy erasure source sequence exceeds PostgreSQL range")
@@ -2298,6 +2307,26 @@ func basePrivacyReadModelExportQueries(tenantID, subject string) []privacyReadMo
 			args: []any{tenantID, subject},
 		},
 		{
+			table: "deployment_targets",
+			sql: `SELECT id::text, ''::text,
+			             jsonb_build_object('name', name, 'type', type, 'configured_by', configured_by, 'created_at', created_at)::text,
+			             created_at
+			        FROM deployment_targets
+			       WHERE tenant_id = $1 AND configured_by = $2
+			       ORDER BY id`,
+			args: []any{tenantID, subject},
+		},
+		{
+			table: "deployment_target_revisions",
+			sql: `SELECT revision_id, target_id::text,
+			             jsonb_build_object('name', name, 'type', type, 'configured_by', configured_by, 'created_at', created_at)::text,
+			             created_at
+			        FROM deployment_target_revisions
+			       WHERE tenant_id = $1 AND configured_by = $2
+			       ORDER BY target_id, revision_id`,
+			args: []any{tenantID, subject},
+		},
+		{
 			table: "discovery_sources",
 			sql: `SELECT id::text, ''::text,
 				             jsonb_build_object('kind', kind, 'name', name, 'config', config, 'created_at', created_at, 'updated_at', updated_at)::text,
@@ -2464,6 +2493,8 @@ func basePrivacyReadModelSelectorQueries(tenantID, subject string) []privacyRead
 		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR ssh_principal = $2 OR revocation_requested_by = $2 OR position($2 in reason) > 0 OR position($2 in revocation_reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "dynamic_secret_leases", sql: `SELECT id::text, ''::text, 0 FROM dynamic_secret_leases WHERE tenant_id = $1 AND requested_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "notification_channels", sql: `SELECT id, ''::text, 0 FROM notification_channels WHERE tenant_id = $1 AND configured_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "deployment_targets", sql: `SELECT id::text, ''::text, 0 FROM deployment_targets WHERE tenant_id = $1 AND configured_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "deployment_target_revisions", sql: `SELECT revision_id, target_id::text, 0 FROM deployment_target_revisions WHERE tenant_id = $1 AND configured_by = $2 ORDER BY target_id, revision_id`, args: []any{tenantID, subject}},
 		{table: "pam_discovery_sources", sql: `SELECT provider_id, ''::text, 0 FROM pam_discovery_sources WHERE tenant_id = $1 AND saved_by = $2 ORDER BY provider_id`, args: []any{tenantID, subject}},
 		{table: "pam_discovery_runs", sql: `SELECT id::text, ''::text, 0 FROM pam_discovery_runs WHERE tenant_id = $1 AND requested_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "pam_discovered_accounts", sql: `SELECT id::text, ''::text, 0 FROM pam_discovered_accounts WHERE tenant_id = $1 AND (dismissed_by = $2 OR position($2 in dismissed_reason) > 0) ORDER BY id`, args: []any{tenantID, subject}},

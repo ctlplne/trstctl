@@ -459,7 +459,7 @@ func TestServedStoredReferenceSelectsOneHistoricalVersionAcrossReaders(t *testin
 	const name = "fixture/team/edge token"
 	const ref = "secret://fixture/team/edge%20token?version=1"
 	const previous = "fixture-version-one"
-	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+	token := seedScopedTokenSubject(t, h.store, h.tenant, "stored-version-connector-author", "secrets:read", "secrets:write", "connectors:read", "connectors:write")
 	if status, _ := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token, map[string]string{"name": name, "value": previous}); status != http.StatusCreated {
 		t.Fatalf("create fixture secret returned HTTP %d", status)
 	}
@@ -467,7 +467,24 @@ func TestServedStoredReferenceSelectsOneHistoricalVersionAcrossReaders(t *testin
 		map[string]string{"value": "fixture-version-two"}); status != http.StatusOK {
 		t.Fatalf("rotate fixture secret returned HTTP %d", status)
 	}
-	lease := &connectorCredentialLease{store: h.store, kek: h.kek, crypto: h.srv.tenantCrypto, tenantID: h.tenant}
+	targetConfig := json.RawMessage(`{"endpoint":"https://kemp.example.test","token_ref":"` + ref + `"}`)
+	status, saved := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", token,
+		map[string]any{"name": "stored-version-kemp", "connector": "kemp", "config": targetConfig})
+	if status != http.StatusCreated {
+		t.Fatalf("save version-pinned connector target: HTTP %d %s", status, saved)
+	}
+	var targetID struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(saved, &targetID); err != nil || targetID.ID == "" {
+		t.Fatalf("decode version-pinned connector target: %v", err)
+	}
+	target, err := h.store.GetDeploymentTarget(ctx, h.tenant, targetID.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease := &connectorCredentialLease{store: h.store, kek: h.kek, crypto: h.srv.tenantCrypto, tenantID: h.tenant,
+		targetID: target.ID, targetRevision: target.RevisionID, targetConfig: target.Config, connectorName: target.Type}
 	defer lease.Close()
 	if value, err := lease.require(ctx, ref); err != nil || !bytes.Equal(value, []byte(previous)) {
 		t.Errorf("connector did not resolve the pinned fixture version: %v", err)

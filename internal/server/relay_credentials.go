@@ -89,7 +89,10 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		return r.resolveHostRenewalReferences(ctx, tenantID, job)
 	case "connector.rollback":
 		var intent RelayRollbackIntent
-		if json.Unmarshal(job.Payload, &intent) == nil && connector.CanRollbackOnHost(intent.Connector) {
+		if err := json.Unmarshal(job.Payload, &intent); err != nil {
+			return redeemedMaterial{}, err
+		}
+		if connector.CanRollbackOnHost(intent.Connector) {
 			return r.resolveHostRollbackReferences(ctx, tenantID, job, intent)
 		}
 		// An appliance or cloud-store re-bind carries no certificate or key
@@ -97,7 +100,8 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// management credential the reviewed target configuration names.
 		// Falling through to the sealed-deploy opener below refused every
 		// relay re-bind before it could contact the target.
-		return r.resolveJobReferences(ctx, tenantID, job)
+		return r.resolveTargetReferenceNames(ctx, tenantID, intent.TargetID, intent.TargetRevision,
+			intent.Connector, intent.TargetConfig, collectSecretRefs(intent.TargetConfig))
 	case sshcollection.Destination:
 		command, err := sshcollection.DecodeCommand(job.Payload)
 		if err != nil {
@@ -143,12 +147,22 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// A43: an appliance object removal redeems the same management
 		// credential a deploy would, resolved from the reviewed target
 		// configuration carried in the job; no certificate or key is sealed.
-		return r.resolveJobReferences(ctx, tenantID, job)
+		var intent orchestrator.ConnectorTakedownRequest
+		if err := json.Unmarshal(job.Payload, &intent); err != nil {
+			return redeemedMaterial{}, err
+		}
+		return r.resolveTargetReferenceNames(ctx, tenantID, intent.TargetID, intent.TargetRevision,
+			intent.Connector, intent.TargetConfig, collectSecretRefs(intent.TargetConfig))
 	case "connector.test":
 		// D5: a target test has no certificate or private key to seal. It still
 		// has to prove the appliance/keystore credential a deploy would use, so
 		// resolve only the secret references in its exact target revision.
-		return r.resolveJobReferences(ctx, tenantID, job)
+		var intent connector.DeployPayload
+		if err := json.Unmarshal(job.Payload, &intent); err != nil {
+			return redeemedMaterial{}, err
+		}
+		return r.resolveTargetReferenceNames(ctx, tenantID, intent.TargetID, intent.TargetRevision,
+			intent.Connector, intent.TargetConfig, collectSecretRefs(intent.TargetConfig))
 	case "connector.deploy":
 	default:
 		return redeemedMaterial{}, fmt.Errorf("job kind %q carries no redeemable credential", job.Destination)
@@ -164,7 +178,8 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	// The opened payload's key bytes are wiped on EVERY exit path below; on
 	// success their ownership passes to the returned material's wipe.
 
-	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.tenantCrypto, tenantID: tenantID}
+	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.tenantCrypto, tenantID: tenantID,
+		targetID: payload.TargetID, targetRevision: payload.TargetRevision, targetConfig: payload.TargetConfig, connectorName: payload.Connector}
 	wipeAll := func() {
 		wipeConnectorDeployPayload(&payload)
 		lease.Close()
@@ -208,7 +223,12 @@ func (r *relayCredentialResolver) resolveRightSizeBinding(ctx context.Context, t
 		return redeemedMaterial{}, errors.New("right-size binding is not configured for a network relay in this tenant")
 	}
 	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.tenantCrypto, tenantID: tenantID}
-	token, err := lease.require(ctx, binding.TokenRef)
+	reference, err := credref.Parse(binding.TokenRef)
+	if err != nil {
+		lease.Close()
+		return redeemedMaterial{}, err
+	}
+	token, err := lease.openReference(ctx, reference)
 	if err != nil {
 		lease.Close()
 		return redeemedMaterial{}, fmt.Errorf("resolve right-size credential reference: %w", err)
@@ -263,6 +283,25 @@ func (r *relayCredentialResolver) resolveReferenceNames(ctx context.Context, ten
 	return redeemedMaterial{items: items, refNames: refNames, wipe: lease.Close}, nil
 }
 
+func (r *relayCredentialResolver) resolveTargetReferenceNames(ctx context.Context, tenantID, targetID, revisionID, connectorName string,
+	targetConfig json.RawMessage, refs []string) (redeemedMaterial, error) {
+	if len(refs) == 0 || r == nil || r.store == nil {
+		return redeemedMaterial{}, errors.New("connector target names no resolvable credential reference")
+	}
+	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.tenantCrypto, tenantID: tenantID,
+		targetID: targetID, targetRevision: revisionID, targetConfig: targetConfig, connectorName: connectorName}
+	items := make([]transport.RedeemedSecret, 0, len(refs))
+	for _, ref := range refs {
+		value, err := lease.require(ctx, ref)
+		if err != nil {
+			lease.Close()
+			return redeemedMaterial{}, fmt.Errorf("resolve target credential reference: %w", err)
+		}
+		items = append(items, transport.RedeemedSecret{Name: ref, Value: secret.JSONBytes(value)})
+	}
+	return redeemedMaterial{items: items, refNames: append([]string(nil), refs...), wipe: lease.Close}, nil
+}
+
 // A host creates its own subject key but may still need a keystore password.
 // Only the reviewed target revision can name that management credential. An
 // arbitrary string elsewhere in the job is never authority to read a secret.
@@ -303,7 +342,7 @@ func (r *relayCredentialResolver) resolveHostRenewalReferences(ctx context.Conte
 	if len(intent.CredentialRefs) > 0 && !slices.Equal(intent.CredentialRefs, refs) {
 		return redeemedMaterial{}, errors.New("host management credential names differ from their target revision")
 	}
-	return r.resolveReferenceNames(ctx, tenantID, refs)
+	return r.resolveTargetReferenceNames(ctx, tenantID, target.ID, target.RevisionID, target.Type, target.Config, refs)
 }
 
 // Rollback commands retain their reviewed target config. Require the current
@@ -331,7 +370,8 @@ func (r *relayCredentialResolver) resolveHostRollbackReferences(ctx context.Cont
 	if !reflect.DeepEqual(saved, queued) {
 		return redeemedMaterial{}, errors.New("host rollback configuration changed after review")
 	}
-	return r.resolveReferenceNames(ctx, tenantID, collectSecretRefs(target.Config))
+	return r.resolveTargetReferenceNames(ctx, tenantID, target.ID, target.RevisionID, target.Type, target.Config,
+		collectSecretRefs(target.Config))
 }
 
 // openSealedDeploy opens the sealed container the dispatcher wrote at enqueue,

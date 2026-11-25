@@ -951,6 +951,13 @@ Remote targets carry only `secret://name` references, read from the tenant's enc
 secret store into locked memory for one outbox attempt then destroyed — as in an F5
 target's
 `{"endpoint":"https://bigip.internal","client_ssl_profile":"payments","username":"svc-trstctl","password_ref":"secret://connectors/f5/password"}`.
+The saved target revision records the principal who authorized each reference.
+Before a native connector or relay opens it, trstctl checks that principal's
+current `secrets:read` authority and restricted-environment membership against
+the exact revision and destination. Removing access stops future credential
+redemptions, including retries and renewals. An authorized operator can save
+the target again to create a new revision; historical revisions without a
+recorded configurer must be saved again before they can use a `secret://` value.
 Private endpoints must also be admitted by the operator-owned
 `connectors.allow_private_cidrs` list; plain HTTP needs an explicit development-only
 loopback override that never widens the plaintext exception in production. Issue and

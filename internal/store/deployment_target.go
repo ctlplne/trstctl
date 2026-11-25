@@ -16,13 +16,15 @@ import (
 // DeploymentTarget is a place credentials get deployed (a connector target),
 // such as a Kubernetes cluster, a file path, a load balancer, or an SSH host.
 type DeploymentTarget struct {
-	ID         string
-	TenantID   string
-	Name       string
-	Type       string          // connector name/kind, kept as "type" for the existing table.
-	Config     json.RawMessage // connector configuration; non-secret
-	RevisionID string
-	Enabled    bool
+	ID              string
+	TenantID        string
+	Name            string
+	Type            string          // connector name/kind, kept as "type" for the existing table.
+	Config          json.RawMessage // connector configuration; non-secret
+	RevisionID      string
+	ConfiguredBy    string
+	ConfiguredByRef string
+	Enabled         bool
 	// EnabledSet distinguishes an explicit disabled target from legacy callers
 	// that predate execution readiness. Omitted legacy state defaults to enabled;
 	// new API and event paths always set this marker explicitly.
@@ -48,21 +50,23 @@ func (s *Store) ApplyDeploymentTargetUpsertedTx(ctx context.Context, tx pgx.Tx, 
 	enabled := deploymentTargetEnabled(d)
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO deployment_target_revisions
-		        (tenant_id, target_id, revision_id, name, type, config, enabled, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+		        (tenant_id, target_id, revision_id, name, type, config, enabled, configured_by, configured_by_ref, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
 		 ON CONFLICT (tenant_id, target_id, revision_id) DO NOTHING`,
-		d.TenantID, d.ID, revisionID, d.Name, d.Type, jsonbOrEmpty(d.Config), enabled, createdAt); err != nil {
+		d.TenantID, d.ID, revisionID, d.Name, d.Type, jsonbOrEmpty(d.Config), enabled, d.ConfiguredBy, d.ConfiguredByRef, createdAt); err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO deployment_targets
-		        (id, tenant_id, name, type, config, revision_id, enabled, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $8)
+		        (id, tenant_id, name, type, config, revision_id, enabled, configured_by, configured_by_ref, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $10)
 		 ON CONFLICT (id) DO UPDATE
 		    SET name = EXCLUDED.name, type = EXCLUDED.type, config = EXCLUDED.config,
-		        revision_id = EXCLUDED.revision_id, enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at
+		        revision_id = EXCLUDED.revision_id, enabled = EXCLUDED.enabled,
+		        configured_by = EXCLUDED.configured_by, configured_by_ref = EXCLUDED.configured_by_ref,
+		        updated_at = EXCLUDED.updated_at
 		  WHERE deployment_targets.tenant_id = EXCLUDED.tenant_id`,
-		d.ID, d.TenantID, d.Name, d.Type, jsonbOrEmpty(d.Config), revisionID, enabled, createdAt)
+		d.ID, d.TenantID, d.Name, d.Type, jsonbOrEmpty(d.Config), revisionID, enabled, d.ConfiguredBy, d.ConfiguredByRef, createdAt)
 	if err != nil {
 		return err
 	}
@@ -103,9 +107,9 @@ func (s *Store) GetDeploymentTarget(ctx context.Context, tenantID, id string) (D
 	)
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, name, type, config, revision_id, enabled, created_at, updated_at
+			`SELECT id::text, tenant_id::text, name, type, config, revision_id, enabled, configured_by, configured_by_ref, created_at, updated_at
 			   FROM deployment_targets WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&d.ID, &d.TenantID, &d.Name, &d.Type, &cfg, &d.RevisionID, &d.Enabled, &d.CreatedAt, &d.UpdatedAt)
+			Scan(&d.ID, &d.TenantID, &d.Name, &d.Type, &cfg, &d.RevisionID, &d.Enabled, &d.ConfiguredBy, &d.ConfiguredByRef, &d.CreatedAt, &d.UpdatedAt)
 	})
 	d.Config = cfg
 	d.EnabledSet = err == nil
@@ -117,7 +121,7 @@ func (s *Store) ListDeploymentTargets(ctx context.Context, tenantID string) ([]D
 	var out []DeploymentTarget
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, name, type, config, revision_id, enabled, created_at, updated_at
+			`SELECT id::text, tenant_id::text, name, type, config, revision_id, enabled, configured_by, configured_by_ref, created_at, updated_at
 			   FROM deployment_targets WHERE tenant_id = $1 ORDER BY created_at, id`, tenantID)
 		if err != nil {
 			return err
@@ -128,7 +132,7 @@ func (s *Store) ListDeploymentTargets(ctx context.Context, tenantID string) ([]D
 				d   DeploymentTarget
 				cfg []byte
 			)
-			if err := rows.Scan(&d.ID, &d.TenantID, &d.Name, &d.Type, &cfg, &d.RevisionID, &d.Enabled, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			if err := rows.Scan(&d.ID, &d.TenantID, &d.Name, &d.Type, &cfg, &d.RevisionID, &d.Enabled, &d.ConfiguredBy, &d.ConfiguredByRef, &d.CreatedAt, &d.UpdatedAt); err != nil {
 				return err
 			}
 			d.Config = cfg
@@ -150,11 +154,11 @@ func (s *Store) GetDeploymentTargetRevision(ctx context.Context, tenantID, targe
 	)
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT target_id::text, tenant_id::text, name, type, config, revision_id, enabled, created_at
+			`SELECT target_id::text, tenant_id::text, name, type, config, revision_id, enabled, configured_by, configured_by_ref, created_at
 			   FROM deployment_target_revisions
 			  WHERE tenant_id = $1 AND target_id = $2 AND revision_id = $3`,
 			tenantID, targetID, revisionID).
-			Scan(&d.ID, &d.TenantID, &d.Name, &d.Type, &cfg, &d.RevisionID, &d.Enabled, &d.CreatedAt)
+			Scan(&d.ID, &d.TenantID, &d.Name, &d.Type, &cfg, &d.RevisionID, &d.Enabled, &d.ConfiguredBy, &d.ConfiguredByRef, &d.CreatedAt)
 	})
 	d.Config = cfg
 	d.EnabledSet = err == nil

@@ -3181,7 +3181,7 @@ not this file.
 | `internal/server/protocol_mounts.go:764` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:879` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:996` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1410` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:1414` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:602` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:240` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:244` | test reads its own tempdir fixture (CWE-22) |

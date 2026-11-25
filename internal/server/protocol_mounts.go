@@ -1366,7 +1366,11 @@ func (s *Server) acmeEABSecretResolver(tenantID string) func(context.Context, st
 	return func(ctx context.Context, ref string) ([]byte, error) {
 		lease := &connectorCredentialLease{store: s.store, kek: s.kek, crypto: s.tenantCrypto, tenantID: tenantID}
 		defer lease.Close()
-		value, err := lease.require(ctx, ref)
+		reference, err := credref.Parse(ref)
+		if err != nil {
+			return nil, fmt.Errorf("the MAC key reference does not resolve in this tenant's secret store")
+		}
+		value, err := lease.openReference(ctx, reference)
 		if err != nil {
 			if s.logger != nil {
 				s.logger.Warn("acme eab: MAC key reference did not resolve", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
