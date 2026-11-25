@@ -31,6 +31,11 @@ import (
 // entry: the Workload API issues nothing rather than guessing (fail-closed).
 var ErrNoIdentity = errors.New("spiffe: no registered identity for caller selectors")
 
+// ErrAuditUnavailable means a signed SVID was withheld because its issuance
+// event could not be appended. Callers may retry; public APIs must not expose
+// the underlying event-log error.
+var ErrAuditUnavailable = errors.New("spiffe: issuance audit unavailable")
+
 // Issuer is the seam between the Workload API and the CA / isolated signer. The
 // Workload API decides *which* identities a caller may hold; the Issuer turns an
 // authorized SPIFFE ID into a signed SVID through the crypto boundary.
@@ -293,8 +298,10 @@ func (s *Server) fetchX509(ctx context.Context, parentID string, pubDER []byte, 
 			if err != nil {
 				return err
 			}
+			if err := s.recordIssued(ctx, "x509", e.SPIFFEID); err != nil {
+				return err
+			}
 			out = append(out, X509SVID{SPIFFEID: e.SPIFFEID, CertChain: [][]byte{certDER}, Bundle: bundle, ExpiresAt: notAfter})
-			s.recordIssued(ctx, "x509", e.SPIFFEID)
 		}
 		return nil
 	})
@@ -365,8 +372,10 @@ func (s *Server) fetchJWT(ctx context.Context, parentID string, audience, select
 			if err != nil {
 				return fmt.Errorf("spiffe: sign JWT-SVID %s: %w", e.SPIFFEID, err)
 			}
+			if err := s.recordIssued(ctx, "jwt", e.SPIFFEID); err != nil {
+				return err
+			}
 			out = append(out, JWTSVID{SPIFFEID: e.SPIFFEID, Token: tok, ExpiresAt: time.Now().Add(ttl)})
-			s.recordIssued(ctx, "jwt", e.SPIFFEID)
 		}
 		return nil
 	})
@@ -430,9 +439,11 @@ func (s *Server) matchedForParent(selectors []string, parentID string) []Registr
 	return out
 }
 
-func (s *Server) recordIssued(ctx context.Context, kind, spiffeID string) {
-	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "spiffe.svid.issued", s.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"type":%q,"spiffe_id":%q}`, kind, spiffeID)))
+func (s *Server) recordIssued(ctx context.Context, kind, spiffeID string) error {
+	if err := auditsink.Emit(ctx, s.cfg.Audit, nil, "spiffe.svid.issued", s.cfg.TenantID,
+		[]byte(fmt.Sprintf(`{"type":%q,"spiffe_id":%q}`, kind, spiffeID))); err != nil {
+		return fmt.Errorf("%w: %w", ErrAuditUnavailable, err)
+	}
 	if s.cfg.Graph != nil {
 		s.cfg.Graph.AddNode(graph.Node{
 			ID:   spiffeID,
@@ -444,6 +455,7 @@ func (s *Server) recordIssued(ctx context.Context, kind, spiffeID string) {
 			},
 		})
 	}
+	return nil
 }
 
 func (s *Server) run(fn func() error) error {

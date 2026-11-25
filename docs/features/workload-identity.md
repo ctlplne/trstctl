@@ -432,6 +432,11 @@ with it off, `FetchX509SVID` is refused naming the host agent's socket, and JWT-
 which carry no key, are still issued. The readiness check and its
 `local_workloads_served` field say which mode the running socket is in.
 
+X.509-SVID and JWT-SVID fetches append the issuance event before returning an
+identity. If the audit event log does not acknowledge the append, the Workload API
+returns `Unavailable` without an SVID or key. Retry after event-log health is
+restored; the internal append error is not sent to the workload.
+
 ### SPIRE upstream authority — keep SPIRE, anchor it in trstctl
 
 If you already run [SPIRE](../glossary.md), trstctl can sit above it as the upstream

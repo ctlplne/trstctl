@@ -5,6 +5,7 @@ package spiffe
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"net"
@@ -293,6 +294,9 @@ func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloa
 		if err == ErrNoIdentity {
 			return nil, status.Error(codes.PermissionDenied, "spiffe: no identity issued for caller selectors")
 		}
+		if errors.Is(err, ErrAuditUnavailable) {
+			return nil, status.Error(codes.Unavailable, "spiffe: issuance audit unavailable; retry the request")
+		}
 		return nil, status.Errorf(codes.Internal, "spiffe: fetch X509-SVID: %v", err)
 	}
 	keyPKCS8, err := key.PKCS8()
@@ -339,7 +343,9 @@ func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloa
 			// mint is audited into the event log and the credential graph with
 			// the same shape, carrying its hint so posture can tell the pair
 			// apart. Without this the second SVID was invisible to audit.
-			s.wl.recordIssued(ctx, "x509-additional:"+additional.Hint, svid.SPIFFEID)
+			if err := s.wl.recordIssued(ctx, "x509-additional:"+additional.Hint, svid.SPIFFEID); err != nil {
+				return nil, status.Error(codes.Unavailable, "spiffe: issuance audit unavailable; retry the request")
+			}
 		}
 	}
 	if len(resp.Svids) == 0 {
@@ -413,6 +419,9 @@ func (s *WorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *workloadpb.JW
 	if err != nil {
 		if err == ErrNoIdentity {
 			return nil, status.Error(codes.PermissionDenied, "spiffe: no identity issued for caller selectors")
+		}
+		if errors.Is(err, ErrAuditUnavailable) {
+			return nil, status.Error(codes.Unavailable, "spiffe: issuance audit unavailable; retry the request")
 		}
 		return nil, status.Errorf(codes.Internal, "spiffe: fetch JWT-SVID: %v", err)
 	}

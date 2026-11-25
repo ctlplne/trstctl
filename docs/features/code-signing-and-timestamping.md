@@ -78,6 +78,10 @@ now. trstctl's TSA (RFC 3161) builds a `TSTInfo` record — policy, hash algorit
 submitted hash, a monotonic serial, and the generation time — and signs it through the
 signer boundary, kept in the isolated signing service rather than the API process.
 Each issuance is recorded as an immutable `tsa.timestamp.issued` event.
+If the audit event log does not acknowledge that append, the TSA refuses the
+request without returning the signed token. An operator should check event-log
+health and retry; the append error may be ambiguous, so verify the audit log
+before assuming a record is absent.
 
 The payoff is long-term validity (LTV): a `VerifyLongTermValidity` check confirms the
 signature and that the timestamp falls within the signing certificate's validity

@@ -214,8 +214,10 @@ func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *
 	if err != nil {
 		return Token{}, fmt.Errorf("tsa: build timestamp token: %w", err)
 	}
-	_ = auditsink.Emit(ctx, a.cfg.Audit, nil, "tsa.timestamp.issued", a.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"serial":%d,"gen_time":%q}`, serial, info.GenTime.Format(time.RFC3339))))
+	if err := auditsink.Emit(ctx, a.cfg.Audit, nil, "tsa.timestamp.issued", a.cfg.TenantID,
+		[]byte(fmt.Sprintf(`{"serial":%d,"gen_time":%q}`, serial, info.GenTime.Format(time.RFC3339)))); err != nil {
+		return Token{}, fmt.Errorf("tsa: audit timestamp issuance: %w", err)
+	}
 	return Token{Info: info, Signature: sig, TSACertDER: certDER, DER: der}, nil
 }
 
