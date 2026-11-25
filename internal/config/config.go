@@ -1112,6 +1112,12 @@ type Protocols struct {
 	// only that the sender signed their own message and a self-signed key pair
 	// is enough to enroll. Served CMP refuses to enroll while this is unset.
 	CMPClientTrustAnchorFile string `json:"cmp_client_trust_anchor_file,omitempty"`
+	// CMPClientCRLFile is a local PEM bundle of current, issuer-signed CRLs
+	// for certificates under external CMP trust anchors. The served mount
+	// rereads it on each enrollment and refuses absent or stale coverage.
+	// An exact certificate pinned as its own trust anchor is revoked by
+	// removing that pin from cmp_client_trust_anchor_file.
+	CMPClientCRLFile string `json:"cmp_client_crl_file,omitempty"`
 	// CMPAllowRAEnrollment is the explicit RFC 4210 registration-authority
 	// opt-in (AUD-201 follow-up H1/V22). Off (the default), the CMP mount
 	// fails closed: a CSR's subject and SANs must be authorized by the
@@ -4486,6 +4492,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setBool(getenv, "TRSTCTL_PROTOCOLS_KMIP_CLIENT_REGISTRATIONS", &p.KMIP.ClientRegistrations)
 	setString(getenv, "TRSTCTL_PROTOCOLS_RA_KEY_FILE", &p.RAKeyFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_CLIENT_TRUST_ANCHOR_FILE", &p.CMPClientTrustAnchorFile)
+	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_CLIENT_CRL_FILE", &p.CMPClientCRLFile)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_CMP_ALLOW_RA_ENROLLMENT", &p.CMPAllowRAEnrollment)
 	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_CERT_FILE", &p.TSACertFile)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED", &p.SPIFFE.Enabled)

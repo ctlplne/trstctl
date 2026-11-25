@@ -114,6 +114,13 @@ type CMPRequest struct {
 	CSRDER        []byte
 	TransactionID []byte
 	SenderNonce   []byte
+	// ProtectionCertificateDER is the certificate whose key protected this
+	// message, surfaced only after its signature and configured chain verify.
+	// The served layer uses its serial and issuer to check current standing.
+	ProtectionCertificateDER []byte
+	// ProtectionChainDER is the verified leaf-to-anchor path. Each non-anchor
+	// member needs a current revocation decision from its actual issuer.
+	ProtectionChainDER [][]byte
 	// ProtectionCommonName is the subject CN of the AUTHENTICATED protection
 	// identity — the certificate that signed the PKIMessage and chained to the
 	// configured anchors. Surfaced so the serving layer can audit WHO enrolled,
@@ -294,8 +301,10 @@ func ParseCMPRequestWithTrustInspector(der []byte, verifyCSR func([]byte) error,
 		return nil, fmt.Errorf("%w: verify protection: %v", ErrCMPProtectionRejected, err)
 	}
 	identityVerified := false
+	var verifiedChain []*x509.Certificate
 	if !anchors.Empty() {
-		if err := verifyCMPProtectionIdentity(signerCert, msg.ExtraCerts[1:], anchors); err != nil {
+		verifiedChain, err = verifyCMPProtectionIdentity(signerCert, msg.ExtraCerts[1:], anchors)
+		if err != nil {
 			return nil, err
 		}
 		identityVerified = true
@@ -312,6 +321,10 @@ func ParseCMPRequestWithTrustInspector(der []byte, verifyCSR func([]byte) error,
 	req := &CMPRequest{Pvno: msg.Header.Pvno, CSRDER: csrDER, TransactionID: msg.Header.TransactionID, SenderNonce: msg.Header.SenderNonce}
 	if identityVerified {
 		req.ProtectionCommonName = signerCert.Subject.CommonName
+		req.ProtectionCertificateDER = append([]byte(nil), signerCert.Raw...)
+		for _, cert := range verifiedChain {
+			req.ProtectionChainDER = append(req.ProtectionChainDER, append([]byte(nil), cert.Raw...))
+		}
 	}
 	return req, nil
 }
@@ -530,7 +543,7 @@ func verifyProtection(header cmpHeader, body asn1.RawValue, prot asn1.BitString,
 // to one of the pre-parsed anchors. Intermediates may accompany it in extraCerts
 // and are inherently per-message; anchors may not come from the message and are
 // parsed once at construction (E3/V33).
-func verifyCMPProtectionIdentity(signerCert *x509.Certificate, extra []asn1.RawValue, anchors *CMPTrustAnchors) error {
+func verifyCMPProtectionIdentity(signerCert *x509.Certificate, extra []asn1.RawValue, anchors *CMPTrustAnchors) ([]*x509.Certificate, error) {
 	roots := anchors.roots
 	intermediates := x509.NewCertPool()
 	for _, raw := range extra {
@@ -538,12 +551,13 @@ func verifyCMPProtectionIdentity(signerCert *x509.Certificate, extra []asn1.RawV
 			intermediates.AddCert(cert)
 		}
 	}
-	if _, err := signerCert.Verify(x509.VerifyOptions{
+	chains, err := signerCert.Verify(x509.VerifyOptions{
 		Roots:         roots,
 		Intermediates: intermediates,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-	}); err != nil {
-		return fmt.Errorf("%w: does not chain to a configured trust anchor: %v", ErrCMPProtectionRejected, err)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: does not chain to a configured trust anchor: %v", ErrCMPProtectionRejected, err)
 	}
-	return nil
+	return chains[0], nil
 }

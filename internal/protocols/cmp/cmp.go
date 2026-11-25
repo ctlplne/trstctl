@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -31,16 +32,17 @@ type Enroller interface {
 
 // Server serves CMP over HTTP under /cmp.
 type Server struct {
-	enroller   Enroller
-	caCertDER  []byte
-	caKeyPKCS8 []byte
-	profile    string
-	pool       *bulkhead.Pool
-	log        *events.Log
-	verifyCSR  func([]byte) error
-	inspectCSR func([]byte) (crypto.CSRInfo, error)
-	onFailure  func(context.Context, enrollmentdiag.Diagnosis)
-	mux        *http.ServeMux
+	enroller                   Enroller
+	caCertDER                  []byte
+	caKeyPKCS8                 []byte
+	profile                    string
+	pool                       *bulkhead.Pool
+	log                        *events.Log
+	verifyCSR                  func([]byte) error
+	inspectCSR                 func([]byte) (crypto.CSRInfo, error)
+	checkProtectionCertificate func(context.Context, *crypto.CMPRequest) error
+	onFailure                  func(context.Context, enrollmentdiag.Diagnosis)
+	mux                        *http.ServeMux
 
 	// clientAnchors is the PRE-PARSED trust-anchor set a PKIMessage's
 	// protection identity must chain to — parsed once at New, opaque so this
@@ -75,6 +77,9 @@ type Config struct {
 	// the verifier accepted is bound on its parsed names instead of being
 	// re-parsed by the core parser. Nil binds through the core parser.
 	CSRInspector func([]byte) (crypto.CSRInfo, error)
+	// CheckProtectionCertificate checks current standing after the protected
+	// message and trust chain verify, before the enroller can mint a leaf.
+	CheckProtectionCertificate func(context.Context, *crypto.CMPRequest) error
 	// ClientTrustAnchorsDER are the anchors a PKIMessage's protection identity
 	// must chain to. CMP carries that identity in the message's own extraCerts,
 	// so without anchors the protection check proves only that the sender signed
@@ -104,12 +109,13 @@ func New(cfg Config) *Server {
 	s := &Server{
 		enroller: cfg.Enroller, caCertDER: cfg.CACertDER, caKeyPKCS8: cfg.CAKeyPKCS8,
 		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
-		verifyCSR:     cfg.CSRVerifier,
-		inspectCSR:    cfg.CSRInspector,
-		onFailure:     cfg.FailureDiagnosis,
-		clientAnchors: anchors,
-		anchorsErr:    anchorsErr,
-		bindPolicy:    crypto.CMPBindCSRToProtectionIdentity,
+		verifyCSR:                  cfg.CSRVerifier,
+		inspectCSR:                 cfg.CSRInspector,
+		checkProtectionCertificate: cfg.CheckProtectionCertificate,
+		onFailure:                  cfg.FailureDiagnosis,
+		clientAnchors:              anchors,
+		anchorsErr:                 anchorsErr,
+		bindPolicy:                 crypto.CMPBindCSRToProtectionIdentity,
 	}
 	if cfg.AllowRAEnrollment {
 		s.bindPolicy = crypto.CMPAllowRAEnrollment
@@ -127,6 +133,8 @@ func (s *Server) Handler() http.Handler { return s.mux }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 
 const maxCMPBody = 1 << 18 // 256 KiB
+
+var errCMPProtectionNotStanding = errors.New("cmp: protection certificate is not in good standing")
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -191,6 +199,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	txid := hex.EncodeToString(req.TransactionID)
 	reply, rerr := s.runBounded(r.Context(), func(ctx context.Context) ([]byte, error) {
+		if s.checkProtectionCertificate != nil {
+			if err := s.checkProtectionCertificate(ctx, req); err != nil {
+				return nil, fmt.Errorf("%w: %w", errCMPProtectionNotStanding, err)
+			}
+		}
 		leaf, err := s.enroller.Enroll(ctx, req.CSRDER, s.profile, "cmp", "cmp:"+txid)
 		if err != nil {
 			return nil, err
@@ -203,6 +216,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepIssue, enrollmentdiag.CMPReasonCapacityRejected, rerr),
 			"cmp:"+txid, cmpIdentityRef(req))
 		http.Error(w, "busy", http.StatusServiceUnavailable)
+	case errors.Is(rerr, errCMPProtectionNotStanding):
+		s.audit(r.Context(), "deny", "protection certificate not in good standing", txid)
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepAuthorize, enrollmentdiag.CMPReasonProtectionRejected, rerr),
+			cmpMessageRef(body), cmpIdentityRef(req))
+		http.Error(w, "cmp: protection certificate not authorized", http.StatusForbidden)
 	case crypto.RefusedSubjectKey(rerr):
 		detail := crypto.SubjectKeyRefusalDetail(rerr)
 		s.audit(r.Context(), "deny", detail, txid)

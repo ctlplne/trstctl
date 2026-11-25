@@ -5722,6 +5722,17 @@ requests under the default are refused with a distinct audit reason
 impersonation attempt from a malformed message. Deployments that relied on the
 previous unbound behavior must set the RA opt-in deliberately on upgrade.
 
+**CMP protection certificates are checked for current revocation state.**
+Platform-issued protection certificates must be good in the tenant's CA ledger,
+including pending revocations. External CA paths require a complete, current,
+issuer-signed CRL bundle at `protocols.cmp_client_crl_file` (or
+`TRSTCTL_PROTOCOLS_CMP_CLIENT_CRL_FILE`); missing, stale, delta, or scoped CRLs
+refuse enrollment. The file is local to each replica and is reread per request;
+operators must keep it current across replicas. A directly pinned certificate
+has no issuing CA below the anchor: remove its pin and reload the mount to
+withdraw trust. Automatic OCSP fetching is not provided for external CMP
+client CAs.
+
 Six of six secrets/identity frameworks are mounted on the running binary
 under `/api/v1/secrets/*` (off by default — `secrets.enable_api` — fail-closed
 when off, requiring a KEK when on):

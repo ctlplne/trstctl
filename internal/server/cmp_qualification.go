@@ -3,13 +3,22 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/enrollmentdiag"
 	"trstctl.com/trstctl/internal/protocols/cmp"
 )
@@ -62,6 +71,9 @@ func (s *Server) buildServedCMP(cfg config.Protocols, tenantFallback string, iss
 		// licensed verifier seam EST uses; protection stays core-verified.
 		CSRVerifier:  issuer.verifyCSR,
 		CSRInspector: issuer.inspectCSRInfo,
+		CheckProtectionCertificate: func(ctx context.Context, req *crypto.CMPRequest) error {
+			return s.checkCMPProtectionCertificate(ctx, sp.cmpTenant, req, cfg.CMPClientCRLFile)
+		},
 		FailureDiagnosis: func(requestCtx context.Context, diagnosis enrollmentdiag.Diagnosis) {
 			if s.api == nil {
 				return
@@ -75,6 +87,78 @@ func (s *Server) buildServedCMP(cfg config.Protocols, tenantFallback string, iss
 	sp.cmpBulkheadReady = pool != nil
 	sp.names = append(sp.names, "cmp")
 	return nil
+}
+
+// checkCMPProtectionCertificate reads the same tenant-scoped issuance and
+// pending-revocation state that backs the served OCSP responder. A certificate
+// signed by our CA cannot authenticate CMP once its serial is revoked, pending
+// revocation, or unknown to this tenant. Other trust anchors need their own
+// revocation authority; this check never mistakes them for a platform leaf.
+func (s *Server) checkCMPProtectionCertificate(ctx context.Context, tenantID string, req *crypto.CMPRequest, externalCRLFile string) error {
+	if tenantID == "" || req == nil || len(req.ProtectionCertificateDER) == 0 || s.store == nil {
+		return errors.New("server: CMP protection identity has no tenant, certificate, or standing store")
+	}
+	if crypto.VerifyLeafSignedByCA(req.ProtectionCertificateDER, s.caCertDER) == nil {
+		info, err := certinfo.Inspect(req.ProtectionCertificateDER)
+		if err != nil {
+			return fmt.Errorf("server: inspect CMP protection identity: %w", err)
+		}
+		standing, _, err := issuedCertStatus(ctx, s.store, tenantID, IssuingCAID(), info.SerialNumber)
+		if err != nil {
+			return fmt.Errorf("server: read CMP protection identity standing: %w", err)
+		}
+		if standing != issuedCertGood {
+			return errors.New("server: CMP protection identity is not in good standing")
+		}
+		return nil
+	}
+	if len(req.ProtectionChainDER) == 1 {
+		// This exact certificate is an operator-pinned trust anchor, rather
+		// than a leaf whose CA can revoke it. Removing the pin and reloading
+		// the mount removes its authority.
+		return nil
+	}
+	crls, err := loadCMPClientCRLs(externalCRLFile)
+	if err != nil {
+		return err
+	}
+	return crypto.VerifyCMPProtectionCRLs(req.ProtectionChainDER, crls, time.Now().UTC())
+}
+
+// loadCMPClientCRLs rereads an operator-owned local bundle on each request so
+// replacing it atomically updates revocation decisions without a process
+// restart. A missing, oversized, malformed, or empty bundle refuses issuance.
+func loadCMPClientCRLs(path string) ([][]byte, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, errors.New("server: external CMP client CAs need a current CRL bundle")
+	}
+	f, err := os.Open(path) // #nosec G304 -- operator-configured local public CRL path, not request input; read bounded below (CWE-22)
+	if err != nil {
+		return nil, fmt.Errorf("server: open CMP client CRL bundle: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	const maxCRLBundleBytes = 2 << 20
+	data, err := io.ReadAll(io.LimitReader(f, maxCRLBundleBytes+1))
+	if err != nil || len(data) > maxCRLBundleBytes {
+		return nil, errors.New("server: CMP client CRL bundle is unreadable or too large")
+	}
+	var crls [][]byte
+	for len(bytes.TrimSpace(data)) > 0 {
+		data = bytes.TrimSpace(data)
+		if !bytes.HasPrefix(data, []byte("-----BEGIN X509 CRL-----")) {
+			return nil, errors.New("server: CMP client CRL bundle has non-PEM content")
+		}
+		block, rest := pem.Decode(data)
+		if block == nil || block.Type != "X509 CRL" || len(block.Headers) != 0 || len(crls) >= 32 {
+			return nil, errors.New("server: CMP client CRL bundle is malformed")
+		}
+		crls = append(crls, block.Bytes)
+		data = rest
+	}
+	if len(crls) == 0 {
+		return nil, errors.New("server: CMP client CRL bundle is empty")
+	}
+	return crls, nil
 }
 
 func (source cmpQualificationSource) read(_ context.Context, tenantID string) api.CMPRuntimePosture {

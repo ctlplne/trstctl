@@ -192,7 +192,15 @@ transaction ID and CSR through the isolated cryptography path, and returns a sig
 `pkixcmp` response. As with SCEP, the CMP protection key is the sealed
 `protocols.ra_key_file` transport identity, distinct from the CA key in the isolated
 signing service. The certificate that protects a client PKIMessage must chain to
-`protocols.cmp_client_trust_anchor_file`. By default, the CSR may request only names
+`protocols.cmp_client_trust_anchor_file`. A certificate issued by trstctl's own
+CA must still be in good standing in the tenant's issuance and revocation ledger;
+a revoked or pending certificate cannot renew through CMP. For a certificate
+under an external CA, set `protocols.cmp_client_crl_file` to a local PEM bundle
+of complete, issuer-signed CRLs covering every certificate below the trust
+anchor. The mount rereads this file on each request and refuses enrollment if
+coverage is missing, invalid, or past `nextUpdate`. Update the bundle before it
+expires. A certificate pinned directly as its own trust anchor is revoked by
+removing that exact pin and reloading the mount. By default, the CSR may request only names
 already asserted by that authenticated protection certificate. Third-party
 registration-authority enrollment is possible only when
 `protocols.cmp_allow_ra_enrollment` is explicitly enabled.
