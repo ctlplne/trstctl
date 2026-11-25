@@ -556,8 +556,10 @@ the root file the administrator DSN names (`sslrootcert`, `tlsCAFile`), read on 
 plane's host, and for MySQL the provider's `tls_ca_ref` and `tls_server_name`. A private CA
 needs no copy on the gateway's host. With none, the gateway uses system roots and verifies
 the database's host name. MySQL refuses a server without TLS or with an untrusted or
-misnamed certificate before sending a password proof. Reopen a session created with an
-older plaintext MySQL route after upgrading the gateway and configuring database TLS.
+misnamed certificate before sending a password proof. PostgreSQL likewise refuses a
+TLSless server before sending startup traffic. Reopen sessions created with older
+plaintext or downgrade-capable PostgreSQL/MySQL routes after upgrading the gateway
+and configuring database TLS.
 
 A session can be worked in from the console instead (A259). Open it with `"browser": true`
 (Request privileged session → "Open in the browser"): the control plane keeps the session's

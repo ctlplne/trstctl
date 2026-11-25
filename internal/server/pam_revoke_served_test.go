@@ -53,7 +53,7 @@ func TestServedPAMEarlyRevokePostgres(t *testing.T) {
 	if issued.Postgres == nil || issued.Postgres.DSN == "" {
 		t.Fatalf("PAM issuance returned no PostgreSQL credential: %+v", issued)
 	}
-	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, true)
 
 	foreignTenant := "22222222-2222-2222-2222-222222222222"
 	if err := h.store.UpsertTenant(context.Background(), store.Tenant{TenantID: foreignTenant, Name: "foreign PAM tenant"}); err != nil {
@@ -100,7 +100,7 @@ func TestServedPAMEarlyRevokePostgres(t *testing.T) {
 					Status string `json:"status"`
 				}
 				if json.Unmarshal(body, &settled) == nil && settled.Status == "revoked" {
-					assertPAMPostgresAccess(t, issued.Postgres.DSN, false)
+					assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, false)
 					if n := pamEventCount(t, h, "pam.session.revocation_requested"); n != 1 {
 						t.Fatalf("revocation request events = %d, want one", n)
 					}
@@ -142,7 +142,7 @@ func TestServedPAMProviderRemovalFailureAndRetry(t *testing.T) {
 	})
 	cancelDispatch()
 	<-dispatchDone
-	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, true)
 	path := "/api/v1/access/sessions/" + issued.ID + "/revoke"
 	if code, body := secretsReqKey(t, h, http.MethodPost, path, requester, "revoke-first", map[string]any{"reason": "incident"}); code != http.StatusAccepted {
 		t.Fatalf("first revoke status %d: %s", code, body)
@@ -177,7 +177,7 @@ func TestServedPAMProviderRemovalFailureAndRetry(t *testing.T) {
 	if err := json.Unmarshal(body, &failed); err != nil || code != http.StatusOK || failed.Status != "revocation_failed" {
 		t.Fatalf("PAM did not expose provider failure: code=%d body=%s err=%v", code, body, err)
 	}
-	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, true)
 	if err := projections.New(h.store).Rebuild(context.Background(), h.log); err != nil {
 		t.Fatalf("cold replay terminal PAM failure: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestServedPAMProviderRemovalFailureAndRetry(t *testing.T) {
 	if err := json.Unmarshal(body, &done); err != nil || code != http.StatusOK || done.Status != "revoked" {
 		t.Fatalf("PAM did not confirm repaired removal: code=%d body=%s err=%v", code, body, err)
 	}
-	assertPAMPostgresAccess(t, issued.Postgres.DSN, false)
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, false)
 	if err := projections.New(h.store).Rebuild(context.Background(), h.log); err != nil {
 		t.Fatalf("cold replay completed PAM retry: %v", err)
 	}

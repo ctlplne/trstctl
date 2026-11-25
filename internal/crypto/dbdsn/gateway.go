@@ -51,7 +51,7 @@ func (r *GatewayRoute) Validate(driver string, explicitTrust bool) error {
 	}
 	switch driver {
 	case Postgres:
-		if len(r.Hosts) != 1 || r.TLS != GatewayPlain && r.TLS != GatewayPreferTLS && r.TLS != GatewayVerifiedTLS {
+		if len(r.Hosts) != 1 || r.TLS != GatewayVerifiedTLS {
 			return ErrGatewayRoute
 		}
 	case Mongo:
@@ -127,16 +127,8 @@ func GatewayTLSMode(driver string, target Target, explicitTrust bool) (string, e
 				return "", ErrGatewayRoute
 			}
 		}
-		switch target.Options["sslmode"] {
-		case "disable", "allow":
-			if explicitTrust || target.SystemRoots {
-				return "", ErrTrust
-			}
-			return GatewayPlain, nil
-		case "", "prefer":
-			if !explicitTrust && !target.SystemRoots {
-				return GatewayPreferTLS, nil
-			}
+		if mode := target.Options["sslmode"]; mode == "disable" || mode == "allow" {
+			return "", ErrTrust
 		}
 		return GatewayVerifiedTLS, nil
 	case Mongo:

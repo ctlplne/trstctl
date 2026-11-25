@@ -70,7 +70,7 @@ func TestServedAccessReviewFailedRevocationIsRetriedQ1L2(t *testing.T) {
 	if session.Postgres == nil {
 		t.Fatalf("PAM session returned no PostgreSQL credential: %+v", session)
 	}
-	assertPAMPostgresAccess(t, session.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, session.Postgres.DSN, pgDSN, true)
 
 	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/reviews/generate", lead, "q1l2-generate", map[string]any{
 		"name": "pg-main retry", "source": "graph_reachers", "target": "res:pam:postgres:pg-main", "reviewer_subject": "review-bob",
@@ -216,7 +216,7 @@ func TestServedAccessReviewFailedRevocationIsRetriedQ1L2(t *testing.T) {
 	if closed.RevocationStatus != "closed" || !strings.Contains(closed.ClosingEvidence, "PAM session revoked") {
 		t.Fatalf("item after the repaired removal = %+v; want closed on the session's revocation", closed)
 	}
-	assertPAMPostgresAccess(t, session.Postgres.DSN, false)
+	assertPAMPostgresAccess(t, session.Postgres.DSN, pgDSN, false)
 	requests = revocationRequests()
 	if len(requests) != 3 || requests[2].Actor == nil || requests[2].Actor.Subject != "review-bob" ||
 		requests[1].Actor == nil || requests[1].Actor.Subject != nhiReviewReconcileActor {

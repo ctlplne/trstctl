@@ -3012,12 +3012,13 @@ destinations the connection may use.
   `sslrootcert=system` to select system roots. A `secret://` DSN uses the
   separate operator CA configuration. Issued credentials omit host CA paths.
   Direct database clients configure their own trusted CA bundle.
-- When a native PostgreSQL connection negotiates TLS, trstctl verifies the
+- When a PostgreSQL provider's native administrator connection negotiates TLS, trstctl verifies the
   certificate chain and server name. Provide the CA or a matching certificate
   name for installations that previously used encryption-only `require` or
   chain-only `verify-ca`. With `sslmode=prefer`, plaintext startup requires
   an explicit TLS refusal from the same network endpoint. A failed certificate
-  check ends the TLS attempt without permitting plaintext there.
+  check ends the TLS attempt without permitting plaintext there. Gateway
+  sign-ins have a stricter rule below.
 - For a tenant-held DSN that needs a private network, set
   `allow_private_endpoint: true` and list the specific `private_egress_cidrs`.
   The socket checks the actual IP chosen by DNS on every attempt. The air-gap
@@ -3043,8 +3044,13 @@ configured `tls_server_name`. Set `tls_ca_ref` for a private MySQL CA. A server
 without TLS, a bad certificate, or a credential DSN with `tls=false` is refused
 before any password proof is sent; a peer-supplied RSA key is never trusted.
 Previously issued plaintext MySQL gateway routes fail closed and need a fresh
-session. PostgreSQL and MongoDB gateways require verified TLS when configured
-with an explicit CA or certificate name. At redemption, the control plane checks
+session. PostgreSQL gateway sign-ins also always require verified TLS. They
+refuse `sslmode=disable` and `allow`, and enforce full chain and name checks
+even when a credential says `prefer`, `require`, or `verify-ca`. PostgreSQL
+servers that refuse TLS receive no startup or password traffic; previously
+issued plaintext or downgrade-capable routes require a fresh session. MongoDB
+gateways require verified TLS when configured with an explicit CA or certificate
+name. At redemption, the control plane checks
 the current credential against the recorded route. A change of route or trust
 requires a fresh session.
 Gateway agents can further limit database sockets with `--relay-egress-allow`.

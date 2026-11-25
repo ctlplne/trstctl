@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/certtest"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -158,7 +160,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	if !strings.HasPrefix(pg.Postgres.Username, "trstctl_pam_") {
 		t.Fatalf("postgres PAM username = %q", pg.Postgres.Username)
 	}
-	assertPAMPostgresAccess(t, pg.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, pg.Postgres.DSN, pgDSN, true)
 	if nativeExpiry := pamPostgresRoleValidUntil(t, pgDSN, pg.Postgres.Username); nativeExpiry.After(pg.ExpiresAt.Add(time.Second)) {
 		t.Fatalf("PostgreSQL role natively valid until %s, after PAM session deadline %s", nativeExpiry, pg.ExpiresAt)
 	}
@@ -170,7 +172,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	if !pamPostgresRoleExists(t, pgDSN, pg.Postgres.Username) {
 		t.Fatal("PostgreSQL role disappeared before the PAM cleanup worker ran")
 	}
-	assertPAMPostgresAccess(t, pg.Postgres.DSN, false)
+	assertPAMPostgresAccess(t, pg.Postgres.DSN, pgDSN, false)
 
 	worker, ok := any(h.srv).(interface{ RunPAMSessionExpiry(context.Context) })
 	if !ok {
@@ -259,7 +261,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	if pamPostgresRoleExists(t, pgDSN, pg.Postgres.Username) {
 		t.Fatalf("postgres PAM role %q did not auto-expire", pg.Postgres.Username)
 	}
-	assertPAMPostgresAccess(t, pg.Postgres.DSN, false)
+	assertPAMPostgresAccess(t, pg.Postgres.DSN, pgDSN, false)
 	for time.Now().Before(ssh.SSH.ValidBefore.Add(250 * time.Millisecond)) {
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -344,7 +346,7 @@ func TestServedPAMUsesTenantManagedAttesterTrust(t *testing.T) {
 	if issued.Postgres == nil {
 		t.Fatal("tenant-trusted PAM did not return a PostgreSQL credential")
 	}
-	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, true)
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources/"+source.ID+"/revoke",
 		owner, "pam-tenant-trust-revoke", map[string]any{"reason": "retire compromised signer"})
 	if status != http.StatusOK {
@@ -388,7 +390,7 @@ func TestServedPAMPostgresUsesProtectedProviderOutbox(t *testing.T) {
 	if issued.Postgres == nil {
 		t.Fatal("provider-backed PAM did not return one PostgreSQL credential")
 	}
-	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, true)
 	if !h.hasEvent(t, "dynsecret.lease.pending") || !h.hasEvent(t, "pam.session.started") {
 		t.Fatal("provider-backed PAM did not record the durable lease request and session start")
 	}
@@ -402,7 +404,7 @@ func TestServedPAMPostgresUsesProtectedProviderOutbox(t *testing.T) {
 	if pamPostgresRoleExists(t, pgDSN, issued.Postgres.Username) {
 		t.Fatal("provider-backed PAM role remained after worker and outbox revocation")
 	}
-	assertPAMPostgresAccess(t, issued.Postgres.DSN, false)
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, false)
 }
 
 // A PAM request is a proposal, not authority to create a privileged login.
@@ -598,7 +600,7 @@ func TestServedPAMRequestDoesNotMintBeforeApproval(t *testing.T) {
 			if issued.Postgres == nil || issued.Postgres.DSN == "" {
 				t.Fatalf("exact reviewed PAM request did not open PostgreSQL: %+v", issued)
 			}
-			assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+			assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, true)
 		})
 	}
 }
@@ -730,16 +732,28 @@ func startPAMPostgres(t *testing.T) (string, func()) {
 			t.Fatal(err)
 		}
 	}
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caFile := filepath.Join(dir, "root.crt")
+	certFile, keyFile := filepath.Join(dir, "server.crt"), filepath.Join(dir, "server.key")
+	for path, body := range map[string][]byte{caFile: caPEM, certFile: certPEM, keyFile: keyPEM} {
+		if err := os.WriteFile(path, body, 0o600); err != nil { // #nosec G703 -- fixed fixture file names in the test-owned directory (CWE-22)
+			t.Fatal(err)
+		}
+	}
 	db := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
 		Username("postgres").Password("postgres").Database("postgres").
-		Port(uint32(port)).RuntimePath(runtime).DataPath(data).BinariesPath(bin)) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
+		Port(uint32(port)).RuntimePath(runtime).DataPath(data).BinariesPath(bin). // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
+		StartParameters(map[string]string{"ssl": "on", "ssl_cert_file": certFile, "ssl_key_file": keyFile}))
 	if err := db.Start(); err != nil {
 		_ = os.RemoveAll(dir)
 		fmt.Fprintln(os.Stderr, "embedded postgres start:", err)
 		t.Skip("embedded postgres unavailable")
 	}
-	return fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres?sslmode=disable", port), func() {
+	return fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres?sslmode=verify-full&sslrootcert=%s", port, url.QueryEscape(caFile)), func() {
 		_ = db.Stop()
 		_ = os.RemoveAll(dir)
 	}
@@ -762,6 +776,12 @@ func wirePAMPostgresProvider(d *Deps, adminDSNRef string, maxTTL time.Duration, 
 	}
 	if len(caDirectory) > 0 {
 		cfg.DatabaseCAFileRoot = caDirectory[0]
+	} else if strings.HasPrefix(adminDSNRef, "file:") {
+		if raw, err := os.ReadFile(strings.TrimPrefix(adminDSNRef, "file:")); err == nil { // #nosec G304 -- test fixture's own administrator DSN file (CWE-22)
+			if parsed, err := url.Parse(string(raw)); err == nil && parsed.Query().Get("sslrootcert") != "" {
+				cfg.DatabaseCAFileRoot = filepath.Dir(parsed.Query().Get("sslrootcert"))
+			}
+		}
 	}
 	provider := newConfiguredDynamicProvider(cfg, map[string]bool{"readonly": true}, maxTTL,
 		integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}, nil)
@@ -804,11 +824,24 @@ func pamPostgresRoleValidUntil(t *testing.T, adminDSN, username string) time.Tim
 	return validUntil
 }
 
-func assertPAMPostgresAccess(t *testing.T, dsn string, wantOK bool) {
+func assertPAMPostgresAccess(t *testing.T, dsn, adminDSN string, wantOK bool) {
 	t.Helper()
+	// Direct clients must install the fixture CA themselves. Issued credentials
+	// deliberately omit the control plane's local CA file path.
+	credentialURL, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminURL, err := url.Parse(adminDSN)
+	if err != nil || adminURL.Query().Get("sslrootcert") == "" {
+		t.Fatalf("fixture administrator DSN has no CA root: %v", err)
+	}
+	query := credentialURL.Query()
+	query.Set("sslrootcert", adminURL.Query().Get("sslrootcert"))
+	credentialURL.RawQuery = query.Encode()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	conn, err := pgx.Connect(ctx, dsn)
+	conn, err := pgx.Connect(ctx, credentialURL.String())
 	if err != nil {
 		if wantOK {
 			t.Fatalf("connect with PAM postgres credential: %v", err)

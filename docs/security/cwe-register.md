@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3632 annotated sites across 35 rules. Each row is
+3635 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1322,9 +1322,9 @@ not this file.
 | `internal/crypto/pfx/certonly.go:226` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
 | `internal/crypto/pfx/certonly.go:400` | pad is at most the block size (CWE-190) |
 | `internal/crypto/pfx/rc2.go:55` | 255 modulo a power of two up to 256 fits a byte (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:160` | a startup message is a few hundred bytes (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:349` | a SCRAM client-first message is under 100 bytes (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:407` | sign-in messages are bounded and small (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:156` | a startup message is a few hundred bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:337` | a SCRAM client-first message is under 100 bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:395` | sign-in messages are bounded and small (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin_test.go:102` | a fake server's messages are a few bytes (CWE-190) |
 | `internal/crypto/quicinitial/quicinitial.go:108` | the token length was checked against the datagram above (CWE-190) |
 | `internal/crypto/quicinitial/quicinitial.go:118` | the length was checked against the datagram above (CWE-190) |
@@ -1479,7 +1479,7 @@ not this file.
 | `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
 | `internal/server/pam_gateway_private_ca_served_test.go:71` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_health.go:100` | a positive interval in nanoseconds, never negative (CWE-190) |
-| `internal/server/pam_served_test.go:736` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/server/pam_served_test.go:749` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:1044` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/protocol_mounts.go:1046` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:174` | event test sequence is PostgreSQL bigint-bounded. |
@@ -2241,8 +2241,8 @@ not this file.
 | `internal/server/pam_health_served_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_recording_served_test.go:196` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_recording_served_test.go:208` | the stock sftp client against the test's own tunnel (CWE-78) |
-| `internal/server/pam_served_test.go:926` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:957` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_served_test.go:959` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_served_test.go:990` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:43` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:46` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2420,7 +2420,7 @@ not this file.
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:245` | the container's keycloak user must read the import directory (CWE-276) |
 | `internal/server/pam_gateway_private_ca_served_test.go:64` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/pam_served_test.go:729` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/pam_served_test.go:731` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:137` | a disposable lab certificate the Envoy container reads |
 | `internal/server/protocols_served_stock_clients_test.go:51` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:94` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2518,7 +2518,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (848 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (850 sites)
 
 | Location | Reason |
 |---|---|
@@ -3149,6 +3149,7 @@ not this file.
 | `internal/server/outbound_credential_scope_census_test.go:40` | the census reads this package's own source files by glob (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:193` | what the launched agent wrote in the test's temp dir (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:197` | what the launched agent wrote in the test's temp dir (CWE-22) |
+| `internal/server/pam_database_gateway_served_test.go:234` | CA path from this test's disposable PostgreSQL fixture (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:187` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:460` | unique owned task file under fixed lab account home (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:465` | unique owned task file under fixed lab account home (CWE-22) |
@@ -3157,7 +3158,8 @@ not this file.
 | `internal/server/pam_gateway_private_ca_served_test.go:84` | the fixture's own data directory (CWE-22) |
 | `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_gateway_ssh_served_test.go:282` | the test's own temporary files (CWE-22) |
-| `internal/server/pam_served_test.go:929` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/pam_served_test.go:780` | test fixture's own administrator DSN file (CWE-22) |
+| `internal/server/pam_served_test.go:962` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:226` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:230` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/pqc_pilot_refusal_served_test.go:187` | the lab's own temporary certificate (CWE-22) |
@@ -3483,8 +3485,8 @@ not this file.
 | `internal/server/lab_openldap_test.go:106` | the container's directory server reads it; the key is a throwaway lab key (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:248` | public realm configuration the container reads (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:252` | public cache configuration the container reads (CWE-276) |
-| `internal/server/pam_served_test.go:853` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/pam_served_test.go:865` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/pam_served_test.go:886` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/pam_served_test.go:898` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:60` | public lab inputs the containers read (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:527` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:581` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -3534,9 +3536,9 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:409` | mysql_native_password (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:410` | mysql_native_password (CWE-327) |
 | `internal/crypto/opaque_x509.go:274` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
-| `internal/crypto/pgsignin/pgsignin.go:308` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
-| `internal/crypto/pgsignin/pgsignin.go:313` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
-| `internal/crypto/pgsignin/pgsignin_test.go:167` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:296` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:301` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin_test.go:183` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 | `internal/crypto/pqc_x509.go:96` | key identifier, not integrity (CWE-328) |
 | `internal/crypto/thumbprint.go:15` | an identifier a CA API requires, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
@@ -3621,7 +3623,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/crypto/pgsignin/pgsignin.go:18` | PostgreSQL's md5 password exchange, used only when the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:16` | PostgreSQL's md5 password exchange, used only when the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin_test.go:7` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 
 ### G502 — CWE-? (unmapped rule) (1 sites)
@@ -3736,7 +3738,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1340` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:978` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (175 sites)
+### G703 — CWE-22 Path traversal (taint) (176 sites)
 
 | Location | Reason |
 |---|---|
@@ -3854,6 +3856,7 @@ not this file.
 | `internal/server/pam_gateway_kubernetes_kind_test.go:162` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_mysql_served_test.go:46` | fixed test-only path beneath t.TempDir (CWE-22) |
 | `internal/server/pam_gateway_private_ca_served_test.go:88` | the fixture's own data directory (CWE-22) |
+| `internal/server/pam_served_test.go:742` | fixed fixture file names in the test-owned directory (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:513` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:517` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:60` | public lab inputs the containers read (CWE-22) |

@@ -9658,6 +9658,9 @@ MySQL gateway sessions now require verified TLS, with the provider's private CA
 carried in the job when configured. Servers using MySQL's auto-generated,
 nonconforming certificate need an operator-issued certificate and a fresh
 session before the gateway will sign in.
+PostgreSQL gateway sessions likewise require verified TLS; a server that refuses
+TLS is rejected before startup, and existing plaintext routes need a fresh
+session.
 
 ## Agent launcher (A257) — served
 

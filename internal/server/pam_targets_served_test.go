@@ -83,7 +83,7 @@ func TestServedPAMTenantTargetRegistrationAndDisable(t *testing.T) {
 	if issued.Postgres == nil {
 		t.Fatal("registered target did not issue a credential")
 	}
-	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, pgDSN, true)
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/targets/postgres/tenant-pg/disable", registrar, "target-disable", map[string]any{"reason": "retire test target"})
 	if status != http.StatusOK {
 		t.Fatalf("disable target: %d %s", status, body)

@@ -127,7 +127,7 @@ func TestServedWhoCanReachADatabaseNamesHolderCredentialAndApproversAcrossColdRe
 	if person.Postgres == nil || agent.Postgres == nil {
 		t.Fatalf("PAM sessions returned no PostgreSQL credential: %+v / %+v", person, agent)
 	}
-	assertPAMPostgresAccess(t, person.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, person.Postgres.DSN, pgDSN, true)
 
 	database := "res:pam:postgres:pg-main"
 	get := func(srv *servedHarness, path, token string, want int) []byte {

@@ -95,7 +95,7 @@ func TestServedAccessReviewThatActsQ1(t *testing.T) {
 	if session.Postgres == nil {
 		t.Fatalf("PAM session returned no PostgreSQL credential: %+v", session)
 	}
-	assertPAMPostgresAccess(t, session.Postgres.DSN, true)
+	assertPAMPostgresAccess(t, session.Postgres.DSN, pgDSN, true)
 
 	// A campaign generated from "credentials that reach this database".
 	generate := map[string]any{
@@ -165,7 +165,7 @@ func TestServedAccessReviewThatActsQ1(t *testing.T) {
 		t.Fatalf("the item did not close on the session's revocation: %+v", closed)
 	}
 	// PostgreSQL refuses the reviewed login.
-	assertPAMPostgresAccess(t, session.Postgres.DSN, false)
+	assertPAMPostgresAccess(t, session.Postgres.DSN, pgDSN, false)
 	if err := h.srv.ReconcileNHIReviewsOnce(ctx); err != nil {
 		t.Fatal(err)
 	}

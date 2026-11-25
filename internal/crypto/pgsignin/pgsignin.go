@@ -6,10 +6,8 @@
 // and returns the connection once the server is ready, for the gateway to
 // relay a stock client's protocol over. It is a sign-in, not a
 // driver: it never sends a query, and the agent binary links no database
-// driver. TLS, whenever it is used, is verified: the database's certificate
-// must chain to sslrootcert (a file on the gateway's host) or to the system
-// roots and name the host — stricter than libpq's prefer, require and
-// verify-ca, which accept a certificate they cannot verify.
+// driver. Every sign-in requires verified TLS: the database's certificate
+// must chain to the session's CA or to the system roots and name the host.
 package pgsignin
 
 import (
@@ -36,7 +34,7 @@ import (
 type Target struct {
 	Host, Port, User, Database string
 	Password                   []byte
-	// SSLMode is libpq's sslmode ("prefer" when the DSN names none).
+	// SSLMode is the DSN's libpq sslmode; sign-in enforces verify-full.
 	SSLMode     string
 	SystemRoots bool
 	// rootPEM and serverName are the target's CA and certificate name as the
@@ -114,12 +112,10 @@ func SignIn(ctx context.Context, dsn []byte, opts Options) (*Session, error) {
 	if target.User == "" || target.Database == "" {
 		return nil, errors.New("pgsignin: the session's DSN names no login or database")
 	}
-	if len(opts.RootCAPEM) > 0 || opts.ServerName != "" || target.SystemRoots {
-		if target.SSLMode == "disable" || target.SSLMode == "allow" {
-			return nil, errors.New("pgsignin: explicit trust requires TLS")
-		}
-		target.SSLMode = "verify-full"
+	if target.SSLMode == "disable" || target.SSLMode == "allow" {
+		return nil, errors.New("pgsignin: the session requires verified TLS")
 	}
+	target.SSLMode = "verify-full"
 	dial := opts.Dial
 	if dial == nil {
 		d := &net.Dialer{Timeout: 10 * time.Second}
@@ -200,15 +196,10 @@ func signIn(conn net.Conn, target *Target, runtime [][2]string) (*Session, error
 	}
 }
 
-// negotiateTLS asks for TLS unless sslmode is disable or allow, and verifies
-// the certificate whenever the server agrees.
+// negotiateTLS requires TLS and verifies the server before startup or auth.
 func negotiateTLS(conn net.Conn, target *Target) (net.Conn, error) {
 	mode := target.SSLMode
-	switch mode {
-	case "disable", "allow":
-		return conn, nil
-	case "prefer", "require", "verify-ca", "verify-full":
-	default:
+	if mode != "verify-full" {
 		return nil, fmt.Errorf("pgsignin: sslmode %q is not supported", mode)
 	}
 	request := binary.BigEndian.AppendUint32(binary.BigEndian.AppendUint32(nil, 8), sslRequestCode)
@@ -221,9 +212,6 @@ func negotiateTLS(conn net.Conn, target *Target) (net.Conn, error) {
 	}
 	switch answer[0] {
 	case 'N':
-		if mode == "prefer" {
-			return conn, nil
-		}
 		return nil, fmt.Errorf("pgsignin: sslmode %s needs TLS and the database offers none", mode)
 	case 'S':
 	default:

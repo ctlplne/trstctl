@@ -127,11 +127,21 @@ func fakePostgres(t *testing.T, authCode uint32, sslAnswer byte, password chan<-
 func TestSignInAnswersTheServersPasswordRequest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("db.private.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverTLS := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+	trust := Options{RootCAPEM: caPEM, ServerName: "db.private.test"}
 	dsn := func(addr, extra string) []byte {
 		host, port, _ := net.SplitHostPort(addr)
 		return []byte("host=" + host + " port=" + port + " user=u password=p dbname=d" + extra)
 	}
-	session, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'N', nil), ""), Options{})
+	session, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'S', nil, serverTLS), ""), trust)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +155,7 @@ func TestSignInAnswersTheServersPasswordRequest(t *testing.T) {
 		5: "md5" + md5Hex(md5Hex("pu")+"\x01\x02\x03\x04") + "\x00",
 	} {
 		got := make(chan []byte, 1)
-		s, err := SignIn(ctx, dsn(fakePostgres(t, code, 'N', got), " sslmode=disable"), Options{})
+		s, err := SignIn(ctx, dsn(fakePostgres(t, code, 'S', got, serverTLS), ""), trust)
 		if err != nil {
 			t.Fatalf("method %d: %v", code, err)
 		}
@@ -155,8 +165,14 @@ func TestSignInAnswersTheServersPasswordRequest(t *testing.T) {
 		}
 	}
 	// Kerberos is refused, and sslmode=require is TLS or nothing.
-	if _, err := SignIn(ctx, dsn(fakePostgres(t, 2, 'N', nil), " sslmode=disable"), Options{}); err == nil || !strings.Contains(err.Error(), "not supported") {
+	if _, err := SignIn(ctx, dsn(fakePostgres(t, 2, 'S', nil, serverTLS), ""), trust); err == nil || !strings.Contains(err.Error(), "not supported") {
 		t.Fatalf("Kerberos sign-in = %v, want refused", err)
+	}
+	if _, err := SignIn(ctx, dsn("db.private.test:5432", " sslmode=disable"), Options{Dial: func(context.Context, string, string) (net.Conn, error) {
+		t.Fatal("disabled TLS reached the dialer")
+		return nil, nil
+	}}); err == nil || !strings.Contains(err.Error(), "verified TLS") {
+		t.Fatalf("disabled TLS sign-in = %v, want refused", err)
 	}
 	if _, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'N', nil), " sslmode=require"), Options{}); err == nil || !strings.Contains(err.Error(), "offers none") {
 		t.Fatalf("require without TLS = %v", err)

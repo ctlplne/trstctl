@@ -11,6 +11,8 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/rotation"
@@ -224,7 +227,17 @@ func TestServedDatabaseGatewayRecoversStartAndRedemptionAfterProjectionFailure(t
 	value := useRecoveredDatabaseGatewayTicket(t, ctx, gatewayListener, h, recovered, relay.Job{JobID: job.JobID, Kind: job.Kind,
 		Attempt: job.Attempt, Payload: job.Payload, LeaseExpiresUnix: job.LeaseExpiresUnix})
 	defer secret.Wipe(value)
-	conn, err := dynsecret.OpenPostgresCredential(ctx, value, nil)
+	adminURL, err := url.Parse(pgDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caPEM, err := os.ReadFile(adminURL.Query().Get("sslrootcert")) // #nosec G304 -- CA path from this test's disposable PostgreSQL fixture (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verificationTrust := &dynsecret.DatabaseTransport{CAPEM: caPEM, ServerName: "localhost",
+		Dialer: netsec.NewDatabaseDialer(netsec.DatabaseDialOptions{OperatorFile: true})}
+	conn, err := dynsecret.OpenPostgresCredential(ctx, value, verificationTrust)
 	if err != nil {
 		t.Fatalf("native lease must still sign in after recovery: %v", err)
 	}
@@ -232,7 +245,7 @@ func TestServedDatabaseGatewayRecoversStartAndRedemptionAfterProjectionFailure(t
 		t.Fatal(err)
 	}
 	const missingColumn = "review_fixture_missing_field"
-	if err := rotation.VerifyPostgresCredential(ctx, value, "SELECT "+missingColumn); err == nil ||
+	if err := rotation.VerifyPostgresCredentialWithTransport(ctx, value, "SELECT "+missingColumn, verificationTrust); err == nil ||
 		strings.Contains(err.Error(), missingColumn) {
 		t.Fatal("live verification exposed the server's query diagnostic")
 	}
@@ -431,7 +444,7 @@ func TestServedVaultedGatewayRechecksTheCurrentCredentialAgainstTheJob(t *testin
 	const targetID = "vaulted-review"
 	const databaseAddress = "127.0.0.1:5432"
 	const gatewayAddress = "127.0.0.1:4444"
-	admin := writeServedCredentialFile(t, "database-admin", "postgres://review:plain@"+databaseAddress+"/orders?sslmode=disable")
+	admin := writeServedCredentialFile(t, "database-admin", "postgres://review:plain@"+databaseAddress+"/orders?sslmode=verify-full")
 	gatewayID := agentRowID(servedTestTenant, "role-agent")
 	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleGateway}, []string{relay.KindAccessGatewaySession}, withSecretsEnabled(t, nil), func(d *Deps) {
 		provider := config.DynamicSecretProviderConfig{ID: "vaulted-postgres", Type: "postgresql", TenantID: servedTestTenant,
@@ -451,7 +464,7 @@ func TestServedVaultedGatewayRechecksTheCurrentCredentialAgainstTheJob(t *testin
 		t.Fatal(err)
 	}
 	writer := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
-	initial := "postgres://account_a:plain@" + databaseAddress + "/orders?sslmode=disable"
+	initial := "postgres://account_a:plain@" + databaseAddress + "/orders?sslmode=verify-full"
 	if status, _ := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/secrets/store", writer, "seed-vaulted-route",
 		map[string]any{"name": account, "value": initial}); status != http.StatusCreated {
 		t.Fatalf("seed vaulted account: %d", status)
@@ -482,11 +495,11 @@ func TestServedVaultedGatewayRechecksTheCurrentCredentialAgainstTheJob(t *testin
 			t.Fatalf("replace vaulted fixture: %d", status)
 		}
 	}
-	put("change-vaulted-db", "postgres://account_a:plain@"+databaseAddress+"/different?sslmode=disable")
+	put("change-vaulted-db", "postgres://account_a:plain@"+databaseAddress+"/different?sslmode=verify-full")
 	if _, err := h.client.RedeemJobCredential(transport.WithGuardedDatabaseRedemption(ctx), redemption); err == nil {
 		t.Fatal("the held job returned a credential for a different initial database")
 	}
-	put("rotate-vaulted-login", "postgres://account_b:rotated@"+databaseAddress+"/orders?sslmode=disable")
+	put("rotate-vaulted-login", "postgres://account_b:rotated@"+databaseAddress+"/orders?sslmode=verify-full")
 	material, err := h.client.RedeemJobCredential(transport.WithGuardedDatabaseRedemption(ctx), redemption)
 	if err != nil || len(material.Items) != 1 {
 		t.Fatalf("the same-route rotation could not redeem the original attempt: %v", err)
