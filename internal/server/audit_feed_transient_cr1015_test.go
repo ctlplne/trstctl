@@ -42,7 +42,7 @@ func TestCR1015AuditFeedTransientTailStallRecovers(t *testing.T) {
 		if err != nil {
 			return "err:" + err.Error()
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 400))
 		return resp.Status + " " + strings.Join(strings.Fields(string(b)), " ")
 	}
@@ -55,7 +55,7 @@ func TestCR1015AuditFeedTransientTailStallRecovers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(context.Background())
+	defer func() { _ = tx.Rollback(context.Background()) }()
 	if _, err := tx.Exec(t.Context(), `SELECT applied_seq FROM projection_checkpoint WHERE id = 1 FOR UPDATE`); err != nil {
 		t.Fatal(err)
 	}

@@ -17,7 +17,7 @@ func cr1015Feed(t *testing.T, s *store.Store, feedID string) store.AuditFeed {
 	t.Helper()
 	at := time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)
 	feed := store.AuditFeed{ID: feedID, TenantID: tenantA, Name: "replay-siem", Provider: "splunk-hec",
-		EndpointURL: "https://collector.example.test/services/collector", TokenRef: "env:TEST_AUDIT_FEED_TOKEN",
+		EndpointURL: "https://collector.example.test/services/collector", TokenRef: "env:TEST_AUDIT_FEED_TOKEN", // #nosec G101 -- fixture environment locator, not credential bytes
 		IntervalSeconds: 60, BatchSize: 100, Enabled: true, ConfigEventSequence: 1,
 		NextRunAt: at, UpdatedAt: at}
 	mustTx(t, t.Context(), s, func(tx pgx.Tx) error { return s.ApplyAuditFeedConfiguredTx(t.Context(), tx, feed) })
@@ -25,8 +25,15 @@ func cr1015Feed(t *testing.T, s *store.Store, feedID string) store.AuditFeed {
 }
 
 func cr1015Batch(number int, feedID string, at time.Time) store.AuditFeedBatch {
-	start := uint64(number*10 - 9)
-	end := uint64(number * 10)
+	var start, end uint64
+	switch number {
+	case 1:
+		start, end = 1, 10
+	case 2:
+		start, end = 11, 20
+	default:
+		panic("CR1015 batch fixture supports only two batches")
+	}
 	return store.AuditFeedBatch{BatchID: uuid(tenantA, 800+number), TenantID: tenantA,
 		DestinationID: feedID, Provider: "splunk-hec", StartSequence: start, EndSequence: end,
 		RecordCount: 10, ChainHead: "sha256:fixture", OutboxIdempotencyKey: "audit-feed:replay:" + uuid(tenantA, 800+number),

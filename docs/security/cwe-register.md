@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3618 annotated sites across 35 rules. Each row is
+3619 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (921 sites)
+### G101 — CWE-798 Use of hardcoded credentials (922 sites)
 
 | Location | Reason |
 |---|---|
@@ -955,6 +955,7 @@ not this file.
 | `internal/store/agent_bootstrap_token_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/store/api_token_revocation_commands.go:60` | SQL column names for an opaque command fence, not a credential. |
 | `internal/store/approved_target_fences.go:230` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/audit_feed_replay_cr1015_test.go:20` | fixture environment locator, not credential bytes |
 | `internal/store/decoy_secret_privacy_test.go:33` | a decoy names a fabricated test secret, no credential value (CWE-798) |
 | `internal/store/decoy_secret_privacy_test.go:123` | a decoy names a fabricated test secret, no credential value (CWE-798) |
 | `internal/store/discovery_secret_move.go:58` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
