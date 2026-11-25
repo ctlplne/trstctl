@@ -169,6 +169,25 @@ type MongoDriverAdmin struct {
 	client *mongo.Client
 }
 
+// CheckTwoUserRetirement refuses a sharded router. MongoDB documents that a
+// role change on one mongos can take minutes to reach another router's user
+// cache, so a local roles readback cannot prove retirement across the cluster.
+func (a *MongoDriverAdmin) CheckTwoUserRetirement(ctx context.Context) error {
+	if a == nil || a.client == nil {
+		return errors.New("dynsecret mongodb: disconnected admin")
+	}
+	var hello struct {
+		Msg string `bson:"msg"`
+	}
+	if err := a.client.Database("admin").RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&hello); err != nil {
+		return errors.New("dynsecret mongodb: cannot verify two-user retirement topology")
+	}
+	if hello.Msg == "isdbgrid" {
+		return errors.New("dynsecret mongodb: two-user rotation cannot verify immediate role retirement across sharded routers")
+	}
+	return nil
+}
+
 // OpenMongoAdmin connects and pings a MongoDB deployment using an operator-owned
 // admin URI. The driver receives the URI only for the lifetime of this adapter.
 func OpenMongoAdmin(ctx context.Context, adminURI []byte) (*MongoDriverAdmin, error) {
@@ -205,6 +224,30 @@ func (a *MongoDriverAdmin) SetUserPassword(ctx context.Context, db, user string,
 	return nil
 }
 
+// SetUserPasswordAndRoles changes both fields in one server command. Clearing
+// roles makes an already-authenticated retired account lose its authority;
+// staging restores the active pair member's configured roles.
+func (a *MongoDriverAdmin) SetUserPasswordAndRoles(ctx context.Context, db, user string, password []byte, roles []MongoRole) error {
+	if a == nil || a.client == nil {
+		return errors.New("dynsecret mongodb: disconnected admin")
+	}
+	cmd := mongoUpdateUserPasswordRolesCommand(user, password, roles)
+	defer secret.Wipe(cmd)
+	if err := a.client.Database(db).RunCommand(ctx, bson.Raw(cmd)).Err(); err != nil {
+		return errors.New("updateUser failed")
+	}
+	return nil
+}
+
+func mongoUpdateUserPasswordRolesCommand(user string, password []byte, roles []MongoRole) []byte {
+	rolesArray := mongoRolesArray(roles)
+	cmd, start := beginBSONDocument(make([]byte, 0, mongoCommandCapacity(user, password, rolesArray)))
+	cmd = appendBSONString(cmd, "updateUser", []byte(user))
+	cmd = appendBSONString(cmd, "pwd", password)
+	cmd = appendBSONDocument(cmd, 0x04, "roles", rolesArray)
+	return finishBSONDocument(cmd, start)
+}
+
 // mongoUpdateUserPasswordCommand encodes {updateUser: user, pwd: password}
 // directly as BSON with its capacity reserved up front, so the password is
 // written once into an array the caller wipes (see mongoCreateUserCommand).
@@ -235,15 +278,7 @@ func VerifyMongoCredentialWithTransport(ctx context.Context, credential []byte, 
 // generated password into an immutable Go string. bson.Raw lets the driver send
 // the required wire type while custody remains byte-native and explicitly wiped.
 func mongoCreateUserCommand(user string, password []byte, roles []MongoRole) []byte {
-	rolesArray, rolesStart := beginBSONDocument(nil)
-	for i, role := range roles {
-		roleDoc, roleStart := beginBSONDocument(nil)
-		roleDoc = appendBSONString(roleDoc, "role", []byte(role.Role))
-		roleDoc = appendBSONString(roleDoc, "db", []byte(role.DB))
-		roleDoc = finishBSONDocument(roleDoc, roleStart)
-		rolesArray = appendBSONDocument(rolesArray, 0x03, strconv.Itoa(i), roleDoc)
-	}
-	rolesArray = finishBSONDocument(rolesArray, rolesStart)
+	rolesArray := mongoRolesArray(roles)
 
 	// Preallocate the whole command before the password goes in. CreateUser wipes
 	// the buffer this returns, but append() reallocates as it grows: writing the
@@ -261,6 +296,19 @@ func mongoCreateUserCommand(user string, password []byte, roles []MongoRole) []b
 	cmd = appendBSONString(cmd, "pwd", password)
 	cmd = appendBSONDocument(cmd, 0x04, "roles", rolesArray)
 	return finishBSONDocument(cmd, start)
+}
+
+func mongoRolesArray(roles []MongoRole) []byte {
+	rolesArray, rolesStart := beginBSONDocument(nil)
+	for i, role := range roles {
+		roleDoc, roleStart := beginBSONDocument(nil)
+		roleDoc = appendBSONString(roleDoc, "role", []byte(role.Role))
+		roleDoc = appendBSONString(roleDoc, "db", []byte(role.DB))
+		roleDoc = finishBSONDocument(roleDoc, roleStart)
+		rolesArray = appendBSONDocument(rolesArray, 0x03, strconv.Itoa(i), roleDoc)
+	}
+	rolesArray = finishBSONDocument(rolesArray, rolesStart)
+	return rolesArray
 }
 
 // mongoCommandCapacity reserves enough room that appending never reallocates

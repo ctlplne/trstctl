@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -806,7 +807,19 @@ type recordingMongoAdmin struct {
 	passwords map[string]string
 }
 
+type rotationRecordingMongoAdmin struct {
+	recordingMongoAdmin
+	roles       map[string][]MongoRole
+	topologyErr error
+}
+
 type echoingMongoAdmin struct{ password []byte }
+
+func (*echoingMongoAdmin) CheckTwoUserRetirement(context.Context) error { return nil }
+
+func (m *rotationRecordingMongoAdmin) CheckTwoUserRetirement(context.Context) error {
+	return m.topologyErr
+}
 
 func (e *echoingMongoAdmin) CreateUser(_ context.Context, _, _ string, password []byte, _ []MongoRole) error {
 	e.password = bytes.Clone(password)
@@ -818,6 +831,14 @@ func (*echoingMongoAdmin) DropUser(context.Context, string, string) error { retu
 func (e *echoingMongoAdmin) SetUserPassword(_ context.Context, _, _ string, password []byte) error {
 	e.password = bytes.Clone(password)
 	return fmt.Errorf("adapter echoed %s", password)
+}
+
+func (*echoingMongoAdmin) UserRoles(context.Context, string, string) ([]MongoRole, bool, error) {
+	return []MongoRole{{Role: "readWrite", DB: "app"}}, true, nil
+}
+
+func (e *echoingMongoAdmin) SetUserPasswordAndRoles(ctx context.Context, db, user string, password []byte, _ []MongoRole) error {
+	return e.SetUserPassword(ctx, db, user, password)
 }
 
 func (m *recordingMongoAdmin) CreateUser(_ context.Context, db, user string, password []byte, roles []MongoRole) error {
@@ -848,6 +869,19 @@ func (m *recordingMongoAdmin) SetUserPassword(_ context.Context, db, user string
 		m.passwords = map[string]string{}
 	}
 	m.passwords[user] = string(password)
+	return nil
+}
+
+func (m *rotationRecordingMongoAdmin) UserRoles(_ context.Context, _, user string) ([]MongoRole, bool, error) {
+	roles, ok := m.roles[user]
+	return slices.Clone(roles), ok, nil
+}
+
+func (m *rotationRecordingMongoAdmin) SetUserPasswordAndRoles(ctx context.Context, db, user string, password []byte, roles []MongoRole) error {
+	if err := m.SetUserPassword(ctx, db, user, password); err != nil {
+		return err
+	}
+	m.roles[user] = slices.Clone(roles)
 	return nil
 }
 
@@ -1382,10 +1416,13 @@ func TestKubernetesLegacyRevokeLeavesReusedNameToItsNewOwner(t *testing.T) {
 
 // A240: a MongoDB two-user role alternates between its two existing users:
 // the static rotation sets a new password on the one its consumers are not
-// using, retirement sets one nobody holds on the other, and nothing is
-// created or dropped; a failing adapter cannot echo the password.
+// using, retirement clears the old account's roles, and nothing is created or
+// dropped; a failing adapter cannot echo the password.
 func TestMongoTwoUserRotationSetsPasswordsAndDropsNothing(t *testing.T) {
-	admin := &recordingMongoAdmin{}
+	admin := &rotationRecordingMongoAdmin{roles: map[string][]MongoRole{
+		"orders_app_a": {{Role: "readWrite", DB: "app"}},
+		"orders_app_b": {{Role: "readWrite", DB: "app"}},
+	}}
 	backend, err := NewMongoBackend(admin, MongoConfig{Database: "app", URI: []byte("mongodb://admin:pw@db.lab.test:27017/app"),
 		RotationAccounts: map[string][2]string{"orders": {"orders_app_a", "orders_app_b"}}})
 	if err != nil {
@@ -1404,8 +1441,9 @@ func TestMongoTwoUserRotationSetsPasswordsAndDropsNothing(t *testing.T) {
 	if err := backend.Revoke(ctx, "orders_app_a"); err != nil {
 		t.Fatal(err)
 	}
-	if admin.passwords["orders_app_a"] == "" || admin.passwords["orders_app_b"] != staged || len(admin.created) != 0 || len(admin.dropped) != 0 {
-		t.Fatalf("retirement changed more than the predecessor's password: passwords=%d created=%v dropped=%v", len(admin.passwords), admin.created, admin.dropped)
+	if admin.passwords["orders_app_a"] == "" || admin.passwords["orders_app_b"] != staged || len(admin.created) != 0 || len(admin.dropped) != 0 ||
+		len(admin.roles["orders_app_a"]) != 0 || !sameMongoRoles(admin.roles["orders_app_b"], []MongoRole{{Role: "readWrite", DB: "app"}}) {
+		t.Fatalf("retirement did not isolate the predecessor while preserving its successor: passwords=%d created=%v dropped=%v roles=%v", len(admin.passwords), admin.created, admin.dropped, admin.roles)
 	}
 	echo := &echoingMongoAdmin{}
 	echoing, err := NewMongoBackend(echo, MongoConfig{Database: "app", RotationAccounts: map[string][2]string{"orders": {"orders_app_a", "orders_app_b"}}})
@@ -1417,5 +1455,38 @@ func TestMongoTwoUserRotationSetsPasswordsAndDropsNothing(t *testing.T) {
 	}
 	if _, err := NewMongoBackend(admin, MongoConfig{Database: "app", RotationAccounts: map[string][2]string{"orders": {"same", "same"}}}); err == nil {
 		t.Fatal("a pair of one user was accepted")
+	}
+}
+
+func TestCR261MongoTwoUserRotationRefusesUnverifiableTopologyBeforeStaging(t *testing.T) {
+	admin := &rotationRecordingMongoAdmin{topologyErr: errors.New("sharded router")}
+	backend, err := NewMongoBackend(admin, MongoConfig{Database: "app", RotationAccounts: map[string][2]string{"orders": {"orders_app_a", "orders_app_b"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	if _, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "orders", Static: true, Predecessor: "orders_app_a"}); err == nil {
+		t.Fatal("sharded topology staged a credential that cannot be retired promptly")
+	}
+	if len(admin.passwords) != 0 {
+		t.Fatal("sharded topology changed an account before failing")
+	}
+}
+
+func TestCR261MongoTwoUserRotationRefusesMismatchedRoles(t *testing.T) {
+	admin := &rotationRecordingMongoAdmin{roles: map[string][]MongoRole{
+		"orders_app_a": {{Role: "readWrite", DB: "app"}},
+		"orders_app_b": {{Role: "dbAdmin", DB: "app"}},
+	}}
+	backend, err := NewMongoBackend(admin, MongoConfig{Database: "app", RotationAccounts: map[string][2]string{"orders": {"orders_app_a", "orders_app_b"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	if _, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "orders", Static: true, Predecessor: "orders_app_a"}); err == nil {
+		t.Fatal("rotation copied mismatched roles onto the next account")
+	}
+	if len(admin.passwords) != 0 {
+		t.Fatal("rotation changed an account before detecting mismatched roles")
 	}
 }

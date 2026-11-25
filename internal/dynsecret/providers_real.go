@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"trstctl.com/trstctl/internal/cloudhttp"
@@ -87,6 +88,14 @@ type MongoAdmin interface {
 	// SetUserPassword replaces an existing user's password; its roles stay
 	// (two-user rotation, A240).
 	SetUserPassword(ctx context.Context, db, user string, password []byte) error
+}
+
+// mongoRotationRoleAdmin is required for two-user retirement. An adapter that
+// can only change passwords cannot make an already-authenticated user safe.
+type mongoRotationRoleAdmin interface {
+	CheckTwoUserRetirement(context.Context) error
+	UserRoles(context.Context, string, string) ([]MongoRole, bool, error)
+	SetUserPasswordAndRoles(context.Context, string, string, []byte, []MongoRole) error
 }
 
 // PostgresConfig configures a PostgreSQL dynamic-secret backend.
@@ -262,7 +271,48 @@ func (b *PostgresBackend) retireTwoUser(ctx context.Context, account string) err
 	if err := setPostgresRolePassword(ctx, conn, account, scrambled); err != nil {
 		return err
 	}
-	_, _ = conn.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename=$1`, account)
+	return terminatePostgresRoleSessions(ctx, conn, account)
+}
+
+func terminatePostgresRoleSessions(ctx context.Context, conn *pgx.Conn, account string) error {
+	for attempt := 0; attempt < 4; attempt++ {
+		rows, err := conn.Query(ctx, `SELECT pid FROM pg_stat_activity WHERE usename=$1`, account)
+		if err != nil {
+			return fmt.Errorf("dynsecret postgres: inspect retired sessions: %w", err)
+		}
+		var pids []int32
+		for rows.Next() {
+			var pid int32
+			if err := rows.Scan(&pid); err != nil {
+				rows.Close()
+				return fmt.Errorf("dynsecret postgres: read retired session: %w", err)
+			}
+			pids = append(pids, pid)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return fmt.Errorf("dynsecret postgres: read retired sessions: %w", err)
+		}
+		if len(pids) == 0 {
+			return nil
+		}
+		for _, pid := range pids {
+			// False can mean the process exited between listing and signalling.
+			// The next list, rather than this flag, decides completion.
+			var sent bool
+			if err := conn.QueryRow(ctx, `SELECT pg_terminate_backend($1)`, pid).Scan(&sent); err != nil {
+				return fmt.Errorf("dynsecret postgres: terminate retired session: %w", err)
+			}
+		}
+	}
+	var remaining int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE usename=$1`, account).Scan(&remaining); err != nil {
+		return fmt.Errorf("dynsecret postgres: recheck retired sessions: %w", err)
+	}
+	if remaining > 0 {
+		return errors.New("dynsecret postgres: retired account still has active sessions")
+	}
 	return nil
 }
 
@@ -541,9 +591,9 @@ type MongoConfig struct {
 	URI            []byte
 	UsernamePrefix string
 	// RotationAccounts maps a two-user role to two existing users of Database
-	// (A240): a static rotation sets a new password on the one its consumers
-	// are not using and retires the other by setting one nobody holds; both
-	// keep their roles.
+	// (A240): a static rotation sets a new password and restores roles on the
+	// inactive account, then retires the predecessor by changing its password
+	// and clearing its roles. The pair must start with the same roles.
 	RotationAccounts map[string][2]string
 	DatabaseRoleAccess
 }
@@ -604,7 +654,27 @@ func (b *MongoBackend) CreateCredential(ctx context.Context, req GenerateRequest
 			return "", nil, err
 		}
 		defer secret.Wipe(password)
-		if err := b.admin.SetUserPassword(ctx, b.database, account, password); err != nil {
+		rolesAdmin, ok := b.admin.(mongoRotationRoleAdmin)
+		if !ok {
+			return "", nil, errors.New("dynsecret mongodb: two-user rotation needs role management")
+		}
+		if err := rolesAdmin.CheckTwoUserRetirement(ctx); err != nil {
+			return "", nil, err
+		}
+		pair := b.rotationAccounts[req.Role]
+		source := pair[0]
+		if source == account {
+			source = pair[1]
+		}
+		roles, found, err := rolesAdmin.UserRoles(ctx, b.database, source)
+		if err != nil || !found || len(roles) == 0 {
+			return "", nil, errors.New("dynsecret mongodb: cannot read active rotation account roles")
+		}
+		targetRoles, found, err := rolesAdmin.UserRoles(ctx, b.database, account)
+		if err != nil || !found || len(targetRoles) > 0 && !sameMongoRoles(roles, targetRoles) {
+			return "", nil, errors.New("dynsecret mongodb: rotation accounts do not have the same roles")
+		}
+		if err := rolesAdmin.SetUserPasswordAndRoles(ctx, b.database, account, password, roles); err != nil {
 			return "", nil, errMongoUserPassword
 		}
 		var uri []byte
@@ -647,6 +717,23 @@ func (b *MongoBackend) CreateCredential(ctx context.Context, req GenerateRequest
 	return user, mongoCredential(uri, b.database, user, password), nil
 }
 
+func sameMongoRoles(a, b []MongoRole) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := make(map[MongoRole]int, len(a))
+	for _, role := range a {
+		set[role]++
+	}
+	for _, role := range b {
+		set[role]--
+		if set[role] < 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (b *MongoBackend) Close() {
 	if b.uri != nil {
 		b.uri.Destroy()
@@ -660,16 +747,26 @@ func (b *MongoBackend) Revoke(ctx context.Context, ref string) error {
 		return nil
 	}
 	if isRotationAccount(b.rotationAccounts, ref) {
-		// A two-user account is retired, never dropped: its roles persist. Its
-		// password becomes one nobody holds, so the next login with the old one
-		// is refused.
+		// A password change stops new logins, but open MongoDB connections keep
+		// working. Clear roles as well so the authenticated user loses access.
+		rolesAdmin, ok := b.admin.(mongoRotationRoleAdmin)
+		if !ok {
+			return errors.New("dynsecret mongodb: two-user retirement needs role management")
+		}
+		if err := rolesAdmin.CheckTwoUserRetirement(ctx); err != nil {
+			return err
+		}
 		scrambled, err := randomSecretHex(32)
 		if err != nil {
 			return err
 		}
 		defer secret.Wipe(scrambled)
-		if err := b.admin.SetUserPassword(ctx, b.database, ref, scrambled); err != nil {
+		if err := rolesAdmin.SetUserPasswordAndRoles(ctx, b.database, ref, scrambled, nil); err != nil {
 			return errMongoUserPassword
+		}
+		roles, found, err := rolesAdmin.UserRoles(ctx, b.database, ref)
+		if err != nil || !found || len(roles) != 0 {
+			return errors.New("dynsecret mongodb: retired account roles could not be verified absent")
 		}
 		return nil
 	}

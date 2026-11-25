@@ -215,8 +215,9 @@ func (app *mongoOrdersApp) snapshot() (map[string]int, []string) {
 // it last read and reports each version it used; each cycle sets a new
 // password on the user the application is not using, proves it by connecting,
 // and, once the application reports, retires the other by setting a password
-// nobody holds. Both users keep their roles and nothing is created or
-// dropped. A paused database times the retirement out and leaves the
+// nobody holds and clearing its roles. Staging restores the inactive user's
+// roles from the active member of the pair; nothing is created or dropped.
+// A paused database times the retirement out and leaves the
 // predecessor connecting until it resumes.
 func TestServedMongoTwoUserStaticRotationKeepsRolesA240(t *testing.T) {
 	lab := startLabMongo(t)
@@ -350,12 +351,12 @@ func TestServedMongoTwoUserStaticRotationKeepsRolesA240(t *testing.T) {
 		}
 		return out.Value
 	}
-	keepRoles := func() {
+	checkRoles := func(active, retired string) {
 		t.Helper()
 		out, err := lab.eval(`JSON.stringify(db.getSiblingDB("orders").getUsers().users.map(u => [u.user, u.roles.map(r => r.role + "@" + r.db).join(",")]))`)
-		if err != nil || !strings.Contains(out, `["`+mongoTwoUserAccountA+`","readWrite@orders"]`) || !strings.Contains(out, `["`+mongoTwoUserAccountB+`","readWrite@orders"]`) ||
+		if err != nil || !strings.Contains(out, `["`+active+`","readWrite@orders"]`) || !strings.Contains(out, `["`+retired+`",""]`) ||
 			strings.Count(out, `["`) != 2 {
-			t.Fatalf("the database's users after a rotation: %v %s", err, out)
+			t.Fatalf("the active and retired database roles after a rotation: %v %s", err, out)
 		}
 	}
 
@@ -378,7 +379,7 @@ func TestServedMongoTwoUserStaticRotationKeepsRolesA240(t *testing.T) {
 		if lab.logsIn(live) {
 			t.Fatalf("cycle %d: the retired password of %s still connects", step.n, liveUser)
 		}
-		keepRoles()
+		checkRoles(step.user, liveUser)
 		awaitLogins(step.user)
 		live, liveUser = next, step.user
 	}
@@ -431,7 +432,7 @@ func TestServedMongoTwoUserStaticRotationKeepsRolesA240(t *testing.T) {
 	if lab.logsIn(live) || !lab.logsIn(successor) {
 		t.Fatal("after the resumed retirement only the successor may connect")
 	}
-	keepRoles()
+	checkRoles(mongoTwoUserAccountA, mongoTwoUserAccountB)
 
 	stopApp()
 	<-appDone

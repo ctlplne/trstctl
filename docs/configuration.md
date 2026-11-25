@@ -3142,7 +3142,16 @@ as `ORDERS_APP_A`; for SQL Server, two logins with users in `database`, and for 
 contained users there; a role with `rotation_accounts` needs no `role_bindings`), or for LDAP
 two entry DNs under `users_dn`; the owner provisions both
 with the role's grants (for MongoDB, its roles; for LDAP, as members of the role's group),
-and rotation only ever changes their passwords.
+and rotation never creates or drops the pair. PostgreSQL retirement changes the old
+password, terminates every old session and checks that none remains; the administrator
+therefore needs authority to terminate those sessions (for example `pg_signal_backend`).
+MongoDB retirement changes the old password and clears its roles so an already-open
+connection loses access. Staging restores the inactive user's roles from the active
+member of the pair, so provision both with the same roles and grant the administrator
+`revokeRole`/`grantRole` plus `usersInfo` authority. MongoDB two-user rotation refuses a
+sharded `mongos` topology before staging: MongoDB documents that other routers can keep
+stale role caches for minutes, so a readback from one router cannot prove immediate
+retirement across the cluster. See [MongoDB's role change behavior](https://www.mongodb.com/docs/manual/tutorial/manage-users-and-roles/).
 
 An `auth0` provider (A240) only rotates: set `endpoint` to the tenant domain,
 `client_id` and `client_secret_ref` to a machine-to-machine application granted the

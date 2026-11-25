@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3647 annotated sites across 35 rules. Each row is
+3648 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -838,7 +838,7 @@ not this file.
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_static_rotation_ldap_two_user_container_test.go:245` | fabricated lab password the first rotation retires (CWE-798) |
-| `internal/server/secret_static_rotation_mongo_two_user_container_test.go:223` | fabricated lab password the first rotation retires (CWE-798) |
+| `internal/server/secret_static_rotation_mongo_two_user_container_test.go:224` | fabricated lab password the first rotation retires (CWE-798) |
 | `internal/server/secret_static_rotation_unix_container_test.go:34` | fabricated lab password the first rotation retires (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:107` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:109` | credential references to fabricated fixture values (CWE-798) |
@@ -1379,10 +1379,10 @@ not this file.
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:305` | preparation is checked at <=64KiB before conversion (CWE-190) |
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:306` | predecessor is checked at <=1024 bytes before conversion (CWE-190) |
 | `internal/dynsecret/active_directory_signin.go:200` | unix is within year 1970..9999, so the FILETIME fits (CWE-190) |
-| `internal/dynsecret/drivers.go:284` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/drivers.go:292` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/providers_real.go:1881` | a string length is never negative (CWE-190) |
-| `internal/dynsecret/providers_real_test.go:733` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/dynsecret/drivers.go:332` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/drivers.go:340` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/providers_real.go:1978` | a string length is never negative (CWE-190) |
+| `internal/dynsecret/providers_real_test.go:734` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp.go:161` | s is checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp_verify_test.go:37` | a positive clock step in a test (CWE-190) |
@@ -1766,7 +1766,7 @@ not this file.
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:233` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1685` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1782` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
@@ -2308,8 +2308,8 @@ not this file.
 | `internal/server/secret_static_rotation_mongo_two_user_container_test.go:54` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_mongo_two_user_container_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_mongo_two_user_container_test.go:65` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_static_rotation_mongo_two_user_container_test.go:395` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_static_rotation_mongo_two_user_container_test.go:421` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_static_rotation_mongo_two_user_container_test.go:396` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_static_rotation_mongo_two_user_container_test.go:422` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_mssql_two_user_lab_test.go:253` | fixed tool in the runner's lab container (CWE-78) |
 | `internal/server/secret_static_rotation_unix_container_test.go:53` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_unix_container_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2406,9 +2406,9 @@ not this file.
 | `internal/api/vault_compat_contract_test.go:246` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:173` | non-secret fixture directory in t.TempDir (CWE-22, CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:103` | deliberately loose fixture dir; secretfile must refuse it (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:721` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:724` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:727` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:722` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:725` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:728` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:33` | the container's D-Bus runtime directory (CWE-276) |
 | `internal/projections/golden_events_test.go:107` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/sshdiscovery_store_test.go:92` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2524,7 +2524,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (852 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (853 sites)
 
 | Location | Reason |
 |---|---|
@@ -2996,7 +2996,7 @@ not this file.
 | `internal/dynsecret/active_directory_signin_lab_test.go:39` | the lab runner's own CA file (CWE-22) |
 | `internal/dynsecret/active_directory_signin_lab_test.go:43` | the lab runner's own protected password file (CWE-22) |
 | `internal/dynsecret/ldap_dynamic_lab_test.go:33` | the lab runner's own protected password file (CWE-22) |
-| `internal/dynsecret/providers_real_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/dynsecret/providers_real_test.go:304` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/eventprotect/verification_keys_file.go:52` | Operator-pinned absolute public trust path is canonicalized outside managed restore roots; only a bounded regular file is read. |
 | `internal/events/protect_schema005_guard_test.go:138` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/events/protect_schema005_guard_test.go:157` | fixed repository source anchor, not caller input (CWE-22) |
@@ -3128,6 +3128,7 @@ not this file.
 | `internal/server/code_signing_config.go:97` | operator-configured certificate chain path (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:69` | the lab runner's build output (CWE-22) |
 | `internal/server/cr260_mysql_sessions_served_test.go:35` | test-owned CA file path returned by the pinned MySQL fixture (CWE-22) |
+| `internal/server/cr261_retirement_sessions_test.go:94` | CA is the test-owned file from startPAMPostgres (CWE-22) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:50` | the lab runner's build output (CWE-22) |
 | `internal/server/discovery_key_posture_test.go:18` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/server/distrust_removal_served_test.go:34` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -3961,7 +3962,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:436` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/providers_real.go:1806` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/providers_real.go:1903` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:240` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |

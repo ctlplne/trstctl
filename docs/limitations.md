@@ -6049,7 +6049,8 @@ when off, requiring a KEK when on):
   phases recorded by immutable events, with rollback to the sealed predecessor on
   a failed verification; `GET /api/v1/secrets/rotations/{id}` follows a command.
   A240 (rotation provider library with consumer cutover) is served: two-user
-  rotation, where both accounts keep their grants, for PostgreSQL, LDAP, MongoDB,
+  rotation, where both accounts keep their grants except MongoDB, which clears
+  the retired account's roles and restores them at its next staging, for PostgreSQL, LDAP, MongoDB,
   Oracle, SQL Server and Azure SQL contained users, Unix/Linux local accounts and
   Windows local accounts; hosted API keys and client secrets for Auth0, Datadog,
   OpenAI, OpenRouter, Fireworks AI, LiteLLM, Supabase, Convex, dbt platform,
@@ -6063,6 +6064,8 @@ when off, requiring a KEK when on):
   SQL Server (x86 CI lab) and an OpenSSH host; a paused database or host times a
   retirement out with the predecessor still working; Windows local accounts on a
   windows-latest runner; the hosted services against stand-ins of their APIs.
+  MongoDB two-user rotation requires a standalone or replica-set target; it
+  refuses a sharded router because other routers can retain stale user roles.
   What comes next: live proofs at the hosted vendors (their accounts) and HP iLO
   local accounts (a server), Track B; Salesforce consumer secrets (the staged
   rotation's effect on the old primary is not documented in the reference we
