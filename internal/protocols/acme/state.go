@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,11 @@ func StateEventTypes() []string {
 type eventLog interface {
 	Append(context.Context, events.Event) (events.Event, error)
 	Replay(context.Context, uint64, func(events.Event) error) error
+}
+
+type conditionalEventLog interface {
+	ObserveAppendSubject(context.Context, string, string) (events.AppendSubjectPosition, error)
+	AppendAtSubjectPosition(context.Context, events.Event, events.AppendSubjectPosition) (events.Event, error)
 }
 
 type acmeAccountEvent struct {
@@ -219,7 +225,14 @@ func (s *Server) WithStateLog(ctx context.Context, tenantID string, log eventLog
 }
 
 func (s *Server) appendStateEventLocked(ctx context.Context, typ string, payload any) error {
+	return s.appendStateEventAtPositionLocked(ctx, typ, payload, nil)
+}
+
+func (s *Server) appendStateEventAtPositionLocked(ctx context.Context, typ string, payload any, position *events.AppendSubjectPosition) error {
 	if s.stateLog == nil {
+		if position != nil {
+			return errors.New("acme: conditional state append requires a state log")
+		}
 		return nil
 	}
 	if s.stateTenantID == "" {
@@ -229,7 +242,17 @@ func (s *Server) appendStateEventLocked(ctx context.Context, typ string, payload
 	if err != nil {
 		return fmt.Errorf("acme: encode %s event: %w", typ, err)
 	}
-	appended, err := s.stateLog.Append(ctx, events.Event{Type: typ, TenantID: s.stateTenantID, Data: data})
+	event := events.Event{Type: typ, TenantID: s.stateTenantID, Data: data}
+	var appended events.Event
+	if position == nil {
+		appended, err = s.stateLog.Append(ctx, event)
+	} else {
+		conditional, ok := s.stateLog.(conditionalEventLog)
+		if !ok {
+			return errors.New("acme: state log cannot conditionally append EAB orders")
+		}
+		appended, err = conditional.AppendAtSubjectPosition(ctx, event, *position)
+	}
 	if err != nil {
 		return fmt.Errorf("acme: append %s event: %w", typ, err)
 	}
@@ -238,6 +261,68 @@ func (s *Server) appendStateEventLocked(ctx context.Context, typ string, payload
 		s.ownApplied[appended.Sequence] = true
 	}
 	return nil
+}
+
+// appendOrderWithEABQuotaLocked spends a bounded EAB grant in the same atomic
+// broker operation that creates the order. Every contender observes the order
+// subject, catches up its projection, checks the current policy, then appends
+// only if no other order changed that subject. A failed append spends nothing.
+// s.mu is held by the caller throughout this sequence.
+func (s *Server) appendOrderWithEABQuotaLocked(ctx context.Context, payload acmeOrderCreatedEvent, acct *account, req OrderRequest, expectedProfile string) (string, error) {
+	if acct == nil || acct.eabKeyID == "" {
+		return "", s.appendStateEventLocked(ctx, acmeEventOrderCreated, payload)
+	}
+	cred := s.eabCredentials[acct.eabKeyID]
+	if cred == nil {
+		return "the external account credential that authorized this account is no longer configured", nil
+	}
+	conditional, supportsCAS := s.stateLog.(conditionalEventLog)
+	if s.stateLog == nil || (!supportsCAS && cred.policy.MaxOrders == 0) {
+		if reason := s.recheckEABOrderLocked(acct, req, expectedProfile); reason != "" {
+			return reason, nil
+		}
+		return "", s.appendStateEventLocked(ctx, acmeEventOrderCreated, payload)
+	}
+	if !supportsCAS {
+		return "", errors.New("acme: bounded EAB quota requires a conditional event log")
+	}
+	for attempt := 0; attempt < 8; attempt++ {
+		position, err := conditional.ObserveAppendSubject(ctx, s.stateTenantID, acmeEventOrderCreated)
+		if err != nil {
+			return "", fmt.Errorf("acme: observe EAB order position: %w", err)
+		}
+		if err := s.catchUpLocked(ctx); err != nil {
+			return "", err
+		}
+		if reason := s.recheckEABOrderLocked(acct, req, expectedProfile); reason != "" {
+			return reason, nil
+		}
+		err = s.appendStateEventAtPositionLocked(ctx, acmeEventOrderCreated, payload, &position)
+		if errors.Is(err, events.ErrAppendPositionChanged) {
+			continue
+		}
+		return "", err
+	}
+	return "", errors.New("acme: EAB order quota is busy; retry the order")
+}
+
+func (s *Server) recheckEABOrderLocked(acct *account, req OrderRequest, expectedProfile string) string {
+	cred := s.eabCredentials[acct.eabKeyID]
+	if cred == nil {
+		return "the external account credential that authorized this account is no longer configured"
+	}
+	if active, reason := cred.active(time.Now()); !active {
+		return reason
+	}
+	if strings.TrimSpace(cred.policy.Profile) != expectedProfile {
+		return "external account credential profile changed during order admission; retry"
+	}
+	for _, id := range req.Identifiers {
+		if !cred.policy.permits(id.Value) {
+			return "identifier " + id.Value + " is outside the scope of external account credential " + cred.keyID
+		}
+	}
+	return ""
 }
 
 func (s *Server) applyStateEventLocked(ev events.Event) error {

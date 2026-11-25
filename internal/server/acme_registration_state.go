@@ -102,6 +102,24 @@ func (l acmeRegistrationLog) Replay(ctx context.Context, from uint64, apply func
 }
 
 func (l acmeRegistrationLog) Append(ctx context.Context, event events.Event) (events.Event, error) {
+	return l.append(ctx, event, nil)
+}
+
+func (l acmeRegistrationLog) ObserveAppendSubject(ctx context.Context, tenantID, typ string) (events.AppendSubjectPosition, error) {
+	if tenantID != l.tenantID {
+		return events.AppendSubjectPosition{}, errACMERegistrationChanged
+	}
+	if expected, ok := acme.RequestStateScope(ctx); !ok || expected.Identity == "" || expected.FirstSequence == 0 {
+		return events.AppendSubjectPosition{}, errACMERegistrationChanged
+	}
+	return l.log.ObserveAppendSubject(ctx, tenantID, typ)
+}
+
+func (l acmeRegistrationLog) AppendAtSubjectPosition(ctx context.Context, event events.Event, position events.AppendSubjectPosition) (events.Event, error) {
+	return l.append(ctx, event, &position)
+}
+
+func (l acmeRegistrationLog) append(ctx context.Context, event events.Event, position *events.AppendSubjectPosition) (events.Event, error) {
 	expected, ok := acme.RequestStateScope(ctx)
 	if !ok || expected.Identity == "" || expected.FirstSequence == 0 || event.TenantID != l.tenantID {
 		return events.Event{}, errors.New("server: ACME event lacks a registration binding")
@@ -135,7 +153,11 @@ func (l acmeRegistrationLog) Append(ctx context.Context, event events.Event) (ev
 			if !found || registration.ID != expected.Identity || registration.TenantID != l.tenantID || registration.Type != "tenant.registered" {
 				return errors.New("server: ACME registration history changed before append")
 			}
-			appended, err = l.log.Append(readCtx, event)
+			if position == nil {
+				appended, err = l.log.Append(readCtx, event)
+			} else {
+				appended, err = l.log.AppendAtSubjectPosition(readCtx, event, *position)
+			}
 			return err
 		})
 	})

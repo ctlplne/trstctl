@@ -152,6 +152,11 @@ the credential, and records an `acme.eab.order_denied` event; one out-of-scope
 identifier refuses the whole order. An unscoped credential may still register
 accounts and place orders subject to the other ACME policies.
 
+`max_orders` is a lifetime hard cap across ACME replicas sharing the event log.
+Each order replays recent state, checks the current credential scope and quota,
+then conditionally appends its order event. If another replica spends the last
+grant first, the losing order is refused and the denial is recorded.
+
 The mechanism: `GET /api/v1/acme/eab-credentials` serves each credential's scope,
 quota, window, and live accounts-bound / orders-created / orders-denied counters, and
 `POST /api/v1/acme/eab-credentials/{kid}/disable` (or `/enable`) stops or resumes new

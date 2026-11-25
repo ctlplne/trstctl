@@ -1332,9 +1332,19 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		o.authzIDs = append(o.authzIDs, az.id)
 		authzURLs = append(authzURLs, base+"/acme/authz/"+az.id)
 	}
-	if err := s.appendStateEventLocked(r.Context(), acmeEventOrderCreated, orderCreatedEventFrom(o, authzs, s.seq)); err != nil {
+	denial, err := s.appendOrderWithEABQuotaLocked(r.Context(), orderCreatedEventFrom(o, authzs, s.seq), acct, req, pinnedProfile)
+	if err != nil {
 		s.mu.Unlock()
 		s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+		return
+	}
+	if denial != "" {
+		s.mu.Unlock()
+		if eabCred != nil {
+			eabCred.recordDenial(time.Now())
+		}
+		s.recordEABOrderDenial(r.Context(), acct, req, denial)
+		s.problem(w, r, http.StatusForbidden, "unauthorized", denial)
 		return
 	}
 	for _, az := range authzs {

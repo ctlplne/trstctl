@@ -6747,9 +6747,10 @@ This is a deliberate, documented trust boundary, not an accident.
   the same list and carries the disable action. Account-bound and
   orders-created counters are rebuilt from the retained account and order
   events on restart, so a restart does not reset the configured order quota.
-  Concurrent order admissions on different replicas still need an atomic
-  shared quota reservation; operators should not treat the per-credential
-  `max_orders` limit as a cross-replica hard cap yet.
+  `max_orders` is enforced across replicas by checking the event-derived count
+  and conditionally appending the new order on the shared broker subject. One
+  remaining grant cannot be spent by two replicas at once; the losing order is
+  refused with a quota reason and recorded as a denial.
   The policy is served as well as configured (A53): `PUT
   /api/v1/acme/eab-credentials/{kid}/policy` (CLI `acme eab policy`) replaces a
   credential's allowed identifiers, order quota, validity window and pinned
