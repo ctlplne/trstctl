@@ -1477,22 +1477,25 @@ certificate) and relays session channels exactly as for SSH; the password stays 
 the gateway's locked memory and is masked in the recording. Rules for the
 `netdevice` protocol name device command verbs, matched by abbreviation; exec
 commands are read, and so are the typed lines of an interactive shell (A270-L1).
-In a ruled shell the gateway forwards every key as typed, so the device echoes and
-edits the line itself, and keeps its own copy of the line, following the editing
-keys the five platforms share (Backspace and Delete erase, Ctrl-U kills the line,
-Ctrl-C abandons it, Ctrl-W erases a word, `?` asks for help and is not part of the
+In a ruled shell the gateway forwards printable input and editing keys it can
+model, so the device echoes and edits those keys. It keeps its own copy of the
+line, following the editing keys the five platforms share (Backspace and Delete
+erase, Ctrl-U clears from the cursor to the start, Ctrl-C abandons the line,
+Ctrl-W erases a word, `?` asks for help and is not part of the
 line). The line's submission (Enter, or Ctrl-Z, which on IOS-XE runs the line as it
 leaves configuration mode) waits for the rules: an allowed line's Enter is
 forwarded; a refused line is killed at the device with Ctrl-U and an empty Enter
 (a fresh prompt), the client is told, the recording is marked `command-refused`,
-and the decision is recorded like an exec command's. Any other control key or
-escape sequence (history recall, completion, cursor movement) makes the line
-unreadable until it is submitted or killed, and an unreadable line is refused as
-uninspectable. The proof (`TestServedNetworkDeviceSessionsA270`) runs the stock
-`ssh` client through the CLI tunnel to SSH stand-ins of all five platforms, seals
-and checks each recording, blocks `wr mem` under a `write` rule before the device
-sees it, and in a ruled interactive shell refuses a typed `wr mem` while the lines
-around it run; `TestTypedLines*` cover the editing keys.
+and the decision is recorded like an exec command's. The gateway withholds every
+other control key and escape sequence (history recall, completion, cursor
+movement), keeping the device cursor at line end so Ctrl-U clears the entire
+line. Such input makes the line unreadable until it is submitted or killed, and
+an unreadable line is refused as uninspectable. The proof
+(`TestServedNetworkDeviceSessionsA270`) runs the stock `ssh` client through the
+CLI tunnel to SSH stand-ins of all five platforms, seals and checks each
+recording, blocks `wr mem` under a `write` rule before the device
+sees it, and in a ruled interactive shell refuses a typed `wr mem` and cursor-move
+attempts while the lines around them run; `TestTypedLines*` cover the editing keys.
 
 
 ## Internal web admin consoles (A273)

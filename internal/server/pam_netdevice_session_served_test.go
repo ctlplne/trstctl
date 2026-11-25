@@ -260,9 +260,11 @@ func TestServedNetworkDeviceSessionsA270(t *testing.T) {
 	// A270-L1: an interactive shell opens under the rule, and each typed line
 	// is judged as the device would run it. "wr mem" is refused: the device
 	// kills the typed line and runs nothing; the lines around it run, and a
-	// "write mem" killed with Ctrl-U before Enter was never submitted.
+	// "write mem" killed with Ctrl-U before Enter was never submitted. Ctrl-A
+	// must not move the device cursor before a refused line is killed, and a
+	// later client Ctrl-U must clear the whole device line before Enter.
 	shell := command()
-	shell.Stdin = strings.NewReader("terminal length 0\rwr mem\rwrite mem\x15show version\r")
+	shell.Stdin = strings.NewReader("terminal length 0\rwr mem\rwrite mem\x15show version\rwrite memory\x01\rwrite memory\x01\x15\r")
 	shellOutput, err := shell.CombinedOutput()
 	if err != nil {
 		t.Fatalf("an interactive shell under the rule: %v %s", err, shellOutput)
@@ -283,16 +285,20 @@ func TestServedNetworkDeviceSessionsA270(t *testing.T) {
 	if status != http.StatusOK || json.Unmarshal(body, &page) != nil {
 		t.Fatalf("the device refusal evidence = %d %s", status, body)
 	}
-	// Two blocked writes: the exec request and the typed line, each bound to
-	// the rule, with no command text in the evidence.
-	blockedWrites := 0
+	// The exec request and typed wr mem match the write rule; the cursor
+	// attempt is recorded separately as uninspectable. The client's Ctrl-U
+	// cancels its own line and needs no policy decision.
+	blockedWrites, blockedUninspectable := 0, 0
 	for _, item := range page.Items {
 		if item.Phase == "exec" && item.Status == "blocked" && item.Reason == "matched_rule" && slices.Equal(item.Operations, []string{"write"}) &&
 			slices.Equal(item.RuleIDs, []string{ruleID}) && item.Protocol == "netdevice" {
 			blockedWrites++
 		}
+		if item.Phase == "uninspectable" && item.Status == "blocked" && slices.Equal(item.RuleIDs, []string{ruleID}) && item.Protocol == "netdevice" {
+			blockedUninspectable++
+		}
 	}
-	if blockedWrites != 2 || len(page.Items) != 2 || strings.Contains(string(body), "wr mem") {
+	if blockedWrites != 2 || blockedUninspectable != 1 || len(page.Items) != 3 || strings.Contains(string(body), "wr mem") {
 		t.Fatalf("the device refusal evidence = %s", body)
 	}
 	revoke(session.ID)

@@ -108,3 +108,95 @@ func TestTypedLinesSubmitOnCtrlZAndPassEmptyLines(t *testing.T) {
 		t.Fatalf("the device received %q", device)
 	}
 }
+
+// IOS-XE Ctrl-U removes text to the left of the cursor. The gateway must not
+// tell an operator it refused a command while its cleanup Enter runs that
+// command on the device, nor forward an unjudged Enter after a cursor move.
+func TestCR130CursorMovesCannotExecuteARefusedLine(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+	}{
+		{"refused after Ctrl-A", "write memory\x01\r"},
+		{"refused after repeated Ctrl-B", "write memory" + strings.Repeat("\x02", len("write memory")) + "\r"},
+		{"refused after CSI cursor-left", "write memory" + strings.Repeat("\x1b[D", len("write memory")) + "\r"},
+		{"client Ctrl-U after Ctrl-A", "write memory\x01\x15\r"},
+		{"client Ctrl-C after Ctrl-A", "write memory\x01\x03\r"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			device, _, _, _ := pumpFor(t, tc.input)
+			if strings.ContainsAny(device, "\x01\x02\x1b") {
+				t.Fatalf("cursor control reached device: %q", device)
+			}
+			for _, ran := range cr130IOSXESubmissions(device) {
+				if ran == "write memory" {
+					t.Fatalf("device ran the protected command after gateway sent %q", device)
+				}
+			}
+		})
+	}
+}
+
+// cr130IOSXESubmissions models the editing behavior relevant to this bypass.
+// It deliberately differs from the older stand-in's whole-line Ctrl-U: at a
+// moved cursor, IOS-XE leaves the suffix in place for the next Enter.
+func cr130IOSXESubmissions(keys string) []string {
+	var line []byte
+	cursor := 0
+	var submitted []string
+	for i := 0; i < len(keys); i++ {
+		b := keys[i]
+		switch b {
+		case '\r', '\n':
+			if len(line) > 0 {
+				submitted = append(submitted, string(line))
+			}
+			line = nil
+			cursor = 0
+		case 0x01: // Ctrl-A: beginning of line
+			cursor = 0
+		case 0x02: // Ctrl-B: move left
+			if cursor > 0 {
+				cursor--
+			}
+		case keyCtrlU: // delete cursor-to-start, not the suffix
+			line = append([]byte(nil), line[cursor:]...)
+			cursor = 0
+		case keyCtrlC:
+			line = nil
+			cursor = 0
+		default:
+			if b >= ' ' && b != keyDelete {
+				line = append(line, 0)
+				copy(line[cursor+1:], line[cursor:])
+				line[cursor] = b
+				cursor++
+			}
+		}
+	}
+	return submitted
+}
+
+// The client controls this byte stream. Unknown controls must not reach the
+// device's line editor, where they could move the cursor behind the gateway's
+// checked copy of the command.
+func FuzzPumpTypedLinesWithholdsUnknownControls(f *testing.F) {
+	f.Add([]byte("write memory\x01\r"))
+	f.Add([]byte("write memory\x1b[12D\r"))
+	f.Add([]byte("write memory\x01\x15\r"))
+	f.Fuzz(func(t *testing.T, input []byte) {
+		if len(input) > 8192 {
+			return
+		}
+		var device, client bytes.Buffer
+		err := pumpTypedLines(context.Background(), bytes.NewReader(input), &device, &client,
+			func(context.Context, []byte, bool) bool { return false }, func() {})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, b := range device.Bytes() {
+			if b == 0x1b || b == 0x01 || b == 0x02 || b == '\t' || b == 0x00 {
+				t.Fatalf("unknown control %#x reached device", b)
+			}
+		}
+	})
+}

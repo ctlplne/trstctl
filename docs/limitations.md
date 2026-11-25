@@ -10374,14 +10374,18 @@ their level, never a hash. A `netdevice` access target brokers sessions to each
 device through the gateway, which signs in over SSH with the vaulted password (the
 client holds none); sessions are recorded with the password masked, and `netdevice`
 command rules block device verbs (by abbreviation too) in exec commands and in the
-typed lines of an interactive shell (A270-L1). In a shell under rules every key reaches
-the device as typed, so its own echo and editing work, and only a line's submission
-(Enter, or Ctrl-Z) waits for the rules: an allowed line runs; a refused one is killed at
+typed lines of an interactive shell (A270-L1). In a shell under rules printable
+input and editing keys the gateway can model reach the device as typed. Its
+echo and editing work for those keys. Only a line's submission (Enter, or
+Ctrl-Z) waits for the rules: an allowed line runs; a refused one is killed at
 the device with Ctrl-U, runs nothing, is recorded as blocked evidence like an exec
 command and marked in the recording, and the client is told. The gateway follows the
-editing keys the five platforms share (erase, kill line, erase word, `?` for help); a
-line edited with keys it cannot follow (history recall, completion, cursor movement) is
-refused as uninspectable, so a ruled shell is retyped rather than recalled. Proof today:
+editing keys the five platforms share (erase, kill line, erase word, `?` for help);
+history recall, completion, cursor movement and other unknown controls are
+withheld from the device, and that line is refused as uninspectable. This keeps
+the device cursor at the end so Ctrl-U clears the entire line, including on
+IOS-XE, where Ctrl-U otherwise deletes only the text before the cursor. A
+ruled shell is retyped rather than recalled. Proof today:
 `TestNetworkDeviceRotationA270`,
 `TestNetworkAPIRotationA270`, `TestServedNetworkDeviceRotationA270`,
 `TestServedNetworkAPIDeviceRotationA270`, `TestGatewaySignsInToADeviceWithItsVaultedPasswordA270`

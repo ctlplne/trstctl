@@ -252,7 +252,7 @@ func (d *Device) serve(conn net.Conn, cfg *ssh.ServerConfig) {
 					}
 					_ = req.Reply(true, nil)
 					go func() {
-						d.run(&lineReader{r: strings.NewReader(command.Line + "\n")}, func(s string) { _, _ = io.WriteString(ch, s) }, sconn.User())
+						d.run(&lineReader{r: strings.NewReader(command.Line + "\n"), dialect: d.dialect}, func(s string) { _, _ = io.WriteString(ch, s) }, sconn.User())
 						_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
 						_ = ch.Close()
 					}()
@@ -269,7 +269,7 @@ func (d *Device) shell(ch io.ReadWriter, user string) {
 	write := func(s string) { _, _ = io.WriteString(ch, s) }
 	// A device echoes the end of each typed line, so output starts on a line
 	// of its own after the prompt.
-	lines := lineReader{r: ch, echo: func() { write("\r\n") }}
+	lines := lineReader{r: ch, dialect: d.dialect, echo: func() { write("\r\n") }}
 	d.run(&lines, write, user)
 }
 
@@ -321,12 +321,17 @@ func (d *Device) generic(lines *lineReader, write func(string), user string) {
 // lineReader is a device's command-line editor: it builds each line from the
 // keys typed, applying the editing keys every vendor's editor shares — erase
 // (Backspace, Delete), kill line (Ctrl-U, and Ctrl-C, which abandons it) and
-// erase word (Ctrl-W) — and runs it on Enter.
+// erase word (Ctrl-W) — and runs it on Enter. IOS-XE's Ctrl-U only deletes
+// text before the cursor, so cursor movement matters to the refused-line test.
 type lineReader struct {
-	r    io.Reader
-	buf  []byte
-	line []byte
-	echo func()
+	r       io.Reader
+	dialect Dialect
+	buf     []byte
+	line    []byte
+	cursor  int
+	escape  byte
+	csiNum  int
+	echo    func()
 }
 
 func (l *lineReader) next() (string, bool) {
@@ -334,10 +339,39 @@ func (l *lineReader) next() (string, bool) {
 		for len(l.buf) > 0 {
 			b := l.buf[0]
 			l.buf = l.buf[1:]
+			if l.dialect == IOSXE && l.escape != 0 {
+				switch l.escape {
+				case 1:
+					l.escape = 0
+					switch b {
+					case '[':
+						l.escape = 2
+						l.csiNum = 0
+					case 'O':
+						l.escape = 3
+					}
+				case 2:
+					if b >= '0' && b <= '9' {
+						l.csiNum = min(len(l.line), l.csiNum*10+int(b-'0'))
+					} else if b >= 0x40 && b <= 0x7e {
+						if b == 'D' {
+							l.cursor = max(0, l.cursor-max(1, l.csiNum))
+						}
+						l.escape = 0
+					}
+				case 3:
+					if b == 'D' && l.cursor > 0 {
+						l.cursor--
+					}
+					l.escape = 0
+				}
+				continue
+			}
 			switch b {
 			case '\r', '\n':
 				line := string(l.line)
 				l.line = l.line[:0]
+				l.cursor = 0
 				if line == "" {
 					continue
 				}
@@ -346,23 +380,51 @@ func (l *lineReader) next() (string, bool) {
 				}
 				return line, true
 			case 0x08, 0x7f:
-				if len(l.line) > 0 {
-					_, size := utf8.DecodeLastRune(l.line)
+				if l.cursor > 0 {
+					_, size := utf8.DecodeLastRune(l.line[:l.cursor])
+					copy(l.line[l.cursor-size:], l.line[l.cursor:])
 					l.line = l.line[:len(l.line)-size]
+					l.cursor -= size
 				}
-			case 0x15, 0x03:
+			case 0x15:
+				if l.dialect == IOSXE {
+					copy(l.line, l.line[l.cursor:])
+					l.line = l.line[:len(l.line)-l.cursor]
+				} else {
+					l.line = l.line[:0]
+				}
+				l.cursor = 0
+			case 0x03:
 				l.line = l.line[:0]
+				l.cursor = 0
+			case 0x01:
+				if l.dialect == IOSXE {
+					l.cursor = 0
+				}
+			case 0x02:
+				if l.dialect == IOSXE && l.cursor > 0 {
+					l.cursor--
+				}
+			case 0x1b:
+				if l.dialect == IOSXE {
+					l.escape = 1
+				}
 			case 0x17:
-				end := len(l.line)
+				end := l.cursor
 				for end > 0 && l.line[end-1] == ' ' {
 					end--
 				}
 				for end > 0 && l.line[end-1] != ' ' {
 					end--
 				}
-				l.line = l.line[:end]
+				copy(l.line[end:], l.line[l.cursor:])
+				l.line = l.line[:len(l.line)-(l.cursor-end)]
+				l.cursor = end
 			default:
-				l.line = append(l.line, b)
+				l.line = append(l.line, 0)
+				copy(l.line[l.cursor+1:], l.line[l.cursor:])
+				l.line[l.cursor] = b
+				l.cursor++
 			}
 		}
 		chunk := make([]byte, 512)

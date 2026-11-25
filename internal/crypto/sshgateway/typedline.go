@@ -11,9 +11,9 @@ import (
 
 // Typed lines in an interactive device shell (A270-L1).
 //
-// A network device's command line is a line editor: the device echoes each key,
-// edits the line, and runs it on Enter. The gateway forwards every key as it is
-// typed, so the device's own editing and echo work as they always do, and keeps
+// A network device's command line is a line editor: the device echoes known
+// editing keys and runs the line on Enter. The gateway withholds controls it
+// cannot model, keeping the device cursor at the end of the line. It keeps
 // its own copy of the line. Only the line's submission waits for the guard: an
 // allowed line's Enter is forwarded; a refused line is killed at the device
 // (Ctrl-U, then an empty Enter, which shows a fresh prompt) and never runs.
@@ -21,10 +21,10 @@ import (
 // The copy follows the keys the IOS-XE, Junos, EOS, FortiOS and tmsh editors
 // share: printable input, erase (Backspace, Delete), kill line (Ctrl-U, and
 // Ctrl-C, which abandons it) and erase word (Ctrl-W). "?" asks the device for
-// help and is not part of the line. Any other control key or escape sequence
-// (history recall, completion, cursor movement) can change the line in ways the
-// gateway cannot follow, so the line becomes unreadable until it is submitted or
-// killed, and an unreadable line is refused on submission.
+// help and is not part of the line. Other control keys and escape sequences
+// (history recall, completion, cursor movement) are withheld. That makes the
+// line unreadable until it is submitted or killed, and an unreadable line is
+// refused on submission.
 
 const (
 	keyCtrlC     = 0x03
@@ -79,14 +79,18 @@ func (l *typedLine) eraseWord() {
 	l.buf = l.buf[:end]
 }
 
-// pumpTypedLines forwards from (the client's typed input) to to (the device) as
-// it is typed, holding each line's submission until check allows the line. A
+// pumpTypedLines forwards known editing keys from the client to the device as
+// they are typed, holding each line's submission until check allows the line. A
 // line submits on Enter (CR or LF) or Ctrl-Z, which on IOS-XE runs the line and
 // leaves configuration mode. check receives the line and whether the gateway
 // could follow it; refused is called once for each refused line. The client
 // writer receives the notice for a refused line.
 func pumpTypedLines(ctx context.Context, from io.Reader, to, client io.Writer, check func(context.Context, []byte, bool) bool, refused func()) error {
 	line := typedLine{readable: true}
+	// 1: ESC prefix; 2: CSI sequence; 3: SS3 sequence. None of these bytes
+	// reaches the device: a cursor move would make Ctrl-U at the old cursor
+	// leave the protected suffix behind when we refuse the line.
+	var escape byte
 	defer line.reset()
 	in := make([]byte, 4096)
 	out := make([]byte, 0, 4096)
@@ -103,6 +107,29 @@ func pumpTypedLines(ctx context.Context, from io.Reader, to, client io.Writer, c
 	for {
 		n, readErr := from.Read(in)
 		for _, b := range in[:n] {
+			if escape != 0 {
+				switch b {
+				case '\r', '\n', keyCtrlZ:
+					escape = 0 // submit the unreadable line through the guard below
+				case keyCtrlU, keyCtrlC:
+					escape = 0
+					line.reset()
+					out = append(out, b)
+					continue
+				default:
+					switch {
+					case b == 0x1b:
+						escape = 1
+					case escape == 1 && b == '[':
+						escape = 2
+					case escape == 1 && b == 'O':
+						escape = 3
+					case escape == 1 || escape == 3 || (escape == 2 && b >= 0x40 && b <= 0x7e):
+						escape = 0
+					}
+					continue
+				}
+			}
 			switch {
 			case b == '\r' || b == '\n' || b == keyCtrlZ:
 				if line.readable && len(bytes.TrimSpace(line.buf)) == 0 {
@@ -110,8 +137,8 @@ func pumpTypedLines(ctx context.Context, from io.Reader, to, client io.Writer, c
 					line.reset()
 					continue
 				}
-				// Everything typed so far reaches the device before the
-				// decision, so the device's line is the one judged.
+				// Every known editing key reaches the device before the
+				// decision. Unknown controls never moved its cursor.
 				if err := flush(); err != nil {
 					return err
 				}
@@ -134,9 +161,11 @@ func pumpTypedLines(ctx context.Context, from io.Reader, to, client io.Writer, c
 				out = append(out, b)
 			case b == '?':
 				out = append(out, b)
+			case b == 0x1b:
+				line.readable = false
+				escape = 1
 			case b < 0x20:
 				line.readable = false
-				out = append(out, b)
 			default:
 				line.add(b)
 				out = append(out, b)

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("write memory\x01\x15\r")
