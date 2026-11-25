@@ -558,3 +558,30 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	*d = Duration(parsed)
 	return nil
 }
+
+// LeafProfile applies the tenant policy to an issuer-specific signing template.
+func (prof CertificateProfile) LeafProfile(base crypto.LeafProfile, intendedEKUs []string) crypto.LeafProfile {
+	out := base
+	if prof.MaxValidity > 0 {
+		max := time.Duration(prof.MaxValidity)
+		if out.MaxValidity == 0 || max < out.MaxValidity {
+			out.MaxValidity = max
+		}
+	}
+	if len(intendedEKUs) > 0 {
+		out.AllowedExtKeyUsage = slices.Clone(intendedEKUs)
+	}
+	if len(prof.AllowedDNSSuffixes) > 0 && len(out.PermittedDNSSuffixes) == 0 {
+		out.PermittedDNSSuffixes = slices.Clone(prof.AllowedDNSSuffixes)
+	}
+	if len(prof.AllowedIPCIDRs) > 0 && len(out.PermittedIPCIDRs) == 0 {
+		out.PermittedIPCIDRs = slices.Clone(prof.AllowedIPCIDRs)
+	}
+	if len(prof.AllowedEmailDomains) > 0 && len(out.PermittedEmailDomains) == 0 {
+		out.PermittedEmailDomains = slices.Clone(prof.AllowedEmailDomains)
+	}
+	if len(prof.AllowedURIPrefixes) > 0 && len(out.PermittedURIPrefixes) == 0 {
+		out.PermittedURIPrefixes = slices.Clone(prof.AllowedURIPrefixes)
+	}
+	return out
+}

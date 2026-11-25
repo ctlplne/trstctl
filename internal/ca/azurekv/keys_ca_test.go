@@ -4,6 +4,7 @@ package azurekv_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -35,6 +36,13 @@ func TestNativeKeysCAIssuesThroughDigestSigner(t *testing.T) {
 	info, err := certinfo.Inspect(issued.CertificatePEM)
 	if err != nil || info.SerialNumber == "" {
 		t.Fatalf("issued info = %+v, %v", info, err)
+	}
+	// A pre-upgrade intent can name a profile without an admitted revision.
+	// The native signer must not try the key with its own unrestricted template.
+	if _, err := plugin.Issue(context.Background(), ca.IssueRequest{
+		CSR: csr, DNSNames: []string{"native.azure.test"}, TTL: time.Hour, ProfileName: "application",
+	}); !errors.Is(err, ca.ErrIssuanceNotSubmitted) {
+		t.Errorf("unresolved named profile: %v, want definite pre-sign refusal", err)
 	}
 	plugin.Destroy()
 	if _, err := plugin.Issue(context.Background(), ca.IssueRequest{CSR: csr, DNSNames: []string{"native.azure.test"}}); err == nil {

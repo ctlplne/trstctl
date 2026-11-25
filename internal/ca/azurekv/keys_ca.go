@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"trstctl.com/trstctl/internal/ca"
@@ -22,9 +23,12 @@ const defaultKeysCAValidity = 90 * 24 * time.Hour
 // Key Vault/Managed-HSM signing key. CACertificatePEM is public material ordered
 // issuer first, then parents. The private key remains in Azure.
 type KeysCAConfig struct {
-	Name             string
-	CACertificatePEM []byte
-	DefaultTTL       time.Duration
+	Name                   string
+	CACertificatePEM       []byte
+	DefaultTTL             time.Duration
+	CRLDistributionPoints  []string
+	OCSPServers            []string
+	IssuingCertificateURLs []string
 }
 
 type keysBackend struct {
@@ -66,6 +70,9 @@ func NewKeysCA(cfg KeysCAConfig, signer crypto.DigestSigner, destroy func()) (*c
 	if cfg.DefaultTTL <= 0 {
 		cfg.DefaultTTL = defaultKeysCAValidity
 	}
+	cfg.CRLDistributionPoints = slices.Clone(cfg.CRLDistributionPoints)
+	cfg.OCSPServers = slices.Clone(cfg.OCSPServers)
+	cfg.IssuingCertificateURLs = slices.Clone(cfg.IssuingCertificateURLs)
 	cfg.CACertificatePEM = append([]byte(nil), cfg.CACertificatePEM...)
 	return catemplate.New(&keysBackend{
 		cfg: cfg, caDER: append([]byte(nil), block.Bytes...), signer: signer, destroy: destroy,
@@ -81,11 +88,21 @@ func (b *keysBackend) Issue(_ context.Context, req ca.IssueRequest) ([]byte, err
 	if len(req.DNSNames) == 0 {
 		return nil, errors.New("azurekv: at least one DNS name is required")
 	}
+	prof, err := req.NativeLeafProfile(crypto.LeafProfile{
+		ClampTTLToIssuer: true, CRLDistributionPoints: b.cfg.CRLDistributionPoints,
+		OCSPServers: b.cfg.OCSPServers, IssuingCertificateURL: b.cfg.IssuingCertificateURLs,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ca.ErrIssuanceNotSubmitted, err)
+	}
 	ttl := req.TTL
 	if ttl <= 0 {
 		ttl = b.cfg.DefaultTTL
+		if prof.MaxValidity > 0 {
+			ttl = min(ttl, prof.MaxValidity)
+		}
 	}
-	leafDER, err := crypto.SignLeafFromCSR(b.caDER, b.signer, req.CSR, ttl)
+	leafDER, err := crypto.SignLeafFromCSRWithProfile(b.caDER, b.signer, req.CSR, ttl, prof)
 	if err != nil {
 		return nil, fmt.Errorf("azurekv: sign leaf through Azure key: %w", err)
 	}

@@ -342,6 +342,9 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 		if errors.Is(err, store.ErrIdempotencyConflict) || errors.Is(err, orchestrator.ErrIdempotencyConflict) {
 			return api.ExternalCAIssuedCertificate{}, orchestrator.ErrIdempotencyConflict
 		}
+		if errors.Is(err, ca.ErrExternalProfileRefused) {
+			return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %s", api.ErrExternalCAInvalid, err)
+		}
 		if errors.Is(err, ca.ErrExternalIssuePending) {
 			return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %w", api.ErrExternalCAUpstream, ca.ErrExternalIssuePending)
 		}

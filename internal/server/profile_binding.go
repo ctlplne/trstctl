@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/profile"
@@ -84,29 +83,7 @@ func intendedProfileEKUs(requested, allowed []string) []string {
 }
 
 func leafProfileForCertificateProfile(base crypto.LeafProfile, prof profile.CertificateProfile, intendedEKUs []string) crypto.LeafProfile {
-	out := base
-	if prof.MaxValidity > 0 {
-		max := time.Duration(prof.MaxValidity)
-		if out.MaxValidity == 0 || max < out.MaxValidity {
-			out.MaxValidity = max
-		}
-	}
-	if len(intendedEKUs) > 0 {
-		out.AllowedExtKeyUsage = cloneStrings(intendedEKUs)
-	}
-	if len(prof.AllowedDNSSuffixes) > 0 && len(out.PermittedDNSSuffixes) == 0 {
-		out.PermittedDNSSuffixes = cloneStrings(prof.AllowedDNSSuffixes)
-	}
-	if len(prof.AllowedIPCIDRs) > 0 && len(out.PermittedIPCIDRs) == 0 {
-		out.PermittedIPCIDRs = cloneStrings(prof.AllowedIPCIDRs)
-	}
-	if len(prof.AllowedEmailDomains) > 0 && len(out.PermittedEmailDomains) == 0 {
-		out.PermittedEmailDomains = cloneStrings(prof.AllowedEmailDomains)
-	}
-	if len(prof.AllowedURIPrefixes) > 0 && len(out.PermittedURIPrefixes) == 0 {
-		out.PermittedURIPrefixes = cloneStrings(prof.AllowedURIPrefixes)
-	}
-	return out
+	return prof.LeafProfile(base, intendedEKUs)
 }
 
 func profileDNSNames(info crypto.CSRInfo, fallback []string) []string {

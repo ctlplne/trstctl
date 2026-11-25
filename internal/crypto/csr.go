@@ -11,10 +11,13 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/url"
+	"slices"
+	"strings"
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
@@ -140,6 +143,33 @@ type CSRInfo struct {
 	URIs              []string // SAN uniformResourceIdentifiers in the request
 	CommonName        string
 	RequestedEKUs     []string // EKUs requested in the CSR's extensionRequest, if any
+}
+
+// CheckExternalProfileSubject verifies the complete signed subject before the
+// external issuer receives the CSR. A profile's name rules cover identifiers;
+// no profile field currently authorizes additional distinguished-name attributes.
+func (info CSRInfo) CheckExternalProfileSubject(authorizedDNS []string) error {
+	var subject pkix.RDNSequence
+	if rest, err := asn1.Unmarshal(info.identity.subject, &subject); err != nil || len(rest) != 0 {
+		return errors.New("crypto: invalid certificate request subject")
+	}
+	if len(subject) == 0 {
+		return nil
+	}
+	if len(subject) != 1 || len(subject[0]) != 1 || !subject[0][0].Type.Equal(asn1.ObjectIdentifier{2, 5, 4, 3}) || info.CommonName == "" {
+		return errors.New("crypto: external issuance profile does not authorize additional subject attributes")
+	}
+	for _, dns := range authorizedDNS {
+		if strings.EqualFold(strings.TrimSuffix(dns, "."), strings.TrimSuffix(info.CommonName, ".")) {
+			return nil
+		}
+	}
+	for _, names := range [][]string{info.IPAddresses, info.EmailAddresses, info.URIs} {
+		if slices.Contains(names, info.CommonName) {
+			return nil
+		}
+	}
+	return errors.New("crypto: common name is outside the profile-checked identifiers")
 }
 
 // CSRIdentifiers are the names a PKCS#10 asks to have certified. It is a

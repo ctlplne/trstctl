@@ -205,6 +205,7 @@ func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Gua
 			}
 			built, buildErr := azurekv.NewKeysCA(azurekv.KeysCAConfig{
 				Name: item.Name, CACertificatePEM: caChain, DefaultTTL: defaultTTL,
+				CRLDistributionPoints: item.CRLDistributionPoints, OCSPServers: item.OCSPServers, IssuingCertificateURLs: item.IssuingCertificateURLs,
 			}, azureCASigner, nil)
 			if buildErr != nil {
 				return fail(buildErr)

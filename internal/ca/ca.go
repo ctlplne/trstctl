@@ -10,7 +10,11 @@ package ca
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/profile"
 )
 
 // IssueRequest asks a CA to sign a PKCS#10 certificate request. DNSNames lists
@@ -33,9 +37,12 @@ type IssueRequest struct {
 	// signing. Protocol names the enrollment path ("api"/"acme"/"est"/...), which a
 	// profile may restrict; RequestedEKUs are the extended key usages the caller
 	// asks for, checked against the profile's allow-list.
-	ProfileName   string
-	Protocol      string
-	RequestedEKUs []string
+	profileRevision *externalProfileRevision
+	resolvedProfile *profile.CertificateProfile
+	resolvedEKUs    []string
+	ProfileName     string
+	Protocol        string
+	RequestedEKUs   []string
 
 	// RequestBinding is a non-secret digest of the authenticated principal and
 	// canonical external-CA command. The durable certificate projection retains
@@ -54,6 +61,22 @@ type IssueRequest struct {
 	// device-attest-01). An issuer that records custody records it as a
 	// device-bound claim with this evidence; nil records none.
 	DeviceAttestation *DeviceAttestation
+}
+
+// NativeLeafProfile returns the effective signing template for a CA that constructs
+// the certificate itself. A named profile must have been resolved by the issuance service.
+func (req IssueRequest) NativeLeafProfile(base crypto.LeafProfile) (crypto.LeafProfile, error) {
+	if req.ProfileName == "" {
+		return base, nil
+	}
+	if req.resolvedProfile == nil {
+		return crypto.LeafProfile{}, errors.New("ca: native issuance requires the admitted certificate profile revision")
+	}
+	usages := req.resolvedEKUs
+	if len(usages) == 0 {
+		usages = req.resolvedProfile.EffectiveEKUs()
+	}
+	return req.resolvedProfile.LeafProfile(base, usages), nil
 }
 
 // DeviceAttestation is the retained proof behind a device-bound custody claim:

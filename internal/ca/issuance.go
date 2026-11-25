@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -132,20 +133,29 @@ const (
 	externalIssueResultWaitTimeout  = 30 * time.Second
 )
 
+// An intent pins the tenant profile version and its canonical specification digest.
+type externalProfileRevision struct {
+	Version int    `json:"version"`
+	Digest  string `json:"digest"`
+}
+
+var ErrExternalProfileRefused = errors.New("ca: certificate profile refused issuance")
+
 // ExternalIssuePayload is the durable outbox payload for provider-backed CA
 // issuance. It carries the full provider request so the outbox worker, not the
 // request handler, owns issue/poll/download side effects.
 type ExternalIssuePayload struct {
-	AuthorityID            string   `json:"authority_id"`
-	TenantID               string   `json:"tenant_id"`
-	CSR                    []byte   `json:"csr_der"`
-	DNSNames               []string `json:"dns_names,omitempty"`
-	TTLNanos               int64    `json:"ttl_nanos"`
-	ProviderIdempotencyKey string   `json:"provider_idempotency_key"`
-	ProfileName            string   `json:"profile_name,omitempty"`
-	Protocol               string   `json:"protocol,omitempty"`
-	RequestedEKUs          []string `json:"requested_ekus,omitempty"`
-	RequestBinding         string   `json:"request_binding"`
+	ProfileRevision        *externalProfileRevision `json:"profile_revision,omitempty"`
+	AuthorityID            string                   `json:"authority_id"`
+	TenantID               string                   `json:"tenant_id"`
+	CSR                    []byte                   `json:"csr_der"`
+	DNSNames               []string                 `json:"dns_names,omitempty"`
+	TTLNanos               int64                    `json:"ttl_nanos"`
+	ProviderIdempotencyKey string                   `json:"provider_idempotency_key"`
+	ProfileName            string                   `json:"profile_name,omitempty"`
+	Protocol               string                   `json:"protocol,omitempty"`
+	RequestedEKUs          []string                 `json:"requested_ekus,omitempty"`
+	RequestBinding         string                   `json:"request_binding"`
 	// KeyOrigin travels with the queued intent so a crash-recovered issue
 	// records the custody its caller stated (A121); older intents carry none.
 	KeyOrigin string `json:"key_origin,omitempty"`
@@ -170,6 +180,7 @@ func dependentRecordIdempotencyKey(idempotencyKey string) string {
 
 func newExternalIssuePayload(authorityID string, req IssueRequest) ExternalIssuePayload {
 	return ExternalIssuePayload{
+		ProfileRevision:        req.profileRevision,
 		AuthorityID:            authorityID,
 		TenantID:               req.TenantID,
 		CSR:                    append([]byte(nil), req.CSR...),
@@ -186,6 +197,7 @@ func newExternalIssuePayload(authorityID string, req IssueRequest) ExternalIssue
 
 func (p ExternalIssuePayload) IssueRequest() IssueRequest {
 	return IssueRequest{
+		profileRevision:        p.ProfileRevision,
 		TenantID:               p.TenantID,
 		CSR:                    append([]byte(nil), p.CSR...),
 		DNSNames:               append([]string(nil), p.DNSNames...),
@@ -221,12 +233,6 @@ var ErrIssuanceNotSubmitted = errors.New("ca: certificate signing was not submit
 // certificate and records the issuance in the outbox; a replay with the same key
 // returns the original certificate without minting again.
 func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempotencyKey string) (Certificate, error) {
-	// Profile gate (S8.1): when the request binds a profile, validate it before
-	// anything is signed. Deterministic, so a replay re-validates and still hits the
-	// idempotency cache below. A violation is rejected with a clear reason.
-	if err := s.enforceProfile(ctx, req); err != nil {
-		return Certificate{}, err
-	}
 	// A subject key that fails a structural weak-key check never reaches an
 	// external CA connector (owner decision, batch 11).
 	if len(req.CSR) > 0 {
@@ -243,6 +249,9 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	}
 	if s.outboxAuthorityID != "" {
 		return s.issueViaOutbox(ctx, req, idempotencyKey)
+	}
+	if err := s.admitProfile(ctx, &req); err != nil {
+		return Certificate{}, err
 	}
 	if err := s.recordIntent(ctx, req.TenantID, idempotencyKey, req); err != nil {
 		return Certificate{}, err
@@ -283,6 +292,14 @@ func (s *IssuanceService) issueViaOutbox(ctx context.Context, req IssueRequest, 
 	if cert, found, err := s.recoverExternalIssue(ctx, req.TenantID, idempotencyKey, req.RequestBinding); err != nil || found {
 		return cert, err
 	}
+	if req.ProfileName != "" {
+		if cert, found, err := s.resumeProfiledIntent(ctx, req, idempotencyKey); found || err != nil {
+			return cert, err
+		}
+		if err := s.admitProfile(ctx, &req); err != nil {
+			return Certificate{}, err
+		}
+	}
 	payload, err := json.Marshal(newExternalIssuePayload(s.outboxAuthorityID, req))
 	if err != nil {
 		return Certificate{}, err
@@ -307,6 +324,13 @@ func (s *IssuanceService) issueViaOutbox(ctx context.Context, req IssueRequest, 
 			  WHERE tenant_id = $1 AND idempotency_key = $2`,
 			req.TenantID, idempotencyKey).Scan(&outboxID, &initialAttempts)
 	}); err != nil {
+		// A concurrent admission can pin another revision between our lookup
+		// and enqueue. Join it only if the complete original command matches.
+		if req.ProfileName != "" && errors.Is(err, store.ErrIdempotencyConflict) {
+			if cert, found, retryErr := s.resumeProfiledIntent(ctx, req, idempotencyKey); found || retryErr != nil {
+				return cert, retryErr
+			}
+		}
 		return Certificate{}, err
 	}
 	if s.wakeOutbox != nil {
@@ -439,6 +463,18 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 		} else if found {
 			return json.Marshal(recovered)
 		}
+		if revision := req.profileRevision; revision != nil {
+			record, err := s.store.GetProfileVersion(ctx, req.TenantID, req.ProfileName, revision.Version)
+			if err != nil {
+				return nil, orchestrator.ConfirmedNoMutation(err)
+			}
+			if store.ProfileSpecDigest(record.Spec) != revision.Digest {
+				return nil, orchestrator.ConfirmedNoMutation(errors.New("ca: admitted external CA profile revision differs"))
+			}
+			if err := resolveExternalProfile(&req, record); err != nil {
+				return nil, orchestrator.ConfirmedNoMutation(err)
+			}
+		}
 		cert, err := s.ca.Issue(ctx, req)
 		if err != nil {
 			// The CA holds the request for a manager's approval: record its
@@ -559,47 +595,108 @@ func (s *IssuanceService) recoverExternalIssue(ctx context.Context, tenantID, id
 	return cert, true, nil
 }
 
-// enforceProfile resolves the request's bound profile (if any) and validates the
-// request against it, emitting an AN-2 audit event for the decision. An unbound
-// request (no ProfileName) is allowed — the enrollment-protocol servers that build
-// on this (S8.2–S8.4) always bind a profile.
-func (s *IssuanceService) enforceProfile(ctx context.Context, req IssueRequest) error {
+// resumeProfiledIntent matches every caller-controlled field and the worker lane.
+// Only the server-selected revision can differ on a retry after a profile edit.
+func (s *IssuanceService) resumeProfiledIntent(ctx context.Context, req IssueRequest, key string) (Certificate, bool, error) {
+	var id int64
+	var attempts, count int
+	var stored []byte
+	err := s.store.WithTenant(ctx, req.TenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT id, attempts, count(*) OVER (),
+			CASE WHEN destination = $3 AND COALESCE(NULLIF(effect_lane,''), destination) = $4
+			AND COALESCE(required_agent_role,'') = '' AND required_agent_id IS NULL THEN payload END
+			FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2 ORDER BY id LIMIT 1`,
+			req.TenantID, key, DestinationExternalCAIssue, DestinationExternalCAIssue+":authority:"+s.outboxAuthorityID).Scan(&id, &attempts, &count, &stored)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Certificate{}, false, nil
+	}
+	if err != nil {
+		return Certificate{}, false, err
+	}
+	if count != 1 || len(stored) == 0 {
+		return Certificate{}, false, store.ErrIdempotencyConflict
+	}
+	var pinned struct {
+		Revision *externalProfileRevision `json:"profile_revision"`
+	}
+	if err := json.Unmarshal(stored, &pinned); err != nil {
+		return Certificate{}, false, err
+	}
+	cmd := newExternalIssuePayload(s.outboxAuthorityID, req)
+	cmd.ProfileRevision = pinned.Revision
+	raw, err := json.Marshal(cmd)
+	if err != nil {
+		return Certificate{}, false, err
+	}
+	if !bytes.Equal(raw, stored) {
+		return Certificate{}, false, store.ErrIdempotencyConflict
+	}
+	if s.wakeOutbox != nil {
+		s.wakeOutbox()
+	}
+	cert, err := s.waitForExternalIssue(ctx, req.TenantID, key, req.RequestBinding, id, attempts)
+	return cert, true, err
+}
+
+func (s *IssuanceService) admitProfile(ctx context.Context, req *IssueRequest) error {
 	if req.ProfileName == "" {
 		return nil
 	}
-	rec, err := s.store.GetActiveProfile(ctx, req.TenantID, req.ProfileName)
+	record, err := s.store.GetActiveProfile(ctx, req.TenantID, req.ProfileName)
+	if err == nil {
+		req.profileRevision = &externalProfileRevision{Version: record.Version, Digest: store.ProfileSpecDigest(record.Spec)}
+		err = resolveExternalProfile(req, record)
+	} else if store.IsNotFound(err) {
+		err = fmt.Errorf("%w: profile %q not found", ErrExternalProfileRefused, req.ProfileName)
+	} else {
+		return err
+	}
 	if err != nil {
-		if store.IsNotFound(err) {
-			return s.auditDecision(ctx, req, 0, "deny", fmt.Sprintf("profile %q not found", req.ProfileName))
+		if aerr := s.auditDecision(ctx, *req, record.Version, "deny", err.Error()); aerr != nil {
+			return aerr
 		}
 		return err
 	}
+	return s.auditDecision(ctx, *req, record.Version, "allow", "")
+}
+
+func resolveExternalProfile(req *IssueRequest, record store.ProfileRecord) error {
 	var prof profile.CertificateProfile
-	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
+	if err := json.Unmarshal(record.Spec, &prof); err != nil {
 		return fmt.Errorf("issuance: decode profile %q: %w", req.ProfileName, err)
 	}
 	info, err := crypto.InspectCSR(req.CSR)
 	if err != nil {
-		return s.auditDecision(ctx, req, rec.Version, "deny", "unparseable CSR")
+		return fmt.Errorf("%w: unparseable CSR", ErrExternalProfileRefused)
 	}
-	preq := profile.Request{
-		KeyAlgorithm:   info.KeyAlgorithm,
-		KeyBits:        info.KeyBits,
-		RequestedEKUs:  req.RequestedEKUs,
-		TTL:            req.TTL,
-		DNSNames:       profileDNSNames(info, req.DNSNames),
-		IPAddresses:    info.IPAddresses,
-		EmailAddresses: info.EmailAddresses,
-		URIs:           info.URIs,
-		Protocol:       req.Protocol,
+	names := profileDNSNames(info, req.DNSNames)
+	if err := info.CheckExternalProfileSubject(names); err != nil {
+		return fmt.Errorf("%w: %w", ErrExternalProfileRefused, err)
 	}
-	if verr := prof.Validate(preq); verr != nil {
-		if aerr := s.auditDecision(ctx, req, rec.Version, "deny", verr.Error()); aerr != nil {
-			return aerr
+	usages := req.RequestedEKUs
+	if len(usages) == 0 {
+		usages = info.RequestedEKUs
+	} else {
+		for _, eku := range info.RequestedEKUs {
+			if !slices.Contains(usages, eku) {
+				return fmt.Errorf("%w: CSR usage %q is outside the requested usages", ErrExternalProfileRefused, eku)
+			}
 		}
-		return verr
 	}
-	return s.auditDecision(ctx, req, rec.Version, "allow", "")
+	if err := prof.Validate(profile.Request{
+		KeyAlgorithm: info.KeyAlgorithm, KeyBits: info.KeyBits, RequestedEKUs: usages,
+		TTL: req.TTL, DNSNames: names, IPAddresses: info.IPAddresses,
+		EmailAddresses: info.EmailAddresses, URIs: info.URIs, Protocol: req.Protocol,
+	}); err != nil {
+		return fmt.Errorf("%w: %w", ErrExternalProfileRefused, err)
+	}
+	req.resolvedProfile = &prof
+	req.resolvedEKUs = slices.Clone(usages)
+	if len(info.RequestedEKUs) > 0 {
+		req.resolvedEKUs = slices.Clone(info.RequestedEKUs)
+	}
+	return nil
 }
 
 // profileDNSNames returns every DNS name the profile must vet: the CSR's own

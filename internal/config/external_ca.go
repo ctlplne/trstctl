@@ -65,12 +65,16 @@ type ExternalCAConfig struct {
 
 	// Azure Keys/Managed HSM CA custody / Google CAS. Azure binds an existing
 	// non-exportable signing key to the matching operator CA certificate chain.
-	KeyName        string `json:"key_name,omitempty"`
-	KeyVersion     string `json:"key_version,omitempty"`
-	ManagedKeyRef  string `json:"managed_key_ref,omitempty"`
-	CACertFile     string `json:"ca_cert_file,omitempty"`
-	CAPool         string `json:"ca_pool,omitempty"`
-	BearerTokenRef string `json:"bearer_token_ref,omitempty"`
+	KeyName       string `json:"key_name,omitempty"`
+	KeyVersion    string `json:"key_version,omitempty"`
+	ManagedKeyRef string `json:"managed_key_ref,omitempty"`
+	CACertFile    string `json:"ca_cert_file,omitempty"`
+	// Issuer-specific URLs that the native Azure CA places in the signed leaf.
+	CRLDistributionPoints  []string `json:"crl_distribution_points,omitempty"`
+	OCSPServers            []string `json:"ocsp_servers,omitempty"`
+	IssuingCertificateURLs []string `json:"issuing_certificate_urls,omitempty"`
+	CAPool                 string   `json:"ca_pool,omitempty"`
+	BearerTokenRef         string   `json:"bearer_token_ref,omitempty"`
 
 	// DigiCert / GlobalSign.
 	APIKeyRef    string `json:"api_key_ref,omitempty"`
@@ -511,6 +515,24 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 // validation is automated right up until the reuse window closes.
 func validateExternalCAFieldScope(where string, c ExternalCAConfig) []error {
 	var errs []error
+	for _, field := range []struct {
+		name string
+		urls []string
+	}{
+		{"crl_distribution_points", c.CRLDistributionPoints}, {"ocsp_servers", c.OCSPServers}, {"issuing_certificate_urls", c.IssuingCertificateURLs},
+	} {
+		if len(field.urls) != 0 && c.Type != "azurekv" {
+			errs = append(errs, fmt.Errorf("%s.%s applies only to the native azurekv issuer", where, field.name))
+			continue
+		}
+		for _, raw := range field.urls {
+			u, err := url.Parse(raw)
+			if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.Fragment != "" || u.RawQuery != "" {
+				errs = append(errs, fmt.Errorf("%s.%s requires an HTTP or HTTPS certificate distribution URL without credentials, query, or fragment", where, field.name))
+			}
+		}
+	}
+
 	if UpstreamDNS01Capable(c.Type) && c.UpstreamDNS01 && strings.TrimSpace(c.CAAIssuerDomain) == "" {
 		errs = append(errs, fmt.Errorf(
 			"%s.caa_issuer_domain is required when upstream_dns01 is enabled: the CAA check "+

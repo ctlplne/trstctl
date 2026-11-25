@@ -411,6 +411,23 @@ revocation and why, such as a relay that has never connected. The same
 relay approves (`certutil -resubmit`) or denies held requests after trstctl's own
 approval (N1); `adcs.request.decide` must be claimable for that.
 
+The native Azure issuer signs with the tenant profile revision admitted for the
+request. The signed leaf carries the requested extended key usages within that
+profile, or the profile defaults when the caller requests none. An omitted TTL
+uses the shorter of the issuer default and the profile maximum, including
+backdating in the signed validity limit. Its subject can carry a common name
+that matches a profile-checked identifier. Extra subject attributes are refused.
+When a policy decision refuses a request, the API returns HTTP 422 before queuing
+a signing job.
+
+On an `azurekv` entry, set `crl_distribution_points`, `ocsp_servers`, and
+`issuing_certificate_urls` to arrays of URLs published for that issuer.
+The signer embeds these pointers in the leaf. The operator runs the named
+status and chain services. A queued pre-upgrade Azure request with a named
+profile and no retained revision cannot start a new signature. Check its
+issuance record and resubmit under a new idempotency key if it still needs a
+certificate.
+
 Supported `type` values are `adcs`, `awspca`, `azurekv`, `digicert`, `ejbca`,
 `entrust`, `gcpcas`, `globalsign`, `letsencrypt`, `sectigo`, `shellca`,
 `smallstep`, `vaultpki`, and `venafi`. `trstctl -check-config` validates every
