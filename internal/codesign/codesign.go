@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/githubidentity"
 )
 
@@ -40,11 +41,20 @@ type Gate interface {
 // is deliberately not the classifier: provider and policy messages may change or
 // contain attacker-controlled values, while errors.Is remains stable.
 var (
-	ErrInvalidRequest  = errors.New("codesign: invalid request")
-	ErrPolicyDenied    = errors.New("codesign: policy denied")
-	ErrKeyUnavailable  = errors.New("codesign: key unavailable")
-	ErrSignerOperation = errors.New("codesign: signer operation failed")
+	ErrInvalidRequest   = errors.New("codesign: invalid request")
+	ErrPolicyDenied     = errors.New("codesign: policy denied")
+	ErrKeyUnavailable   = errors.New("codesign: key unavailable")
+	ErrSignerOperation  = errors.New("codesign: signer operation failed")
+	ErrAuditUnavailable = errors.New("codesign: audit unavailable")
 )
+
+// auditUnavailableError keeps the append detail available to internal callers
+// through errors.Is while giving job/API surfaces a safe, stable error string.
+type auditUnavailableError struct{ cause error }
+
+func (e *auditUnavailableError) Error() string { return ErrAuditUnavailable.Error() }
+
+func (e *auditUnavailableError) Unwrap() []error { return []error{ErrAuditUnavailable, e.cause} }
 
 type classifiedError struct {
 	class error
@@ -119,8 +129,10 @@ func (s *Service) Sign(ctx context.Context, req SignRequest) (Signature, error) 
 	digestHex := fmt.Sprintf("%x", req.Digest)
 	if s.cfg.Gate != nil {
 		if ok, reason := s.cfg.Gate.MaySign(ctx, s.cfg.TenantID, req.Principal, req.KeyID, digestHex); !ok {
-			_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.refused", s.cfg.TenantID,
-				[]byte(fmt.Sprintf(`{"principal":%q,"key":%q,"reason":%q}`, req.Principal, req.KeyID, reason)))
+			if auditErr := auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.refused", s.cfg.TenantID,
+				[]byte(fmt.Sprintf(`{"principal":%q,"key":%q,"reason":%q}`, req.Principal, req.KeyID, reason))); auditErr != nil {
+				return Signature{}, &auditUnavailableError{auditErr}
+			}
 			return Signature{}, classify(ErrPolicyDenied, fmt.Errorf("codesign: %s not permitted to sign with %s: %s", req.Principal, req.KeyID, reason))
 		}
 	}
@@ -139,8 +151,11 @@ func (s *Service) Sign(ctx context.Context, req SignRequest) (Signature, error) 
 		return Signature{}, classify(ErrSignerOperation, fmt.Errorf("codesign: sign: %w", err))
 	}
 	pub := signer.Public()
-	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.signed", s.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"principal":%q,"key":%q,"artifact_type":%q,"digest":%q}`, req.Principal, req.KeyID, req.ArtifactType, digestHex)))
+	if auditErr := auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.signed", s.cfg.TenantID,
+		[]byte(fmt.Sprintf(`{"principal":%q,"key":%q,"artifact_type":%q,"digest":%q}`, req.Principal, req.KeyID, req.ArtifactType, digestHex))); auditErr != nil {
+		secret.Wipe(value)
+		return Signature{}, &auditUnavailableError{auditErr}
+	}
 	return Signature{Algorithm: string(pub.Algorithm), Value: value, PublicKeyDER: pub.DER, KeyID: req.KeyID, ArtifactType: req.ArtifactType}, nil
 }
 
@@ -230,8 +245,10 @@ func (s *Service) SignKeyless(ctx context.Context, req KeylessRequest) (KeylessS
 	// A caller may assert the SAN/issuer it expects, but it must agree with the
 	// verified attestation — it cannot override it with an arbitrary value.
 	if req.FulcioSAN != "" && req.FulcioSAN != san {
-		_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.refused", s.cfg.TenantID,
-			[]byte(fmt.Sprintf(`{"principal":%q,"reason":"san_mismatch","claimed_san":%q,"verified_san":%q}`, req.Principal, req.FulcioSAN, san)))
+		if auditErr := auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.refused", s.cfg.TenantID,
+			[]byte(fmt.Sprintf(`{"principal":%q,"reason":"san_mismatch","claimed_san":%q,"verified_san":%q}`, req.Principal, req.FulcioSAN, san))); auditErr != nil {
+			return KeylessSignature{}, &auditUnavailableError{auditErr}
+		}
 		return KeylessSignature{}, classify(ErrInvalidRequest, fmt.Errorf("codesign: keyless SAN %q does not match the verified attestation subject %q", req.FulcioSAN, san))
 	}
 	if req.FulcioIssuer != "" && req.FulcioIssuer != issuer {
@@ -241,8 +258,10 @@ func (s *Service) SignKeyless(ctx context.Context, req KeylessRequest) (KeylessS
 		digestHex := fmt.Sprintf("%x", req.Digest)
 		keylessIdentity := "keyless:" + san
 		if ok, reason := s.cfg.Gate.MaySign(ctx, s.cfg.TenantID, req.Principal, keylessIdentity, digestHex); !ok {
-			_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.refused", s.cfg.TenantID,
-				[]byte(fmt.Sprintf(`{"principal":%q,"reason":%q}`, req.Principal, reason)))
+			if auditErr := auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.refused", s.cfg.TenantID,
+				[]byte(fmt.Sprintf(`{"principal":%q,"reason":%q}`, req.Principal, reason))); auditErr != nil {
+				return KeylessSignature{}, &auditUnavailableError{auditErr}
+			}
 			return KeylessSignature{}, classify(ErrPolicyDenied, fmt.Errorf("codesign: %s not permitted to sign as %s: %s", req.Principal, keylessIdentity, reason))
 		}
 	}
@@ -265,7 +284,10 @@ func (s *Service) SignKeyless(ctx context.Context, req KeylessRequest) (KeylessS
 		evidence.RepositoryID = req.Identity.Claims[githubidentity.RepositoryIDClaim]
 	}
 	payload, _ := json.Marshal(evidence)
-	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.signed", s.cfg.TenantID, payload)
+	if auditErr := auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.signed", s.cfg.TenantID, payload); auditErr != nil {
+		secret.Wipe(value)
+		return KeylessSignature{}, &auditUnavailableError{auditErr}
+	}
 	return KeylessSignature{
 		Algorithm: string(pub.Algorithm), Value: value, PublicKeyDER: pub.DER,
 		FulcioSAN: san, FulcioIssuer: issuer, ArtifactType: req.ArtifactType,

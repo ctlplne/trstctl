@@ -167,6 +167,9 @@ string that could echo identity material. A request whose deadline passes before
 outcome is confirmed, including in the middle of a database write, is answered as the
 deadline (a retryable `503` with `Retry-After`), never as a socket error; retrying with
 the same `Idempotency-Key` returns the recorded command's result.
+If the signing or refusal audit append fails, no signature is returned. The worker
+retries the command after audit service recovery; its error text does not expose the
+append failure detail. Use the same `Idempotency-Key` to check the outcome.
 
 When `ca.policy.require_approval` is enabled, the first request is refused (`403`) with
 a non-secret `approval_required:codesign:<sha256> request_id=<id> intent_digest=<digest>`,

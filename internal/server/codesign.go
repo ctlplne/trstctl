@@ -122,6 +122,12 @@ func codeSigningInfrastructureRetryable(err error) bool {
 	if err == nil {
 		return false
 	}
+	// The append cause can have a code that looks like a permanent request
+	// refusal. The typed audit outage wins: the signature was withheld and the
+	// same durable command must run again when its audit sink recovers.
+	if errors.Is(err, codesign.ErrAuditUnavailable) {
+		return true
+	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
@@ -140,6 +146,9 @@ func codeSigningInfrastructureRetryable(err error) bool {
 // avoids turning one transient provider message into a permanent user-visible deny.
 func codeSigningExecutionIsTerminal(err error) bool {
 	if err == nil {
+		return false
+	}
+	if errors.Is(err, codesign.ErrAuditUnavailable) {
 		return false
 	}
 	if errors.Is(err, errCodeSigningTerminalDomain) {
