@@ -247,7 +247,9 @@ func newSSHKRLWatchClient(o sshKRLWatchOptions) (*http.Client, error) {
 	if !ok {
 		return nil, errors.New("SSH KRL safe HTTP transport is unavailable")
 	}
-	safeTransport.TLSClientConfig = tlsTransport.TLSClientConfig
+	if err := netsec.AdoptTLSConfig(safeTransport, tlsTransport); err != nil {
+		return nil, fmt.Errorf("SSH KRL TLS adoption: %w", err)
+	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error {
 		return errors.New("SSH KRL endpoint redirected; exact origin required")
 	}

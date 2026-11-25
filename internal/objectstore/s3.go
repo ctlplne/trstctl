@@ -228,7 +228,9 @@ func httpClientFor(endpoint string, opts Options, timeout time.Duration) (*http.
 				return nil, fmt.Errorf("objectstore: ca_file: %w", err)
 			}
 			transport = transport.Clone()
-			transport.TLSClientConfig = pinned.TLSClientConfig
+			if err := netsec.AdoptTLSConfig(transport, pinned); err != nil {
+				return nil, fmt.Errorf("objectstore: adopt pinned CA: %w", err)
+			}
 		}
 		client = netsec.ClientFor(transport, ceiling, nil)
 	}

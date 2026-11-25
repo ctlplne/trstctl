@@ -1407,8 +1407,8 @@ not this file.
 | `internal/mdm/challenge/dynamic.go:80` | unix-epoch seconds; in int64 range until year 292e9 (CWE-190) |
 | `internal/mdm/challenge/dynamic.go:117` | unix-epoch seconds round-trip (CWE-190) |
 | `internal/netsec/relay_egress.go:157` | LookupPort returned 0-65535, checked above (CWE-190) |
-| `internal/objectstore/s3.go:405` | page is at most listPageSize (CWE-190) |
-| `internal/objectstore/s3.go:487` | limit is at most listPageSize (CWE-190) |
+| `internal/objectstore/s3.go:407` | page is at most listPageSize (CWE-190) |
+| `internal/objectstore/s3.go:489` | limit is at most listPageSize (CWE-190) |
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
 | `internal/orchestrator/discovery.go:367` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:75` | bounded fixture/corpus value packing inside a test (CWE-190) |

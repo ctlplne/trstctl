@@ -2018,7 +2018,9 @@ func secretIntegrationHTTPClientWithTLSAndBoundary(endpoint string, allowPrivate
 			return nil, errors.New("server: safe HTTPS transport is unavailable")
 		}
 		copy := base.Clone()
-		copy.TLSClientConfig = pinned.TLSClientConfig
+		if err := netsec.AdoptTLSConfig(copy, pinned); err != nil {
+			return nil, fmt.Errorf("server: adopt pinned CA: %w", err)
+		}
 		client.Transport = copy
 	}
 	if begin != nil {

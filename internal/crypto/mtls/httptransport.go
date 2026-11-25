@@ -20,6 +20,12 @@ func HTTPTransport(caPEM []byte) (*http.Transport, error) {
 	return HTTPTransportForServerName(caPEM, "")
 }
 
+// DirectoryHTTPTransport exposes the verified directory TLS configuration as
+// a transport solely so netsec can adopt it onto an SSRF-scoped HTTP dialer.
+func DirectoryHTTPTransport() *http.Transport {
+	return &http.Transport{TLSClientConfig: DirectoryClientTLSConfig(false)}
+}
+
 // HTTPTransportForServerName is HTTPTransport with an explicit certificate
 // identity override. This is needed when an operator reaches a private HTTPS
 // service by IP or an internal alias while its certificate names a stable DNS

@@ -246,7 +246,9 @@ func newADCSEndpointClient(intent ADCSInventoryIntent) (*http.Client, error) {
 	// Keep the resolved-address SSRF dialer while routing TLS policy through the
 	// crypto boundary. Redirects are evidence, not instructions: following one
 	// could leave the exact operator-scoped endpoint and erase its real status.
-	transport.TLSClientConfig = mtls.DirectoryClientTLSConfig(false)
+	if err := netsec.AdoptTLSConfig(transport, mtls.DirectoryHTTPTransport()); err != nil {
+		return nil, fmt.Errorf("relay: AD CS directory TLS adoption: %w", err)
+	}
 	transport.MaxResponseHeaderBytes = 64 * 1024
 	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 	// The agent's egress policy applies on top of the SSRF dial check. This
