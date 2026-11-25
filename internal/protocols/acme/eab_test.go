@@ -129,22 +129,34 @@ func TestSetEABDisabledCannotLiftTheConfigurationFloor(t *testing.T) {
 		"normal": {keyID: "normal"},
 	}
 
-	status, ok := s.SetEABDisabled("locked", false)
-	if !ok {
-		t.Fatal("SetEABDisabled did not find a configured credential")
+	status, ok, err := s.SetEABDisabled(t.Context(), "locked", false)
+	if !ok || err != nil {
+		t.Fatalf("SetEABDisabled did not find a configured credential: %v", err)
 	}
 	if status.State != "disabled" {
 		t.Fatalf("a config-disabled credential was re-enabled by an API call: %+v", status)
 	}
 
-	if status, ok = s.SetEABDisabled("normal", true); !ok || status.State != "disabled" || !status.DisabledByOperator {
+	if status, ok, err = s.SetEABDisabled(t.Context(), "normal", true); err != nil || !ok || status.State != "disabled" || !status.DisabledByOperator {
 		t.Fatalf("disable did not take effect: ok=%v %+v", ok, status)
 	}
-	if status, ok = s.SetEABDisabled("normal", false); !ok || status.State != "active" || status.DisabledByOperator {
+	if status, ok, err = s.SetEABDisabled(t.Context(), "normal", false); err != nil || !ok || status.State != "active" || status.DisabledByOperator {
 		t.Fatalf("enable did not take effect: ok=%v %+v", ok, status)
 	}
-	if _, ok = s.SetEABDisabled("no-such-kid", true); ok {
+	if _, ok, err = s.SetEABDisabled(t.Context(), "no-such-kid", true); ok || err != nil {
 		t.Error("SetEABDisabled reported success for a credential that is not configured")
+	}
+}
+
+func TestEABDisableKeepsServingStateWhenEventAppendFails(t *testing.T) {
+	s := New(nil, Validators{})
+	s.eabCredentials = map[string]*eabCredential{"compromised": {keyID: "compromised"}}
+	s.stateLog, s.stateTenantID = &accountFailingLog{}, "eab-tenant"
+	if _, ok, err := s.SetEABDisabled(t.Context(), "compromised", true); !ok || err == nil {
+		t.Fatalf("failed state append: ok=%v err=%v, want an error", ok, err)
+	}
+	if status := s.eabCredentials["compromised"].status(time.Now()); status.DisabledByOperator {
+		t.Fatalf("failed state append changed the serving view: %+v", status)
 	}
 }
 

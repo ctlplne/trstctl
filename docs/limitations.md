@@ -240,7 +240,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Conditional/partial residuals | Real served spine; specific operator-facing edges remain | [Conditional, partial, and residual boundaries](#conditional-partial-and-residual-boundaries) |
 | Served status strings | Every status is registered with what the code actually did; CI blocks a status spelled stronger than its own flags | [Served status vocabulary](#served-status-vocabulary-what-each-status-claims) |
 | CA hierarchy expiry horizon | Served; year-scale bands, re-alerting on each tightening, leaf-validity-compression check, horizon on the CA API and console, opt-in drafted re-key ceremonies at a chosen band | [The CA calendar](#the-ca-calendar-year-scale-hierarchy-expiry) |
-| ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window / profile enforced fail-closed, runtime disable, served policy replacement and rotation by secret-store reference (both replayed from the ACME state log) | [Protocols](#protocols) |
+| ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window / profile enforced fail-closed, runtime disable, served policy replacement and rotation by secret-store reference (all three replayed from the ACME state log) | [Protocols](#protocols) |
 | Certificate Transparency monitoring | Served as a headline Discovery capability: exact source replacement, active versus retired watchlist history, immutable per-log success/failure with independent checkpoint progress, unexpected-issuance findings, and remediation hand-off. Covers only the domains, IP addresses and ranges, and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Four paths still generate one in the control plane, each named with its successor and each governed by the tenant's control-plane key generation switch: the three deprecated paths (identity issuance without a CSR and its renewal, PKI-as-a-secret by common name and the Vault-compatible `pki/issue`, the compatibility Workload API socket) and the reissue step of a PQC migration run that predates host-csr migration. Kubernetes TLS auto-issuance never generates a key in the control plane: a `k8s_ingress_gateway` source bound to the host-role agent running in the cluster hands each TLS block to that agent, which generates the key inside the cluster, sends only a CSR and writes the TLS Secret with a signed receipt; a source without an agent records each resource and reports it not delivered, with the reason | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped get the origin their own retained issuance event proves, marked as derived and naming the rule and the event ([Key custody](custody.md) lists the rules); the rest of them, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance. A certificate ordered through an external CA records requester custody (A121), and where a host agent's key inventory found a matching key file the detail lists where it was seen, as an observation rather than a custody claim (A121) | [Key custody](custody.md) |
@@ -6741,8 +6741,15 @@ This is a deliberate, documented trust boundary, not an accident.
   `POST /api/v1/acme/eab-credentials/{kid}/disable` (and `/enable`) stops or
   resumes new accounts and orders under one credential at runtime. Disabling is
   a closed tap, not a revocation: certificates already issued under the
-  credential stay valid. The Protocols console shows the same list and carries
-  the disable action.
+  credential stay valid. Disable and enable decisions are recorded as
+  `acme.eab.disabled` state events, replayed after restart, and caught up by
+  other replicas before they admit ACME traffic. The Protocols console shows
+  the same list and carries the disable action. Account-bound and
+  orders-created counters are rebuilt from the retained account and order
+  events on restart, so a restart does not reset the configured order quota.
+  Concurrent order admissions on different replicas still need an atomic
+  shared quota reservation; operators should not treat the per-credential
+  `max_orders` limit as a cross-replica hard cap yet.
   The policy is served as well as configured (A53): `PUT
   /api/v1/acme/eab-credentials/{kid}/policy` (CLI `acme eab policy`) replaces a
   credential's allowed identifiers, order quota, validity window and pinned

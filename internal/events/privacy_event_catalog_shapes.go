@@ -233,6 +233,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "acme.eab.policy_updated":
 		return shape(`{"key_id":"","allowed_identifiers":[""],"max_orders":1,"not_after":"","profile":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/allowed_identifiers", "/max_orders", "/not_after", "/profile"}}), true
+	case "acme.eab.disabled":
+		return shape(`{"key_id":"","disabled":true}`, catalogPrivacyShapeOptions{}), true
 	case "acme.email_reply.refused":
 		return shape(`{"outcome":"","from_domain":"","challenge_id":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/from_domain", "/challenge_id"}}), true

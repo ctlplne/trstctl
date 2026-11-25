@@ -37,7 +37,7 @@ func StateEventTypes() []string {
 		acmeEventAccountUpserted, acmeEventOrderCreated,
 		acmeEventChallengeValidated, acmeEventCertificateIssued,
 		acmeEventCertificateRevoked, acmeEventEarlyRenewalMarked,
-		acmeEventEABPolicyUpdated, acmeEventEABCredentialRotated,
+		acmeEventEABPolicyUpdated, acmeEventEABCredentialRotated, acmeEventEABDisabled,
 	}
 }
 
@@ -250,13 +250,13 @@ func (s *Server) applyStateEventLocked(ev events.Event) error {
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {
 			return fmt.Errorf("acme: decode account event: %w", err)
 		}
-		return s.applyAccountEventLocked(payload)
+		return s.applyAccountEventLocked(payload, ev.Time)
 	case acmeEventOrderCreated:
 		var payload acmeOrderCreatedEvent
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {
 			return fmt.Errorf("acme: decode order event: %w", err)
 		}
-		return s.applyOrderCreatedEventLocked(payload)
+		return s.applyOrderCreatedEventLocked(payload, ev.Time)
 	case acmeEventEABPolicyUpdated:
 		var payload acmeEABPolicyUpdatedEvent
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {
@@ -270,6 +270,20 @@ func (s *Server) applyStateEventLocked(ev events.Event) error {
 			return fmt.Errorf("acme: decode EAB rotation event: %w", err)
 		}
 		s.applyEABCredentialRotatedLocked(context.Background(), payload)
+		return nil
+	case acmeEventEABDisabled:
+		var payload acmeEABDisabledEvent
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			return fmt.Errorf("acme: decode EAB disable event: %w", err)
+		}
+		if !validEABKeyID(payload.KeyID) {
+			return errors.New("acme: malformed EAB disable event key id")
+		}
+		if cred := s.eabCredentials[payload.KeyID]; cred != nil {
+			cred.mu.Lock()
+			cred.disabledByOperator = payload.Disabled
+			cred.mu.Unlock()
+		}
 		return nil
 	case acmeEventChallengeValidated:
 		var payload acmeChallengeValidatedEvent
@@ -300,7 +314,7 @@ func (s *Server) applyStateEventLocked(ev events.Event) error {
 	}
 }
 
-func (s *Server) applyAccountEventLocked(payload acmeAccountEvent) error {
+func (s *Server) applyAccountEventLocked(payload acmeAccountEvent, at time.Time) error {
 	if payload.URL == "" || payload.ID == "" || len(payload.JWK) == 0 {
 		return errors.New("acme: malformed account event")
 	}
@@ -309,6 +323,7 @@ func (s *Server) applyAccountEventLocked(payload acmeAccountEvent) error {
 		return fmt.Errorf("acme: account key replay: %w", err)
 	}
 	acct := s.accounts[payload.URL]
+	newAccount := acct == nil
 	if acct == nil {
 		acct = &account{url: payload.URL, lifecycle: &sync.RWMutex{}}
 	}
@@ -330,6 +345,11 @@ func (s *Server) applyAccountEventLocked(payload acmeAccountEvent) error {
 	// the policy it was admitted under (B4).
 	acct.eabKeyID = payload.EABKeyID
 	s.accounts[acct.url] = acct
+	if newAccount && acct.eabKeyID != "" {
+		if cred := s.eabCredentials[acct.eabKeyID]; cred != nil {
+			cred.recordAccountBound(at)
+		}
+	}
 	if oldID != "" && oldID != acct.id {
 		delete(s.byKey, oldID)
 	}
@@ -341,10 +361,11 @@ func (s *Server) applyAccountEventLocked(payload acmeAccountEvent) error {
 	return nil
 }
 
-func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) error {
+func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent, at time.Time) error {
 	if payload.Order.ID == "" || payload.Order.AccountURL == "" {
 		return errors.New("acme: malformed order event")
 	}
+	newOrder := s.orders[payload.Order.ID] == nil
 	o := &order{
 		id:         payload.Order.ID,
 		accountURL: payload.Order.AccountURL,
@@ -368,6 +389,13 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 		o.status = statusPending
 	}
 	s.orders[o.id] = o
+	if newOrder {
+		if acct := s.accounts[o.accountURL]; acct != nil && acct.eabKeyID != "" {
+			if cred := s.eabCredentials[acct.eabKeyID]; cred != nil {
+				cred.recordOrder(at)
+			}
+		}
+	}
 	for _, azPayload := range payload.Authorizations {
 		if azPayload.ID == "" || azPayload.OrderID == "" {
 			return errors.New("acme: malformed authorization event")

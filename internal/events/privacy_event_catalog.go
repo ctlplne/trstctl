@@ -146,6 +146,8 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/key_id", opaque), catalogPrivacyRule("/allowed_identifiers/*", token),
 			catalogPrivacyRule("/max_orders", opaque), catalogPrivacyRule("/not_after", opaque),
 			catalogPrivacyRule("/profile", opaque)),
+		entry("acme.eab.disabled",
+			catalogPrivacyRule("/key_id", opaque), catalogPrivacyRule("/disabled", opaque)),
 		entry("acme.order.created",
 			catalogPrivacyRule("/seq", opaque),
 			catalogPrivacyRule("/order/id", opaque), catalogPrivacyRule("/order/account_url", opaque),

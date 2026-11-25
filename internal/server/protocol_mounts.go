@@ -1301,12 +1301,15 @@ func (s *Server) acmeEABPosture(ctx context.Context, tenantID string) (api.ACMEE
 
 // setACMEEABDisabled applies an operator's runtime enable/disable decision to one
 // credential on this tenant's ACME mount.
-func (s *Server) setACMEEABDisabled(_ context.Context, tenantID, keyID string, disabled bool) (api.ACMEEABCredential, bool, error) {
+func (s *Server) setACMEEABDisabled(ctx context.Context, tenantID, keyID string, disabled bool) (api.ACMEEABCredential, bool, error) {
 	sp := s.protocols
 	if sp == nil || sp.acme == nil || sp.acmeTenant == "" || sp.acmeTenant != tenantID {
 		return api.ACMEEABCredential{}, false, nil
 	}
-	status, ok := sp.acme.SetEABDisabled(keyID, disabled)
+	status, ok, err := sp.acme.SetEABDisabled(ctx, keyID, disabled)
+	if err != nil {
+		return api.ACMEEABCredential{}, ok, err
+	}
 	if !ok {
 		return api.ACMEEABCredential{}, false, nil
 	}

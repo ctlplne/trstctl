@@ -342,6 +342,7 @@ type EABPolicyUpdate struct {
 const (
 	acmeEventEABPolicyUpdated      = "acme.eab.policy_updated"
 	acmeEventEABCredentialRotated  = "acme.eab.credential_rotated" // #nosec G101 -- an event type name, not credential material (CWE-798)
+	acmeEventEABDisabled           = "acme.eab.disabled"
 	eabResolvedKeyMinimumLength    = 16
 	eabCredentialKeyIDMaximumBytes = 128
 )
@@ -584,21 +585,34 @@ func (s *Server) EABCredentials() []EABCredentialStatus {
 // touching certificates already issued under it. It cannot re-enable a credential
 // that configuration disables — config is the floor, and an API call must not be
 // able to lift it.
-func (s *Server) SetEABDisabled(keyID string, disabled bool) (EABCredentialStatus, bool) {
+func (s *Server) SetEABDisabled(ctx context.Context, keyID string, disabled bool) (EABCredentialStatus, bool, error) {
 	if s == nil {
-		return EABCredentialStatus{}, false
+		return EABCredentialStatus{}, false, nil
 	}
 	keyID = strings.TrimSpace(keyID)
+	ctx, release, err := s.beginStateScope(ctx)
+	if err != nil {
+		return EABCredentialStatus{}, true, err
+	}
+	defer release()
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	cred := s.eabCredentials[keyID]
-	s.mu.Unlock()
 	if cred == nil {
-		return EABCredentialStatus{}, false
+		return EABCredentialStatus{}, false, nil
+	}
+	if err := s.appendStateEventLocked(ctx, acmeEventEABDisabled, acmeEABDisabledEvent{KeyID: keyID, Disabled: disabled}); err != nil {
+		return EABCredentialStatus{}, true, err
 	}
 	cred.mu.Lock()
 	cred.disabledByOperator = disabled
 	cred.mu.Unlock()
-	return cred.status(time.Now()), true
+	return cred.status(time.Now()), true, nil
+}
+
+type acmeEABDisabledEvent struct {
+	KeyID    string `json:"key_id"`
+	Disabled bool   `json:"disabled"`
 }
 
 func sortEABStatuses(in []EABCredentialStatus) {

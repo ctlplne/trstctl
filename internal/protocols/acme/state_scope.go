@@ -204,6 +204,14 @@ func (s *Server) resetStateScopeLocked() {
 	s.seq = 0
 	s.stateThrough, s.stateHead = 0, 0
 	s.ownApplied = map[uint64]bool{}
+	for _, cred := range s.eabCredentials {
+		cred.mu.Lock()
+		cred.accountsBound = 0
+		cred.ordersCreated = 0
+		cred.ordersDenied = 0
+		cred.lastUsed = time.Time{}
+		cred.mu.Unlock()
+	}
 	// Preserve configured EAB controls and abuse budgets. Account URLs include
 	// the registration identity, so per-account limits cannot alias old accounts.
 }

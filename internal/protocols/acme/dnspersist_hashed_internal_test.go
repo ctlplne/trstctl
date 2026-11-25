@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto/jose"
 )
@@ -138,7 +139,7 @@ func TestAccountKeyRolloverKeepsItsEarlierThumbprintsP1ACCOUNTURI(t *testing.T) 
 		jwk string
 		k   *jose.ACMEKey
 	}{{rfc7638Key, first}, {rfc7517Key, second}} {
-		if err := s.applyAccountEventLocked(acmeAccountEvent{ID: key.k.Thumbprint(), URL: url, JWK: json.RawMessage(key.jwk), Status: statusValid}); err != nil {
+		if err := s.applyAccountEventLocked(acmeAccountEvent{ID: key.k.Thumbprint(), URL: url, JWK: json.RawMessage(key.jwk), Status: statusValid}, time.Time{}); err != nil {
 			t.Fatal(err)
 		}
 	}

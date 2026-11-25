@@ -5,6 +5,7 @@ package acme
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestLegacyACMEOrderKeepsOriginalIssuanceBinding(t *testing.T) {
@@ -15,7 +16,7 @@ func TestLegacyACMEOrderKeepsOriginalIssuanceBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := New(nil, nil)
-	if err := srv.applyOrderCreatedEventLocked(event); err != nil {
+	if err := srv.applyOrderCreatedEventLocked(event, time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	if srv.orders["2"].issuanceKey != "" {
