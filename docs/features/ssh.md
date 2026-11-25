@@ -37,7 +37,8 @@ taking an opaque signer handle — so the CA key lives in an [HSM](../glossary.m
 the isolated signing service, never in the API process or in the clear. An issuance
 profile bounds the maximum TTL and allowed certificate types; serial numbers increment
 under a lock; every issuance is recorded as an immutable `ssh.cert.issued` event in its
-own bounded lane. The CA also maintains a key revocation list (KRL): revoke by serial or
+own bounded lane. If that audit append fails, issuance returns an error and no
+certificate. The CA also maintains a key revocation list (KRL): revoke by serial or
 key ID, then distribute a snapshot to hosts, pulling back a certificate before it
 expires.
 

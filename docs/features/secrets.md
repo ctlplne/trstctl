@@ -1586,7 +1586,9 @@ key material.
 Events —
 `transit.key.created`, `transit.key.rotated`, `transit.encrypt`, `transit.rewrap`,
 `transit.hmac`, `transit.sign` — give audit evidence without logging key bytes or
-plaintext.
+plaintext. A successful encrypt, decrypt, rewrap, HMAC, sign or verify requires
+its audit append; if that append fails, the operation returns an error and does
+not release the output.
 
 The console's **Encryption and signing** task at `/secrets/engines` reads back safe
 key metadata, creates AEAD/HMAC/signing keys, selects only a compatible key for each

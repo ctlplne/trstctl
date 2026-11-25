@@ -97,7 +97,9 @@ func newFactID() (string, error) {
 func (s *Service) afterSave(ctx context.Context, tenantID string, k *Keyring, name, eventType string) {
 	rec := s.factRecorder()
 	if rec == nil {
-		k.event(ctx, eventType, name)
+		// CR-024: the key is already saved. This post-commit audit site needs a
+		// durable intent before its error can become a safe caller failure.
+		_ = k.event(ctx, eventType, name)
 		return
 	}
 	_ = s.recordFacts(ctx, rec, tenantID, k.keyFacts(name))

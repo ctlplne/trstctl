@@ -704,6 +704,9 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 // same reviewed request is still valid and should be retried after recovery
 // (503). Internal socket/provider details do not cross the API boundary.
 func sshWorkflowIssuanceError(err error) error {
+	if errors.Is(err, sshca.ErrAuditUnavailable) {
+		return fmt.Errorf("%w: SSH issuance audit is unavailable; restore the event log and retry the exact request with the same Idempotency-Key", api.ErrSSHWorkflowUnavailable)
+	}
 	if sshWorkflowInfrastructureRetryable(err) {
 		return fmt.Errorf("%w: SSH signing service is temporarily unavailable; restore it and retry the exact request with the same Idempotency-Key", api.ErrSSHWorkflowUnavailable)
 	}

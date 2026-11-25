@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -27,6 +28,11 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 )
+
+// ErrAuditUnavailable means a certificate was signed but withheld because its
+// sole issuance audit event could not be appended. Callers may retry after
+// restoring the event log; no certificate bytes are returned to the caller.
+var ErrAuditUnavailable = errors.New("ssh: issuance audit append unavailable")
 
 // Profile governs SSH issuance.
 type Profile struct {
@@ -208,8 +214,11 @@ func (ca *CA) issue(ctx context.Context, profile Profile, req IssueRequest, cert
 			ValidBefore:    validBefore.UTC().Format(time.RFC3339),
 			Profile:        profile.Name,
 		})
-		if marshalErr == nil {
-			_ = auditsink.Emit(ctx, ca.cfg.Audit, nil, "ssh.cert.issued", ca.cfg.TenantID, payload)
+		if marshalErr != nil {
+			return fmt.Errorf("%w: %w", ErrAuditUnavailable, marshalErr)
+		}
+		if err := auditsink.Emit(ctx, ca.cfg.Audit, nil, "ssh.cert.issued", ca.cfg.TenantID, payload); err != nil {
+			return fmt.Errorf("%w: %w", ErrAuditUnavailable, err)
 		}
 		return nil
 	})

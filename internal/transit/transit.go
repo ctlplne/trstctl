@@ -584,7 +584,9 @@ func (k *Keyring) Encrypt(ctx context.Context, name string, plaintext, aad []byt
 	if err != nil {
 		return "", err
 	}
-	k.event(ctx, "transit.encrypt", name)
+	if err := k.event(ctx, "transit.encrypt", name); err != nil {
+		return "", err
+	}
 	return fmt.Sprintf("trv:%d:%s", nk.latest, base64.RawStdEncoding.EncodeToString(ct)), nil
 }
 
@@ -607,7 +609,10 @@ func (k *Keyring) Decrypt(ctx context.Context, name, ciphertext string, aad []by
 	if err != nil {
 		return nil, err
 	}
-	k.event(ctx, "transit.decrypt", name)
+	if err := k.event(ctx, "transit.decrypt", name); err != nil {
+		secret.Wipe(pt)
+		return nil, err
+	}
 	return pt, nil
 }
 
@@ -631,7 +636,9 @@ func (k *Keyring) Rewrap(ctx context.Context, name, ciphertext string, aad []byt
 	defer buf.Destroy()
 	out, err := k.Encrypt(ctx, name, buf.Bytes(), aad)
 	if err == nil {
-		k.event(ctx, "transit.rewrap", name)
+		if err := k.event(ctx, "transit.rewrap", name); err != nil {
+			return "", err
+		}
 	}
 	return out, err
 }
@@ -645,7 +652,10 @@ func (k *Keyring) HMAC(ctx context.Context, name string, data []byte) ([]byte, e
 		return nil, missf("transit: %q is not an HMAC key", name)
 	}
 	mac := crypto.HMACSHA256(nk.hmac[nk.latest], data)
-	k.event(ctx, "transit.hmac", name)
+	if err := k.event(ctx, "transit.hmac", name); err != nil {
+		secret.Wipe(mac)
+		return nil, err
+	}
 	return mac, nil
 }
 
@@ -663,7 +673,10 @@ func (k *Keyring) Sign(ctx context.Context, name string, message []byte) (sig, p
 	if err != nil {
 		return nil, nil, err
 	}
-	k.event(ctx, "transit.sign", name)
+	if err := k.event(ctx, "transit.sign", name); err != nil {
+		secret.Wipe(sig)
+		return nil, nil, err
+	}
 	// The caller owns and may wipe its return buffer. Never hand out the
 	// signer's cached public DER slice, even though its contents are public.
 	return sig, bytes.Clone(s.Public().DER), nil
@@ -672,10 +685,10 @@ func (k *Keyring) Sign(ctx context.Context, name string, message []byte) (sig, p
 // Verify checks a transit signature.
 func (k *Keyring) Verify(ctx context.Context, message, sig, pubDER []byte) error {
 	err := crypto.VerifyMessage(pubDER, message, sig)
-	if err == nil {
-		k.event(ctx, "transit.verify", "signature")
+	if err != nil {
+		return err
 	}
-	return err
+	return k.event(ctx, "transit.verify", "signature")
 }
 
 // VerifyNamed accepts prior versions after rotation while rejecting a public
@@ -698,8 +711,7 @@ func (k *Keyring) VerifyNamed(ctx context.Context, name string, message, sig, pu
 		if err := crypto.VerifyMessage(pubDER, message, sig); err != nil {
 			return err
 		}
-		k.event(ctx, "transit.verify", name)
-		return nil
+		return k.event(ctx, "transit.verify", name)
 	}
 	return missf("transit: signature key does not belong to %q", name)
 }
@@ -731,8 +743,8 @@ func CiphertextVersion(ciphertext string) (int, error) {
 	return ver, err
 }
 
-func (k *Keyring) event(ctx context.Context, ev, name string) {
-	_ = auditsink.Emit(ctx, k.audit, nil, ev, k.tenantID, []byte(fmt.Sprintf(`{"key":%q}`, name)))
+func (k *Keyring) event(ctx context.Context, ev, name string) error {
+	return auditsink.Emit(ctx, k.audit, nil, ev, k.tenantID, []byte(fmt.Sprintf(`{"key":%q}`, name)))
 }
 
 func parseCT(s string) (int, []byte, error) {

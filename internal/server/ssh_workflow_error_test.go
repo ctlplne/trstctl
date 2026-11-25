@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
+	sshca "trstctl.com/trstctl/internal/protocols/ssh"
 )
 
 func TestSSHWorkflowIssuanceErrorSeparatesSignerOutageFromRequestDenial(t *testing.T) {
@@ -25,5 +26,15 @@ func TestSSHWorkflowIssuanceErrorSeparatesSignerOutageFromRequestDenial(t *testi
 	denied := sshWorkflowIssuanceError(errors.New("ssh: requested principal is not bound to attested subject"))
 	if !errors.Is(denied, api.ErrSSHWorkflowRejected) || errors.Is(denied, api.ErrSSHWorkflowUnavailable) {
 		t.Fatalf("request denial classification = %v, want rejected only", denied)
+	}
+}
+
+func TestCR024SSHAuditFailureIsRetryableWithoutLeakingAppendDetails(t *testing.T) {
+	audit := sshWorkflowIssuanceError(errors.Join(sshca.ErrAuditUnavailable, errors.New("private event-log path")))
+	if !errors.Is(audit, api.ErrSSHWorkflowUnavailable) || errors.Is(audit, api.ErrSSHWorkflowRejected) {
+		t.Fatalf("audit outage classification = %v, want unavailable only", audit)
+	}
+	if strings.Contains(audit.Error(), "private event-log path") || !strings.Contains(audit.Error(), "audit") {
+		t.Fatalf("audit outage response lacks recovery guidance or leaked append details: %v", audit)
 	}
 }
