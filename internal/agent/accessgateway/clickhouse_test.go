@@ -72,7 +72,7 @@ func TestClickHouseRelaySignsEveryRequestInAsTheSessionUser(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", ln.Addr().String())
 	}, MaxConnsPerHost: 1}}
 	// A client's own credentials, in every form ClickHouse reads them.
-	req, _ := http.NewRequest(http.MethodPost, "http://gateway/?user=default&password=hunter2&database=orders", strings.NewReader("SELECT 1, note FROM notes"))
+	req, _ := http.NewRequest(http.MethodPost, "http://"+ln.Addr().String()+"/?user=default&password=hunter2&database=orders", strings.NewReader("SELECT 1, note FROM notes"))
 	req.SetBasicAuth("default", "hunter2")
 	req.Header.Set("X-ClickHouse-User", "default")
 	req.Header.Set("X-ClickHouse-Key", "hunter2")
@@ -90,7 +90,7 @@ func TestClickHouseRelaySignsEveryRequestInAsTheSessionUser(t *testing.T) {
 		t.Fatalf("upstream saw %+v", s)
 	}
 	// A second request on the same connection is signed in the same way.
-	resp, err = client.Get("http://gateway/?query=SELECT%202")
+	resp, err = client.Get("http://" + ln.Addr().String() + "/?query=SELECT%202")
 	if err != nil {
 		t.Fatal(err)
 	}

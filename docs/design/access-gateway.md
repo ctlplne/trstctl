@@ -17,6 +17,21 @@ separate design with no component in the call path, and does not reuse the gatew
 | Gateway | `trstctl-agent` in its own process with the **gateway** role (granted explicitly, with `agents:relay.grant`; a host-role agent cannot serve it) and `--access-gateway-listen`. It claims session jobs in a claim loop of its own, holds each session's upstream credential in locked memory (a redeemed PostgreSQL login or Redis ACL user, or a key it generated for an SSH session and the certificate the tenant SSH CA issued for it), admits only connections carrying the session's ticket, signs in upstream itself and never returns the credential. |
 | CLI | `trstctl access sessions connect <id> --ticket-file F`: a loopback listener; each local connection becomes one TLS connection to the gateway, verified as below. Stock clients (`psql`, `redis-cli`, `ssh`) connect to the loopback address. |
 
+For credentialed HTTP tunnels (web console, Kubernetes, ClickHouse, AWS API,
+GCP/Azure API and Snowflake), the gateway
+checks the browser's Host before it adds the session credential. Host must be a
+literal loopback address or `localhost` with a port. Origin and Referer, when
+present, must name that exact local HTTP origin; Fetch Metadata must say
+`same-origin` (or `none` for a direct safe navigation). A browser-shaped
+request without either Origin or Fetch Metadata is refused, including older
+browser GETs that might otherwise invoke an AWS query action. Stock CLI clients
+with their own User-Agent remain usable. A foreign-site form, WebSocket or
+DNS-rebound Host therefore reaches no upstream action or read. The web-console
+proxy maps a **verified** local Origin to the console's Origin so its own CSRF
+check still works; it never maps a foreign Origin into a trusted one. The
+session ticket still authenticates the CLI-to-gateway connection, while these
+checks protect the browser-facing loopback port from other web pages.
+
 The gateway's outbound destinations are the control plane and the targets bound to it.
 Its listener serves a certificate the agent CA signs for it (in the signer process, AN-4):
 ServerAuth, for the host names clients reach it by (`--access-gateway-hosts`, each the host

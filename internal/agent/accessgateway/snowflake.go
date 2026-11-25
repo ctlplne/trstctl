@@ -95,6 +95,9 @@ func serveSnowflake(ctx context.Context, client net.Conn, raw []byte, upstream h
 	}
 	defer key.Destroy()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refuseUntrustedTunnelRequest(w, r) {
+			return
+		}
 		if r.URL.RawPath != "" || !snowflakeSQLPath.MatchString(r.URL.Path) || (r.Method != http.MethodGet && r.Method != http.MethodPost) || r.Header.Get("Upgrade") != "" {
 			http.Error(w, "only the Snowflake SQL API is supported", http.StatusForbidden)
 			return

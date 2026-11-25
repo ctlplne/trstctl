@@ -108,6 +108,9 @@ func serveClickHouse(ctx context.Context, client net.Conn, credential []byte, up
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refuseUntrustedTunnelRequest(w, r) {
+			return
+		}
 		if rec != nil {
 			// The statement is the query parameter, the body, or both; the
 			// body is peeked, not read, so it still streams upstream.

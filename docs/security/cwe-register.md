@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3619 annotated sites across 35 rules. Each row is
+3622 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (922 sites)
+### G101 — CWE-798 Use of hardcoded credentials (925 sites)
 
 | Location | Reason |
 |---|---|
@@ -115,6 +115,9 @@ not this file.
 | `ee/provider/scim_groups_test.go:36` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `internal/accessrules/risk.go:22` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/accessrules/risk.go:30` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/accessgateway/browser_tunnel_cr037_test.go:176` | non-secret local upstream fixture for CR-037 (CWE-352) |
+| `internal/agent/accessgateway/browser_tunnel_cr037_test.go:177` | non-secret local upstream fixture for CR-037 (CWE-352) |
+| `internal/agent/accessgateway/browser_tunnel_cr037_test.go:179` | non-secret local upstream fixture for CR-037 (CWE-352) |
 | `internal/agent/csisecrets/driver.go:64` | the kubelet's request key name, not a credential (CWE-798) |
 | `internal/agent/csisecrets/driver_test.go:458` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/keystore.go:41` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
@@ -1158,8 +1161,8 @@ not this file.
 | `ee/managedkeys/provider_dates_e2e_test.go:270` | port is checked to be 1..65535 above (CWE-190) |
 | `ee/silo/lanedrill_test.go:97` | bounds-checked to [1, MaxUint16] above (CWE-190) |
 | `internal/agent/accessgateway/cr004_pg_encoding_test.go:84` | fixed test packet is well below the PostgreSQL wire length limit |
-| `internal/agent/accessgateway/kubernetes.go:230` | bounded by len(p) (CWE-190) |
-| `internal/agent/accessgateway/kubernetes.go:238` | take is non-negative (CWE-190) |
+| `internal/agent/accessgateway/kubernetes.go:233` | bounded by len(p) (CWE-190) |
+| `internal/agent/accessgateway/kubernetes.go:241` | take is non-negative (CWE-190) |
 | `internal/agent/accessgateway/kubernetes_test.go:24` | a 7-bit length below 126 (CWE-190) |
 | `internal/agent/accessgateway/kubernetes_test.go:27` | under 1<<16 (CWE-190) |
 | `internal/agent/accessgateway/kubernetes_test.go:30` | a payload length, never negative (CWE-190) |
@@ -1844,7 +1847,7 @@ not this file.
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/agent/accessgateway/webconsole.go:965` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
+| `internal/agent/accessgateway/webconsole.go:971` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
 | `internal/api/auth.go:1242` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
 | `internal/api/auth.go:1253` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth.go:1277` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |

@@ -857,6 +857,9 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refuseUntrustedTunnelRequest(w, r) {
+			return
+		}
 		if !reviewed.WithinURL(r.URL) {
 			// The tunnel's root leads to the console's path; any other path
 			// on the console's host is not the reviewed console.
@@ -927,6 +930,9 @@ func (c *webConsoleClient) rewrite(r *httputil.ProxyRequest, state *webConsoleSt
 		r.Out.Header.Set("Cookie", cookie)
 	}
 	r.Out.Header.Set("Accept-Encoding", "identity")
+	// The handler has already refused a foreign browser Origin and Referer.
+	// Map only that verified tunnel origin to the console's own origin so its
+	// same-origin form and WebSocket checks still work (CR-037).
 	if r.In.Header.Get("Origin") != "" {
 		r.Out.Header.Set("Origin", webOrigin(c.target))
 	}

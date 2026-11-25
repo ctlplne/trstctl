@@ -187,7 +187,7 @@ func TestGCPRelayReplacesClientAuthAndRefreshesOnlyWithinSession(t *testing.T) {
 		if n == 2 {
 			time.Sleep(1100 * time.Millisecond)
 		}
-		wire := "POST /resource?x=one+two&access_token=foreign&oauth_token=foreign&key=foreign&api_key=foreign HTTP/1.1\r\nHost: untrusted.example\r\nAuthorization: Bearer foreign\r\nCookie: session=foreign\r\nX-Goog-Api-Key: foreign\r\nX-Goog-Iam-Authorization-Token: foreign\r\nX-Serverless-Authorization: foreign\r\nContent-Length: 14\r\n\r\nexact-api-body"
+		wire := "POST /resource?x=one+two&access_token=foreign&oauth_token=foreign&key=foreign&api_key=foreign HTTP/1.1\r\nHost: 127.0.0.1:18080\r\nUser-Agent: curl/8.0\r\nAuthorization: Bearer foreign\r\nCookie: session=foreign\r\nX-Goog-Api-Key: foreign\r\nX-Goog-Iam-Authorization-Token: foreign\r\nX-Serverless-Authorization: foreign\r\nContent-Length: 14\r\n\r\nexact-api-body"
 		if _, err := io.WriteString(client, wire); err != nil {
 			t.Fatal(err)
 		}

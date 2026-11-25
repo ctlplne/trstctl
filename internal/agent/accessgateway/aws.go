@@ -133,6 +133,9 @@ func serveAWS(ctx context.Context, client net.Conn, raw []byte, upstream httpUps
 	defer material.destroy()
 	deadline = earliest(deadline, material.expiration)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refuseUntrustedTunnelRequest(w, r) {
+			return
+		}
 		if r.Method == http.MethodConnect || r.Header.Get("Upgrade") != "" {
 			http.Error(w, "this cloud account forwards API requests only", http.StatusForbidden)
 			return

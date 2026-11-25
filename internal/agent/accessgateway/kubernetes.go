@@ -97,6 +97,9 @@ func serveKubernetes(ctx context.Context, client net.Conn, token []byte, upstrea
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refuseUntrustedTunnelRequest(w, r) {
+			return
+		}
 		if rec != nil {
 			text := r.Method + " " + r.URL.RequestURI()
 			if r.Body != nil && r.ContentLength != 0 && r.Header.Get("Upgrade") == "" {

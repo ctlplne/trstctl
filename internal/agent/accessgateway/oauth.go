@@ -63,6 +63,9 @@ func serveOAuthHTTP(ctx context.Context, client net.Conn, intent SessionIntent, 
 		}
 	}()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refuseUntrustedTunnelRequest(w, r) {
+			return
+		}
 		if r.Method == http.MethodConnect || r.Header.Get("Upgrade") != "" {
 			http.Error(w, "this cloud account forwards API requests only", http.StatusForbidden)
 			return
