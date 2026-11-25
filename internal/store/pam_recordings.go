@@ -3,8 +3,10 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -78,6 +80,36 @@ func (s *Store) ApplyPAMRecordingSealedTx(ctx context.Context, tx pgx.Tx, r PAMR
 	  WHERE tenant_id = $1::uuid AND session_id = $2::uuid AND status = 'recording'`,
 		r.TenantID, r.SessionID, r.SealedAt, r.ManifestRef, r.ManifestSHA256, r.ManifestSignature)
 	return err
+}
+
+// QueuePAMRecordingIncompleteAlertTx records the alert in the same projection
+// transaction as the seal. Replaying a previously projected event queues no
+// second external effect; a repeated key must retain exactly the same body.
+func (s *Store) QueuePAMRecordingIncompleteAlertTx(ctx context.Context, tx pgx.Tx, tenantID string, alert []byte, key string) error {
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "pam-recording-incomplete\x1f"+tenantID+"\x1f"+key); err != nil {
+		return fmt.Errorf("store: lock incomplete recording alert: %w", err)
+	}
+	var destination string
+	var existing []byte
+	err := tx.QueryRow(ctx, `SELECT destination, payload FROM outbox WHERE tenant_id=$1 AND idempotency_key=$2 ORDER BY id LIMIT 1`,
+		tenantID, key).Scan(&destination, &existing)
+	if err == nil {
+		if destination != "notification.risk" || !bytes.Equal(existing, alert) {
+			return fmt.Errorf("%w: incomplete recording alert key is already bound", ErrIdempotencyConflict)
+		}
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key) VALUES ($1, 'notification.risk', 'notification.risk', $2, $3)`,
+		tenantID, alert, key); err != nil {
+		return fmt.Errorf("store: enqueue incomplete recording alert: %w", err)
+	}
+	return nil
 }
 
 const pamRecordingColumns = `tenant_id::text, session_id::text, gateway_agent_id::text, status, chunks, bytes,

@@ -120,7 +120,7 @@ describe("journey definitions stay wired end to end", () => {
       }
       for (const step of journey.steps) {
         expect(messages[step.titleKey], `missing ${step.titleKey}`).toBeDefined();
-        expect(messages[step.bodyKey], `missing ${step.bodyKey}`).toBeDefined();
+        expect(messages[step.bodyMessage], `missing ${step.bodyMessage}`).toBeDefined();
         // Every step guides somewhere: a console page, a command, or both.
         expect(Boolean(step.to || step.command), `${journey.id}/${step.id} has neither a link nor a command`).toBe(true);
       }

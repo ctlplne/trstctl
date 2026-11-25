@@ -228,10 +228,11 @@ func (s *pamService) sealRecording(ctx context.Context, tenantID, sessionID stri
 	if err != nil {
 		return err
 	}
+	finalReceived := rec.FinalReceived
 	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("pam-recording-sealed\x00"+tenantID+"\x00"+sessionID)).String()
 	return s.appendDeterministic(ctx, tenantID, eventID, projections.EventPAMRecordingSealed, projections.PAMRecordingSealed{
 		ID: sessionID, ManifestRef: ref, ManifestSHA256: hex.EncodeToString(crypto.SHA256Sum(body)),
-		ManifestSignature: signature, SealedAt: manifest.SealedAt})
+		ManifestSignature: signature, SealedAt: manifest.SealedAt, FinalReceived: &finalReceived})
 }
 
 // sealIdleRecordings seals the recordings of ended sessions whose gateway
@@ -315,6 +316,12 @@ func (s *pamService) verifyRecording(ctx context.Context, tenantID, sessionID st
 	if manifest.Kind != "trstctl.pam.session.recording.v1" || manifest.Scope != expectedScope {
 		problem("the signed recording scope does not match this session")
 		return out, nil
+	}
+	if !manifest.FinalReceived {
+		problem("the signed recording has no final chunk; session activity may be missing")
+	}
+	if manifest.FinalReceived != rec.FinalReceived {
+		problem("the signed final-chunk status differs from the recording index")
 	}
 	indexed := make([]store.PAMRecordingChunk, 0, len(manifest.Chunks))
 	for from := 0; len(indexed) <= len(manifest.Chunks); {

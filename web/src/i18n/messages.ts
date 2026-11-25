@@ -871,6 +871,10 @@ export const messages = {
   },
   "admin.access.recording": { defaultMessage: "Recording", description: "Session detail: its gateway recording (A278)." },
   "admin.access.recordingSealed": { defaultMessage: "Sealed: {chunks} chunks", description: "Session detail: recording sealed (A278)." },
+  "admin.access.recordingIncomplete": {
+    defaultMessage: "Recording is incomplete: final chunk missing ({chunks} stored)",
+    description: "Session detail: sealed recording has no final gateway chunk (CR-971).",
+  },
   "admin.access.recordingDeleted": { defaultMessage: "Deleted by retention", description: "Session detail: recording removed by retention (A278)." },
   "admin.access.recordingOpen": { defaultMessage: "Recording: {chunks} chunks stored", description: "Session detail: recording in progress (A278)." },
   "admin.access.recordingPending": {

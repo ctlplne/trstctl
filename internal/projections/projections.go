@@ -4959,6 +4959,9 @@ type PAMRecordingSealed struct {
 	ManifestSHA256    string    `json:"manifest_sha256"`
 	ManifestSignature string    `json:"manifest_signature"`
 	SealedAt          time.Time `json:"sealed_at"`
+	// Nil identifies an event recorded before completeness was carried in the
+	// envelope. New seals always set this, including an explicit false.
+	FinalReceived *bool `json:"final_received,omitempty"`
 }
 
 // PAMSessionGatewayEnded is the gateway's own report that it ended a
@@ -9692,8 +9695,18 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		sealedAt := pl.SealedAt
-		return p.store.ApplyPAMRecordingSealedTx(ctx, tx, store.PAMRecording{TenantID: e.TenantID, SessionID: pl.ID,
-			SealedAt: &sealedAt, ManifestRef: pl.ManifestRef, ManifestSHA256: pl.ManifestSHA256, ManifestSignature: pl.ManifestSignature})
+		if err := p.store.ApplyPAMRecordingSealedTx(ctx, tx, store.PAMRecording{TenantID: e.TenantID, SessionID: pl.ID,
+			SealedAt: &sealedAt, ManifestRef: pl.ManifestRef, ManifestSHA256: pl.ManifestSHA256, ManifestSignature: pl.ManifestSignature}); err != nil {
+			return err
+		}
+		if pl.FinalReceived != nil && !*pl.FinalReceived {
+			alert, key, err := PAMRecordingIncompleteAlert(e.TenantID, pl.ID)
+			if err != nil {
+				return err
+			}
+			return p.store.QueuePAMRecordingIncompleteAlertTx(ctx, tx, e.TenantID, alert, key)
+		}
+		return nil
 	case EventPAMSessionGatewayEnded:
 		var pl PAMSessionGatewayEnded
 		if err := decode(e, &pl); err != nil {
@@ -10958,9 +10971,39 @@ type pamCommandRiskAlertPayload struct {
 	RecordingPath string `json:"recording_path"`
 }
 
+// pamRecordingIncompleteAlertPayload is the credential-free outbox contract
+// for a sealed privileged-session recording with no gateway final chunk.
+type pamRecordingIncompleteAlertPayload struct {
+	Kind          string `json:"kind"`
+	TenantID      string `json:"tenant_id"`
+	OperationID   string `json:"operation_id"`
+	Subject       string `json:"subject"`
+	Detail        string `json:"detail"`
+	Severity      string `json:"severity"`
+	SessionID     string `json:"session_id"`
+	RecordingPath string `json:"recording_path"`
+	FinalReceived bool   `json:"final_received"`
+}
+
 // PAMSessionRecordingPath is the console page that opens a session's
 // recording (A275).
 func PAMSessionRecordingPath(sessionID string) string { return "/admin/access?session=" + sessionID }
+
+// PAMRecordingIncompleteAlert is derived from the immutable seal event so a
+// replay creates the same outbox intent, never a new alert identity.
+func PAMRecordingIncompleteAlert(tenantID, sessionID string) ([]byte, string, error) {
+	key := "pam-recording-incomplete:" + sessionID
+	payload, err := json.Marshal(pamRecordingIncompleteAlertPayload{
+		Kind: "pam.recording.incomplete", TenantID: tenantID, OperationID: key,
+		Subject:  "session/" + sessionID,
+		Detail:   "The signed recording has no final chunk; the end of this privileged session may be missing. Inspect the gateway and recording before relying on this evidence.",
+		Severity: "critical", SessionID: sessionID, RecordingPath: PAMSessionRecordingPath(sessionID), FinalReceived: false,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("projections: encode incomplete recording alert: %w", err)
+	}
+	return payload, key, nil
+}
 
 // PAMCommandRiskAlert is the risk alert an alerted command raises: what ran
 // (its known operation names, never its text), where, by whom, and a link to

@@ -1053,7 +1053,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		),
 		{EventPAMRecordingSealed, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/manifest_ref", opaque), privacyRule("/manifest_sha256", opaque),
-			privacyRule("/manifest_signature", opaque), privacyRule("/sealed_at", opaque),
+			privacyRule("/manifest_signature", opaque), privacyRule("/sealed_at", opaque), privacyRule("/final_received", opaque),
 		),
 		{EventPAMSessionGatewayEnded, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/ended", opaque), privacyRule("/connections", opaque),

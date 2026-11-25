@@ -985,7 +985,11 @@ key, every gateway session is recorded (A255): SSH bytes and requests, SFTP oper
 masked at the gateway before anything leaves it, sealed for the tenant and closed with a
 manifest the audit key signs. Read a recording's index with
 `GET /api/v1/access/sessions/{id}/recording` and check it end to end with
-`GET /api/v1/access/sessions/{id}/recording/verify`. With `recordings:read`, play it back
+`GET /api/v1/access/sessions/{id}/recording/verify`. A signed manifest without
+the gateway's final chunk returns `verified:false` with a final-chunk problem;
+the seal event retains `final_received:false`, a risk alert links the session,
+and the console marks the recording incomplete. Desktop replay refuses it.
+With `recordings:read`, play a complete recording back
 or watch a live session (`trstctl access sessions watch <id>`); with `recordings:export`,
 export it with its signed manifest and place a legal hold. With `access:terminate`, end a
 live session (`trstctl access sessions terminate <id> -f reason.json`); until the gateway

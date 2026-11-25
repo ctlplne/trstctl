@@ -140,6 +140,9 @@ const (
 	// KindSessionRiskAlert (A275): a command in a privileged session matched
 	// an alert rule of its access template; the alert links the recording.
 	KindSessionRiskAlert = "pam.session.risk"
+	// KindRecordingIncomplete means a signed privileged-session manifest has
+	// no final chunk, so its end cannot be treated as complete evidence.
+	KindRecordingIncomplete = "pam.recording.incomplete"
 	// KindCheckoutRotationBlocked (A261-L2): a vaulted account's check-out
 	// passed its deadline and the rotation that retires its revealed
 	// credential could not be queued, so that credential still signs in.
@@ -208,6 +211,7 @@ type Alert struct {
 	// page that opens its recording (A275).
 	SessionID            string           `json:"session_id,omitempty"`
 	RecordingPath        string           `json:"recording_path,omitempty"`
+	FinalReceived        *bool            `json:"final_received,omitempty"`
 	RenewalJobID         int64            `json:"renewal_job_id,omitempty"`
 	RenewalAttempt       int              `json:"renewal_attempt,omitempty"`
 	Subject              string           `json:"subject,omitempty"`

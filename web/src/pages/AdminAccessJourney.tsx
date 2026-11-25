@@ -1330,13 +1330,21 @@ function PAMRecordingRow({ sessionID }: { sessionID: string }) {
   if (!rec) return null;
   return (
     <DetailRow term={t("admin.access.recording")}>
-      {rec.status === "sealed"
-        ? t("admin.access.recordingSealed", { chunks: rec.chunks })
-        : rec.status === "deleted"
-          ? t("admin.access.recordingDeleted")
-          : rec.pending_chunks > 0
-            ? t("admin.access.recordingPending", { chunks: rec.chunks, pending: rec.pending_chunks })
-            : t("admin.access.recordingOpen", { chunks: rec.chunks })}
+      {rec.status === "sealed" ? (
+        rec.final_received ? (
+          t("admin.access.recordingSealed", { chunks: rec.chunks })
+        ) : (
+          <span role="alert" aria-label={t("admin.access.recordingIncomplete", { chunks: rec.chunks })}>
+            {t("admin.access.recordingIncomplete", { chunks: rec.chunks })}
+          </span>
+        )
+      ) : rec.status === "deleted" ? (
+        t("admin.access.recordingDeleted")
+      ) : rec.pending_chunks > 0 ? (
+        t("admin.access.recordingPending", { chunks: rec.chunks, pending: rec.pending_chunks })
+      ) : (
+        t("admin.access.recordingOpen", { chunks: rec.chunks })
+      )}
     </DetailRow>
   );
 }

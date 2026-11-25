@@ -223,7 +223,7 @@ export function Journeys() {
         return {
           id: s.id,
           label: t(s.titleKey),
-          description: t(s.bodyKey),
+          description: t(s.bodyMessage),
           progressState: stepDone(active, s, detected, marks, exactProof)
             ? "done"
             : detector?.state === "blocked" || detector?.state === "error"
@@ -373,7 +373,7 @@ export function Journeys() {
                   ) : (
                     <StatusBadge value="requested" label={t("journeys.status.pending")} tone="neutral" />
                   )}
-                  <p className="text-body text-muted-foreground">{t(current.bodyKey)}</p>
+                  <p className="text-body text-muted-foreground">{t(current.bodyMessage)}</p>
                 </div>
                 {currentDone && (
                   <p className="text-caption text-muted-foreground">

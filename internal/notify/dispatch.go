@@ -746,6 +746,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Emergency access opened without approval")
 	case KindSessionRiskAlert:
 		b.WriteString("Risky command in a privileged session")
+	case KindRecordingIncomplete:
+		b.WriteString("Privileged session recording is incomplete")
 	case KindCheckoutRotationBlocked:
 		b.WriteString("A checked-out credential could not be retired")
 	case KindSessionAccountRotationBlocked:

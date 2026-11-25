@@ -158,3 +158,22 @@ it("says when a gateway session's recording is sealed (A278)", async () => {
   const dialog = await screen.findByRole("dialog");
   expect(await within(dialog).findByText("Sealed: 15 chunks")).toBeInTheDocument();
 });
+
+it("warns that a sealed recording is incomplete when its final chunk is missing (CR-971)", async () => {
+  apiMock.pamRecording.mockResolvedValue({
+    session_id: sessionID,
+    status: "sealed",
+    chunks: 15,
+    bytes: 4096,
+    started_at: "2026-11-07T20:00:00Z",
+    last_chunk_at: "2026-11-07T20:05:00Z",
+    final_received: false,
+    chain_head: "00",
+    legal_hold: false,
+    pending_chunks: 0,
+  });
+  mount(`/admin/access?session=${sessionID}`);
+  const dialog = await screen.findByRole("dialog");
+  expect(await within(dialog).findByRole("alert", { name: /recording is incomplete/i })).toBeInTheDocument();
+  expect(within(dialog).queryByText("Sealed: 15 chunks")).not.toBeInTheDocument();
+});

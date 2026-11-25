@@ -504,6 +504,10 @@ func TestFormatMessage(t *testing.T) {
 	if !strings.Contains(failed, "Emergency endpoint containment failed") || !strings.Contains(failed, "payments Apache") {
 		t.Errorf("critical containment page lacks actionable identity: %q", failed)
 	}
+	incomplete := notify.FormatMessage(notify.Alert{Kind: notify.KindRecordingIncomplete, Subject: "session/123", Detail: "final chunk missing"})
+	if !strings.Contains(incomplete, "recording is incomplete") || !strings.Contains(incomplete, "session/123") || !strings.Contains(incomplete, "final chunk missing") {
+		t.Errorf("incomplete recording alert lacks the evidence gap and session: %q", incomplete)
+	}
 }
 
 // A103: a scheduled report notice goes to exactly the channel its schedule
