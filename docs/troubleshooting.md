@@ -102,6 +102,32 @@ authoritative and the tail advances to later events. A different approver's new
 decision after a terminal request still fails closed. Never acknowledge the
 consumer message or move the checkpoint by hand to clear this condition.
 
+### Audit feed batch replay recovery
+
+An audit feed can queue and deliver two batches while its durable projection
+consumer is behind. The live request may already have projected both. When the
+consumer replays the older batch, the delivery row identifies that exact batch
+and the feed's newer cursor must stay in place. A repeated `audit feed batch
+conflicts with durable authority` error at one sequence means the tail cannot
+advance and every tenant's `/readyz` stays degraded; a restart may refuse to
+boot at `server: project event log`.
+
+Record the failed sequence, destination ID, batch ID, collector request ID,
+projection checkpoint, and current backup set. Preserve PostgreSQL and the full
+JetStream history. Confirm every replica runs a version with the audit feed
+replay fix, then allow the tail to retry. If the same history still cannot boot
+or advance, stop every control plane replica. With **external PostgreSQL and
+external NATS**, run `trstctl --rebuild` using the existing configuration and
+original event history. It rebuilds the read model from the log; it is not a
+collector retry. Restart replicas and verify `/readyz`, checkpoint versus log
+head, the latest feed cursor, each batch receipt, and the collector's accepted
+records. If rebuild also reports a conflict, preserve the evidence for support;
+do not edit the log, delivery rows, or checkpoint to force green.
+
+The bundled evaluation stack does not support `--rebuild`. Preserve its volumes
+and capture a support bundle for supported recovery or migration to external
+datastores. Repeated restarts alone cannot repair a deterministic replay error.
+
 ### Pending event key destruction replay recovery
 
 A protected tenant's offboard can commit inline while the durable projection

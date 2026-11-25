@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3617 annotated sites across 35 rules. Each row is
+3618 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (920 sites)
+### G101 — CWE-798 Use of hardcoded credentials (921 sites)
 
 | Location | Reason |
 |---|---|
@@ -568,6 +568,7 @@ not this file.
 | `internal/server/audit_feed_refusal_test.go:60` | fabricated test header values, no real credential (CWE-798) |
 | `internal/server/audit_feed_relp_lab_test.go:41` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_relp_served_test.go:49` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_restart_cr1015_test.go:40` | locator, not a secret |
 | `internal/server/audit_feed_rsyslog_content_lab_test.go:40` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_served_test.go:41` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:138` | the credential-bearing URL is a negative fixture that production must reject (CWE-798). |
@@ -1520,12 +1521,12 @@ not this file.
 | `internal/store/audit_checkpoint.go:52` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:86` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:116` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/audit_feed.go:426` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:427` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:428` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:429` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:442` | positive PostgreSQL bigint by schema (CWE-190) |
-| `internal/store/audit_feed.go:443` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:506` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:507` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:508` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:509` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:522` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:523` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/audit_retention_scope.go:22` | PostgreSQL advisory keys are signed bit patterns. |
 | `internal/store/aws_honey_trail.go:76` | bounded above (CWE-190) |
 | `internal/store/breakglass_authority_receipt.go:36` | MaxInt64 checked above. |
@@ -2419,7 +2420,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2582` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3280` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:3283` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -3200,9 +3201,9 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:1786` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:3207` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:3284` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:1789` | operator-configured key file path (CWE-22) |
+| `internal/server/server.go:3210` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:3287` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:62` | the repository's own SOAR pack (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:72` | a playbook the repository's own pack names (CWE-22) |
 | `internal/server/spiffe_ca.go:40` | path derives from operator CA file and canonical tenant UUID |
@@ -3476,7 +3477,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:586` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3290` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:3293` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_certificate_lease_served_test.go:76` | public CA/KRL fixture in a test tempdir (CWE-276) |

@@ -215,20 +215,25 @@ func (s *Store) ApplyAuditFeedBatchQueuedTx(ctx context.Context, tx pgx.Tx, batc
 		        next_run_at = $6::timestamptz + ($7::integer * interval '1 second'),
 		        updated_at = $6::timestamptz
 		  WHERE tenant_id = $1 AND id = $2
-		    AND last_delivered_sequence < $3`,
+		    AND last_delivered_sequence < $3
+		    AND (last_queued_sequence < $3 OR
+		         (last_queued_sequence = $3 AND last_status = 'failed'
+		          AND last_batch_id <> $4))`,
 		batch.TenantID, batch.DestinationID, batch.EndSequence, batch.BatchID,
 		batch.OutboxIdempotencyKey, batch.QueuedAt, intervalSeconds, batch.RecordCount)
 	if err != nil {
 		return err
 	}
 	if command.RowsAffected() != 1 {
-		var lastBatchID string
+		var lastQueuedSequence uint64
 		if err := tx.QueryRow(ctx,
-			`SELECT COALESCE(last_batch_id::text, '') FROM audit_feed_destinations
-			  WHERE tenant_id = $1 AND id = $2`, batch.TenantID, batch.DestinationID).Scan(&lastBatchID); err != nil {
+			`SELECT last_queued_sequence FROM audit_feed_destinations
+			  WHERE tenant_id = $1 AND id = $2`, batch.TenantID, batch.DestinationID).Scan(&lastQueuedSequence); err != nil {
 			return err
 		}
-		if lastBatchID != batch.BatchID {
+		// The exact delivery row above proves this event was projected. A
+		// newer queued/delivered batch must retain the feed's current cursor.
+		if lastQueuedSequence < batch.EndSequence {
 			return ErrAuditFeedBatchConflict
 		}
 	}
@@ -241,16 +246,24 @@ func (s *Store) ApplyAuditFeedBatchDeliveredTx(ctx context.Context, tx pgx.Tx, b
 		    SET status = 'delivered', accepted_at = $4, collector_request_id = $5, error_code = ''
 		  WHERE tenant_id = $1 AND batch_id = $2 AND destination_id = $3
 		    AND start_sequence = $6 AND end_sequence = $7 AND record_count = $8
-		    AND chain_head = $9 AND outbox_idempotency_key = $10
-		    AND status IN ('queued','delivered')`,
+		    AND chain_head = $9 AND outbox_idempotency_key = $10 AND provider = $11
+		    AND status IN ('queued','failed')`,
 		batch.TenantID, batch.BatchID, batch.DestinationID, batch.AcceptedAt,
 		batch.CollectorRequestID, batch.StartSequence, batch.EndSequence,
-		batch.RecordCount, batch.ChainHead, batch.OutboxIdempotencyKey)
+		batch.RecordCount, batch.ChainHead, batch.OutboxIdempotencyKey, batch.Provider)
 	if err != nil {
 		return err
 	}
-	if command.RowsAffected() != 1 {
-		return ErrAuditFeedBatchConflict
+	if command.RowsAffected() == 0 {
+		existing, err := auditFeedBatchTx(ctx, tx, batch.TenantID, batch.BatchID)
+		if err != nil {
+			return err
+		}
+		if !sameAuditFeedBatch(existing, batch) || existing.Status != "delivered" ||
+			existing.CollectorRequestID != batch.CollectorRequestID ||
+			!sameAuditFeedTimestamp(existing.AcceptedAt, batch.AcceptedAt) {
+			return ErrAuditFeedBatchConflict
+		}
 	}
 	command, err = tx.Exec(ctx,
 		`UPDATE audit_feed_destinations
@@ -262,14 +275,32 @@ func (s *Store) ApplyAuditFeedBatchDeliveredTx(ctx context.Context, tx pgx.Tx, b
 		        last_error_code = '',
 		        updated_at = $5
 		  WHERE tenant_id = $1 AND id = $2 AND last_batch_id = $3
-		    AND last_outbox_key = $6 AND last_queued_sequence = $4`,
+		    AND last_outbox_key = $6 AND last_queued_sequence = $4
+		    AND last_delivered_sequence < $4`,
 		batch.TenantID, batch.DestinationID, batch.BatchID, batch.EndSequence,
 		batch.AcceptedAt, batch.OutboxIdempotencyKey)
 	if err != nil {
 		return err
 	}
 	if command.RowsAffected() != 1 {
-		return ErrAuditFeedBatchConflict
+		var lastQueuedSequence, lastDeliveredSequence uint64
+		var lastBatchID, lastOutboxKey string
+		if err := tx.QueryRow(ctx,
+			`SELECT last_queued_sequence, last_delivered_sequence,
+			        COALESCE(last_batch_id::text, ''), last_outbox_key
+			   FROM audit_feed_destinations WHERE tenant_id = $1 AND id = $2`,
+			batch.TenantID, batch.DestinationID).Scan(
+			&lastQueuedSequence, &lastDeliveredSequence, &lastBatchID, &lastOutboxKey); err != nil {
+			return err
+		}
+		if lastBatchID == "" || lastQueuedSequence < batch.EndSequence ||
+			(lastBatchID == batch.BatchID &&
+				(lastOutboxKey != batch.OutboxIdempotencyKey || lastDeliveredSequence < batch.EndSequence)) {
+			return ErrAuditFeedBatchConflict
+		}
+		// A retry can queue the same range under a new batch ID after a
+		// failed attempt. The late exact receipt belongs to the older row;
+		// it does not replace the newer in-flight intent.
 	}
 	return nil
 }
@@ -279,30 +310,79 @@ func (s *Store) ApplyAuditFeedBatchFailedTx(ctx context.Context, tx pgx.Tx, batc
 		`UPDATE audit_feed_deliveries
 		    SET status = 'failed', error_code = $4
 		  WHERE tenant_id = $1 AND batch_id = $2 AND destination_id = $3
-		    AND outbox_idempotency_key = $5 AND status IN ('queued','failed')`,
+		    AND outbox_idempotency_key = $5
+		    AND (status = 'queued' OR (status = 'failed' AND error_code = $4))`,
 		batch.TenantID, batch.BatchID, batch.DestinationID, batch.ErrorCode,
 		batch.OutboxIdempotencyKey)
 	if err != nil {
 		return err
 	}
-	if command.RowsAffected() != 1 {
+	existing, err := auditFeedBatchTx(ctx, tx, batch.TenantID, batch.BatchID)
+	if err != nil {
+		return err
+	}
+	if existing.DestinationID != batch.DestinationID ||
+		existing.OutboxIdempotencyKey != batch.OutboxIdempotencyKey ||
+		(command.RowsAffected() == 0 && existing.Status != "delivered") {
 		return ErrAuditFeedBatchConflict
+	}
+	if existing.Status == "delivered" {
+		// A collector receipt is stronger than an earlier failure event.
+		return nil
 	}
 	command, err = tx.Exec(ctx,
 		`UPDATE audit_feed_destinations
 		    SET last_status = 'failed', last_error_code = $4,
 		        last_attempt_at = $5, updated_at = $5
-		  WHERE tenant_id = $1 AND id = $2 AND last_batch_id = $3
-		    AND last_outbox_key = $6`,
+	  WHERE tenant_id = $1 AND id = $2 AND last_batch_id = $3
+		    AND last_outbox_key = $6 AND last_delivered_sequence < $7
+		    AND (last_attempt_at IS NULL OR last_attempt_at <= $5)`,
 		batch.TenantID, batch.DestinationID, batch.BatchID, batch.ErrorCode,
-		batch.AcceptedAt, batch.OutboxIdempotencyKey)
+		batch.AcceptedAt, batch.OutboxIdempotencyKey, existing.EndSequence)
 	if err != nil {
 		return err
 	}
 	if command.RowsAffected() != 1 {
-		return ErrAuditFeedBatchConflict
+		var lastQueuedSequence uint64
+		if err := tx.QueryRow(ctx,
+			`SELECT last_queued_sequence FROM audit_feed_destinations
+			  WHERE tenant_id = $1 AND id = $2`, batch.TenantID, batch.DestinationID).Scan(&lastQueuedSequence); err != nil {
+			return err
+		}
+		if lastQueuedSequence < existing.EndSequence {
+			return ErrAuditFeedBatchConflict
+		}
 	}
 	return nil
+}
+
+func auditFeedBatchTx(ctx context.Context, tx pgx.Tx, tenantID, batchID string) (AuditFeedBatch, error) {
+	var batch AuditFeedBatch
+	err := scanAuditFeedBatch(tx.QueryRow(ctx,
+		`SELECT batch_id::text, tenant_id::text, destination_id::text, provider,
+		        start_sequence, end_sequence, record_count, chain_head,
+		        outbox_idempotency_key, status, queued_at, accepted_at,
+		        collector_request_id, error_code
+		   FROM audit_feed_deliveries WHERE tenant_id = $1 AND batch_id = $2`, tenantID, batchID), &batch)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AuditFeedBatch{}, ErrAuditFeedBatchConflict
+	}
+	return batch, err
+}
+
+func sameAuditFeedBatch(a, b AuditFeedBatch) bool {
+	return a.TenantID == b.TenantID && a.BatchID == b.BatchID &&
+		a.DestinationID == b.DestinationID && a.Provider == b.Provider &&
+		a.StartSequence == b.StartSequence && a.EndSequence == b.EndSequence &&
+		a.RecordCount == b.RecordCount && a.ChainHead == b.ChainHead &&
+		a.OutboxIdempotencyKey == b.OutboxIdempotencyKey
+}
+
+func sameAuditFeedTimestamp(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.UTC().Round(time.Microsecond).Equal(b.UTC().Round(time.Microsecond))
 }
 
 func (s *Store) GetAuditFeed(ctx context.Context, tenantID, id string) (AuditFeed, bool, error) {
