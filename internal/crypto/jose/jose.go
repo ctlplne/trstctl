@@ -305,6 +305,9 @@ const (
 	ArtifactCryptoReadiness      = "trstctl.audit-evidence/crypto-readiness-export/v1"
 	ArtifactRestoreDrill         = "trstctl.audit-evidence/restore-drill/v1"
 	ArtifactPAMRecordingManifest = "trstctl.audit-evidence/pam-recording-manifest/v1"
+	// ArtifactPAMCertificationResult is the published result domain. Keep its
+	// exact legacy spelling so existing SDKs and verifiers use the same kind.
+	ArtifactPAMCertificationResult = "access-certification-result"
 	// ArtifactAuditAnchorLog signs a tenant's audit anchor log tree head.
 	ArtifactAuditAnchorLog = "trstctl.audit-evidence/audit-anchor-log/v1"
 	// ArtifactAssuranceRecord signs one credential's lifecycle assurance

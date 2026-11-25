@@ -55,7 +55,9 @@ func WithArtifactSigner(signer ArtifactSigner) ServerOption {
 }
 
 func (s *Server) signArtifact(ctx context.Context, req ArtifactSignRequest) (ArtifactSignature, error) {
-	if strings.HasPrefix(req.Kind, "trstctl.audit-evidence/") {
+	// Certification results use a published legacy domain. Admit only that
+	// exact spelling through the audit key's fixed authority and kind checks.
+	if strings.HasPrefix(req.Kind, "trstctl.audit-evidence/") || req.Kind == jose.ArtifactPAMCertificationResult {
 		return s.signAuditEvidenceArtifact(req)
 	}
 	s.mu.Lock()
@@ -68,21 +70,22 @@ func (s *Server) signArtifact(ctx context.Context, req ArtifactSignRequest) (Art
 }
 
 var auditEvidenceKinds = map[string]bool{
-	jose.ArtifactAuditExport:          true,
-	jose.ArtifactAuditRetention:       true,
-	jose.ArtifactHistoryContinuity:    true,
-	jose.ArtifactEventKeyDestruction:  true,
-	jose.ArtifactBillingInvoice:       true,
-	jose.ArtifactDoctorReceipt:        true,
-	jose.ArtifactPQCCampaignClosure:   true,
-	jose.ArtifactCryptoReadiness:      true,
-	jose.ArtifactRestoreDrill:         true,
-	jose.ArtifactPAMRecordingManifest: true,
-	jose.ArtifactAuditAnchorLog:       true,
-	jose.ArtifactAssuranceRecord:      true,
-	jose.ArtifactEvaluationPack:       true,
-	jose.ArtifactCBOMCycloneDX:        true,
-	jose.ArtifactCBOMCycloneDXJSF:     true,
+	jose.ArtifactAuditExport:            true,
+	jose.ArtifactAuditRetention:         true,
+	jose.ArtifactHistoryContinuity:      true,
+	jose.ArtifactEventKeyDestruction:    true,
+	jose.ArtifactBillingInvoice:         true,
+	jose.ArtifactDoctorReceipt:          true,
+	jose.ArtifactPQCCampaignClosure:     true,
+	jose.ArtifactCryptoReadiness:        true,
+	jose.ArtifactRestoreDrill:           true,
+	jose.ArtifactPAMRecordingManifest:   true,
+	jose.ArtifactPAMCertificationResult: true,
+	jose.ArtifactAuditAnchorLog:         true,
+	jose.ArtifactAssuranceRecord:        true,
+	jose.ArtifactEvaluationPack:         true,
+	jose.ArtifactCBOMCycloneDX:          true,
+	jose.ArtifactCBOMCycloneDXJSF:       true,
 }
 
 // signAuditEvidenceArtifact is the core, signer-owned evidence admission path.

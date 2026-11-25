@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -32,7 +33,7 @@ const (
 	pamCertificationActor = "trstctl:pam-certification"
 	// CertificationResultArtifact is what a campaign result's signature
 	// covers.
-	CertificationResultArtifact = "access-certification-result"
+	CertificationResultArtifact = jose.ArtifactPAMCertificationResult
 	pamCertificationApproverMax = 25
 )
 

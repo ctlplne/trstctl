@@ -799,7 +799,9 @@ responders. A reviewer's revoke of an account disables it (the item closes when 
 disabled); a revoked approver list is changed by hand. Once every item is decided,
 `GET /api/v1/access/reviews/{id}/result` (CLI `access reviews result`) returns the
 campaign's canonical result with the audit key's signature over it; verify it with
-`GET /api/v1/audit/verification-keys`. With `pam.certification_interval` set, the PAM worker
+`GET /api/v1/audit/verification-keys`. The isolated signer admits the exact
+`access-certification-result` artifact kind. With `pam.certification_interval`
+set, the PAM worker
 starts the next such campaign when the last one began longer ago than the interval
 (assigned to `pam.certification_reviewer` when set). In the console: Policy → access
 reviews → **Build from: Privileged accounts and their approvers**, and **Download the
