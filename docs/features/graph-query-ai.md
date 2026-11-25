@@ -270,6 +270,10 @@ over REST:
 | `revocation_status` | a certificate's recorded revocation and the relay's CRL and OCSP observations of it | the certificate ID |
 | `crypto_inventory` | crypto inventory assets with strength, quantum exposure and migration target | optional: an algorithm, location or library |
 
+These evidence tools acknowledge their call or rate-limit refusal in the audit log
+before answering. If that append fails, the API returns a retryable `503` without
+the evidence result; retry when event-log health is restored.
+
 `distrust_exposure` answers "which of my certificates and hosts does this distrust entry
 affect?": each affected certificate cites `certificate:<id>` (and the discovery finding or
 connector target it was seen on), and each affected trust store cites the agent's

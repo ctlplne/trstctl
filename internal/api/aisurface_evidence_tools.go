@@ -71,8 +71,11 @@ func (e *mcpReadError) Error() string { return fmt.Sprintf("mcp: read answered H
 
 func (a *API) mcpCallEvidence(w http.ResponseWriter, r *http.Request, principal authz.Principal, tool string, req mcpCallRequest) {
 	if !a.ai.rate.Allow(principal.Subject + "|" + tool) {
-		_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.ratelimited", principal.TenantID,
-			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, principal.Subject, tool)))
+		if err := auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.ratelimited", principal.TenantID,
+			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, principal.Subject, tool))); err != nil {
+			a.writeError(w, mcpserver.ErrAuditUnavailable)
+			return
+		}
 		a.writeError(w, errStatus(http.StatusTooManyRequests, "rate limit exceeded"))
 		return
 	}
@@ -117,8 +120,11 @@ func (a *API) mcpCallEvidence(w http.ResponseWriter, r *http.Request, principal 
 	if len(ev.partial) > 0 {
 		ev.text += "\nThis token could not read " + strings.Join(ev.partial, ", ") + "; the answer covers only what it may read."
 	}
-	_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.call", principal.TenantID,
-		[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"scope":%q,"citations":%d,"outcome":"ok"}`, principal.Subject, tool, principal.TenantID, len(ev.citations))))
+	if err := auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.call", principal.TenantID,
+		[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"scope":%q,"citations":%d,"outcome":"ok"}`, principal.Subject, tool, principal.TenantID, len(ev.citations)))); err != nil {
+		a.writeError(w, mcpserver.ErrAuditUnavailable)
+		return
+	}
 	res := mcpResult(tool, ev.text, ev.citations, ev.findings)
 	sufficient := !ev.truncated && len(ev.partial) == 0
 	res.Sufficient, res.Truncated = &sufficient, ev.truncated
