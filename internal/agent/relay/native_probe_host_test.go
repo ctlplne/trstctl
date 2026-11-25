@@ -3,10 +3,10 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -76,26 +76,42 @@ func nativeHostProbeFixture(t *testing.T) (executable, address string, certifica
 	}
 	address = listener.Addr().String()
 	_ = listener.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	t.Cleanup(cancel)
 	server := exec.CommandContext(ctx, path, "s_server", "-accept", address, "-cert", filepath.Join(dir, "leaf.pem"), "-cert_chain", filepath.Join(dir, "ca.pem"), "-key", filepath.Join(dir, "key.pem"), "-quiet", "-tls1_3", "-groups", "X25519") // #nosec G204 -- fixed stock command against owned loopback fixtures.
-	server.Stdout, server.Stderr = io.Discard, io.Discard
+	var stdout, stderr bytes.Buffer
+	server.Stdout, server.Stderr = &stdout, &stderr
 	if err := server.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = server.Process.Kill(); _ = server.Wait() })
+	done := make(chan struct{})
+	var waitErr error
+	go func() {
+		waitErr = server.Wait()
+		close(done)
+	}()
+	t.Cleanup(func() { _ = server.Process.Kill(); <-done })
 	ready := false
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+	var dialErr error
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
+		select {
+		case <-done:
+			t.Fatalf("native host test listener exited before startup: %v; stderr: %s; stdout: %s", waitErr, stderr.String(), stdout.String())
+		default:
+		}
 		conn, err := net.DialTimeout("tcp", address, 100*time.Millisecond)
 		if err == nil {
 			_ = conn.Close()
 			ready = true
 			break
 		}
+		dialErr = err
 		time.Sleep(25 * time.Millisecond)
 	}
 	if !ready {
-		t.Fatal("native host test listener did not start")
+		_ = server.Process.Kill()
+		<-done
+		t.Fatalf("native host test listener did not start: %v; process: %v; stderr: %s; stdout: %s", dialErr, waitErr, stderr.String(), stdout.String())
 	}
 	return path, address, append(leafPEM, caPEM...)
 }

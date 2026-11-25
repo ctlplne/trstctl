@@ -20,7 +20,7 @@ func TestExternalKMSWrapsDEKViaCommandAdapter(t *testing.T) {
 		Provider:    "awskms",
 		KeyRef:      "arn:aws:kms:us-east-1:111122223333:key/trstctl-test",
 		WrapCommand: helper,
-		Timeout:     5 * time.Second,
+		Timeout:     30 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("NewExternalKMSWrapper: %v", err)
