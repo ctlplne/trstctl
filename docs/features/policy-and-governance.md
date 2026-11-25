@@ -38,6 +38,8 @@ overloaded pool all return *deny*. Evaluation runs in its own bounded lane, so o
 is rejected fast instead of starving issuance, and every decision is recorded as an
 immutable `policy.decision` event. The default policy denies everything except
 revocation and permits issuance/deployment only when a profile is bound.
+If the decision event cannot be appended, the served gate denies the operation
+with a retryable `503`; retry after event-log health is restored.
 
 **Status:** served on the issuance path when `ca.policy.enabled`: the gate runs on every
 issue/deploy/revoke transition, the RA scope split (`certs:request` ≠ `certs:issue`)
@@ -697,6 +699,8 @@ ABAC fails closed: a non-compiling module stops startup, an evaluation error den
 immutable `policy.abac.decision` event. A practical change-window overlay — deny
 `certs:issue` in `prod` outside a configured window — is shown in full under
 [Use it](#use-it).
+If the ABAC decision event cannot be appended, the overlay denies the operation
+with a retryable `503` rather than passing the request through.
 
 For profile-scoped routes, admission and the handler use the same canonical
 `profile_name` or `name` JSON field. A duplicate or differently cased copy is

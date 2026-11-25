@@ -5,6 +5,7 @@ package policy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -83,7 +84,9 @@ func NewABAC(cfg ABACConfig) (*ABACEngine, error) {
 // errors, saturated bulkheads, and malformed policy outputs produce Deny=true.
 func (e *ABACEngine) EvaluateDeny(ctx context.Context, in ABACInput) (ABACDecision, error) {
 	d, err := e.runDeny(ctx, in)
-	e.auditABAC(ctx, in, d, err)
+	if auditErr := e.auditABAC(ctx, in, d, err); auditErr != nil {
+		return ABACDecision{Deny: true, Reason: "ABAC decision audit unavailable"}, errors.Join(err, fmt.Errorf("%w: %w", ErrDecisionAuditUnavailable, auditErr))
+	}
 	return d, err
 }
 
@@ -145,11 +148,11 @@ func abacDecisionFrom(rs rego.ResultSet) ABACDecision {
 	return ABACDecision{Deny: deny, Reason: reason}
 }
 
-func (e *ABACEngine) auditABAC(ctx context.Context, in ABACInput, d ABACDecision, evalErr error) {
+func (e *ABACEngine) auditABAC(ctx context.Context, in ABACInput, d ABACDecision, evalErr error) error {
 	if e.log == nil {
-		return
+		return nil
 	}
-	payload, _ := json.Marshal(struct {
+	payload, err := json.Marshal(struct {
 		Permission string `json:"permission"`
 		Action     Action `json:"action,omitempty"`
 		Actor      string `json:"actor,omitempty"`
@@ -163,5 +166,8 @@ func (e *ABACEngine) auditABAC(ctx context.Context, in ABACInput, d ABACDecision
 	}{in.Permission, in.Action, in.Actor, in.Subject,
 		in.Resource["profile"], in.Resource["issuer"], in.Resource["project"],
 		d.Deny, d.Reason, errString(evalErr)})
-	_, _ = e.log.Append(ctx, events.Event{Type: "policy.abac.decision", TenantID: in.TenantID, Data: payload})
+	if err != nil {
+		return err
+	}
+	return appendDecisionAudit(ctx, e.log, "policy.abac.decision", in.TenantID, payload)
 }

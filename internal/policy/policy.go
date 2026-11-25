@@ -14,6 +14,7 @@ import (
 
 	"github.com/open-policy-agent/opa/v1/rego"
 
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/events"
 )
@@ -44,6 +45,10 @@ const (
 	// lifecycle gate: only the opt-in `nhi_posture` set of violations is read.
 	ActionNHIPosture Action = "nhi_posture"
 )
+
+// ErrDecisionAuditUnavailable identifies a decision whose required audit append
+// did not complete. Callers must deny the action and may offer a retryable status.
+var ErrDecisionAuditUnavailable = errors.New("policy: decision audit unavailable")
 
 // Input is the decision input. It is marshaled to the Rego document `input`, so policies
 // reference `input.action`, `input.profile`, etc.
@@ -324,7 +329,9 @@ func (l *LiveEngine) Evaluate(ctx context.Context, in Input) (Decision, error) {
 	active, err := l.active(ctx, in.TenantID)
 	if err != nil {
 		denied := Decision{Allow: false, Reason: "active tenant policy unavailable"}
-		l.boot.engine.audit(ctx, in, denied, err)
+		if auditErr := l.boot.engine.audit(ctx, in, denied, err); auditErr != nil {
+			return denied, errors.Join(err, fmt.Errorf("%w: %w", ErrDecisionAuditUnavailable, auditErr))
+		}
 		return denied, err
 	}
 	return active.engine.Evaluate(ctx, in)
@@ -372,7 +379,9 @@ func (l *LiveEngine) ActiveModule(ctx context.Context, tenantID string) (string,
 // saturated pool, or an ambiguous result yields a deny. Every call is audited (AN-2).
 func (e *Engine) Evaluate(ctx context.Context, in Input) (Decision, error) {
 	d, err := e.run(ctx, in)
-	e.audit(ctx, in, d, err)
+	if auditErr := e.audit(ctx, in, d, err); auditErr != nil {
+		return Decision{Reason: "policy decision audit unavailable"}, errors.Join(err, fmt.Errorf("%w: %w", ErrDecisionAuditUnavailable, auditErr))
+	}
 	return d, err
 }
 
@@ -533,11 +542,11 @@ func decisionFrom(rs rego.ResultSet) Decision {
 	return Decision{Allow: allow, Reason: reason}
 }
 
-func (e *Engine) audit(ctx context.Context, in Input, d Decision, evalErr error) {
+func (e *Engine) audit(ctx context.Context, in Input, d Decision, evalErr error) error {
 	if e.log == nil {
-		return
+		return nil
 	}
-	payload, _ := json.Marshal(struct {
+	payload, err := json.Marshal(struct {
 		Action  Action `json:"action"`
 		Profile string `json:"profile,omitempty"`
 		Actor   string `json:"actor,omitempty"`
@@ -545,7 +554,17 @@ func (e *Engine) audit(ctx context.Context, in Input, d Decision, evalErr error)
 		Reason  string `json:"reason,omitempty"`
 		Error   string `json:"error,omitempty"`
 	}{in.Action, in.Profile, in.Actor, d.Allow, d.Reason, errString(evalErr)})
-	_, _ = e.log.Append(ctx, events.Event{Type: "policy.decision", TenantID: in.TenantID, Data: payload})
+	if err != nil {
+		return err
+	}
+	return appendDecisionAudit(ctx, e.log, "policy.decision", in.TenantID, payload)
+}
+
+func appendDecisionAudit(ctx context.Context, log *events.Log, eventType, tenantID string, payload []byte) error {
+	return auditsink.Emit(ctx, auditsink.AuditorFunc(func(appendCtx context.Context, kind, tenant string, data []byte) error {
+		_, err := log.Append(appendCtx, events.Event{Type: kind, TenantID: tenant, Data: data})
+		return err
+	}), nil, eventType, tenantID, payload)
 }
 
 func errString(err error) string {

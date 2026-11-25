@@ -255,6 +255,8 @@ func (g MutationGate) checkWithApproval(ctx context.Context, p authz.Principal, 
 		switch {
 		case errors.Is(err, bulkhead.ErrRejected):
 			return nil, &gateError{status: http.StatusServiceUnavailable, detail: "ABAC engine busy; retry"}
+		case errors.Is(err, policy.ErrDecisionAuditUnavailable):
+			return nil, &gateError{status: http.StatusServiceUnavailable, detail: "ABAC decision audit unavailable; retry"}
 		case err != nil:
 			return nil, &gateError{status: http.StatusForbidden, detail: "denied by ABAC (evaluation error)"}
 		case d.Deny:
@@ -281,6 +283,8 @@ func (g MutationGate) checkWithApproval(ctx context.Context, p authz.Principal, 
 		case errors.Is(err, bulkhead.ErrRejected):
 			// AN-7: the policy pool shed — fail closed with a retryable status.
 			return nil, &gateError{status: http.StatusServiceUnavailable, detail: "policy engine busy; retry"}
+		case errors.Is(err, policy.ErrDecisionAuditUnavailable):
+			return nil, &gateError{status: http.StatusServiceUnavailable, detail: "policy decision audit unavailable; retry"}
 		case err != nil:
 			// Any evaluation error denies (fail closed); the engine already audited it.
 			return nil, &gateError{status: http.StatusForbidden, detail: "denied by policy (evaluation error)"}

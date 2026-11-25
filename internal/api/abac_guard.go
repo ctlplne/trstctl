@@ -57,6 +57,8 @@ func (a *API) checkABAC(ctx context.Context, r *http.Request, principal authz.Pr
 	switch {
 	case errors.Is(err, bulkhead.ErrRejected):
 		return errStatus(http.StatusServiceUnavailable, "ABAC engine busy; retry")
+	case errors.Is(err, policy.ErrDecisionAuditUnavailable):
+		return errStatus(http.StatusServiceUnavailable, "ABAC decision audit unavailable; retry")
 	case err != nil:
 		return errStatus(http.StatusForbidden, "denied by ABAC (evaluation error)")
 	case d.Deny:
