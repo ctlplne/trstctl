@@ -93,7 +93,7 @@ func TestPostgresGatewayRejectsUnsupportedProviderOptions(t *testing.T) {
 // CR-276: the workload database and the authentication database are distinct.
 func TestMongoGatewayBindsBothDatabaseFields(t *testing.T) {
 	route := GatewayRoute{Revision: GatewayRouteRevision, ProviderID: "review", Hosts: []string{"db.test:27017"},
-		Database: "orders", TLS: GatewayPlain, Source: OperatorFileSource}
+		Database: "orders", TLS: GatewayVerifiedTLS, Source: OperatorFileSource}
 	for _, tc := range []struct {
 		name, path, auth string
 		allowed          bool

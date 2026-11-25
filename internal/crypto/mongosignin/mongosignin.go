@@ -7,9 +7,8 @@
 // relay a stock client's messages over. It is a sign-in, not a driver: the
 // session's connection carries only the SASL exchange (a hello that finds the
 // primary of several hosts goes over a connection of its own), and the agent
-// binary links no MongoDB driver. TLS, when the URI asks for
-// it, is verified against tlsCAFile (a file on the gateway's host) or the
-// system roots, for the host's name.
+// binary links no MongoDB driver. Every connection uses verified TLS against
+// the session's CA or system roots, for the host's name.
 package mongosignin
 
 import (
@@ -69,15 +68,19 @@ func (t *Target) Wipe() {
 	t.Password = nil
 }
 
-// ParseURI admits an explicit, bounded TCP host list and an optional TLS
-// decision. The job supplies private CA material by value.
+// ParseURI admits an explicit, bounded TCP host list and requires verified
+// TLS. The job supplies private CA material by value.
 func ParseURI(credential []byte) (*Target, error) {
 	profile, err := dbdsn.Parse(dbdsn.Mongo, credential, dbdsn.Gateway)
 	if err != nil {
 		return nil, err
 	}
+	if profile.Options["tls"] == "false" {
+		profile.Wipe()
+		return nil, errors.New("mongosignin: the session requires verified TLS")
+	}
 	return &Target{Hosts: profile.Hosts, User: profile.User, Password: profile.Password,
-		AuthSource: profile.AuthSource, TLS: profile.Options["tls"] == "true", passwordOwner: &profile}, nil
+		AuthSource: profile.AuthSource, TLS: true, passwordOwner: &profile}, nil
 }
 
 // Options shape one sign-in.
@@ -108,9 +111,6 @@ func SignIn(ctx context.Context, credential []byte, opts Options) (net.Conn, err
 	defer target.Wipe()
 	if opts.AuthSource != "" && opts.AuthSource != target.AuthSource {
 		return nil, dbdsn.ErrGatewayRoute
-	}
-	if !target.TLS && (len(opts.RootCAPEM) > 0 || opts.ServerName != "") {
-		return nil, errors.New("mongosignin: explicit trust requires TLS")
 	}
 	target.rootPEM, target.serverName = opts.RootCAPEM, opts.ServerName
 	dial := opts.Dial
@@ -166,9 +166,6 @@ func connect(ctx context.Context, dial func(context.Context, string, string) (ne
 	}
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(deadline)
-	}
-	if !target.TLS {
-		return conn, nil
 	}
 	name, _, _ := net.SplitHostPort(host)
 	if target.serverName != "" {

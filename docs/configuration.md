@@ -3049,8 +3049,10 @@ refuse `sslmode=disable` and `allow`, and enforce full chain and name checks
 even when a credential says `prefer`, `require`, or `verify-ca`. PostgreSQL
 servers that refuse TLS receive no startup or password traffic; previously
 issued plaintext or downgrade-capable routes require a fresh session. MongoDB
-gateways require verified TLS when configured with an explicit CA or certificate
-name. At redemption, the control plane checks
+gateway sign-ins also require verified TLS with the provider's CA or system
+roots; `tls=false` is refused, and an omitted `tls` option no longer means
+plaintext. Existing plaintext MongoDB routes require a fresh session. At
+redemption, the control plane checks
 the current credential against the recorded route. A change of route or trust
 requires a fresh session.
 Gateway agents can further limit database sockets with `--relay-egress-allow`.

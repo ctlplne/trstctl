@@ -57,7 +57,7 @@ func TestServedMongoCommandRuleBlocksAndRecordsA262(t *testing.T) {
 		t.Fatal("missing exact owned Mongo login")
 	}
 	root := func(script string) (string, error) {
-		return a201Exec(f.mongoID, "mongosh", "--quiet", "-u", "root", "-p", "a256-admin", "--authenticationDatabase", "admin", "--eval", script)
+		return a256MongoRoot(f.mongoID, script)
 	}
 	// Fixture authority for the exact session login: readWrite on this disposable
 	// orders database. The same-login alias below proves actual remove permission.
@@ -144,7 +144,7 @@ func TestServedMongoCommandReviewWaitsAndCancelsA262(t *testing.T) {
 				t.Fatal("missing owned Mongo account")
 			}
 			root := func(script string) (string, error) {
-				return a201Exec(f.mongoID, "mongosh", "--quiet", "-u", "root", "-p", "a256-admin", "--authenticationDatabase", "admin", "--eval", script)
+				return a256MongoRoot(f.mongoID, script)
 			}
 			if out, err := root(`db.getSiblingDB("orders").grantRolesToUser("` + users[0] + `",[{role:"readWrite",db:"orders"}])`); err != nil {
 				t.Fatalf("seed owned Mongo review authority: %v %s", err, out)

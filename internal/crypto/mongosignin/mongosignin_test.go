@@ -24,12 +24,15 @@ func TestParseURIReadsTheProviderCredential(t *testing.T) {
 		len(target.Hosts) != 2 || target.Hosts[0] != "db1.internal:27017" || target.Hosts[1] != "db2.internal:27018" {
 		t.Fatalf("target = %+v", target)
 	}
-	plain, err := ParseURI([]byte("mongodb://u:p@127.0.0.1:27017"))
-	if plain != nil {
-		defer plain.Wipe()
+	defaultTLS, err := ParseURI([]byte("mongodb://u:p@127.0.0.1:27017"))
+	if defaultTLS != nil {
+		defer defaultTLS.Wipe()
 	}
-	if err != nil || plain.AuthSource != "admin" || plain.TLS {
-		t.Fatalf("plain = %+v %v", plain, err)
+	if err != nil || defaultTLS.AuthSource != "admin" || !defaultTLS.TLS {
+		t.Fatalf("default TLS = %+v %v", defaultTLS, err)
+	}
+	if _, err := ParseURI([]byte("mongodb://u:p@127.0.0.1:27017/?tls=false")); err == nil {
+		t.Fatal("explicit plaintext MongoDB credential parsed")
 	}
 	for _, bad := range []string{"mongodb+srv://u:p@h/db", "postgres://u:p@h/db", "mongodb://h/db", "mongodb://u:@h/db",
 		"mongodb://u:p@h:0/db", "mongodb://u:p@h/db?authMechanism=SCRAM-SHA-1", "mongodb://u:%zz@h/db",

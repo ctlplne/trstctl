@@ -557,8 +557,9 @@ plane's host, and for MySQL the provider's `tls_ca_ref` and `tls_server_name`. A
 needs no copy on the gateway's host. With none, the gateway uses system roots and verifies
 the database's host name. MySQL refuses a server without TLS or with an untrusted or
 misnamed certificate before sending a password proof. PostgreSQL likewise refuses a
-TLSless server before sending startup traffic. Reopen sessions created with older
-plaintext or downgrade-capable PostgreSQL/MySQL routes after upgrading the gateway
+TLSless server before sending startup traffic. MongoDB also requires verified TLS
+before its SCRAM exchange. Reopen sessions created with older plaintext or
+downgrade-capable PostgreSQL, MongoDB or MySQL routes after upgrading the gateway
 and configuring database TLS.
 
 A session can be worked in from the console instead (A259). Open it with `"browser": true`

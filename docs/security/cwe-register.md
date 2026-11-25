@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3635 annotated sites across 35 rules. Each row is
+3642 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1305,10 +1305,10 @@ not this file.
 | `internal/crypto/mongosignin/bson.go:81` | a command document is short (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:194` | a BSON int32's two's-complement bits (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:196` | a BSON int64's two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:313` | a message length is bounded by its reader (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:314` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:315` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:316` | an op code is a small constant (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:310` | a message length is bounded by its reader (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:311` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:312` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:313` | an op code is a small constant (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:131` | the 3-byte little-endian length of a payload checked above (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:193` | the capability flags' lower half (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:196` | the capability flags' upper half (CWE-190) |
@@ -1476,7 +1476,7 @@ not this file.
 | `internal/server/pam_browser_kube_test.go:40` | test frame length below 126 (CWE-190) |
 | `internal/server/pam_browser_kube_test.go:43` | test frame length under 1<<16 (CWE-190) |
 | `internal/server/pam_browser_kube_test.go:46` | test frame length, never negative (CWE-190) |
-| `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
+| `internal/server/pam_gateway_mongo_served_test.go:167` | a request id's two's-complement bits (CWE-190) |
 | `internal/server/pam_gateway_private_ca_served_test.go:71` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_health.go:100` | a positive interval in nanoseconds, never negative (CWE-190) |
 | `internal/server/pam_served_test.go:749` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1908,7 +1908,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (464 sites)
+### G204 — CWE-78 OS command injection (469 sites)
 
 | Location | Reason |
 |---|---|
@@ -2225,9 +2225,14 @@ not this file.
 | `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:175` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:198` | the stock kubectl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_mongo_served_test.go:31` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_gateway_mongo_served_test.go:68` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:57` | fixed pinned fixture image and arguments (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:67` | exact fixture-owned container id (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:69` | fixed fixture-owned files and container (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:74` | exact fixture-owned container id (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:77` | exact fixture-owned container id (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:94` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:130` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:203` | the stock mongosh against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:49` | exact container id returned by this fixture, fixed destination (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:58` | fixture-owned container, fixed chown/chmod arguments (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:76` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -3673,7 +3678,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1482` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:741` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (60 sites)
+### G702 — CWE-78 OS command injection (taint) (62 sites)
 
 | Location | Reason |
 |---|---|
@@ -3713,7 +3718,9 @@ not this file.
 | `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:175` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:198` | the stock kubectl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:57` | fixed pinned fixture image and arguments (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:69` | fixed fixture-owned files and container (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:203` | the stock mongosh against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:49` | exact container id returned by this fixture, fixed destination (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:58` | fixture-owned container, fixed chown/chmod arguments (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:205` | the stock mysql client against the test's own tunnel (CWE-78) |
@@ -3738,7 +3745,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1340` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:978` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (176 sites)
+### G703 — CWE-22 Path traversal (taint) (178 sites)
 
 | Location | Reason |
 |---|---|
@@ -3854,6 +3861,8 @@ not this file.
 | `internal/server/pam_desktop_served_test.go:187` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:47` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:162` | the kubeconfig the CLI wrote for this test (CWE-22) |
+| `internal/server/pam_gateway_mongo_served_test.go:46` | fixed file name in test-owned directory (CWE-22) |
+| `internal/server/pam_gateway_mongo_served_test.go:49` | fixed file name in test-owned directory (CWE-22) |
 | `internal/server/pam_gateway_mysql_served_test.go:46` | fixed test-only path beneath t.TempDir (CWE-22) |
 | `internal/server/pam_gateway_private_ca_served_test.go:88` | the fixture's own data directory (CWE-22) |
 | `internal/server/pam_served_test.go:742` | fixed fixture file names in the test-owned directory (CWE-22) |

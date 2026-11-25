@@ -55,7 +55,7 @@ func (r *GatewayRoute) Validate(driver string, explicitTrust bool) error {
 			return ErrGatewayRoute
 		}
 	case Mongo:
-		if r.TLS != GatewayPlain && r.TLS != GatewayVerifiedTLS {
+		if r.TLS != GatewayVerifiedTLS {
 			return ErrGatewayRoute
 		}
 	case MySQL:
@@ -135,11 +135,8 @@ func GatewayTLSMode(driver string, target Target, explicitTrust bool) (string, e
 		if target.SRV || target.Options["loadbalanced"] == "true" {
 			return "", ErrGatewayRoute
 		}
-		if target.Options["tls"] == "true" {
+		if target.Options["tls"] == "" || target.Options["tls"] == "true" {
 			return GatewayVerifiedTLS, nil
-		}
-		if !explicitTrust {
-			return GatewayPlain, nil
 		}
 	case MySQL:
 		if target.Options["tls"] == "" || target.Options["tls"] == "true" {

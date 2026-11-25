@@ -9661,6 +9661,8 @@ session before the gateway will sign in.
 PostgreSQL gateway sessions likewise require verified TLS; a server that refuses
 TLS is rejected before startup, and existing plaintext routes need a fresh
 session.
+MongoDB gateway sessions require verified TLS before SCRAM; `tls=false` and
+older plaintext routes are refused.
 
 ## Agent launcher (A257) — served
 

@@ -3,13 +3,16 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,11 +20,71 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/certtest"
 	"trstctl.com/trstctl/internal/crypto/mongosignin"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // a256MongoImage is the census's pinned MongoDB 7.0, which carries mongosh.
 const a256MongoImage = mongoTwoUserImage
+
+// startPAMMongoTLSContainer creates only this test's MongoDB container. Copying
+// the certificate before start lets the image entrypoint chown its data tree
+// before dropping privileges; no Docker daemon or unrelated container changes.
+func startPAMMongoTLSContainer(t *testing.T) (string, string, string) {
+	t.Helper()
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(keyPEM)
+	dir := t.TempDir()
+	caFile := filepath.Join(dir, "ca.pem")
+	serverFile := filepath.Join(dir, "server.pem")
+	serverPEM := append(append([]byte(nil), certPEM...), keyPEM...)
+	defer secret.Wipe(serverPEM)
+	if err := os.WriteFile(caFile, caPEM, 0o600); err != nil { // #nosec G703 -- fixed file name in test-owned directory (CWE-22)
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(serverFile, serverPEM, 0o600); err != nil { // #nosec G703 -- fixed file name in test-owned directory (CWE-22)
+		t.Fatal(err)
+	}
+	args := []string{"create", "-p", "127.0.0.1::27017", "-e", "MONGO_INITDB_ROOT_USERNAME=root",
+		"-e", "MONGO_INITDB_ROOT_PASSWORD=a256-admin", a256MongoImage,
+		"--tlsMode", "requireTLS", "--tlsCertificateKeyFile", "/data/db/server.pem",
+		"--tlsCAFile", "/data/db/ca.pem", "--tlsAllowConnectionsWithoutCertificates"}
+	var stdout, stderr bytes.Buffer
+	create := exec.Command("docker", args...) // #nosec G204 G702 -- fixed pinned fixture image and arguments (CWE-78)
+	create.Stdout, create.Stderr = &stdout, &stderr
+	if err := create.Run(); err != nil {
+		t.Fatalf("create fixture MongoDB: %v %s%s", err, stdout.Bytes(), stderr.Bytes())
+	}
+	fields := strings.Fields(stdout.String())
+	if len(fields) == 0 {
+		t.Fatalf("create fixture MongoDB returned no container id: %s", stderr.Bytes())
+	}
+	id := fields[len(fields)-1]
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", id).Run() }) // #nosec G204 -- exact fixture-owned container id (CWE-78)
+	for name, path := range map[string]string{"ca.pem": caFile, "server.pem": serverFile} {
+		out, err := exec.Command("docker", "cp", path, id+":/data/db/"+name).CombinedOutput() // #nosec G204 G702 -- fixed fixture-owned files and container (CWE-78)
+		if err != nil {
+			t.Fatalf("copy fixture MongoDB TLS file: %v %s", err, out)
+		}
+	}
+	if out, err := exec.Command("docker", "start", id).CombinedOutput(); err != nil { // #nosec G204 -- exact fixture-owned container id (CWE-78)
+		t.Fatalf("start fixture MongoDB: %v %s", err, out)
+	}
+	mapped, err := exec.Command("docker", "port", id, "27017/tcp").CombinedOutput() // #nosec G204 -- exact fixture-owned container id (CWE-78)
+	if err != nil {
+		t.Fatalf("fixture MongoDB port: %v %s", err, mapped)
+	}
+	return id, strings.TrimSpace(strings.Split(string(mapped), "\n")[0]), "file:" + caFile
+}
+
+func a256MongoRoot(id, script string) (string, error) {
+	return a201Exec(id, "mongosh", "--quiet", "--tls", "--tlsCAFile", "/data/db/ca.pem", "--host", "localhost",
+		"-u", "root", "-p", "a256-admin", "--authenticationDatabase", "admin", "--eval", script)
+}
 
 // startPAMMongo runs the pinned MongoDB image with a root user and an
 // "orders" database holding a note, and returns its container and a
@@ -31,10 +94,8 @@ func startPAMMongo(t *testing.T, note string) (string, DynamicSecretProviderRegi
 	if out, err := exec.Command("docker", "image", "inspect", a256MongoImage).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Skipf("the pinned image %s is not present locally: %v\n%s", a256MongoImage, err, out)
 	}
-	id, addr := a201Container(t, "27017", "-e", "MONGO_INITDB_ROOT_USERNAME=root", "-e", "MONGO_INITDB_ROOT_PASSWORD=a256-admin", a256MongoImage)
-	root := func(script string) (string, error) {
-		return a201Exec(id, "mongosh", "--quiet", "-u", "root", "-p", "a256-admin", "--authenticationDatabase", "admin", "--eval", script)
-	}
+	id, addr, tlsCARef := startPAMMongoTLSContainer(t)
+	root := func(script string) (string, error) { return a256MongoRoot(id, script) }
 	// The image's init server answers on localhost and then restarts; wait
 	// for the init-done line, after which only the real server answers.
 	a256AwaitLog(t, id, "MongoDB init process complete")
@@ -46,10 +107,11 @@ func startPAMMongo(t *testing.T, note string) (string, DynamicSecretProviderRegi
 		t.Fatalf("seed MongoDB: %v %s", err, out)
 	}
 	adminURI := (&url.URL{Scheme: "mongodb", User: url.UserPassword("root", "a256-admin"), Host: addr, Path: "/orders",
-		RawQuery: "authSource=admin&directConnection=true"}).String()
+		RawQuery: "authSource=admin&directConnection=true&tls=true"}).String()
 	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "pam-mongo-provider", Type: "mongodb",
 		AdminDSNRef: writeServedCredentialFile(t, "mongo-admin-uri", adminURI), Database: "orders",
+		TLSCARef: tlsCARef, TLSServerName: "localhost",
 		AllowedRoles: []string{"mongo-reader"}, RoleAccess: map[string]string{"mongo-reader": "read"}, MaxTTL: "1h", UsernamePrefix: "a256_mongo",
 	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
@@ -73,8 +135,7 @@ func a256AwaitLog(t *testing.T, id, line string) {
 // mongoSessionUsers lists the per-session users the provider created.
 func mongoSessionUsers(t *testing.T, mongoID string) []string {
 	t.Helper()
-	out, err := a201Exec(mongoID, "mongosh", "--quiet", "-u", "root", "-p", "a256-admin", "--authenticationDatabase", "admin", "--eval",
-		`db.getSiblingDB("orders").getUsers().users.map(u => u.user).join("\n")`)
+	out, err := a256MongoRoot(mongoID, `db.getSiblingDB("orders").getUsers().users.map(u => u.user).join("\n")`)
 	if err != nil {
 		t.Fatalf("list users: %v %s", err, out)
 	}
