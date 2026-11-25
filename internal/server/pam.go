@@ -823,7 +823,18 @@ func (s *pamService) targetReviewEvidence(ctx context.Context, tenantID string, 
 		if err != nil {
 			return nil, err
 		}
-		return []string{"pam-" + req.TargetType + "-provider:" + target.cfg.ProviderID}, nil
+		evidence := []string{"pam-" + req.TargetType + "-provider:" + target.cfg.ProviderID}
+		if req.TargetType == pamTargetWebConsole {
+			// CR-072: the digest binds the complete route, while these
+			// readable references let reviewers see where the account goes.
+			evidence = append(evidence,
+				"pam-web-origin:"+target.cfg.Web.URL,
+				"pam-web-account-secret:"+target.cfg.AccountSecret)
+			if target.cfg.Web.SignInURL != "" {
+				evidence = append(evidence, "pam-web-sign-in-origin:"+target.cfg.Web.SignInURL)
+			}
+		}
+		return evidence, nil
 	case req.TargetType == pamTargetSSH:
 		cfg, err := s.sshTarget(ctx, tenantID, req.TargetID)
 		if err != nil {

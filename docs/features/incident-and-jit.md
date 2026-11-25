@@ -1908,8 +1908,11 @@ CSRF token; every other cookie the console sets stays at the gateway.
 ```
 
 A `webconsole` session is requested through such a template (its folder's, or
-`template_id`); reviewers see the sign-in mode in the request's evidence and the gateway
-applies exactly the sign-in they approved. Enable `access.gateway.session.web.v1` in
+`template_id`); reviewers see the sign-in mode, the account secret's name and
+the console origin in the request's evidence. A single sign-on request also
+shows the identity provider's origin. The target digest binds the complete
+route, and the gateway applies exactly the sign-in the reviewers approved.
+Enable `access.gateway.session.web.v1` in
 `agent_channel.claimable_job_kinds`. `trstctl access sessions connect` prints the tunnel's
 address to open in a browser: the gateway signs in for the operator and the browser never
 receives the password, the token or the console's session cookies. A console page that

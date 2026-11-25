@@ -3872,8 +3872,8 @@ not this file.
 | `internal/server/pam_gateway_private_ca_served_test.go:88` | the fixture's own data directory (CWE-22) |
 | `internal/server/pam_gateway_redis_served_test.go:48` | fixed fixture files under t.TempDir (CWE-22) |
 | `internal/server/pam_served_test.go:742` | fixed fixture file names in the test-owned directory (CWE-22) |
-| `internal/server/pam_webconsole_served_test.go:559` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
-| `internal/server/pam_webconsole_served_test.go:563` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
+| `internal/server/pam_webconsole_served_test.go:561` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
+| `internal/server/pam_webconsole_served_test.go:565` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:60` | public lab inputs the containers read (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:82` | the lab runner's build output (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:328` | test path inside its own tempdir/checkout (CWE-22) |

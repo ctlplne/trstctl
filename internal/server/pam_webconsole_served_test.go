@@ -341,10 +341,12 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	if session.Delivery != "gateway" || session.Gateway == nil {
 		t.Fatalf("the console session was not delivered through its gateway: %+v", session)
 	}
-	// The reviewers saw how the gateway signs in.
+	// The reviewers saw both where the credential goes and how the gateway signs in.
 	if status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/approval-requests?status=consumed", f.reviewerOne, nil); status != http.StatusOK ||
-		!strings.Contains(string(body), "pam-web-sign-in:form") {
-		t.Fatalf("the reviewed request's evidence lacks the sign-in: %d %s", status, body)
+		!strings.Contains(string(body), "pam-web-sign-in:form") ||
+		!strings.Contains(string(body), "pam-web-origin:"+console.URL()) ||
+		!strings.Contains(string(body), "pam-web-account-secret:"+account) {
+		t.Fatalf("CR-072: the reviewed request lacks the sign-in, console origin or account reference: %d %s", status, body)
 	}
 	out, stop := f.connect(session.ID, session.Gateway.Ticket, a273OpenLine.MatchString)
 	defer stop()
@@ -719,6 +721,12 @@ func servedWebConsoleSingleSignOn(t *testing.T, f *gatewayFixture, gatewayID, ac
 	req := request(sso.ID)
 	req["target_id"] = "a273-sso-console"
 	session := servedPAMReviewedOpen(t, h.servedHarness, f.requester, f.reviewerOne, f.reviewerTwo, "a273-open-sso", req)
+	if status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/approval-requests?status=consumed", f.reviewerOne, nil); status != http.StatusOK ||
+		!strings.Contains(string(body), "pam-web-origin:"+console.URL()) ||
+		!strings.Contains(string(body), "pam-web-sign-in-origin:"+idp.URL()) ||
+		!strings.Contains(string(body), "pam-web-account-secret:"+account) {
+		t.Fatalf("CR-072: single sign-on review lacks the console, identity-provider origin or account reference: %d %s", status, body)
+	}
 	out, stop := f.connect(session.ID, session.Gateway.Ticket, a273OpenLine.MatchString)
 	defer stop()
 	capture := startA273Capture(t, a273OpenLine.FindStringSubmatch(out)[1])
