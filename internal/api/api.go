@@ -820,6 +820,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		if r.approval {
 			handler = a.refuseDelegatedApproval(r.perm, handler)
 		}
+		if r.mutation {
+			handler = a.refuseDelegatedMutation(r.perm, handler)
+		}
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, handler))
 	}
 	// Compatibility alias for the probectl editions surface. The canonical,

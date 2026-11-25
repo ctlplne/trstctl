@@ -1411,8 +1411,8 @@ not this file.
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
 | `internal/orchestrator/discovery.go:367` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:75` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/orchestrator/operation_approvals.go:441` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
-| `internal/orchestrator/operation_approvals.go:451` | a negative stored version is classified as drift before conversion (CWE-190). |
+| `internal/orchestrator/operation_approvals.go:448` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
+| `internal/orchestrator/operation_approvals.go:458` | a negative stored version is classified as drift before conversion (CWE-190). |
 | `internal/orchestrator/rewrap_tenant_command_owner_test.go:45` | net.TCPAddr.Port is bounded to the 16-bit TCP port range |
 | `internal/orchestrator/secret_rotation.go:628` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:243` | bounded test sequence. |
@@ -1539,8 +1539,8 @@ not this file.
 | `internal/store/breakglass_issue_receipt.go:35` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/breakglass_issue_receipt.go:93` | MaxInt64 bound above rejects narrowing (CWE-190). |
 | `internal/store/breakglass_issue_receipt.go:136` | MaxInt64 bound above rejects narrowing (CWE-190). |
-| `internal/store/ca.go:557` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/ca.go:637` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:558` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:644` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/ca_rollover_draft.go:45` | event sequences fit int64 (CWE-190) |
 | `internal/store/ca_rollover_draft.go:68` | positive by constraint (CWE-190) |
 | `internal/store/ca_upstream_standing_approval.go:52` | event sequences fit int64 (CWE-190) |

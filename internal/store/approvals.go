@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -168,6 +169,13 @@ func (s *Store) ApproveIssuance(ctx context.Context, tenantID, resource, action,
 		if requester != "" && requester == approver {
 			return ErrSelfIssuanceApproval
 		}
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, requester, []string{approver})
+		if err != nil {
+			return err
+		}
+		if minter {
+			return ErrSelfIssuanceApproval
+		}
 		if status == "consumed" {
 			return ErrIssuanceApprovalConsumed
 		}
@@ -181,11 +189,8 @@ func (s *Store) ApproveIssuance(ctx context.Context, tenantID, resource, action,
 			tenantID, resource, action, approver); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx,
-			`SELECT count(*) FROM issuance_approvals
-			  WHERE tenant_id = $1 AND resource = $2 AND action = $3
-			    AND approver <> $4`,
-			tenantID, resource, action, requester).Scan(&count); err != nil {
+		count, err = s.countIndependentIssuanceApprovalsTx(ctx, tx, tenantID, resource, action, requester)
+		if err != nil {
 			return err
 		}
 		if count >= required && status != "approved" {
@@ -202,13 +207,54 @@ func (s *Store) ApproveIssuance(ctx context.Context, tenantID, resource, action,
 	return count, err
 }
 
+// A pre-fix decision stays in the audit history, but never counts as another
+// person's approval if its reviewer minted a token for the requester.
+func (s *Store) countIndependentIssuanceApprovalsTx(ctx context.Context, tx pgx.Tx, tenantID, resource, action, requester string) (int, error) {
+	rows, err := tx.Query(ctx, `SELECT approver FROM issuance_approvals
+		WHERE tenant_id=$1 AND resource=$2 AND action=$3 ORDER BY approver LIMIT 1025`, tenantID, resource, action)
+	if err != nil {
+		return 0, err
+	}
+	approvers := make([]string, 0)
+	for rows.Next() {
+		var approver string
+		if err := rows.Scan(&approver); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		approvers = append(approvers, approver)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+	if len(approvers) > 1024 {
+		return 0, fmt.Errorf("store: issuance approvals exceed review bound")
+	}
+	count := 0
+	for _, approver := range approvers {
+		if approver == requester {
+			continue
+		}
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, requester, []string{approver})
+		if err != nil {
+			return 0, err
+		}
+		if !minter {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // GetIssuanceApproval loads the dual-control state for a privileged action: the
 // requester, the required count, and the current DISTINCT-approver count. A missing
 // request yields a not-found error. It is tenant-scoped under RLS (AN-1).
 func (s *Store) GetIssuanceApproval(ctx context.Context, tenantID, resource, action string) (IssuanceApproval, error) {
 	a := IssuanceApproval{TenantID: tenantID, Resource: resource, Action: action}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
+		if err := tx.QueryRow(ctx,
 			`SELECT requester, required,
 			        (SELECT count(*) FROM issuance_approvals ia
 			          WHERE ia.tenant_id = r.tenant_id AND ia.resource = r.resource AND ia.action = r.action
@@ -217,7 +263,15 @@ func (s *Store) GetIssuanceApproval(ctx context.Context, tenantID, resource, act
 			   FROM issuance_approval_requests r
 			  WHERE tenant_id = $1 AND resource = $2 AND action = $3`,
 			tenantID, resource, action).
-			Scan(&a.Requester, &a.Required, &a.Approvals, &a.Status, &a.ExpiresAt)
+			Scan(&a.Requester, &a.Required, &a.Approvals, &a.Status, &a.ExpiresAt); err != nil {
+			return err
+		}
+		var err error
+		a.Approvals, err = s.countIndependentIssuanceApprovalsTx(ctx, tx, tenantID, resource, action, a.Requester)
+		if a.Status == "approved" && a.Approvals < a.Required {
+			a.Status = "pending"
+		}
+		return err
 	})
 	return a, err
 }
@@ -234,25 +288,27 @@ func (s *Store) HasDistinctApproval(ctx context.Context, tenantID, resource, act
 	}
 	var approved bool
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		// The request row, not the call arguments, owns the requester and quorum.
-		// Equality checks make a stale caller fail closed; the count then excludes
-		// that durably bound requester as a second self-approval defense.
-		return tx.QueryRow(ctx,
-			`SELECT EXISTS (
-			   SELECT 1
-			     FROM issuance_approval_requests r
-			    WHERE r.tenant_id = $1 AND r.resource = $2 AND r.action = $3
-			      AND r.requester <> '' AND r.requester = $4 AND r.required = $5
-			      AND r.status IN ('pending', 'approved')
-			      AND r.expires_at > CURRENT_TIMESTAMP
-			      AND (SELECT count(*)
-			             FROM issuance_approvals ia
-			            WHERE ia.tenant_id = r.tenant_id
-			              AND ia.resource = r.resource
-			              AND ia.action = r.action
-			              AND ia.approver <> r.requester) >= r.required
-			 )`,
-			tenantID, resource, action, requester, required).Scan(&approved)
+		var boundRequester, status string
+		var boundRequired int
+		var unexpired bool
+		err := tx.QueryRow(ctx, `SELECT requester, required, status, expires_at > CURRENT_TIMESTAMP
+			FROM issuance_approval_requests WHERE tenant_id=$1 AND resource=$2 AND action=$3`,
+			tenantID, resource, action).Scan(&boundRequester, &boundRequired, &status, &unexpired)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if boundRequester == "" || boundRequester != requester || boundRequired != required || !isLiveIssuanceApprovalStatus(status) || !unexpired {
+			return nil
+		}
+		count, err := s.countIndependentIssuanceApprovalsTx(ctx, tx, tenantID, resource, action, requester)
+		if err != nil {
+			return err
+		}
+		approved = count >= required
+		return nil
 	})
 	if err != nil {
 		return false, err
@@ -309,6 +365,11 @@ func (s *Store) ConsumeIssuanceApprovalTx(ctx context.Context, tx pgx.Tx, tenant
 	if !isLiveIssuanceApprovalStatus(a.Status) || !unexpired {
 		return IssuanceApproval{}, ErrIssuanceApprovalNotLive
 	}
+	count, err := s.countIndependentIssuanceApprovalsTx(ctx, tx, tenantID, resource, action, a.Requester)
+	if err != nil {
+		return IssuanceApproval{}, err
+	}
+	a.Approvals = count
 	if a.Approvals < a.Required {
 		return IssuanceApproval{}, ErrIssuanceApprovalQuorumNotMet
 	}

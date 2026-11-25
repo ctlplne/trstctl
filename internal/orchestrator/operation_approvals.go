@@ -311,6 +311,13 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 			if err := validateOperationApprovalDecisionTarget(request, decision); err != nil {
 				return err
 			}
+			minter, err := o.store.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, request.Requester, []string{decision.Approver})
+			if err != nil {
+				return err
+			}
+			if minter {
+				return store.ErrApprovalSelfDecision
+			}
 			var (
 				managedKey        store.ManagedKey
 				managedKeyExists  = true

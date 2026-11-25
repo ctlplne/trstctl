@@ -72,8 +72,8 @@ func TestServedApprovalRequiresAReviewerIndependentOfTheBundleRun(t *testing.T) 
 	}
 }
 
-// F262: a token that one person mints for another subject can do that subject's
-// work, but it never counts as that subject's approval. Otherwise one admin can
+// F262: a historical token that one person minted for another subject may read
+// in that subject's scope, but it never counts as that subject's approval. Otherwise one admin can
 // mint tokens named after the custodians and pass every two-person control alone.
 // A token its own subject minted and a deployment-custody token still approve.
 func TestServedDelegatedTokensCannotApprove(t *testing.T) {
@@ -117,7 +117,7 @@ func TestServedDelegatedTokensCannotApprove(t *testing.T) {
 	approveCACeremony(t, h, selfMinted, ceremony.ID, 1, "f262-ceremony-self")
 	approveCACeremony(t, h, custody, ceremony.ID, 2, "f262-ceremony-custody")
 	if code, body := doBearer(t, h.ts, http.MethodGet, "/api/v1/ca/ceremonies/"+ceremony.ID, delegated, "", nil); code != http.StatusOK {
-		t.Errorf("delegated token reading the ceremony = %d body=%s; want 200 (it still does its subject's work)", code, body)
+		t.Errorf("delegated token reading the ceremony = %d body=%s; want 200 for an authorized read", code, body)
 	}
 
 	// Identity issuance under dual control.

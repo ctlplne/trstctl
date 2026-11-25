@@ -45,6 +45,9 @@ func (o *Orchestrator) DecideIssuanceRequestFromTicket(ctx context.Context, tena
 	if err := issuancerequest.CanDecide(current.Requester, decidedBy); err != nil {
 		return false, err
 	}
+	if err := o.requesterIsNotDecider(ctx, tenantID, current.Requester, decidedBy); err != nil {
+		return false, err
+	}
 	payload, err := json.Marshal(projections.IssuanceRequestDecided{ID: requestID, Status: to, DecidedBy: decidedBy,
 		Reason: reason, DecidedAt: time.Now().UTC()})
 	if err != nil {

@@ -5,13 +5,114 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/privacy"
 )
+
+// DelegatedTokenMinterMatches finds every authenticated minter in a retained
+// token's chain, including revoked tokens. Old approval requests did not store
+// the token ID, so any cross-subject token for that requester must fence its
+// minter from acting as an independent reviewer. An old delegated token with
+// no recorded minter makes every proposed reviewer conflict: the old request
+// must be reopened under an independently identifiable requester. Subject
+// references survive privacy erasure; every lookup is tenant-scoped.
+func (s *Store) DelegatedTokenMinterMatches(ctx context.Context, tenantID, requester string, reviewers []string) (bool, error) {
+	var matched bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		matched, err = s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, requester, reviewers)
+		return err
+	})
+	return matched, err
+}
+
+// DelegatedTokenMinterMatchesTx is the transaction-local form for approval
+// recorders that already hold the request row lock.
+func (s *Store) DelegatedTokenMinterMatchesTx(ctx context.Context, tx pgx.Tx, tenantID, requester string, reviewers []string) (bool, error) {
+	if requester == "" || len(reviewers) == 0 {
+		return false, nil
+	}
+	if owner, ok := authz.BundleRunPrincipal(requester); ok {
+		requester = owner
+	}
+	requesterRef := privacy.SubjectRef(tenantID, requester)
+	var unknownMinter bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (
+	    SELECT 1 FROM api_tokens
+	     WHERE tenant_id=$1 AND subject_ref=$2 AND delegated AND btrim(minted_by_ref)=''
+	)`, tenantID, requesterRef).Scan(&unknownMinter); err != nil {
+		return false, fmt.Errorf("store: read historical delegated token provenance: %w", err)
+	}
+	if unknownMinter {
+		return true, nil
+	}
+	rows, err := tx.Query(ctx, `WITH RECURSIVE minter_lineage(ref, name) AS (
+	    SELECT minted_by_ref, minted_by FROM api_tokens
+	     WHERE tenant_id=$1 AND subject_ref=$2 AND minted_by_ref<>'' AND minted_by_ref<>subject_ref
+	    UNION
+	    SELECT t.minted_by_ref, t.minted_by FROM api_tokens AS t JOIN minter_lineage AS m ON t.subject_ref=m.ref
+	     WHERE t.tenant_id=$1 AND t.minted_by_ref<>'' AND t.minted_by_ref<>t.subject_ref
+	) SELECT ref, name FROM minter_lineage LIMIT 1025`, tenantID, requesterRef)
+	if err != nil {
+		return false, fmt.Errorf("store: read delegated token lineage: %w", err)
+	}
+	type minterIdentity struct{ ref, name string }
+	minters := make([]minterIdentity, 0)
+	for rows.Next() {
+		var minter minterIdentity
+		if err := rows.Scan(&minter.ref, &minter.name); err != nil {
+			rows.Close()
+			return false, err
+		}
+		minters = append(minters, minter)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return false, err
+	}
+	rows.Close()
+	if len(minters) > 1024 {
+		return false, fmt.Errorf("store: delegated token lineage exceeds review bound")
+	}
+	if len(minters) == 0 {
+		return false, nil
+	}
+	identifiers := make([]string, 0, 3*len(reviewers))
+	for _, reviewer := range reviewers {
+		if owner, ok := authz.BundleRunPrincipal(reviewer); ok {
+			reviewer = owner
+		}
+		if reviewer == "" {
+			continue
+		}
+		identifiers = append(identifiers, reviewer)
+		var email, displayName string
+		err := tx.QueryRow(ctx, `SELECT email, display_name FROM tenant_members WHERE tenant_id=$1 AND subject_ref=$2`,
+			tenantID, privacy.SubjectRef(tenantID, reviewer)).Scan(&email, &displayName)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return false, fmt.Errorf("store: read reviewer member identifiers: %w", err)
+		}
+		if err == nil {
+			identifiers = append(identifiers, email, displayName)
+		}
+	}
+	for _, minter := range minters {
+		for _, identifier := range identifiers {
+			identifier = strings.TrimSpace(identifier)
+			if identifier != "" && (privacy.SubjectRef(tenantID, identifier) == minter.ref || strings.EqualFold(identifier, minter.name)) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
 
 // APITokenRecord is a stored API token: its identity, scopes, and expiry, plus
 // the hash of its secret. The secret itself is never stored.

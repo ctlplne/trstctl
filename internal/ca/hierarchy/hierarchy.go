@@ -193,6 +193,13 @@ func (m *Manager) Approve(ctx context.Context, tenantID, ceremonyID, custodian s
 	if current.Opener != "" && current.Opener == custodian {
 		return current.Approvals, store.ErrSelfApproval
 	}
+	minter, err := m.store.DelegatedTokenMinterMatches(ctx, tenantID, current.Opener, []string{custodian})
+	if err != nil {
+		return current.Approvals, err
+	}
+	if minter {
+		return current.Approvals, store.ErrSelfApproval
+	}
 	evidenced, err := m.store.KeyCeremonyApprovalEvidenced(ctx, tenantID, ceremonyID, custodian)
 	if err != nil {
 		return current.Approvals, err

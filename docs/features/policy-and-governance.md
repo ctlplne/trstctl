@@ -54,9 +54,20 @@ its key, or use the custody-bound local `trstctl token create` command for
 bootstrap. The token inventory shows its
 authenticated minter. Offboarding that minter revokes both their own tokens and
 tokens they minted for another subject; a pending offboard fence denies either
-bearer before projection catches up. Historical delegated tokens can still do
-their subject's non-approval work until revoked, but every approval and denial
-route refuses them with 403. Approve with your own sign-in or a self-minted token.
+bearer before projection catches up. Historical cross-subject tokens are read-only:
+every native mutation route refuses them with 403. This prevents an old token
+from opening an approval request under its named subject and its minter from
+approving it under another sign-in. Already-open requests also check the retained
+token minter chain when a reviewer decides; a minter cannot count as an
+independent reviewer. Earlier minter approvals remain in the audit history but
+no longer count toward issuance, operation, CA-ceremony, profile-edit, or
+access-change quorum when an action is prepared. Obtain a genuinely independent
+approval before retrying the action. If an older delegated token has no recorded
+minter, its request cannot establish reviewer independence; open a new request
+under the authenticated service identity and review that request instead.
+Replace old delegated tokens with credentials minted by
+the authenticated subject before resuming automation. Approve with your own
+sign-in or a self-minted token.
 An older delegated token whose minter is missing from the upgraded read model
 is refused at authentication until event replay restores provenance; reissue it
 through the reviewed workflow if it can no longer be used.

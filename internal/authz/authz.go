@@ -352,7 +352,8 @@ type Principal struct {
 	Subject  string
 	Grants   []Grant
 	// Delegated marks an API token that one person minted for another subject
-	// (F262). It may do that subject's work, but approval routes refuse it so a
+	// (F262). Historical cross-subject tokens may read in that subject's scope,
+	// but mutation and approval routes refuse them so a
 	// minter cannot cast a second person's vote.
 	Delegated bool
 	// RunID is set when the principal is an access bundle run (A251): the run

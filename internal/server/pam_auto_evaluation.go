@@ -22,6 +22,26 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// A retained cross-subject token can make the rule author and requester look
+// like different people. Check both directions: either side may be the token's
+// historical subject, and a bundle run carries its owner's subject.
+func (s *pamService) pamApprovalPrincipalConflict(ctx context.Context, tenantID, author, requester string) (bool, error) {
+	if authz.SameApprovalPrincipal(author, requester) {
+		return true, nil
+	}
+	if owner, ok := orchestrator.BundleRunPrincipal(requester); ok {
+		requester = owner
+	}
+	if owner, ok := orchestrator.BundleRunPrincipal(author); ok {
+		author = owner
+	}
+	conflict, err := s.store.DelegatedTokenMinterMatches(ctx, tenantID, requester, []string{author})
+	if err != nil || conflict {
+		return conflict, err
+	}
+	return s.store.DelegatedTokenMinterMatches(ctx, tenantID, author, []string{requester})
+}
+
 // pamEnsureReviewedRequest freezes policy evaluation before requesting the
 // review. The existing resource-creation fence carries a dedicated lock-pool
 // session through nested event/projection work; it never parks all request
@@ -85,6 +105,13 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 				if !ok {
 					continue
 				}
+				conflict, err := s.pamApprovalPrincipalConflict(work, tenantID, rule.SavedBy, intent.Requester)
+				if err != nil {
+					return err
+				}
+				if conflict {
+					continue
+				}
 				// A rule applies only while its author may still approve
 				// access: the rules of an offboarded author, or of one whose
 				// role no longer grants access:approve, stop applying.
@@ -129,10 +156,14 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 			if err != nil {
 				return err
 			}
+			conflict, err := s.pamApprovalPrincipalConflict(work, tenantID, standing.GrantedBy, intent.Requester)
+			if err != nil {
+				return err
+			}
 			if standing.BundleID != evaluated.Standing.BundleID || standing.TargetType != facts.TargetType ||
 				standing.TargetID != facts.TargetID || standing.Role != facts.Role || standing.RevokedAt != nil ||
 				!standing.ExpiresAt.Equal(evaluated.Standing.ExpiresAt) || !standing.ExpiresAt.After(s.clock().UTC()) ||
-				authz.SameApprovalPrincipal(standing.GrantedBy, intent.Requester) {
+				conflict {
 				return fmt.Errorf("%w: the standing approval witness is no longer valid for this requester", api.ErrPAMRejected)
 			}
 		}
@@ -167,6 +198,13 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 		if evaluated.Rule == nil {
 			result = approval
 			return nil
+		}
+		conflict, err := s.pamApprovalPrincipalConflict(work, tenantID, evaluated.Rule.SavedBy, intent.Requester)
+		if err != nil {
+			return err
+		}
+		if conflict {
+			return fmt.Errorf("%w: the automatic review rule's author is this requester", api.ErrPAMRejected)
 		}
 		approver := "auto-approval:" + evaluated.Rule.ID
 		system := events.ContextWithActor(work, events.Actor{Subject: approver, Roles: []string{"policy"}})
@@ -310,6 +348,10 @@ func (s *pamService) pamStandingApproval(ctx context.Context, tenantID, requeste
 		facts.At.Add(time.Duration(facts.TTLSeconds)*time.Second).After(expires) {
 		return nil, nil
 	}
+	conflict, err := s.pamApprovalPrincipalConflict(ctx, tenantID, approval.GrantedBy, requester)
+	if err != nil || conflict {
+		return nil, err
+	}
 	return &projections.PAMStandingApprovalMatch{ApprovalID: approval.ID, BundleID: approval.BundleID, RunID: facts.RunID,
 		Principal: principal, Role: facts.Role, ExpiresAt: expires}, nil
 }
@@ -368,6 +410,13 @@ func (s *pamService) pamStandingApprovalInForce(ctx context.Context, tenantID, r
 			return err
 		}
 		if authz.SameApprovalPrincipal(approval.GrantedBy, requester) {
+			return fmt.Errorf("%w: the standing approval's author cannot approve their own run", api.ErrPAMRejected)
+		}
+		conflict, err := s.pamApprovalPrincipalConflict(ctx, tenantID, approval.GrantedBy, requester)
+		if err != nil {
+			return err
+		}
+		if conflict {
 			return fmt.Errorf("%w: the standing approval's author cannot approve their own run", api.ErrPAMRejected)
 		}
 		if approval.RevokedAt != nil || !approval.ExpiresAt.After(s.clock().UTC()) {

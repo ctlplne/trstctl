@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -71,6 +72,66 @@ func TestIssuanceApprovalDistinctAndSelfApproval(t *testing.T) {
 	// Anonymous approver is refused.
 	if _, err := s.ApproveIssuance(ctx, tenantA, resource, action, ""); !errors.Is(err, store.ErrAnonymousIssuanceApproval) {
 		t.Fatalf("anonymous approval = %v, want ErrAnonymousIssuanceApproval", err)
+	}
+}
+
+func TestIssuanceApprovalRejectsHistoricalDelegatedMinter(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedTwoTenants(t, s)
+	if _, err := s.CreateAPIToken(ctx, store.APITokenRecord{TenantID: tenantA, TokenHash: privacy.SubjectRef(tenantA, "cr972-issuance-holder"), Subject: "cr972-service", MintedBy: "cr972-minter"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.OpenIssuanceApprovalRequest(ctx, tenantA, "cr972-identity", "issue", "cr972-service", 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ApproveIssuance(ctx, tenantA, "cr972-identity", "issue", "cr972-minter"); !errors.Is(err, store.ErrSelfIssuanceApproval) {
+		t.Fatalf("token minter approved delegated identity request: %v", err)
+	}
+	if count, err := s.ApproveIssuance(ctx, tenantA, "cr972-identity", "issue", "independent"); err != nil || count != 1 {
+		t.Fatalf("independent decision = (%d, %v), want one approval", count, err)
+	}
+}
+
+func TestHistoricalDelegatedMinterApprovalCannotSatisfyIssuanceQuorum(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedTwoTenants(t, s)
+	const resource, action = "cr972-old-identity", "issue"
+	const requester, minter = "cr972-old-service", "cr972-old-minter"
+	if _, err := s.CreateAPIToken(ctx, store.APITokenRecord{TenantID: tenantA, TokenHash: privacy.SubjectRef(tenantA, "cr972-old-issuance-holder"), Subject: requester, MintedBy: minter}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.OpenIssuanceApprovalRequest(ctx, tenantA, resource, action, requester, 1); err != nil {
+		t.Fatal(err)
+	}
+	// A pre-fix approval event already projected this row. Preserve it as audit
+	// history, but do not let it authorize a future issuance.
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO issuance_approvals (tenant_id, resource, action, approver) VALUES ($1,$2,$3,$4)`,
+			tenantA, resource, action, minter); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE issuance_approval_requests SET status='approved' WHERE tenant_id=$1 AND resource=$2 AND action=$3`, tenantA, resource, action)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	approval, err := s.GetIssuanceApproval(ctx, tenantA, resource, action)
+	if err != nil || approval.Approvals != 0 || approval.Status != "pending" {
+		t.Errorf("retained minter approval counted in inventory: status=%s count=%d err=%v", approval.Status, approval.Approvals, err)
+	}
+	if ok, err := s.HasDistinctApproval(ctx, tenantA, resource, action, requester, 1); err != nil || ok {
+		t.Errorf("retained minter approval satisfied the gate: ok=%t err=%v", ok, err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := s.ConsumeIssuanceApprovalTx(ctx, tx, tenantA, resource, action, requester, 1)
+		return err
+	}); !errors.Is(err, store.ErrIssuanceApprovalQuorumNotMet) {
+		t.Errorf("retained minter approval was consumable: %v", err)
+	}
+	if count, err := s.ApproveIssuance(ctx, tenantA, resource, action, "independent"); err != nil || count != 1 {
+		t.Errorf("one independent approval count=%d err=%v, want 1", count, err)
 	}
 }
 

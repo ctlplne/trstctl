@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -592,6 +593,13 @@ func (s *Store) ReserveKeyCeremonyApproval(ctx context.Context, tenantID, ceremo
 		if opener != "" && opener == custodian {
 			return ErrSelfApproval
 		}
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, opener, []string{custodian})
+		if err != nil {
+			return err
+		}
+		if minter {
+			return ErrSelfApproval
+		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO ca_ceremony_approvals (tenant_id, ceremony_id, custodian)
 			 VALUES ($1, $2, $3)
@@ -606,10 +614,9 @@ func (s *Store) ReserveKeyCeremonyApproval(ctx context.Context, tenantID, ceremo
 			tenantID, ceremonyID, custodian).Scan(&evidenced); err != nil {
 			return err
 		}
-		return tx.QueryRow(ctx,
-			`SELECT count(*) FROM ca_ceremony_approvals
-			  WHERE tenant_id = $1 AND ceremony_id = $2 AND approval_event_id IS NOT NULL`,
-			tenantID, ceremonyID).Scan(&count)
+		independentCount, err := s.countIndependentKeyCeremonyApprovalsTx(ctx, tx, tenantID, ceremonyID, opener)
+		count = independentCount
+		return err
 	})
 	return count, !evidenced, err
 }
@@ -640,10 +647,13 @@ func (s *Store) AttachKeyCeremonyApprovalEvidence(ctx context.Context, tenantID,
 			}
 			return err
 		}
-		return tx.QueryRow(ctx,
-			`SELECT count(*) FROM ca_ceremony_approvals
-			  WHERE tenant_id = $1 AND ceremony_id = $2 AND approval_event_id IS NOT NULL`,
-			tenantID, ceremonyID).Scan(&count)
+		var opener string
+		if err := tx.QueryRow(ctx, `SELECT opener FROM ca_key_ceremonies WHERE tenant_id=$1 AND id=$2`, tenantID, ceremonyID).Scan(&opener); err != nil {
+			return err
+		}
+		independentCount, err := s.countIndependentKeyCeremonyApprovalsTx(ctx, tx, tenantID, ceremonyID, opener)
+		count = independentCount
+		return err
 	})
 	return count, err
 }
@@ -652,7 +662,7 @@ func (s *Store) AttachKeyCeremonyApprovalEvidence(ctx context.Context, tenantID,
 func (s *Store) GetKeyCeremony(ctx context.Context, tenantID, id string) (KeyCeremony, error) {
 	var c KeyCeremony
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
+		if err := tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, purpose, threshold, status, opener, created_at,
 			        (SELECT count(*) FROM ca_ceremony_approvals a
 			          WHERE a.tenant_id = c.tenant_id AND a.ceremony_id = c.id
@@ -660,9 +670,55 @@ func (s *Store) GetKeyCeremony(ctx context.Context, tenantID, id string) (KeyCer
 			        c.closed_at, COALESCE(c.closed_by, ''), COALESCE(c.close_reason, '')
 			   FROM ca_key_ceremonies c WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&c.ID, &c.TenantID, &c.Purpose, &c.Threshold, &c.Status, &c.Opener, &c.CreatedAt, &c.Approvals,
-				&c.ClosedAt, &c.ClosedBy, &c.CloseReason)
+				&c.ClosedAt, &c.ClosedBy, &c.CloseReason); err != nil {
+			return err
+		}
+		var err error
+		c.Approvals, err = s.countIndependentKeyCeremonyApprovalsTx(ctx, tx, tenantID, id, c.Opener)
+		return err
 	})
 	return c, err
+}
+
+// Keep pre-fix event-backed approvals in the audit history, but give them no
+// quorum power when the custodian minted a token for the ceremony opener.
+func (s *Store) countIndependentKeyCeremonyApprovalsTx(ctx context.Context, tx pgx.Tx, tenantID, ceremonyID, opener string) (int, error) {
+	rows, err := tx.Query(ctx, `SELECT custodian FROM ca_ceremony_approvals
+		WHERE tenant_id=$1 AND ceremony_id=$2 AND approval_event_id IS NOT NULL ORDER BY custodian LIMIT 1025`, tenantID, ceremonyID)
+	if err != nil {
+		return 0, err
+	}
+	custodians := make([]string, 0)
+	for rows.Next() {
+		var custodian string
+		if err := rows.Scan(&custodian); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		custodians = append(custodians, custodian)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+	if len(custodians) > 1024 {
+		return 0, fmt.Errorf("store: ceremony approvals exceed review bound")
+	}
+	count := 0
+	for _, custodian := range custodians {
+		if custodian == opener {
+			continue
+		}
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, opener, []string{custodian})
+		if err != nil {
+			return 0, err
+		}
+		if !minter {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // LockPendingKeyCeremonyTx serializes a terminal decision with CA consumption
@@ -865,9 +921,7 @@ func (s *Store) keyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx
 	if c.Purpose != expectedPurpose {
 		return c, nil, ErrKeyCeremonyPurposeMismatch
 	}
-	if c.Approvals < c.Threshold {
-		return c, nil, ErrKeyCeremonyQuorumNotMet
-	}
+	rawApprovalCount := c.Approvals
 	rows, err := tx.Query(ctx,
 		`SELECT custodian, approval_event_id, approval_event_sequence, approved_at
 		   FROM ca_ceremony_approvals
@@ -898,8 +952,26 @@ func (s *Store) keyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx
 		return c, nil, err
 	}
 	rows.Close()
-	if len(evidence) != c.Approvals {
+	if len(evidence) != rawApprovalCount {
 		return c, nil, errors.New("store: ceremony approval evidence count changed while locked")
+	}
+	valid := evidence[:0]
+	for _, item := range evidence {
+		if item.Custodian == c.Opener {
+			continue
+		}
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, c.Opener, []string{item.Custodian})
+		if err != nil {
+			return c, nil, err
+		}
+		if !minter {
+			valid = append(valid, item)
+		}
+	}
+	evidence = valid
+	c.Approvals = len(evidence)
+	if c.Approvals < c.Threshold {
+		return c, nil, ErrKeyCeremonyQuorumNotMet
 	}
 	if !consume {
 		return c, evidence, nil

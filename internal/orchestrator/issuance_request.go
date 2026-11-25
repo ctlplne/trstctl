@@ -201,6 +201,14 @@ func (o *Orchestrator) requesterIsNotDecider(ctx context.Context, tenantID, requ
 		return fmt.Errorf("%w: %s is this request's requester %q under another identifier, by their member record; "+
 			"another member must decide it", issuancerequest.ErrRequesterCannotDecide, decidedBy, requester)
 	}
+	minter, err := o.store.DelegatedTokenMinterMatches(ctx, tenantID, requester, deciderIDs)
+	if err != nil {
+		return err
+	}
+	if minter {
+		return fmt.Errorf("%w: %s minted a delegated token for requester %q; another member must decide it",
+			issuancerequest.ErrRequesterCannotDecide, decidedBy, requester)
+	}
 	return nil
 }
 

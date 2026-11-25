@@ -76,9 +76,28 @@ func (a *authzDenialAudit) recordReason(r *http.Request, principal authz.Princip
 // delegatedApprovalRefusal explains why a delegated token cannot approve.
 const delegatedApprovalRefusal = "this API token was minted for its subject by another person, so it cannot approve or deny on their behalf; approve with your own sign-in or a token you minted yourself"
 
+// Retained cross-subject tokens predate the rule that a served mint must name
+// its authenticated subject. A write under one of those tokens could open an
+// approval request that the minter then approves under their own sign-in.
+// Reads remain available so operators can inspect and replace old tokens.
+// A bound access-bundle run is a separate, reviewed capability with a RunID;
+// it keeps its own narrowly scoped write path and approval fences.
+const delegatedMutationRefusal = "this API token was minted for its subject by another person, so it cannot change state or open an approval request; use your own sign-in or a token you minted yourself"
+
+func (a *API) refuseDelegatedMutation(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if principal, ok := r.Context().Value(principalCtxKey).(authz.Principal); ok && principal.Delegated && principal.RunID == "" {
+			w.Header().Set("X-Trstctl-Audit-Status", a.denialAudit.recordReason(r, principal, perm, "delegated API token cannot change state"))
+			a.writeProblem(w, problem.New(http.StatusForbidden, delegatedMutationRefusal))
+			return
+		}
+		h(w, r)
+	}
+}
+
 // refuseDelegatedApproval keeps approvals personal (F262). A token one person
-// minted for another subject may do that subject's work, but counting its vote
-// would let the minter act as two people in a dual-control decision. The route
+// minted for another subject may still read in that subject's scope, but
+// counting its vote would let the minter act as two people. The route
 // guard has already authenticated and authorized the caller.
 func (a *API) refuseDelegatedApproval(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

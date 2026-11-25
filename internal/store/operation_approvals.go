@@ -380,6 +380,15 @@ func (s *Store) applyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 	if r.Requester == d.Approver || (!recorded && authz.SameApprovalPrincipal(r.Requester, d.Approver)) {
 		return ErrApprovalSelfDecision
 	}
+	if !recorded {
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, d.TenantID, r.Requester, []string{d.Approver})
+		if err != nil {
+			return err
+		}
+		if minter {
+			return ErrApprovalSelfDecision
+		}
+	}
 	if d.ExpectedResourceKind != "" && d.ExpectedResourceKind != r.ResourceKind ||
 		d.ExpectedResourceID != "" && d.ExpectedResourceID != r.ResourceID ||
 		d.ExpectedAction != "" && d.ExpectedAction != r.Action {
@@ -434,11 +443,19 @@ func (s *Store) applyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 		status = ApprovalStatusDenied
 	} else {
 		var count int
-		if err := tx.QueryRow(ctx, `
+		if recorded {
+			if err := tx.QueryRow(ctx, `
 			SELECT count(*) FROM operation_approval_decisions
 			 WHERE tenant_id = $1 AND request_id = $2 AND decision = 'approve'`,
-			d.TenantID, d.RequestID).Scan(&count); err != nil {
-			return err
+				d.TenantID, d.RequestID).Scan(&count); err != nil {
+				return err
+			}
+		} else {
+			var err error
+			count, err = s.countIndependentOperationApprovalsTx(ctx, tx, d.TenantID, d.RequestID, r.Requester)
+			if err != nil {
+				return err
+			}
 		}
 		if count >= r.RequiredApprovals {
 			status = ApprovalStatusApproved
@@ -449,6 +466,47 @@ func (s *Store) applyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 		   SET status = $3, updated_at = $4
 		 WHERE tenant_id = $1 AND id = $2`, d.TenantID, d.RequestID, status, d.DecidedAt)
 	return err
+}
+
+// Retained decisions remain in the audit log but cannot supply live quorum
+// when their reviewer minted a token for the requester's subject.
+func (s *Store) countIndependentOperationApprovalsTx(ctx context.Context, tx pgx.Tx, tenantID, requestID, requester string) (int, error) {
+	rows, err := tx.Query(ctx, `SELECT approver FROM operation_approval_decisions
+		WHERE tenant_id=$1 AND request_id=$2 AND decision='approve' ORDER BY approver LIMIT 1025`, tenantID, requestID)
+	if err != nil {
+		return 0, err
+	}
+	approvers := make([]string, 0)
+	for rows.Next() {
+		var approver string
+		if err := rows.Scan(&approver); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		approvers = append(approvers, approver)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+	if len(approvers) > 1024 {
+		return 0, fmt.Errorf("store: operation approvals exceed review bound")
+	}
+	count := 0
+	for _, approver := range approvers {
+		if authz.SameApprovalPrincipal(requester, approver) {
+			continue
+		}
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, requester, []string{approver})
+		if err != nil {
+			return 0, err
+		}
+		if !minter {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func validateExistingOperationApprovalDecision(ctx context.Context, tx pgx.Tx, d OperationApprovalDecision) (bool, error) {
@@ -561,7 +619,15 @@ func (s *Store) GetOperationApproval(ctx context.Context, tenantID, requestID st
 // tenant transaction. Command paths use this after taking their scope advisory
 // lock, so the not-found check and any replacement events share one serial order.
 func (s *Store) GetOperationApprovalTx(ctx context.Context, tx pgx.Tx, tenantID, requestID string) (OperationApprovalRequest, error) {
-	return s.getOperationApprovalTx(ctx, tx, tenantID, requestID, false)
+	r, err := s.getOperationApprovalTx(ctx, tx, tenantID, requestID, false)
+	if err != nil {
+		return r, err
+	}
+	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, requestID, r.Requester)
+	if r.Status == ApprovalStatusApproved && r.ApprovalCount < r.RequiredApprovals {
+		r.Status = ApprovalStatusPending
+	}
+	return r, err
 }
 
 // GetOperationApprovalForUpdateTx holds the exact request row through final
@@ -569,7 +635,15 @@ func (s *Store) GetOperationApprovalTx(ctx context.Context, tx pgx.Tx, tenantID,
 // supersession or consumption could commit after a command-side read but before
 // its decision event was projected.
 func (s *Store) GetOperationApprovalForUpdateTx(ctx context.Context, tx pgx.Tx, tenantID, requestID string) (OperationApprovalRequest, error) {
-	return s.getOperationApprovalTx(ctx, tx, tenantID, requestID, true)
+	r, err := s.getOperationApprovalTx(ctx, tx, tenantID, requestID, true)
+	if err != nil {
+		return r, err
+	}
+	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, requestID, r.Requester)
+	if r.Status == ApprovalStatusApproved && r.ApprovalCount < r.RequiredApprovals {
+		r.Status = ApprovalStatusPending
+	}
+	return r, err
 }
 
 // LockOperationApprovalScopeTx serializes every requester-side command that can
@@ -690,7 +764,24 @@ func (s *Store) ListOperationApprovalsPage(ctx context.Context, tenantID string,
 			}
 			out = append(out, r)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		rows.Close()
+		for i := range out {
+			if out[i].ApprovalCount == 0 || (out[i].Status != ApprovalStatusPending && out[i].Status != ApprovalStatusApproved) {
+				continue
+			}
+			count, err := s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, out[i].ID, out[i].Requester)
+			if err != nil {
+				return err
+			}
+			out[i].ApprovalCount = count
+			if out[i].Status == ApprovalStatusApproved && count < out[i].RequiredApprovals {
+				out[i].Status = ApprovalStatusPending
+			}
+		}
+		return nil
 	})
 	if out == nil {
 		out = []OperationApprovalRequest{}
@@ -875,6 +966,10 @@ func scanIdentityApprovalTarget(row pgx.Row) (Identity, uint64, error) {
 // while the same row lock is held, after projecting that event.
 func (s *Store) ValidateOperationApprovalUseTx(ctx context.Context, tx pgx.Tx, tenantID string, use OperationApprovalUse, now time.Time) (OperationApprovalRequest, error) {
 	r, err := s.getOperationApprovalTx(ctx, tx, tenantID, use.RequestID, true)
+	if err != nil {
+		return OperationApprovalRequest{}, err
+	}
+	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, use.RequestID, r.Requester)
 	if err != nil {
 		return OperationApprovalRequest{}, err
 	}

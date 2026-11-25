@@ -59,18 +59,30 @@ type AccessChangeDecision struct {
 // rejects unauthorized or duplicate actors before the decision event append.
 func (s *Store) CheckAccessChangeDecisionAuthorityTx(ctx context.Context, tx pgx.Tx, tenantID, requestID, approver string) error {
 	var requester, status string
+	var required int
 	err := tx.QueryRow(ctx,
-		`SELECT requester_subject, status
+		`SELECT requester_subject, status, required_approvals
 		   FROM access_change_requests
 		  WHERE tenant_id = $1 AND id = $2
-		  FOR UPDATE`, tenantID, requestID).Scan(&requester, &status)
+		  FOR UPDATE`, tenantID, requestID).Scan(&requester, &status, &required)
 	if err != nil {
 		return err
 	}
 	if approver == "" || approver == requester {
 		return ErrAccessChangeActorUnauthorized
 	}
-	if status != "pending" {
+	minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, requester, []string{approver})
+	if err != nil {
+		return err
+	}
+	if minter {
+		return ErrAccessChangeActorUnauthorized
+	}
+	count, err := s.countIndependentAccessChangeApprovalsTx(ctx, tx, tenantID, requestID, requester)
+	if err != nil {
+		return err
+	}
+	if status == "denied" || (status == "approved" && count >= required) {
 		return fmt.Errorf("%w: request %s is %s", ErrAccessChangeRequestTerminal, requestID, status)
 	}
 	var alreadyDecided bool
@@ -113,19 +125,23 @@ func (s *Store) ApplyAccessChangeRequestCreatedTx(ctx context.Context, tx pgx.Tx
 // decision by the same approver or any decision after terminal state fails closed;
 // HTTP idempotent replays are answered before they reach this projector.
 func (s *Store) ApplyAccessChangeRequestDecidedTx(ctx context.Context, tx pgx.Tx, tenantID string, d AccessChangeDecision) error {
-	var status string
+	var status, requester string
 	var required int
 	err := tx.QueryRow(ctx,
-		`SELECT status, required_approvals
+		`SELECT status, required_approvals, requester_subject
 		   FROM access_change_requests
 		  WHERE tenant_id = $1
 		    AND id = $2
 		  FOR UPDATE`,
-		tenantID, d.RequestID).Scan(&status, &required)
+		tenantID, d.RequestID).Scan(&status, &required, &requester)
 	if err != nil {
 		return err
 	}
-	if status != "pending" {
+	priorCount, err := s.countIndependentAccessChangeApprovalsTx(ctx, tx, tenantID, d.RequestID, requester)
+	if err != nil {
+		return err
+	}
+	if status == "denied" || (status == "approved" && priorCount >= required) {
 		return fmt.Errorf("%w: request %s is %s", ErrAccessChangeRequestTerminal, d.RequestID, status)
 	}
 
@@ -145,44 +161,72 @@ func (s *Store) ApplyAccessChangeRequestDecidedTx(ctx context.Context, tx pgx.Tx
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("%w: %s already decided request %s", ErrAccessChangeDecisionDuplicate, d.ApproverSubject, d.RequestID)
 	}
+	count, err := s.countIndependentAccessChangeApprovalsTx(ctx, tx, tenantID, d.RequestID, requester)
+	if err != nil {
+		return err
+	}
 
 	if d.Decision == "denied" {
 		_, err = tx.Exec(ctx,
-			`WITH counts AS (
-			    SELECT count(*) FILTER (WHERE decision = 'approved')::integer AS approval_count
-			      FROM access_change_request_decisions
-			     WHERE tenant_id = $1
-			       AND request_id = $2
-			)
-			UPDATE access_change_requests r
+			`UPDATE access_change_requests r
 			   SET status = 'denied',
-			       approval_count = counts.approval_count,
-			       completed_at = $3,
-			       updated_at = $3
-			  FROM counts
+			       approval_count = $3,
+			       completed_at = $4,
+			       updated_at = $4
 			 WHERE r.tenant_id = $1
 			   AND r.id = $2`,
-			tenantID, d.RequestID, d.DecidedAt)
+			tenantID, d.RequestID, count, d.DecidedAt)
 		return err
 	}
 
 	_, err = tx.Exec(ctx,
-		`WITH counts AS (
-		    SELECT count(*) FILTER (WHERE decision = 'approved')::integer AS approval_count
-		      FROM access_change_request_decisions
-		     WHERE tenant_id = $1
-		       AND request_id = $2
-		)
-		UPDATE access_change_requests r
-		   SET approval_count = counts.approval_count,
-		       status = CASE WHEN counts.approval_count >= $3 THEN 'approved' ELSE 'pending' END,
-		       completed_at = CASE WHEN counts.approval_count >= $3 THEN COALESCE(r.completed_at, $4) ELSE r.completed_at END,
-		       updated_at = $4
-		  FROM counts
+		`UPDATE access_change_requests r
+		   SET approval_count = $3,
+		       status = CASE WHEN $3::integer >= $4::integer THEN 'approved' ELSE 'pending' END,
+		       completed_at = CASE WHEN $3::integer >= $4::integer THEN COALESCE(r.completed_at, $5::timestamptz) ELSE NULL END,
+		       updated_at = $5
 		 WHERE r.tenant_id = $1
 		   AND r.id = $2`,
-		tenantID, d.RequestID, required, d.DecidedAt)
+		tenantID, d.RequestID, count, required, d.DecidedAt)
 	return err
+}
+
+func (s *Store) countIndependentAccessChangeApprovalsTx(ctx context.Context, tx pgx.Tx, tenantID, requestID, requester string) (int, error) {
+	decisions, err := s.listAccessChangeDecisionsTx(ctx, tx, tenantID, requestID)
+	if err != nil {
+		return 0, err
+	}
+	return s.independentAccessChangeApprovalCountTx(ctx, tx, tenantID, requester, decisions)
+}
+
+func (s *Store) independentAccessChangeApprovalCountTx(ctx context.Context, tx pgx.Tx, tenantID, requester string, decisions []AccessChangeDecision) (int, error) {
+	count := 0
+	for _, d := range decisions {
+		if d.Decision != "approved" || d.ApproverSubject == requester {
+			continue
+		}
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, requester, []string{d.ApproverSubject})
+		if err != nil {
+			return 0, err
+		}
+		if !minter {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (s *Store) effectiveAccessChangeRequestTx(ctx context.Context, tx pgx.Tx, r AccessChangeRequest) (AccessChangeRequest, error) {
+	count, err := s.independentAccessChangeApprovalCountTx(ctx, tx, r.TenantID, r.RequesterSubject, r.Decisions)
+	if err != nil {
+		return AccessChangeRequest{}, err
+	}
+	r.ApprovalCount = count
+	if r.Status == "approved" && count < r.RequiredApprovals {
+		r.Status = "pending"
+		r.CompletedAt = nil
+	}
+	return r, nil
 }
 
 // ApplyAccessChangeRequestDecidedReplayTx keeps the first recorded decision by
@@ -225,8 +269,8 @@ func (s *Store) GetAccessChangeRequest(ctx context.Context, tenantID, id string)
 			return err
 		}
 		req.Decisions = decisions
-		out = req
-		return nil
+		out, err = s.effectiveAccessChangeRequestTx(ctx, tx, req)
+		return err
 	})
 	return out, err
 }
@@ -259,7 +303,23 @@ func (s *Store) ListAccessChangeRequestsPage(ctx context.Context, tenantID, afte
 			}
 			out = append(out, req)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		rows.Close()
+		for i := range out {
+			decisions, err := s.listAccessChangeDecisionsTx(ctx, tx, tenantID, out[i].ID)
+			if err != nil {
+				return err
+			}
+			out[i].Decisions = decisions
+			out[i], err = s.effectiveAccessChangeRequestTx(ctx, tx, out[i])
+			if err != nil {
+				return err
+			}
+			out[i].Decisions = nil
+		}
+		return nil
 	})
 	return out, err
 }

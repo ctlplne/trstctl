@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -72,6 +73,63 @@ func operationApprovalUse(request store.OperationApprovalRequest) store.Operatio
 		ResourceKind: request.ResourceKind, ResourceID: request.ResourceID, Action: request.Action,
 		FromState: request.FromState, ToState: request.ToState, TargetVersion: request.TargetVersion,
 		RequiredApprovals: request.RequiredApprovals,
+	}
+}
+
+func TestOperationApprovalRejectsHistoricalDelegatedMinter(t *testing.T) {
+	s := newOperationApprovalStore(t)
+	ctx := context.Background()
+	request := operationApprovalRequest("77000000-0000-4000-8000-000000000972", tenantA)
+	if _, err := s.CreateAPIToken(ctx, store.APITokenRecord{TenantID: tenantA, TokenHash: privacy.SubjectRef(tenantA, "cr972-operation-holder"), Subject: request.Requester, MintedBy: "reviewer"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOperationApprovalRequest(ctx, s, request); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOperationApprovalDecision(ctx, s, operationApprovalDecision(request, "reviewer", "77000000-0000-4000-8000-000000000973")); !errors.Is(err, store.ErrApprovalSelfDecision) {
+		t.Fatalf("token minter decided the request opened under their delegated token: %v", err)
+	}
+	if err := applyOperationApprovalDecision(ctx, s, operationApprovalDecision(request, "independent", "77000000-0000-4000-8000-000000000974")); err != nil {
+		t.Fatalf("independent reviewer refused: %v", err)
+	}
+}
+
+func TestRetainedDelegatedMinterDecisionCannotAuthorizeOperation(t *testing.T) {
+	s := newOperationApprovalStore(t)
+	ctx := context.Background()
+	request := operationApprovalRequest("77000000-0000-4000-8000-000000000975", tenantA)
+	request.RequiredApprovals = 1
+	if _, err := s.CreateAPIToken(ctx, store.APITokenRecord{TenantID: tenantA, TokenHash: privacy.SubjectRef(tenantA, "cr972-retained-operation-holder"), Subject: request.Requester, MintedBy: "reviewer"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOperationApprovalRequest(ctx, s, request); err != nil {
+		t.Fatal(err)
+	}
+	decision := operationApprovalDecision(request, "reviewer", "77000000-0000-4000-8000-000000000976")
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyRecordedOperationApprovalDecisionTx(ctx, tx, decision)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetOperationApproval(ctx, tenantA, request.ID)
+	if err != nil || got.ApprovalCount != 0 || got.Status != store.ApprovalStatusPending {
+		t.Errorf("retained minter decision counted in operation inventory: status=%s count=%d err=%v", got.Status, got.ApprovalCount, err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := s.ValidateOperationApprovalUseTx(ctx, tx, tenantA, operationApprovalUse(request), operationApprovalBaseTime.Add(15*time.Minute))
+		return err
+	}); !errors.Is(err, store.ErrApprovalNotReady) {
+		t.Errorf("retained minter decision authorized operation: %v", err)
+	}
+	independent := operationApprovalDecision(request, "independent", "77000000-0000-4000-8000-000000000977")
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyRecordedOperationApprovalDecisionTx(ctx, tx, independent)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetOperationApproval(ctx, tenantA, request.ID)
+	if err != nil || got.ApprovalCount != 1 || got.Status != store.ApprovalStatusApproved {
+		t.Fatalf("replacement independent decision did not approve: got=%+v err=%v", got, err)
 	}
 }
 

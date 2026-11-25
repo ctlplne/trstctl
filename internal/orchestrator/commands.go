@@ -405,6 +405,13 @@ func (o *Orchestrator) createProfileVersionWithOptions(ctx context.Context, tena
 				rec = existing
 				return nil
 			}
+			count, err := o.independentProfileEditApprovalCount(ctx, tenantID, parked)
+			if err != nil {
+				return err
+			}
+			if count < parked.RequiredApprovals {
+				return ErrProfileEditApprovalPending
+			}
 		}
 		if opts.ExpectedActiveVersion > 0 {
 			active, err := o.store.GetActiveProfile(ctx, tenantID, name)
@@ -738,6 +745,41 @@ var ErrProfileEditApprovalExpired = errors.New("orchestrator: profile edit appro
 // ErrProfileEditSelfApproval reports the requester approving their own edit.
 var ErrProfileEditSelfApproval = errors.New("orchestrator: requester cannot approve own profile edit (dual control)")
 
+// ErrProfileEditApprovalPending means the recorded decisions do not contain
+// enough reviewers independent of the requester and their token minters.
+var ErrProfileEditApprovalPending = errors.New("orchestrator: profile edit approval needs independent reviewers")
+
+func (o *Orchestrator) independentProfileEditApprovalCount(ctx context.Context, tenantID string, parked store.ProfileEditApproval) (int, error) {
+	count := 0
+	for _, decision := range parked.Approvals {
+		if decision.Decision != "approve" || decision.Approver == parked.Requester {
+			continue
+		}
+		minter, err := o.store.DelegatedTokenMinterMatches(ctx, tenantID, parked.Requester, []string{decision.Approver})
+		if err != nil {
+			return 0, err
+		}
+		if !minter {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (o *Orchestrator) effectiveProfileEditApproval(ctx context.Context, tenantID string, parked store.ProfileEditApproval) (store.ProfileEditApproval, error) {
+	if parked.State != "approved" {
+		return parked, nil
+	}
+	count, err := o.independentProfileEditApprovalCount(ctx, tenantID, parked)
+	if err != nil {
+		return store.ProfileEditApproval{}, err
+	}
+	if count < parked.RequiredApprovals {
+		parked.State = string(approval.StateAwaitingApproval)
+	}
+	return parked, nil
+}
+
 // ProfileEditApprovalState reads the served state of a parked request: the
 // projected state, or "expired" when it is still awaiting approval past its
 // window.
@@ -751,7 +793,17 @@ func ProfileEditApprovalState(r store.ProfileEditApproval, now time.Time) string
 // ListProfileEditApprovals returns the tenant's parked profile create/edit
 // approval requests, oldest first, from the projection (DP2-057, OPP-R09).
 func (o *Orchestrator) ListProfileEditApprovals(ctx context.Context, tenantID string) ([]store.ProfileEditApproval, error) {
-	return o.store.ListProfileEditApprovals(ctx, tenantID)
+	rows, err := o.store.ListProfileEditApprovals(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i], err = o.effectiveProfileEditApproval(ctx, tenantID, rows[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return rows, nil
 }
 
 // GetProfileEditApproval returns one parked request of the tenant.
@@ -760,7 +812,10 @@ func (o *Orchestrator) GetProfileEditApproval(ctx context.Context, tenantID, req
 	if errors.Is(err, store.ErrProfileEditApprovalNotFound) {
 		return store.ProfileEditApproval{}, ErrProfileEditApprovalUnknown
 	}
-	return r, err
+	if err != nil {
+		return store.ProfileEditApproval{}, err
+	}
+	return o.effectiveProfileEditApproval(ctx, tenantID, r)
 }
 
 // ApproveProfileEdit records a non-requester approval and applies the queued
@@ -787,7 +842,11 @@ func (o *Orchestrator) ApproveProfileEdit(ctx context.Context, tenantID, request
 	case string(approval.StateExpired):
 		return parked, ErrProfileEditApprovalExpired
 	}
-	if approver == parked.Requester {
+	minter, err := o.store.DelegatedTokenMinterMatches(ctx, tenantID, parked.Requester, []string{approver})
+	if err != nil {
+		return store.ProfileEditApproval{}, err
+	}
+	if approver == parked.Requester || minter {
 		payload, _ := json.Marshal(map[string]string{"id": parked.ID, "approver": approver, "reason": "self-approval"})
 		if _, err := o.emit(ctx, eventProfileEditApprovalRefused, tenantID, payload); err != nil {
 			return store.ProfileEditApproval{}, err
@@ -815,7 +874,11 @@ func (o *Orchestrator) ApproveProfileEdit(ctx context.Context, tenantID, request
 			return store.ProfileEditApproval{}, err
 		}
 	}
-	if len(parked.Approvals) < parked.RequiredApprovals {
+	count, err := o.independentProfileEditApprovalCount(ctx, tenantID, parked)
+	if err != nil {
+		return store.ProfileEditApproval{}, err
+	}
+	if count < parked.RequiredApprovals {
 		return parked, nil
 	}
 	// Quorum: apply the queued spec as the new active version. The version event

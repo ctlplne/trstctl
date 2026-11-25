@@ -816,6 +816,10 @@ subject and scopes that subject already holds. The token list shows `minted_by`;
 offboarding that person revokes tokens they minted, including older delegated
 tokens. To provision a service identity, authenticate as that identity through
 its configured machine method, or use the local custody-bound bootstrap command.
+Tokens minted for another subject before the subject rule was enforced can read
+authorized inventory when their minter metadata is retained, but native write
+routes return 403. Tokens with no recorded minter cannot authenticate. Replace
+them with self-minted credentials before using write automation.
 
 ## Examples
 
