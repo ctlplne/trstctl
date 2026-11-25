@@ -33,16 +33,26 @@ const ExternalCAHeldIssueListMax = 500
 // ExternalCAHeldIssue is one issuance an external CA holds, or held, for
 // approval.
 type ExternalCAHeldIssue struct {
-	AuthorityID    string
-	CARequestID    int
-	IssueKey       string
-	RequestBinding string
-	KeyOrigin      string
-	DNSNames       []string
-	Status         string
-	Serial         string
-	HeldAt         time.Time
-	ResolvedAt     *time.Time
+	AuthorityID         string
+	CARequestID         int
+	IssueKey            string
+	RequestBinding      string
+	KeyOrigin           string
+	DNSNames            []string
+	ProfileBindingKnown bool
+	ProfileName         string
+	ProfileVersion      int
+	ProfileDigest       string
+	Protocol            string
+	IPAddresses         []string
+	EmailAddresses      []string
+	URIs                []string
+	RequestedEKUs       []string
+	SubjectSPKISHA256   string
+	Status              string
+	Serial              string
+	HeldAt              time.Time
+	ResolvedAt          *time.Time
 }
 
 func externalCAHeldSequence(sequence uint64) (int64, error) {
@@ -63,12 +73,31 @@ func (s *Store) ApplyExternalCAIssueHeldTx(ctx context.Context, tx pgx.Tx, tenan
 	if names == nil {
 		names = []string{}
 	}
+	ips := h.IPAddresses
+	if ips == nil {
+		ips = []string{}
+	}
+	emails := h.EmailAddresses
+	if emails == nil {
+		emails = []string{}
+	}
+	uris := h.URIs
+	if uris == nil {
+		uris = []string{}
+	}
+	ekus := h.RequestedEKUs
+	if ekus == nil {
+		ekus = []string{}
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO external_ca_held_issues (tenant_id, authority_id, ca_request_id, issue_key, request_binding, key_origin,
-		                                     dns_names, held_at, event_sequence)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		                                     dns_names, profile_binding_known, profile_name, profile_version, profile_digest,
+		                                     protocol, ip_addresses, email_addresses, uris, requested_ekus, subject_spki_sha256, held_at, event_sequence)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		ON CONFLICT DO NOTHING`,
-		tenantID, h.AuthorityID, h.CARequestID, h.IssueKey, h.RequestBinding, h.KeyOrigin, names, h.HeldAt.UTC(), seq)
+		tenantID, h.AuthorityID, h.CARequestID, h.IssueKey, h.RequestBinding, h.KeyOrigin, names,
+		h.ProfileBindingKnown, h.ProfileName, h.ProfileVersion, h.ProfileDigest, h.Protocol,
+		ips, emails, uris, ekus, h.SubjectSPKISHA256, h.HeldAt.UTC(), seq)
 	return err
 }
 
@@ -89,16 +118,20 @@ func (s *Store) ApplyExternalCAIssueResumedTx(ctx context.Context, tx pgx.Tx, te
 	return err
 }
 
-const externalCAHeldColumns = `authority_id, ca_request_id, issue_key, request_binding, key_origin, dns_names, status, serial,
-	held_at, resolved_at`
+const externalCAHeldColumns = `authority_id, ca_request_id, issue_key, request_binding, key_origin, dns_names,
+	profile_binding_known, profile_name, profile_version, profile_digest, protocol, ip_addresses, email_addresses, uris, requested_ekus, subject_spki_sha256,
+	status, serial, held_at, resolved_at`
 
-const prefixedExternalCAHeldColumns = `h.authority_id, h.ca_request_id, h.issue_key, h.request_binding, h.key_origin, h.dns_names, h.status,
-	h.serial, h.held_at, h.resolved_at`
+const prefixedExternalCAHeldColumns = `h.authority_id, h.ca_request_id, h.issue_key, h.request_binding, h.key_origin, h.dns_names,
+	h.profile_binding_known, h.profile_name, h.profile_version, h.profile_digest, h.protocol,
+	h.ip_addresses, h.email_addresses, h.uris, h.requested_ekus, h.subject_spki_sha256, h.status, h.serial, h.held_at, h.resolved_at`
 
 func scanExternalCAHeldIssue(row pgx.Row) (ExternalCAHeldIssue, error) {
 	var h ExternalCAHeldIssue
-	err := row.Scan(&h.AuthorityID, &h.CARequestID, &h.IssueKey, &h.RequestBinding, &h.KeyOrigin, &h.DNSNames, &h.Status, &h.Serial,
-		&h.HeldAt, &h.ResolvedAt)
+	err := row.Scan(&h.AuthorityID, &h.CARequestID, &h.IssueKey, &h.RequestBinding, &h.KeyOrigin, &h.DNSNames,
+		&h.ProfileBindingKnown, &h.ProfileName, &h.ProfileVersion, &h.ProfileDigest, &h.Protocol,
+		&h.IPAddresses, &h.EmailAddresses, &h.URIs, &h.RequestedEKUs, &h.SubjectSPKISHA256,
+		&h.Status, &h.Serial, &h.HeldAt, &h.ResolvedAt)
 	return h, err
 }
 

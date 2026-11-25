@@ -132,6 +132,7 @@ type CSRInfo struct {
 	identity     enrollmentIdentity // complete signed name fields, including names outside the profile view
 	KeyAlgorithm string             // "RSA" | "ECDSA" | "Ed25519"
 	KeyBits      int                // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
+	SPKISHA256   string             // SHA-256 of the signed CSR's SubjectPublicKeyInfo DER
 	DNSNames     []string           // SAN dNSNames in the request
 	IPAddresses  []string           // SAN iPAddresses in the request, string form
 	// EmailAddresses are the request's mailboxes: its SAN rfc822Names and,
@@ -170,6 +171,86 @@ func (info CSRInfo) CheckExternalProfileSubject(authorizedDNS []string) error {
 		}
 	}
 	return errors.New("crypto: common name is outside the profile-checked identifiers")
+}
+
+// CheckExternalProfileSANs rejects GeneralName forms this profile cannot
+// inspect. A permissive or suffix-only rule is not authority to forward an
+// opaque UPN, directoryName or registeredID to a supply-in-request CA.
+func (info CSRInfo) CheckExternalProfileSANs() error {
+	return checkExternalProfileSANs(info.identity.san)
+}
+
+func checkExternalProfileSANs(der []byte) error {
+	if len(der) == 0 {
+		return nil
+	}
+	var names []asn1.RawValue
+	if rest, err := asn1.Unmarshal(der, &names); err != nil || len(rest) != 0 || len(names) == 0 {
+		return errors.New("crypto: external profile cannot inspect the subjectAltName")
+	}
+	for _, name := range names {
+		if name.Class != asn1.ClassContextSpecific {
+			return errors.New("crypto: external profile cannot inspect this subjectAltName form")
+		}
+		switch name.Tag {
+		case 1, 2, 6, 7: // rfc822Name, dNSName, URI, IP
+			if name.IsCompound {
+				return errors.New("crypto: external profile cannot inspect this subjectAltName form")
+			}
+		case 0: // only the SmtpUTF8Mailbox otherName is modeled
+			if !name.IsCompound {
+				return errors.New("crypto: external profile cannot inspect this otherName")
+			}
+			var oid asn1.ObjectIdentifier
+			if _, err := asn1.Unmarshal(name.Bytes, &oid); err != nil || !oid.Equal(certinfo.OIDSmtpUTF8Mailbox) {
+				return errors.New("crypto: external profile cannot inspect this otherName")
+			}
+		default:
+			return errors.New("crypto: external profile cannot inspect this subjectAltName form")
+		}
+	}
+	if _, err := certinfo.SmtpUTF8Mailboxes([]pkix.Extension{{Id: oidSubjectAltNameExt, Value: der}}); err != nil {
+		return errors.New("crypto: external profile cannot inspect the subjectAltName")
+	}
+	return nil
+}
+
+// CheckExternalCertificateSubject binds the name an upstream CA returned to
+// the identifiers in the held request. An external issuer may add its own
+// subject attributes, but a profile-bound caller must not receive that leaf.
+func CheckExternalCertificateSubject(raw []byte, dns, ips, emails, uris []string) error {
+	der, err := certinfo.LeafDER(raw)
+	if err != nil {
+		return errors.New("crypto: invalid external CA certificate")
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return errors.New("crypto: invalid external CA certificate")
+	}
+	if err := checkExternalProfileSANs(enrollmentSANExtension(cert.Extensions)); err != nil {
+		return err
+	}
+	var subject pkix.RDNSequence
+	if rest, err := asn1.Unmarshal(cert.RawSubject, &subject); err != nil || len(rest) != 0 {
+		return errors.New("crypto: invalid external CA certificate subject")
+	}
+	if len(subject) == 0 {
+		return nil
+	}
+	if len(subject) != 1 || len(subject[0]) != 1 || !subject[0][0].Type.Equal(asn1.ObjectIdentifier{2, 5, 4, 3}) || cert.Subject.CommonName == "" {
+		return errors.New("crypto: external CA certificate has unauthorized subject attributes")
+	}
+	for _, name := range dns {
+		if strings.EqualFold(strings.TrimSuffix(name, "."), strings.TrimSuffix(cert.Subject.CommonName, ".")) {
+			return nil
+		}
+	}
+	for _, names := range [][]string{ips, emails, uris} {
+		if slices.Contains(names, cert.Subject.CommonName) {
+			return nil
+		}
+	}
+	return errors.New("crypto: external CA certificate common name is outside the held request")
 }
 
 // CSRIdentifiers are the names a PKCS#10 asks to have certified. It is a
@@ -317,6 +398,7 @@ func InspectCSR(der []byte) (CSRInfo, error) {
 	}
 	info := CSRInfo{
 		identity:          enrollmentIdentityFromCSR(csr),
+		SPKISHA256:        SHA256Hex(csr.RawSubjectPublicKeyInfo),
 		DNSNames:          csr.DNSNames,
 		IPAddresses:       ipStrings(csr.IPAddresses),
 		EmailAddresses:    append(append([]string(nil), csr.EmailAddresses...), mailboxes...),

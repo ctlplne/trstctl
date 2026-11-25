@@ -29,7 +29,7 @@ func (o *Orchestrator) RecordExternalCAIssueHeld(ctx context.Context, tenantID s
 		return err
 	}
 	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("external-ca-held\x00"+tenantID+"\x00"+held.AuthorityID+"\x00"+held.IssueKey)).String()
-	ev, err := o.emitPrepared(ctx, events.Event{ID: id, Type: projections.EventExternalCAIssueHeld, TenantID: tenantID, Data: data})
+	ev, err := o.emitPrepared(ctx, events.Event{ID: id, Type: projections.EventExternalCAIssueHeld, TenantID: tenantID, Data: data, SchemaVersion: 2})
 	if err != nil {
 		return err
 	}

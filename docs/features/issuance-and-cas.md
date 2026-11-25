@@ -656,6 +656,16 @@ that profile pass the profile's checks in trstctl and are then signed by that
 CA instead of trstctl's own: for example ACME in front of an AD CS template, with
 one `adcs` external CA entry per template. The client receives the upstream's
 leaf and chain, and the certificate is recorded in inventory like any other.
+For a profile-bound external issuance, trstctl checks the CSR's subject, SAN
+forms, requested usages, and key against that profile before dispatch. It
+refuses identity forms the profile cannot inspect, including UPN otherName,
+directoryName and registeredID. Before it records a CA result, it checks the
+returned leaf's names, subject, exact CSR public key, key strength, usages and
+validity against the original request and the profile revision selected at
+issuance time. A CA
+certificate or an unconstrained EKU cannot satisfy a leaf profile. If the CA
+returns a different identity, the request remains unfulfilled and the operator
+must correct the upstream template or issue a new request.
 Saving a profile that names an external CA the tenant does not have is refused
 (422). An ACME revoke of an upstream-issued certificate is refused, because
 trstctl's CRL covers only its own CA; revoke it through trstctl's revocation
@@ -714,6 +724,12 @@ held on (N1), recording that decision queues the resume in the same transaction,
 issuance finishes on its own. A manager's approval made at the CA itself is resumed by an
 operator. The CA Hierarchy page lists each AD CS authority's held issuances (request id,
 names, when they stopped waiting, and whether they were issued or denied) with Resume.
+New held requests retain the pinned profile revision and checked identifiers.
+Resume refuses a CA certificate that differs from those constraints before it
+enters inventory or reaches the original caller. Held requests recorded before
+this binding was introduced cannot be proven safe from their old event payload;
+resume refuses them. Submit a new issuance if one of those older requests is
+still pending at the CA.
 Status: served.
 
 The **registration-authority (RA) model** is a role split that prevents the classic

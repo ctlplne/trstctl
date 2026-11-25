@@ -274,6 +274,9 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	if err := json.Unmarshal(raw, &cert); err != nil {
 		return Certificate{}, err
 	}
+	if err := s.validateIssuedCertificate(ctx, req, cert); err != nil {
+		return Certificate{}, err
+	}
 	// Cache the returned provider result before local recording. A projection
 	// failure can then replay this exact certificate without signing again.
 	if err := s.record(ctx, req.TenantID, idempotencyKey, req.RequestBinding, req.KeyOrigin, req.Protocol, cert); err != nil {
@@ -515,6 +518,9 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 	if err := json.Unmarshal(raw, &cert); err != nil {
 		return safeExternalIssueError("external_ca_result_decode_failed", "external CA result decoding failed", err)
 	}
+	if err := s.validateIssuedCertificate(ctx, req, cert); err != nil {
+		return safeExternalIssueError("external_ca_profile_refused", "external CA certificate violates the pinned profile", err)
+	}
 	// The upstream effect is complete once its exact response is durably
 	// cached. Recording can now retry locally without calling the CA again.
 	// No served response is successful until recording/notification commits.
@@ -669,6 +675,9 @@ func resolveExternalProfile(req *IssueRequest, record store.ProfileRecord) error
 	info, err := crypto.InspectCSR(req.CSR)
 	if err != nil {
 		return fmt.Errorf("%w: unparseable CSR", ErrExternalProfileRefused)
+	}
+	if err := info.CheckExternalProfileSANs(); err != nil {
+		return fmt.Errorf("%w: %w", ErrExternalProfileRefused, err)
 	}
 	names := profileDNSNames(info, req.DNSNames)
 	if err := info.CheckExternalProfileSubject(names); err != nil {

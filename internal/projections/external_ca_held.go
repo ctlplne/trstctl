@@ -27,6 +27,24 @@ const (
 // issue key, request binding and key origin are the held issuance's own, so a
 // resumed certificate is recorded under the issuance its caller waits on.
 type ExternalCAIssueHeld struct {
+	AuthorityID       string   `json:"authority_id"`
+	CARequestID       int      `json:"ca_request_id"`
+	IssueKey          string   `json:"issue_key"`
+	RequestBinding    string   `json:"request_binding"`
+	KeyOrigin         string   `json:"key_origin,omitempty"`
+	DNSNames          []string `json:"dns_names,omitempty"`
+	ProfileName       string   `json:"profile_name,omitempty"`
+	ProfileVersion    int      `json:"profile_version,omitempty"`
+	ProfileDigest     string   `json:"profile_digest,omitempty"`
+	Protocol          string   `json:"protocol,omitempty"`
+	IPAddresses       []string `json:"ip_addresses,omitempty"`
+	EmailAddresses    []string `json:"email_addresses,omitempty"`
+	URIs              []string `json:"uris,omitempty"`
+	RequestedEKUs     []string `json:"requested_ekus,omitempty"`
+	SubjectSPKISHA256 string   `json:"subject_spki_sha256,omitempty"`
+}
+
+type externalCAIssueHeldV1 struct {
 	AuthorityID    string   `json:"authority_id"`
 	CARequestID    int      `json:"ca_request_id"`
 	IssueKey       string   `json:"issue_key"`
@@ -48,6 +66,10 @@ func ValidateExternalCAIssueHeld(h ExternalCAIssueHeld) error {
 	if h.AuthorityID == "" || h.CARequestID <= 0 || h.IssueKey == "" || h.RequestBinding == "" {
 		return errors.New("projections: a held external CA issuance needs its authority, CA request id, issue key and request binding")
 	}
+	if h.ProfileName != "" && (h.ProfileVersion <= 0 || h.ProfileDigest == "") ||
+		h.ProfileName == "" && (h.ProfileVersion != 0 || h.ProfileDigest != "") {
+		return errors.New("projections: a held external CA profile needs one complete pinned revision")
+	}
 	return nil
 }
 
@@ -68,6 +90,7 @@ func init() {
 	for _, typ := range []string{EventExternalCAIssueHeld, EventExternalCAIssueResumed} {
 		knownSchemaVersions[typ] = map[int]bool{1: true}
 	}
+	knownSchemaVersions[EventExternalCAIssueHeld][2] = true
 }
 
 func (p *Projector) applyExternalCAHeldTx(ctx context.Context, tx pgx.Tx, e events.Event) (bool, error) {
@@ -82,7 +105,10 @@ func (p *Projector) applyExternalCAHeldTx(ctx context.Context, tx pgx.Tx, e even
 		}
 		return true, p.store.ApplyExternalCAIssueHeldTx(ctx, tx, e.TenantID, store.ExternalCAHeldIssue{AuthorityID: h.AuthorityID,
 			CARequestID: h.CARequestID, IssueKey: h.IssueKey, RequestBinding: h.RequestBinding, KeyOrigin: h.KeyOrigin,
-			DNSNames: h.DNSNames, HeldAt: e.Time}, e.Sequence)
+			DNSNames: h.DNSNames, ProfileBindingKnown: e.SchemaVersion >= 2, ProfileName: h.ProfileName,
+			ProfileVersion: h.ProfileVersion, ProfileDigest: h.ProfileDigest, Protocol: h.Protocol,
+			IPAddresses: h.IPAddresses, EmailAddresses: h.EmailAddresses, URIs: h.URIs,
+			RequestedEKUs: h.RequestedEKUs, SubjectSPKISHA256: h.SubjectSPKISHA256, HeldAt: e.Time}, e.Sequence)
 	case EventExternalCAIssueResumed:
 		var r ExternalCAIssueResumed
 		if err := json.Unmarshal(e.Data, &r); err != nil {
@@ -104,12 +130,19 @@ func addExternalCAHeldPrivacyPolicies(policies map[privacyEventPolicyKey]events.
 	policies[privacyEventPolicyKey{EventExternalCAIssueHeld, 1}] = privacyRules(
 		privacyRule("/authority_id", opaque), privacyRule("/ca_request_id", opaque), privacyRule("/issue_key", opaque),
 		privacyRule("/request_binding", opaque), privacyRule("/key_origin", opaque), privacyRule("/dns_names/*", token))
+	policies[privacyEventPolicyKey{EventExternalCAIssueHeld, 2}] = privacyRules(
+		privacyRule("/authority_id", opaque), privacyRule("/ca_request_id", opaque), privacyRule("/issue_key", opaque),
+		privacyRule("/request_binding", opaque), privacyRule("/key_origin", opaque), privacyRule("/dns_names/*", token),
+		privacyRule("/profile_name", opaque), privacyRule("/profile_version", opaque), privacyRule("/profile_digest", opaque),
+		privacyRule("/protocol", opaque), privacyRule("/ip_addresses/*", token), privacyRule("/email_addresses/*", token),
+		privacyRule("/uris/*", token), privacyRule("/requested_ekus/*", opaque), privacyRule("/subject_spki_sha256", opaque))
 	policies[privacyEventPolicyKey{EventExternalCAIssueResumed, 1}] = privacyRules(
 		privacyRule("/authority_id", opaque), privacyRule("/ca_request_id", opaque), privacyRule("/status", opaque),
 		privacyRule("/serial", opaque))
 }
 
 func addExternalCAHeldPrivacyShapes(shapes map[privacyEventPolicyKey]events.PrivacyPayloadShape) {
-	shapes[privacyEventPolicyKey{EventExternalCAIssueHeld, 1}] = privacyPayloadShape[ExternalCAIssueHeld]()
+	shapes[privacyEventPolicyKey{EventExternalCAIssueHeld, 1}] = privacyPayloadShape[externalCAIssueHeldV1]()
+	shapes[privacyEventPolicyKey{EventExternalCAIssueHeld, 2}] = privacyPayloadShape[ExternalCAIssueHeld]()
 	shapes[privacyEventPolicyKey{EventExternalCAIssueResumed, 1}] = privacyPayloadShape[ExternalCAIssueResumed]()
 }
