@@ -256,6 +256,9 @@ rate-limited, and audited; answers flow through the RCA pipeline, cited and reda
 server itself holds a [workload identity](workload-identity.md) from trstctl's own
 broker. **Served** at `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/tools/{tool}` when
 `ai.enable_api` is on.
+If a scope or rate-limit refusal cannot be recorded in the audit log, the tool
+returns a retryable `503` without a result. REST-backed and write tools apply the
+same rule to their rate-limit refusals.
 
 Six more read tools answer posture and exposure questions from the served read routes,
 entered with the agent's own credentials, so a token sees here exactly what it may read

@@ -567,8 +567,11 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 // normal route path; the MCP layer only translates tool arguments to an HTTP request.
 func (a *API) mcpCallREST(w http.ResponseWriter, r *http.Request, principal authz.Principal, tool string, rt mcpserver.RESTTool, req mcpCallRequest) {
 	if !a.ai.rate.Allow(principal.Subject + "|" + tool) {
-		_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.ratelimited", principal.TenantID,
-			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, principal.Subject, tool)))
+		if err := auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.ratelimited", principal.TenantID,
+			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, principal.Subject, tool))); err != nil {
+			a.writeError(w, mcpserver.ErrAuditUnavailable)
+			return
+		}
 		a.writeError(w, errStatus(http.StatusTooManyRequests, "rate limit exceeded"))
 		return
 	}
@@ -628,8 +631,11 @@ func mcpRESTResponseSummary(rt mcpserver.RESTTool, status int) string {
 // proposal and executes only when the same call is made after the approval.
 func (a *API) mcpCallWrite(w http.ResponseWriter, r *http.Request, principal authz.Principal, tool string, req mcpCallRequest) {
 	if !a.ai.rate.Allow(principal.Subject + "|" + tool) {
-		_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.ratelimited", principal.TenantID,
-			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, principal.Subject, tool)))
+		if err := auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.ratelimited", principal.TenantID,
+			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, principal.Subject, tool))); err != nil {
+			a.writeError(w, mcpserver.ErrAuditUnavailable)
+			return
+		}
 		a.writeError(w, errStatus(http.StatusTooManyRequests, "rate limit exceeded"))
 		return
 	}
