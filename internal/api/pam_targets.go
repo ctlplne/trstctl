@@ -48,6 +48,14 @@ func (a *API) registerPAMTarget(w http.ResponseWriter, r *http.Request) {
 		if principal.Subject == "" {
 			return 0, nil, errStatus(http.StatusUnauthorized, "authenticated registrar required")
 		}
+		if strings.TrimSpace(body.TargetType) == "webconsole" && strings.TrimSpace(body.AccountSecret) != "" {
+			// The gateway redeems this account after registration. A target
+			// writer may choose the route, so selecting the account is a read
+			// of that secret even when this request returns no secret bytes.
+			if err := a.requireSecretReferencesRead(ctx, tenantID, "account_secret", "secret://"+strings.TrimSpace(body.AccountSecret)); err != nil {
+				return 0, nil, err
+			}
+		}
 		created, err := a.pam.RegisterPAMTarget(ctx, tenantID, principal.Subject, PAMTarget{
 			ID: strings.TrimSpace(body.ID), TargetType: strings.TrimSpace(body.TargetType),
 			ProviderID: strings.TrimSpace(body.ProviderID), AllowedRoles: body.AllowedRoles,

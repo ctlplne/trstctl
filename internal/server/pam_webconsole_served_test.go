@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -34,6 +35,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/infratest"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/objectstore/s3test"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const a273ConsolePassword = "Lab-Console-Pass-7!"
@@ -107,10 +109,41 @@ func (c *a273Capture) seen() []byte {
 }
 
 var (
-	a273OpenLine = regexp.MustCompile(`Open http://(127\.0\.0\.1:\d+)/ in your browser`)
+	a273OpenLine = regexp.MustCompile(`Open http://(127\.0\.0\.1:\d+)/\?trstctl_tunnel=([0-9a-f]{64}) in your browser`)
 	a273CSRF     = regexp.MustCompile(`name="csrf" value="([0-9a-f]+)"`)
 	a273Absolute = regexp.MustCompile(`<a href="([^"]+)" id="absolute">`)
 )
+
+func bootstrapA273Browser(t *testing.T, browser *http.Client, base, cliOutput string) string {
+	t.Helper()
+	match := a273OpenLine.FindStringSubmatch(cliOutput)
+	if match == nil {
+		t.Fatal("CLI did not print a signed loopback browser URL")
+	}
+	entry := base + "/?trstctl_tunnel=" + match[2]
+	if browser.Jar == nil {
+		t.Fatal("browser needs a cookie jar for the signed loopback bootstrap")
+	}
+	local, err := url.Parse(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a201Await(t, "the signed browser entry", func() bool {
+		resp, err := browser.Get(entry)
+		if err != nil {
+			return false
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		for _, cookie := range browser.Jar.Cookies(local) {
+			if cookie.Name == "trstctl_tunnel" && cookie.Value == match[2] {
+				return true
+			}
+		}
+		return false
+	})
+	return entry
+}
 
 // TestServedWebConsoleSessionA273: an internal web admin console is reached
 // only through its gateway. A webconsole target vaults the account and names
@@ -186,7 +219,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	f.requester = seedScopedTokenSubject(t, h.store, h.tenant, "a273-requester", "access:read", "access:write")
 	f.reviewerOne = seedScopedTokenSubject(t, h.store, h.tenant, "a273-reviewer-one", "access:approve")
 	f.reviewerTwo = seedScopedTokenSubject(t, h.store, h.tenant, "a273-reviewer-two", "access:approve")
-	f.operator = seedScopedTokenSubject(t, h.store, h.tenant, "a273-operator", "access:read", "access:write", "access:targets.write", "access:terminate")
+	f.operator = seedScopedTokenSubject(t, h.store, h.tenant, "a273-operator", "access:read", "access:write", "access:targets.write", "access:terminate", "secrets:read")
 	custodian := seedScopedTokenSubject(t, h.store, h.tenant, "a273-custodian", "secrets:read", "secrets:write")
 
 	const account = "consoles/a273-lab-admin"
@@ -196,6 +229,16 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 		t.Fatalf("vault the console account: %d %s", status, body)
 	}
 	route := map[string]any{"url": console.URL(), "ca_pem": string(console.CAPEM())}
+	untrustedRegistrar := seedScopedTokenSubject(t, h.store, h.tenant, "cr072-untrusted-registrar", "access:targets.write")
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/targets", untrustedRegistrar,
+		"cr072-untrusted-target", map[string]any{"id": "cr072-untrusted", "target_type": "webconsole",
+			"account_secret": account, "allowed_roles": []string{account}, "gateway_agent_id": gatewayID,
+			"gateway_address": f.gatewayAddr, "web": route}); status != http.StatusForbidden {
+		t.Fatalf("CR-072: target writer without secrets:read registered an account bound to its chosen origin: HTTP %d %s", status, body)
+	}
+	if _, err := h.store.GetPAMTarget(context.Background(), h.tenant, "webconsole", "cr072-untrusted"); !errors.Is(err, store.ErrPAMTargetNotFound) {
+		t.Fatalf("CR-072: refused registration left a target record: %v", err)
+	}
 	register := func(key string, target map[string]any) (int, []byte) {
 		t.Helper()
 		body := map[string]any{"target_type": "webconsole", "account_secret": account, "allowed_roles": []string{account},
@@ -311,6 +354,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 		t.Fatal(err)
 	}
 	browser := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+	entry := bootstrapA273Browser(t, browser, base, out)
 	get := func(path string) (int, string, error) {
 		resp, err := browser.Get(base + path)
 		if err != nil {
@@ -376,7 +420,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 
 	local, _ := url.Parse(base)
 	for _, c := range jar.Cookies(local) {
-		if c.Name != infratest.WebConsoleXSRFCookie {
+		if c.Name != infratest.WebConsoleXSRFCookie && c.Name != "trstctl_tunnel" {
 			t.Fatalf("the browser holds the console's cookie %s", c.Name)
 		}
 	}
@@ -397,7 +441,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 		t.Fatal("the console's own origin reached the browser's network traffic")
 	}
 	if browserDir != "" {
-		a273AwaitBrowser(t, browserDir, "url", base+"/", "done")
+		a273AwaitBrowser(t, browserDir, "url", entry, "done")
 		for _, leak := range append(leaks, console.SessionCookies()...) {
 			if bytes.Contains(capture.seen(), []byte(leak)) {
 				t.Fatalf("the real browser's traffic carries %q", leak)
@@ -475,6 +519,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 		t.Fatal(err)
 	}
 	pathBrowser := &http.Client{Jar: pathJar, Timeout: 30 * time.Second}
+	bootstrapA273Browser(t, pathBrowser, pathBase, pathOut)
 	a201Await(t, "the console under a path through the gateway", func() bool {
 		resp, err := pathBrowser.Get(pathBase + "/")
 		if err != nil {
@@ -564,7 +609,12 @@ func servedWebConsoleAccountRotatesAfterSession(t *testing.T, f *gatewayFixture,
 	out, stop := f.connect(session.ID, session.Gateway.Ticket, a273OpenLine.MatchString)
 	defer stop()
 	base := "http://" + a273OpenLine.FindStringSubmatch(out)[1]
-	browser := &http.Client{Timeout: 30 * time.Second}
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browser := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+	bootstrapA273Browser(t, browser, base, out)
 	a201Await(t, "the controller's console through the gateway", func() bool {
 		resp, err := browser.Get(base + "/redfish/v1/AccountService/Accounts")
 		if err != nil {
@@ -676,6 +726,7 @@ func servedWebConsoleSingleSignOn(t *testing.T, f *gatewayFixture, gatewayID, ac
 		t.Fatal(err)
 	}
 	browser := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+	bootstrapA273Browser(t, browser, base, out)
 	a201Await(t, "the single sign-on console through the gateway", func() bool {
 		resp, err := browser.Get(base + "/")
 		if err != nil {
@@ -689,8 +740,8 @@ func servedWebConsoleSingleSignOn(t *testing.T, f *gatewayFixture, gatewayID, ac
 		t.Fatalf("sign-ins: provider %d, console %d", idp.SignIns(), console.SignIns())
 	}
 	local, _ := url.Parse(base)
-	if cookies := jar.Cookies(local); len(cookies) != 0 {
-		t.Fatalf("the browser holds cookies: %v", cookies)
+	if cookies := jar.Cookies(local); len(cookies) != 1 || cookies[0].Name != "trstctl_tunnel" {
+		t.Fatalf("the browser holds cookies beyond its local tunnel capability: %v", cookies)
 	}
 	seen := capture.seen()
 	for _, leak := range append(append([]string{a273ConsolePassword, idp.URL(), strings.TrimPrefix(idp.URL(), "https://"), infratest.OIDCSessionCookie,

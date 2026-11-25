@@ -1866,6 +1866,10 @@ or `{"token": ...}` for a header sign-in) and register it as a `webconsole` acce
 the account secret (its only role), the console's route — its origin over https, or the
 path it lives under on that origin (such as `https://apps.internal.example/grafana/`), with
 the CA and server name its certificate is checked against — and the gateway that serves it.
+The registrar needs both `access:targets.write` and `secrets:read` for the named
+`account_secret`: choosing a route for a vaulted credential authorizes where
+the gateway will send that credential. A target writer without that secret's
+read authority receives 403 before a target is recorded.
 
 A console whose account an in-place account provider manages (ESXi, vCenter single sign-on,
 Redfish or a network device) can name that provider in `provider_id`. The provider must
