@@ -18,6 +18,8 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
+	"net/url"
 	"time"
 )
 
@@ -54,6 +56,22 @@ func ForeignLeaf(cn string) (string, error) {
 // check. The certificate is real and chains to the delegation; only the
 // brain's reconcile verdict can catch it.
 func RogueLeaf(delegationCertPEM, delegationKeyPEM []byte, cn string) (string, error) {
+	return RogueLeafWithIdentity(delegationCertPEM, delegationKeyPEM, RogueIdentity{CommonName: cn, DNSNames: []string{cn}})
+}
+
+// RogueIdentity is a deliberately untrusted leaf request. It is used to prove
+// the brain catches a host that signs around the agent's issuance checks.
+type RogueIdentity struct {
+	CommonName   string
+	Organization []string
+	DNSNames     []string
+	IPNames      []net.IP
+	EmailNames   []string
+	URINames     []*url.URL
+	CodeSigning  bool
+}
+
+func RogueLeafWithIdentity(delegationCertPEM, delegationKeyPEM []byte, identity RogueIdentity) (string, error) {
 	block, _ := pem.Decode(delegationCertPEM)
 	if block == nil || block.Type != "CERTIFICATE" {
 		return "", fmt.Errorf("edgetest: no delegation certificate block")
@@ -74,10 +92,14 @@ func RogueLeaf(delegationCertPEM, delegationKeyPEM []byte, cn string) (string, e
 	if !ok {
 		return "", fmt.Errorf("edgetest: delegation key is not ECDSA")
 	}
-	return signLeaf(caCert, caKey, cn)
+	return signLeafWithIdentity(caCert, caKey, identity)
 }
 
 func signLeaf(ca *x509.Certificate, caKey *ecdsa.PrivateKey, cn string) (string, error) {
+	return signLeafWithIdentity(ca, caKey, RogueIdentity{CommonName: cn, DNSNames: []string{cn}})
+}
+
+func signLeafWithIdentity(ca *x509.Certificate, caKey *ecdsa.PrivateKey, identity RogueIdentity) (string, error) {
 	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return "", err
@@ -87,12 +109,19 @@ func signLeaf(ca *x509.Certificate, caKey *ecdsa.PrivateKey, cn string) (string,
 		return "", err
 	}
 	template := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: cn},
-		DNSNames:     []string{cn},
-		NotBefore:    time.Now().Add(-time.Minute),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
+		SerialNumber:   serial,
+		Subject:        pkix.Name{CommonName: identity.CommonName, Organization: identity.Organization},
+		DNSNames:       identity.DNSNames,
+		IPAddresses:    identity.IPNames,
+		EmailAddresses: identity.EmailNames,
+		URIs:           identity.URINames,
+		NotBefore:      time.Now().Add(-time.Minute),
+		NotAfter:       time.Now().Add(30 * time.Minute),
+		KeyUsage:       x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:    []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+	}
+	if identity.CodeSigning {
+		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning}
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, ca, &leafKey.PublicKey, caKey)
 	if err != nil {

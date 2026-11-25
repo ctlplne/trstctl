@@ -4,6 +4,7 @@ package crypto
 
 import (
 	"crypto/x509"
+	"encoding/asn1"
 	"fmt"
 	"net"
 	"strings"
@@ -48,13 +49,18 @@ type EdgeCARequest struct {
 // reports having issued: its identity and names, after the signature has been
 // checked against the delegated CA that supposedly issued it.
 type EdgeReportedLeaf struct {
-	SerialHex string
-	Subject   string
-	DNSNames  []string
-	IPSANs    []net.IP
-	NotBefore time.Time
-	NotAfter  time.Time
-	DER       []byte
+	SerialHex             string
+	Subject               string
+	CommonName            string
+	SubjectOnlyCommonName bool
+	DNSNames              []string
+	IPSANs                []net.IP
+	EmailSANs             []string
+	URISANs               []string
+	ExtKeyUsages          []string
+	NotBefore             time.Time
+	NotAfter              time.Time
+	DER                   []byte
 }
 
 // InspectEdgeReportedLeaf parses a reported leaf and verifies its signature
@@ -73,15 +79,70 @@ func InspectEdgeReportedLeaf(delegationCertDER, leafDER []byte) (EdgeReportedLea
 	if err := leaf.CheckSignatureFrom(delegation); err != nil {
 		return EdgeReportedLeaf{}, fmt.Errorf("crypto: reported leaf was not issued by this delegated CA: %w", err)
 	}
+	ekus, err := extKeyUsageNamesFromExtensions(leaf.Extensions)
+	if err != nil {
+		return EdgeReportedLeaf{}, fmt.Errorf("crypto: parse reported leaf usages: %w", err)
+	}
+	uriNames := make([]string, 0, len(leaf.URIs))
+	for _, uri := range leaf.URIs {
+		uriNames = append(uriNames, uri.String())
+	}
+	cnCount := 0
+	onlyCN := true
+	for _, name := range leaf.Subject.Names {
+		if name.Type.Equal(asn1.ObjectIdentifier{2, 5, 4, 3}) {
+			cnCount++
+		} else {
+			onlyCN = false
+		}
+	}
 	return EdgeReportedLeaf{
-		SerialHex: leaf.SerialNumber.Text(16),
-		Subject:   leaf.Subject.String(),
-		DNSNames:  append([]string(nil), leaf.DNSNames...),
-		IPSANs:    append([]net.IP(nil), leaf.IPAddresses...),
-		NotBefore: leaf.NotBefore,
-		NotAfter:  leaf.NotAfter,
-		DER:       append([]byte(nil), leafDER...),
+		SerialHex:             leaf.SerialNumber.Text(16),
+		Subject:               leaf.Subject.String(),
+		CommonName:            leaf.Subject.CommonName,
+		SubjectOnlyCommonName: onlyCN && cnCount <= 1,
+		DNSNames:              append([]string(nil), leaf.DNSNames...),
+		IPSANs:                append([]net.IP(nil), leaf.IPAddresses...),
+		EmailSANs:             append([]string(nil), leaf.EmailAddresses...),
+		URISANs:               uriNames,
+		ExtKeyUsages:          ekus,
+		NotBefore:             leaf.NotBefore,
+		NotAfter:              leaf.NotAfter,
+		DER:                   append([]byte(nil), leafDER...),
 	}, nil
+}
+
+// CheckEdgeReportedLeaf applies the segment's grant to every identity and
+// purpose in a certificate signed by the delegated key. Reconcile needs this
+// check even for a certificate that cannot chain for an honest relying party:
+// the journal must flag a signer that stepped outside its grant.
+func CheckEdgeReportedLeaf(c EdgeConstraints, leaf EdgeReportedLeaf) error {
+	if err := CheckEdgeIssuance(c, leaf.DNSNames, leaf.IPSANs, leaf.NotBefore); err != nil {
+		return err
+	}
+	if !leaf.SubjectOnlyCommonName {
+		return edgeError{"crypto: reported edge leaf subject contains attributes outside the DNS delegation"}
+	}
+	if leaf.CommonName != "" {
+		if err := checkEdgeDNS(c, leaf.CommonName); err != nil {
+			return fmt.Errorf("crypto: reported edge leaf subject common name: %w", err)
+		}
+	}
+	if len(leaf.URISANs) != 0 {
+		return edgeError{fmt.Sprintf("crypto: reported edge leaf carries URI identities outside the DNS delegation: %v", leaf.URISANs)}
+	}
+	if len(leaf.EmailSANs) != 0 {
+		return edgeError{fmt.Sprintf("crypto: reported edge leaf carries email identities outside the DNS delegation: %v", leaf.EmailSANs)}
+	}
+	if len(leaf.ExtKeyUsages) == 0 {
+		return edgeError{"crypto: reported edge leaf has no bounded TLS extended key usage"}
+	}
+	for _, eku := range leaf.ExtKeyUsages {
+		if eku != "serverAuth" && eku != "clientAuth" {
+			return edgeError{fmt.Sprintf("crypto: reported edge leaf usage %q is outside the TLS delegation", eku)}
+		}
+	}
+	return nil
 }
 
 // EdgeAttestationChallenge derives the challenge an edge host's TPM
@@ -170,8 +231,20 @@ func MintDelegatedEdgeCA(parentCertDER []byte, parentSigner DigestSigner, childP
 		CommonName:          strings.TrimSpace(req.CommonName),
 		PermittedDNSDomains: append([]string(nil), req.PermittedDNSDomains...),
 		ExcludedDNSDomains:  append([]string(nil), req.ExcludedDNSDomains...),
+		// No edge segment policy grants IP, email or URI identities. Carry
+		// exclusions in the certificate because a host holding this key can
+		// bypass the agent's local issuance checks.
+		ExcludedIPRanges: []*net.IPNet{
+			{IP: net.IPv4zero.To4(), Mask: net.CIDRMask(0, 32)},
+			{IP: net.IPv6zero.To16(), Mask: net.CIDRMask(0, 128)},
+		},
+		PermittedEmailAddresses: []string{""},
+		ExcludedEmailAddresses:  []string{""},
+		PermittedURIDomains:     []string{""},
+		ExcludedURIDomains:      []string{""},
 		// An edge CA issues leaves and never another CA.
 		MaxPathLen: 0,
+		EKUs:       []string{"serverAuth", "clientAuth"},
 		TTL:        ttl,
 	})
 }

@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -469,6 +471,40 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 	}
 	if len(detail.Issuances) != 2 || violations != 1 {
 		t.Fatalf("detail issuances = %+v, want the good leaf and one flagged violation", detail.Issuances)
+	}
+	// A compromised edge signer can skip the local agent's checks. Reconcile
+	// must inspect every signed identity and usage, even when the DNS SAN is
+	// otherwise inside the delegation's segment.
+	foreignURI, err := url.Parse("spiffe://other.example.test/admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, identity := range map[string]edgetest.RogueIdentity{
+		"IP":                {CommonName: "db.edge.example.test", DNSNames: []string{"db.edge.example.test"}, IPNames: []net.IP{net.ParseIP("192.0.2.42")}},
+		"URI":               {CommonName: "db.edge.example.test", DNSNames: []string{"db.edge.example.test"}, URINames: []*url.URL{foreignURI}},
+		"email":             {CommonName: "db.edge.example.test", DNSNames: []string{"db.edge.example.test"}, EmailNames: []string{"admin@other.example.test"}},
+		"EKU":               {CommonName: "db.edge.example.test", DNSNames: []string{"db.edge.example.test"}, CodeSigning: true},
+		"CN":                {CommonName: "admin.other.example.test", DNSNames: []string{"db.edge.example.test"}},
+		"subject attribute": {CommonName: "db.edge.example.test", Organization: []string{"Other identity"}, DNSNames: []string{"db.edge.example.test"}},
+	} {
+		t.Run("reconcile rejects "+name, func(t *testing.T) {
+			leaf, err := edgetest.RogueLeafWithIdentity(delegationPEM, hostKeyPEM, identity)
+			if err != nil {
+				t.Fatal(err)
+			}
+			code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/edge/delegations/"+minted.ID+"/reconcile", operator, "edge-reconcile-cr065-"+name, map[string]any{
+				"certificates_pem": []string{leaf},
+			})
+			if code != http.StatusOK {
+				t.Fatalf("reconcile %s = %d body=%s", name, code, body)
+			}
+			var result struct {
+				Violations int `json:"violations"`
+			}
+			if err := json.Unmarshal(body, &result); err != nil || result.Violations != 1 {
+				t.Errorf("reconcile %s counts = %+v err=%v, want one recorded violation", name, result, err)
+			}
+		})
 	}
 
 	// Revocation from the brain: the delegation flips AND the parent ledger

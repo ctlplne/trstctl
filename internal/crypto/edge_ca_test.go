@@ -4,8 +4,14 @@ package crypto
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
+	"math/big"
+	"net"
+	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -196,6 +202,134 @@ func TestAMintedEdgeCACarriesItsConstraintsAndCannotDelegate(t *testing.T) {
 	if d := time.Until(cert.NotAfter); d > maxEdgeCATTL+time.Hour {
 		t.Fatalf("minted CA lives %v, past the %v ceiling", d, maxEdgeCATTL)
 	}
+}
+
+func TestCR065EdgeDelegationConstrainsEveryIdentityFormAndUsage(t *testing.T) {
+	t.Parallel()
+	parentKey, err := GenerateLockedKey(ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(parentKey.Destroy)
+	edgeKey, err := GenerateLockedKey(ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(edgeKey.Destroy)
+	parent, err := SelfSignedHierarchyCA(parentKey, HierarchyCAProfile{
+		CommonName: "unrestricted parent", MaxPathLen: 1, TTL: 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := MintDelegatedEdgeCA(parent.CertificateDER, parentKey, edgeKey.Public(), EdgeCARequest{
+		CommonName: "segment edge CA", PermittedDNSDomains: []string{"edge.example.test"}, TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := x509.ParseCertificate(issued.CertificateDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cert.PermittedDNSDomainsCritical || !slices.Equal(cert.PermittedDNSDomains, []string{"edge.example.test"}) {
+		t.Errorf("signed DNS name constraints = %v (critical=%v)", cert.PermittedDNSDomains, cert.PermittedDNSDomainsCritical)
+	}
+	for _, ip := range []net.IP{net.ParseIP("192.0.2.42"), net.ParseIP("2001:db8::42")} {
+		if !excludedEdgeIP(cert.ExcludedIPRanges, ip) {
+			t.Errorf("signed CA permits unrelated IP %s", ip)
+		}
+	}
+	if !slices.Contains(cert.ExcludedEmailAddresses, "") || !slices.Contains(cert.PermittedEmailAddresses, "") {
+		t.Errorf("signed CA permits unrelated email names: permitted=%v excluded=%v", cert.PermittedEmailAddresses, cert.ExcludedEmailAddresses)
+	}
+	if !slices.Contains(cert.ExcludedURIDomains, "") {
+		t.Errorf("signed CA permits unrelated URI hosts: excluded=%v", cert.ExcludedURIDomains)
+	}
+	if len(cert.ExtKeyUsage) != 2 || !slices.Contains(cert.ExtKeyUsage, x509.ExtKeyUsageServerAuth) || !slices.Contains(cert.ExtKeyUsage, x509.ExtKeyUsageClientAuth) {
+		t.Errorf("signed CA usages = %v, want TLS server/client only", cert.ExtKeyUsage)
+	}
+	rootCert, err := x509.ParseCertificate(parent.CertificateDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootPool := x509.NewCertPool()
+	rootPool.AddCert(rootCert)
+	intermediates := x509.NewCertPool()
+	intermediates.AddCert(cert)
+	edgeSigner, err := newX509Signer(edgeKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := GenerateLockedKey(ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(leafKey.Destroy)
+	leafSigner, err := newX509Signer(leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignURI, err := url.Parse("spiffe://other.example.test/admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, tc := range []struct {
+		name   string
+		ip     net.IP
+		email  string
+		uri    *url.URL
+		usage  x509.ExtKeyUsage
+		accept bool
+	}{
+		{name: "bounded DNS TLS", usage: x509.ExtKeyUsageServerAuth, accept: true},
+		{name: "unrelated IP", ip: net.ParseIP("192.0.2.42"), usage: x509.ExtKeyUsageServerAuth},
+		{name: "unrelated email", email: "admin@other.example.test", usage: x509.ExtKeyUsageServerAuth},
+		{name: "unrelated URI", uri: foreignURI, usage: x509.ExtKeyUsageServerAuth},
+		{name: "code signing", usage: x509.ExtKeyUsageCodeSigning},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			leafTemplate := &x509.Certificate{
+				SerialNumber: big.NewInt(int64(i + 1)),
+				Subject:      pkix.Name{CommonName: "db.edge.example.test"},
+				DNSNames:     []string{"db.edge.example.test"},
+				NotBefore:    time.Now().Add(-time.Minute),
+				NotAfter:     time.Now().Add(30 * time.Minute),
+				KeyUsage:     x509.KeyUsageDigitalSignature,
+				ExtKeyUsage:  []x509.ExtKeyUsage{tc.usage},
+			}
+			if tc.ip != nil {
+				leafTemplate.IPAddresses = []net.IP{tc.ip}
+			}
+			if tc.email != "" {
+				leafTemplate.EmailAddresses = []string{tc.email}
+			}
+			if tc.uri != nil {
+				leafTemplate.URIs = []*url.URL{tc.uri}
+			}
+			der, err := x509.CreateCertificate(rand.Reader, leafTemplate, cert, leafSigner.Public(), edgeSigner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			leaf, err := x509.ParseCertificate(der)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = leaf.Verify(x509.VerifyOptions{Roots: rootPool, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{tc.usage}})
+			if (err == nil) != tc.accept {
+				t.Errorf("chain verification error = %v, accept=%v", err, tc.accept)
+			}
+		})
+	}
+}
+
+func excludedEdgeIP(ranges []*net.IPNet, ip net.IP) bool {
+	for _, r := range ranges {
+		if r.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // The default when a caller does not choose must be the SAFE answer.

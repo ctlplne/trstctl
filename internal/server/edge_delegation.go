@@ -367,7 +367,7 @@ func (s *edgeDelegationService) Reconcile(ctx context.Context, tenantID, id stri
 			continue
 		}
 		violation := ""
-		if err := crypto.CheckEdgeIssuance(constraints, leaf.DNSNames, leaf.IPSANs, leaf.NotBefore); err != nil {
+		if err := crypto.CheckEdgeReportedLeaf(constraints, leaf); err != nil {
 			violation = err.Error()
 		} else if d.RevokedAt != nil && leaf.NotBefore.After(*d.RevokedAt) {
 			violation = "issued after the delegation was revoked"
