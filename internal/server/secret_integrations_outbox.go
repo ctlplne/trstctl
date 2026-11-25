@@ -960,6 +960,8 @@ func (d *secretIntegrationOutboxDispatcher) recoverDynamicSecretRevocationOutcom
 		if !found {
 			return false, false, nil
 		}
+		// CR-686: project the exact retained completion, including Method. A
+		// reconstructed completion would conflict with the append-only event.
 		if err := secretIntegrationProjector(d.store, d.log, d.tenantCrypto).Apply(ctx, retained); err != nil {
 			return false, false, err
 		}

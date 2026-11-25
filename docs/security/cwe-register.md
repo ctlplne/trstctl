@@ -1487,8 +1487,8 @@ not this file.
 | `internal/server/restore_outbox_pairs.go:109` | positive int64 is representable. |
 | `internal/server/revocation.go:498` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:268` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:1322` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:1326` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1324` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1328` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_sync_source_sequence_test.go:57` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:68` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:73` | this fixture appends exactly two events. |
