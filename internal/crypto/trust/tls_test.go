@@ -17,6 +17,38 @@ import (
 	"time"
 )
 
+func TestRawClientConstructorsRejectOperatorDistrustedCA(t *testing.T) {
+	pki := newTwoPathPKI(t)
+	roots := x509.NewCertPool()
+	roots.AddCert(pki.rootD)
+	addr := serve(t, [][]byte{pki.leaf, pki.interD}, pki.leafKey)
+	if err := SetOperator(listWith(t, Entry{Name: "CR-071 test root", Kind: KindRoot, SPKISHA256: SPKISHA256(pki.rootD), Reason: "test distrust", Sources: []string{"test"}, Since: "2026-11-25"})); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = SetOperator(nil) })
+	config := func() *tls.Config {
+		return &tls.Config{RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS12}
+	}
+	raw, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := Client(raw, config())
+	err = client.Handshake()
+	_ = client.Close()
+	var distrusted *DistrustError
+	if !errors.As(err, &distrusted) {
+		t.Fatalf("raw Client handshake = %v, want operator distrust", err)
+	}
+	conn, err := Dialer(nil, config()).DialContext(t.Context(), "tcp", addr)
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if !errors.As(err, &distrusted) {
+		t.Fatalf("raw Dialer handshake = %v, want operator distrust", err)
+	}
+}
+
 // twoPathPKI is a server leaf under an intermediate key that carries two
 // certificates: one issued by a root the test may distrust and a cross-sign
 // issued by a clean root. The eMudhra shape: every intermediate had an emSign

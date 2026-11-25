@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/tools/trstctllint/licenseboundary"
 	"trstctl.com/trstctl/tools/trstctllint/netexec"
 	"trstctl.com/trstctl/tools/trstctllint/tenantfilter"
+	"trstctl.com/trstctl/tools/trstctllint/tlsdistrust"
 	"trstctl.com/trstctl/tools/trstctllint/tlsverify"
 	"trstctl.com/trstctl/tools/trstctllint/upsertarbiter"
 )
@@ -28,6 +29,7 @@ func main() {
 		netexec.Analyzer,         // SEC-005
 		licenseboundary.Analyzer, // PACKAGING-007
 		tlsverify.Analyzer,       // SEC-CWE-295
+		tlsdistrust.Analyzer,     // CR-071
 		upsertarbiter.Analyzer,   // OPP-C01
 	)
 }

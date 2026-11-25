@@ -5,9 +5,24 @@ package trust
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 )
+
+// Client upgrades a raw connection with the active runtime distrust list.
+// Credentialed protocol clients use this instead of crypto/tls.Client so a
+// newly added caller cannot omit operator distrust while still passing normal
+// hostname verification.
+func Client(conn net.Conn, cfg *tls.Config) *tls.Conn {
+	return tls.Client(conn, HardenTLSConfig(cfg))
+}
+
+// Dialer is the equivalent constructor for clients that dial and handshake
+// in one step. A nil netDialer keeps crypto/tls's standard network dialer.
+func Dialer(netDialer *net.Dialer, cfg *tls.Config) *tls.Dialer {
+	return &tls.Dialer{NetDialer: netDialer, Config: HardenTLSConfig(cfg)}
+}
 
 // The runtime list: the shipped list, plus whatever an operator adds in
 // configuration. It is process-wide because outbound transports are built in

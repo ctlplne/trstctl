@@ -182,7 +182,7 @@ func connect(ctx context.Context, dial func(context.Context, string, string) (ne
 		config.RootCAs = roots
 
 	}
-	tlsConn := tls.Client(conn, trust.HardenTLSConfig(config))
+	tlsConn := trust.Client(conn, config)
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("mongosignin: the server's TLS certificate does not verify: %w", err)

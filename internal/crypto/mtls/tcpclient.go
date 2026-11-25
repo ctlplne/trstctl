@@ -24,7 +24,7 @@ func dialVerifiedTCP(ctx context.Context, addr, serverName string, caPEM []byte,
 	if err != nil {
 		return nil, err
 	}
-	dialer := tls.Dialer{NetDialer: netDialer, Config: config}
+	dialer := trust.Dialer(netDialer, config)
 	return dialer.DialContext(ctx, "tcp", addr)
 }
 
@@ -59,7 +59,7 @@ func VerifyClientConnection(ctx context.Context, conn net.Conn, serverName strin
 		_ = conn.Close()
 		return nil, err
 	}
-	secured := tls.Client(conn, config)
+	secured := trust.Client(conn, config)
 	if err := secured.HandshakeContext(ctx); err != nil {
 		_ = secured.Close()
 		return nil, err

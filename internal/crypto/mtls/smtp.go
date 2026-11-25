@@ -21,7 +21,7 @@ func SMTPClientTLSConfig(serverName string) *tls.Config {
 // SMTP exchange over it, so it can write the AUTH PLAIN line from a buffer it
 // wipes, and it imports no crypto/* itself (AN-3).
 func SMTPStartTLS(conn net.Conn, serverName string) (net.Conn, error) {
-	tlsConn := tls.Client(conn, SMTPClientTLSConfig(serverName))
+	tlsConn := trust.Client(conn, SMTPClientTLSConfig(serverName))
 	if err := tlsConn.Handshake(); err != nil {
 		return nil, err
 	}

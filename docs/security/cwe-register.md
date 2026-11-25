@@ -3574,7 +3574,7 @@ not this file.
 | `internal/crypto/tlsprobe/native_fallback_test.go:24` | interoperability fixture pins TLS 1.2 to prove the native fallback preserves an existing supported listener. |
 | `internal/crypto/tlsprobe/openssl_test.go:59` | negative control: this fixture must reject the TLS 1.3-only native probe. |
 | `internal/crypto/tlsprobe/tlsprobe.go:203` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
-| `internal/crypto/trust/tls_test.go:140` | the test proves the check runs with verification off (CWE-295) |
+| `internal/crypto/trust/tls_test.go:172` | the test proves the check runs with verification off (CWE-295) |
 
 ### G403 — CWE-326 Inadequate encryption strength (RSA key size) (4 sites)
 

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // RawClientOption adjusts the TLS configuration MutualTLSClientConnFromFiles
@@ -72,7 +74,7 @@ func MutualTLSClientConnFromFiles(
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	tlsConn := tls.Client(raw, cfg)
+	tlsConn := trust.Client(raw, cfg)
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return fail(fmt.Errorf("mtls: client handshake: %w", err))
 	}

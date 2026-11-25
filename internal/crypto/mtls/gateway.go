@@ -79,6 +79,6 @@ func GatewayDial(ctx context.Context, addr string, agentCAPEM []byte, spiffeID s
 	if err != nil {
 		return nil, err
 	}
-	d := &tls.Dialer{Config: cfg}
+	d := trust.Dialer(nil, cfg)
 	return d.DialContext(ctx, "tcp", addr)
 }

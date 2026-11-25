@@ -6,7 +6,6 @@ package ldapbind
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +17,7 @@ import (
 	"time"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 var (
@@ -113,7 +113,7 @@ func dialVerifiedDirectory(ctx context.Context, endpoint, dn string, password, c
 		}
 		messageID++
 	}
-	encrypted := tls.Client(raw, config)
+	encrypted := trust.Client(raw, config)
 	if err := encrypted.HandshakeContext(bounded); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTLS, err)
 	}

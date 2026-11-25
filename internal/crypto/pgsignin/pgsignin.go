@@ -229,7 +229,7 @@ func negotiateTLS(conn net.Conn, target *Target) (net.Conn, error) {
 		}
 		config.RootCAs = roots
 	}
-	tlsConn := tls.Client(conn, trust.HardenTLSConfig(config))
+	tlsConn := trust.Client(conn, config)
 	if err := tlsConn.Handshake(); err != nil {
 		return nil, fmt.Errorf("pgsignin: the database's TLS certificate does not verify: %w", err)
 	}

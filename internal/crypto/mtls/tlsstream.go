@@ -11,6 +11,8 @@ import (
 	"net"
 	"syscall"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // Listener wraps ln in TLS with this server certificate for a plain TLS
@@ -66,7 +68,7 @@ func DialVerifiedTCPWithClientCert(ctx context.Context, addr, serverName string,
 		}
 		config.Certificates = []tls.Certificate{cert}
 	}
-	dialer := tls.Dialer{NetDialer: &net.Dialer{Control: control}, Config: config}
+	dialer := trust.Dialer(&net.Dialer{Control: control}, config)
 	started := time.Now()
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
