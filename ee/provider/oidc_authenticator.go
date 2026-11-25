@@ -170,7 +170,7 @@ func (a *OIDCAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 	}
 	operator := Operator{ID: claims.Sub, Email: strings.TrimSpace(claims.Email), Role: role, Ceiling: role, MFA: mfa}
 	if a.cfg.Directory != nil {
-		identity, err := a.cfg.Directory.ResolveOperator(r.Context(), claims.Sub)
+		identity, err := a.cfg.Directory.ResolveOperatorByExternalID(r.Context(), claims.Sub)
 		if err != nil {
 			if a.cfg.RequireDirectory || !errors.Is(err, ErrNotFound) {
 				return Operator{}, false

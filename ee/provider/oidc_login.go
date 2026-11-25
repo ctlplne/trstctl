@@ -300,9 +300,15 @@ func (l *OIDCLogin) bindDirectory(ctx context.Context, operator Operator) (Opera
 	if directory == nil {
 		return operator, !l.cfg.Verifier.RequireDirectory
 	}
+	// The signed ID token was bound to externalId before this session was
+	// issued. Its subject is now the canonical operator ID, so every cookie
+	// request rechecks that exact row for offboarding and role changes.
 	identity, err := directory.ResolveOperator(ctx, operator.ID)
 	if err != nil {
 		return operator, !l.cfg.Verifier.RequireDirectory && errors.Is(err, ErrNotFound)
+	}
+	if identity.ID != operator.ID {
+		return Operator{}, false
 	}
 	if !identity.Active {
 		return Operator{}, false

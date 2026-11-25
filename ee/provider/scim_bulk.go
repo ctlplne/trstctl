@@ -108,7 +108,7 @@ func (h *providerSCIMHandler) bulkOperation(ctx context.Context, token SCIMToken
 			return fail(scim.BulkRefusal{Status: http.StatusBadRequest, ScimType: "invalidPath", Detail: "operation path must name a user id"})
 		}
 		current, rerr := h.access.ResolveOperator(ctx, id)
-		if rerr != nil {
+		if rerr != nil || current.ID != id {
 			return fail(ErrNotFound)
 		}
 		identity, status, err = h.bulkUserChange(ctx, token, method, current, data, key, binding)
@@ -173,6 +173,8 @@ func providerSCIMMutationStatus(err error) (int, string, string) {
 		return refusal.Status, refusal.ScimType, refusal.Detail
 	case errors.Is(err, ErrNotFound):
 		return http.StatusNotFound, "", "user not found"
+	case errors.Is(err, ErrOperatorIdentityAmbiguous):
+		return http.StatusConflict, "uniqueness", "operator reference matches multiple provider operators"
 	case errors.Is(err, ErrMutationConflict):
 		return http.StatusConflict, "uniqueness", "idempotency key was reused for a different SCIM command"
 	case errors.Is(err, ErrMutationPersistence):

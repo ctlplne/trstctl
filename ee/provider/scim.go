@@ -182,7 +182,7 @@ func (h *providerSCIMHandler) userByID(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 	current, err := h.access.ResolveOperator(r.Context(), id)
-	if err != nil {
+	if err != nil || current.ID != id {
 		writeProviderSCIMError(w, http.StatusNotFound, "", "user not found")
 		return
 	}
@@ -283,8 +283,24 @@ func (h *providerSCIMHandler) upsertUser(ctx context.Context, token SCIMToken, p
 		}
 	}
 	current, currentErr := h.access.ResolveOperator(ctx, lookup)
+	if errors.Is(currentErr, ErrOperatorIdentityAmbiguous) {
+		return OperatorIdentity{}, scim.BulkRefusal{Status: http.StatusConflict, ScimType: "uniqueness",
+			Detail: "operator reference matches multiple provider operators"}
+	}
 	if currentErr != nil && !errors.Is(currentErr, ErrNotFound) {
 		return OperatorIdentity{}, currentErr
+	}
+	if currentErr == nil {
+		switch {
+		case pathID != "" && current.ID != strings.TrimSpace(pathID):
+			return OperatorIdentity{}, ErrNotFound
+		case pathID == "" && externalID != "" && current.ExternalID != externalID:
+			return OperatorIdentity{}, scim.BulkRefusal{Status: http.StatusConflict, ScimType: "uniqueness",
+				Detail: "externalId is already held in another operator identifier"}
+		case pathID == "" && externalID == "" && current.UserName != userName:
+			return OperatorIdentity{}, scim.BulkRefusal{Status: http.StatusConflict, ScimType: "uniqueness",
+				Detail: "userName is already held in another operator identifier"}
+		}
 	}
 	role := providerRoleFromSCIM(in.Roles)
 	if role == "" && currentErr == nil {
@@ -338,22 +354,30 @@ func (h *providerSCIMHandler) upsertUser(ctx context.Context, token SCIMToken, p
 	} else {
 		identity.DeprovisionedAt = time.Time{}
 	}
-	// LS-1-L2: provider_operators is unique on user_name. A user with a new
-	// external ID under a userName another operator holds would append an
-	// event whose projection then meets that index, so it is refused before
-	// anything is appended, under the authority fence its append takes.
+	// Resolve every proposed identifier against every column while the same
+	// authority fence protects the append. Per-column SQL indexes cannot
+	// reject a cross-column or generated-ID collision.
 	var out OperatorIdentity
 	err := h.withMutationFence(ctx, func(ctx context.Context) error {
-		holder, err := h.access.ResolveOperator(ctx, userName)
-		switch {
-		case err == nil && holder.ID != identity.ID && holder.UserName == userName:
-			return scim.BulkRefusal{Status: http.StatusConflict, ScimType: "uniqueness",
-				Detail: "userName is already held by another provider operator"}
-		case err != nil && !errors.Is(err, ErrNotFound):
-			return err
+		for _, candidate := range []string{identity.ID, identity.ExternalID, identity.UserName} {
+			if candidate == "" {
+				continue
+			}
+			holder, err := h.access.ResolveOperator(ctx, candidate)
+			switch {
+			case errors.Is(err, ErrOperatorIdentityAmbiguous):
+				return scim.BulkRefusal{Status: http.StatusConflict, ScimType: "uniqueness",
+					Detail: "operator identifier matches multiple provider operators"}
+			case err != nil && !errors.Is(err, ErrNotFound):
+				return err
+			case err == nil && holder.ID != identity.ID:
+				return scim.BulkRefusal{Status: http.StatusConflict, ScimType: "uniqueness",
+					Detail: "operator identifier is already held by another provider operator"}
+			}
 		}
-		out, err = h.emitIdentity(ctx, token, typ, identity, key, binding)
-		return err
+		var appendErr error
+		out, appendErr = h.emitIdentity(ctx, token, typ, identity, key, binding)
+		return appendErr
 	})
 	return out, err
 }

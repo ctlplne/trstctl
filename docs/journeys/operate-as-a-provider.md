@@ -189,7 +189,9 @@ signs (`sub`). When Provider SCIM is enabled, provision that employee first with
 the signed subject as their SCIM `externalId`. The command resolves the subject
 to the directory operator ID used by authentication and prints that effective ID.
 It also accepts the SCIM `userName` or canonical directory ID. Missing or inactive
-employees cannot receive new grants; an unreadable directory fails closed.
+employees cannot receive new grants; an ambiguous reference or unreadable
+directory fails closed. SCIM rejects an identifier that another operator holds
+as a canonical ID, `externalId`, or `userName` with 409 `uniqueness`.
 Without SCIM, an unknown subject can still receive the initial bootstrap grant.
 
 Use `-revoke` with the same operator reference, customer and operations and a new

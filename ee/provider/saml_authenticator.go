@@ -120,7 +120,7 @@ func (a *SAMLAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 		return Operator{}, false
 	}
 	operator := Operator{ID: session.Subject, Email: session.Email, Role: sessionRole, MFA: true, Session: session.ID}
-	return a.bindDirectory(r.Context(), operator)
+	return a.bindDirectory(r.Context(), operator, true)
 }
 
 // AuthenticateLogout recognizes the same signed, unexpired Provider cookie
@@ -299,18 +299,29 @@ func (a *SAMLAuthenticator) operatorFromAssertion(r *http.Request, assertion sam
 		email = strings.TrimSpace(values[0])
 	}
 	operator := Operator{ID: subject, Email: email, Role: role, MFA: true}
-	return a.bindDirectory(r.Context(), operator)
+	return a.bindDirectory(r.Context(), operator, false)
 }
 
-func (a *SAMLAuthenticator) bindDirectory(ctx context.Context, operator Operator) (Operator, bool) {
+func (a *SAMLAuthenticator) bindDirectory(ctx context.Context, operator Operator, session bool) (Operator, bool) {
 	if a.cfg.Directory == nil {
 		return operator, !a.cfg.RequireDirectory
 	}
-	identity, err := a.cfg.Directory.ResolveOperator(ctx, operator.ID)
+	var identity OperatorIdentity
+	var err error
+	if session {
+		// Browser sessions carry the canonical operator ID assigned after the
+		// signed assertion was bound to externalId at ACS.
+		identity, err = a.cfg.Directory.ResolveOperator(ctx, operator.ID)
+	} else {
+		identity, err = a.cfg.Directory.ResolveOperatorByExternalID(ctx, operator.ID)
+	}
 	if err != nil {
 		// Without SCIM an IdP-signed role may bootstrap an operator, but an
 		// unavailable directory must never look like an absent identity.
 		return operator, !a.cfg.RequireDirectory && errors.Is(err, ErrNotFound)
+	}
+	if session && identity.ID != operator.ID {
+		return Operator{}, false
 	}
 	if !identity.Active {
 		return Operator{}, false

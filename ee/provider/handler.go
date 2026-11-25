@@ -1403,6 +1403,8 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusServiceUnavailable, "customer_health_unavailable"
 	case errors.Is(err, ErrTenantStateConflict):
 		status, code = http.StatusConflict, "customer_state_conflict"
+	case errors.Is(err, ErrOperatorIdentityAmbiguous):
+		status, code = http.StatusConflict, "operator_identity_ambiguous"
 	case errors.Is(err, ErrRoleBuiltIn):
 		status, code = http.StatusConflict, "role_built_in"
 	case errors.Is(err, ErrRoleInUse):

@@ -63,10 +63,14 @@ type OperatorAccess struct {
 }
 
 // OperatorDirectory is the request-time lifecycle gate shared by OIDC and
-// SAML. Subject may match the canonical id, SCIM externalId, or userName.
+// SAML. Federation subjects bind only to SCIM externalId; administrative
+// references may use aliases only when the reference names exactly one row.
 type OperatorDirectory interface {
 	ResolveOperator(context.Context, string) (OperatorIdentity, error)
+	ResolveOperatorByExternalID(context.Context, string) (OperatorIdentity, error)
 }
+
+var ErrOperatorIdentityAmbiguous = errors.New("provider: operator reference matches multiple identities")
 
 // OperatorAccessStore adds the admin inventory to the lifecycle lookup.
 type OperatorAccessStore interface {
@@ -85,20 +89,48 @@ func NewPGAccessStore(store *corestore.Store) *PGAccessStore {
 }
 
 func (p *PGAccessStore) ResolveOperator(ctx context.Context, subject string) (OperatorIdentity, error) {
+	return p.resolveOperator(ctx, subject, false)
+}
+
+func (p *PGAccessStore) ResolveOperatorByExternalID(ctx context.Context, subject string) (OperatorIdentity, error) {
+	return p.resolveOperator(ctx, subject, true)
+}
+
+func (p *PGAccessStore) resolveOperator(ctx context.Context, subject string, externalOnly bool) (OperatorIdentity, error) {
 	if p == nil || p.store == nil || strings.TrimSpace(subject) == "" {
 		return OperatorIdentity{}, ErrNotFound
 	}
+	subject = strings.TrimSpace(subject)
 	//trstctl:system-query — Provider-global authority is read before a customer tenant is selected; the fixed tenant_id is still explicit and the table is FORCE RLS.
-	row := p.store.SystemPool().QueryRow(ctx, `SELECT id, external_id, user_name, email, display_name,
+	rows, err := p.store.SystemPool().Query(ctx, `SELECT id, external_id, user_name, email, display_name,
 		role, active, source, created_at, updated_at, deprovisioned_at, revision_event_id
 		FROM provider_operators
-		WHERE tenant_id = $1 AND (id = $2 OR external_id = $2 OR user_name = $2)`,
-		providerAuthorityTenant, strings.TrimSpace(subject))
-	identity, err := scanOperatorIdentity(row)
-	if errors.Is(err, pgx.ErrNoRows) {
+		WHERE tenant_id = $1 AND (id = $2 OR external_id = $2 OR user_name = $2)
+		LIMIT 2`, providerAuthorityTenant, subject)
+	if err != nil {
+		return OperatorIdentity{}, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return OperatorIdentity{}, err
+		}
 		return OperatorIdentity{}, ErrNotFound
 	}
-	return identity, err
+	identity, err := scanOperatorIdentity(rows)
+	if err != nil {
+		return OperatorIdentity{}, err
+	}
+	if rows.Next() {
+		return OperatorIdentity{}, ErrOperatorIdentityAmbiguous
+	}
+	if err := rows.Err(); err != nil {
+		return OperatorIdentity{}, err
+	}
+	if externalOnly && identity.ExternalID != subject {
+		return OperatorIdentity{}, ErrNotFound
+	}
+	return identity, nil
 }
 
 func (p *PGAccessStore) ListOperatorAccess(ctx context.Context) ([]OperatorAccess, error) {

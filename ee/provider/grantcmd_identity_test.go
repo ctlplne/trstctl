@@ -127,6 +127,10 @@ func (unavailableGrantDirectory) ResolveOperator(context.Context, string) (Opera
 	return OperatorIdentity{}, errors.New("directory unavailable")
 }
 
+func (unavailableGrantDirectory) ResolveOperatorByExternalID(context.Context, string) (OperatorIdentity, error) {
+	return OperatorIdentity{}, errors.New("directory unavailable")
+}
+
 func TestGrantOperatorResolutionFailsClosed(t *testing.T) {
 	directory := newAUD58AccessStore()
 	directory.identities["canonical"] = OperatorIdentity{

@@ -106,7 +106,7 @@ not this file.
 | `ee/enterpriseauth/scim_writeback_served_test.go:111` | fabricated fixture credential (CWE-798) |
 | `ee/governance/misuse/misuse.go:40` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `ee/managedkeys/signerwiring/gcp_workload_test.go:46` | a stand-in fixture value, not a credential (CWE-798) |
-| `ee/provider/aud58_test.go:173` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
+| `ee/provider/aud58_test.go:192` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `ee/provider/aud59_test.go:22` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/aud60_test.go:16` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/custom_roles_test.go:91` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
@@ -1837,16 +1837,16 @@ not this file.
 | `ee/enterpriseauth/scim_served_test.go:225` | explicit plaintext loopback fixture; the production TLS cookie remains Secure and __Host-prefixed (CWE-1004) |
 | `ee/provider/oidc_login.go:156` | credential cookie is HttpOnly, host-only, strict, and Secure follows the served TLS mode. |
 | `ee/provider/oidc_login.go:165` | non-HttpOnly by design for double-submit CSRF; it is not a credential without the HttpOnly session. |
-| `ee/provider/oidc_login.go:331` | deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614). |
-| `ee/provider/oidc_login.go:335` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
-| `ee/provider/oidc_login.go:352` | short-lived login state, HttpOnly; Lax so the IdP's top-level GET redirect returns it (CWE-614). |
-| `ee/provider/oidc_login.go:359` | expiring login state (CWE-614). |
+| `ee/provider/oidc_login.go:337` | deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614). |
+| `ee/provider/oidc_login.go:341` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
+| `ee/provider/oidc_login.go:358` | short-lived login state, HttpOnly; Lax so the IdP's top-level GET redirect returns it (CWE-614). |
+| `ee/provider/oidc_login.go:365` | expiring login state (CWE-614). |
 | `ee/provider/saml_authenticator.go:199` | credential cookie is HttpOnly, host-only, strict, and Secure follows the served TLS mode. |
 | `ee/provider/saml_authenticator.go:208` | non-HttpOnly by design for double-submit CSRF; it is not a credential without the HttpOnly session. |
 | `ee/provider/saml_authenticator.go:230` | deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614). |
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
-| `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
-| `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
+| `ee/provider/saml_authenticator.go:349` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
+| `ee/provider/saml_authenticator.go:356` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
 | `internal/agent/accessgateway/browser_tunnel.go:144` | CLI loopback uses plain HTTP, so Secure would prevent the required cookie (CWE-614) |
 | `internal/agent/accessgateway/webconsole.go:974` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
 | `internal/agent/accessgateway/webconsole_test.go:77` | test browser connects over plain HTTP loopback, where Secure would suppress the session cookie (CWE-614) |

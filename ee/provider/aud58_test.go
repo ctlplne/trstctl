@@ -41,12 +41,31 @@ func newAUD58AccessStore() *aud58AccessStore {
 func (s *aud58AccessStore) ResolveOperator(_ context.Context, subject string) (OperatorIdentity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var match OperatorIdentity
+	found := false
 	for _, identity := range s.identities {
 		if identity.ID == subject || identity.ExternalID == subject || identity.UserName == subject {
-			return identity, nil
+			if found {
+				return OperatorIdentity{}, ErrOperatorIdentityAmbiguous
+			}
+			match, found = identity, true
 		}
 	}
+	if found {
+		return match, nil
+	}
 	return OperatorIdentity{}, ErrNotFound
+}
+
+func (s *aud58AccessStore) ResolveOperatorByExternalID(ctx context.Context, subject string) (OperatorIdentity, error) {
+	identity, err := s.ResolveOperator(ctx, subject)
+	if err != nil || identity.ExternalID != subject {
+		if err != nil {
+			return OperatorIdentity{}, err
+		}
+		return OperatorIdentity{}, ErrNotFound
+	}
+	return identity, nil
 }
 
 func (s *aud58AccessStore) ListOperatorAccess(context.Context) ([]OperatorAccess, error) {
