@@ -515,8 +515,14 @@ domain:
   approved `ttl_seconds` to at least SPIRE's `ca_ttl`. A CSR from another token,
   for another trust domain, with another spec or with a longer lifetime is refused
   with 422 and changes nothing.
-- Each CA signed under the approval carries a URI name constraint for its trust
-  domain, so an SVID that CA mints for another trust domain does not verify.
+- Each CA signed under the approval carries a URI host constraint for its trust
+  domain, excludes every IP and email name, and excludes DNS unless the approved
+  spec explicitly lists permitted DNS domains. Its EKUs are limited to
+  `serverAuth` and `clientAuth`; a grant requesting another EKU is refused. The
+  signed certificate carries these constraints, so a leaf with an extra name
+  outside them fails chain verification. X.509 URI constraints check the host,
+  not the `spiffe` scheme: a relying party that uses URI identity must also
+  require the `spiffe` scheme and the intended trust domain.
 - Every signing is audited: the CSR signing events carry the approval's ceremony
   ID, and `ca.upstream_standing_approval.signed` records the CSR's SHA-256 and the
   serial. The approval counts its signings (`signings`, `last_signed_at`).
@@ -528,7 +534,9 @@ domain:
 
 A served test drives the real plugin through this: after the grant, the plugin
 gets a SPIRE CA with no ceremony; an SVID that CA signs for its trust domain
-verifies against the authority and one for another trust domain does not; CSRs
+verifies against the authority, while leaves with another trust domain or an
+unapproved DNS, IP or email name fail Go verification; stock OpenSSL verification
+was also checked against the signed CA during CR-066 repair. CSRs
 for another trust domain, with a longer lifetime or from another token are
 refused and not counted; the audit trail names the approval and the serial; and
 after revocation the plugin's next CA is refused until a ceremony approves it.

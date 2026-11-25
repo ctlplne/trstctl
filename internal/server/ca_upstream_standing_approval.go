@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 	"time"
@@ -59,7 +60,7 @@ func upstreamStandingApprovalPurpose(caID, principal, trustDomain string, validF
 	if spec.TTLSeconds <= 0 {
 		return "", fmt.Errorf("%w: spec.ttl_seconds, the longest lifetime of a CA it signs, must be positive", api.ErrCAHierarchyInvalid)
 	}
-	if err := validateCASpec(spec); err != nil {
+	if err := validateUpstreamStandingApprovalSpec(spec); err != nil {
 		return "", err
 	}
 	specPurpose, err := hierarchyPurpose("create_intermediate", caID, spec)
@@ -77,6 +78,18 @@ func upstreamStandingApprovalPurpose(caID, principal, trustDomain string, validF
 		return "", err
 	}
 	return "upstream-standing:" + crypto.SHA256Hex(payload), nil
+}
+
+func validateUpstreamStandingApprovalSpec(spec api.CASpec) error {
+	if err := validateCASpec(spec); err != nil {
+		return err
+	}
+	for _, eku := range spec.ExtendedKeyUsages {
+		if eku != "serverAuth" && eku != "clientAuth" {
+			return fmt.Errorf("%w: a SPIRE standing approval can grant only serverAuth or clientAuth", api.ErrCAHierarchyInvalid)
+		}
+	}
+	return nil
 }
 
 // upstreamStandingApprovalCeremonyPurpose validates a grant ceremony against
@@ -238,7 +251,7 @@ func (h *caHierarchyService) issueIntermediateCSRUnderStandingApproval(ctx conte
 	if len(req.CSRDER) == 0 {
 		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: CSR is required", api.ErrCAHierarchyInvalid)
 	}
-	if err := validateCASpec(req.Spec); err != nil {
+	if err := validateUpstreamStandingApprovalSpec(req.Spec); err != nil {
 		return api.CAIssuedIntermediate{}, err
 	}
 	requested, err := crypto.CSRRequestedIdentifiers(req.CSRDER)
@@ -286,9 +299,27 @@ func (h *caHierarchyService) issueIntermediateCSRUnderStandingApproval(ctx conte
 			return fmt.Errorf("%w: the CA spec is not the approved one, or its lifetime is longer than the approved %d seconds",
 				api.ErrCAHierarchyInvalid, approved.TTLSeconds)
 		}
-		// The signed CA vouches for its trust domain's SPIFFE IDs only: a URI
-		// name constraint every verifier enforces.
+		// X.509 constrains the URI host, not its scheme. The grant therefore
+		// covers URIs at this trust-domain host, plus only DNS names the
+		// custodians explicitly included in the approved CA spec. Other name
+		// forms are excluded in the signed certificate, not merely in records.
 		profile.PermittedURIDomains = []string{approval.TrustDomain}
+		if len(req.Spec.PermittedDNSDomains) == 0 {
+			profile.ExcludedDNSDomains = []string{""}
+		}
+		profile.ExcludedIPRanges = []*net.IPNet{
+			{IP: net.IPv4zero.To4(), Mask: net.CIDRMask(0, 32)},
+			{IP: net.IPv6zero.To16(), Mask: net.CIDRMask(0, 128)},
+		}
+		// Go treats an empty excluded email subtree as exclude-all.
+		// OpenSSL 4 treats that empty subtree as no match, but treats an
+		// empty permitted subtree as no email permitted. Carry both so a
+		// relying party using either verifier refuses email-bearing leaves.
+		profile.PermittedEmailAddresses = []string{""}
+		profile.ExcludedEmailAddresses = []string{""}
+		if len(profile.EKUs) == 0 {
+			profile.EKUs = []string{"serverAuth", "clientAuth"}
+		}
 		if err := h.emit(ctx, tenantID, projections.EventCAIntermediateCSRSignRequested, map[string]any{
 			"ca_id": caID, "ceremony_id": approval.CeremonyID, "csr_sha256": csrSHA,
 		}); err != nil {

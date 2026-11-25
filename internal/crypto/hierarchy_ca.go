@@ -39,11 +39,18 @@ type HierarchyCAProfile struct {
 	// verifier enforces, not a note in our records (B6). Exclusion beats
 	// permission in X.509 semantics, which is exactly why it exists here.
 	ExcludedDNSDomains []string
+	// A delegated CA may need to exclude an entire unused name form. An empty
+	// subtree's behavior differs between X.509 verifiers, so the caller must
+	// test the exact signed profile with its supported relying parties.
+	PermittedIPRanges       []*net.IPNet
+	ExcludedIPRanges        []*net.IPNet
+	PermittedEmailAddresses []string
+	ExcludedEmailAddresses  []string
 	// PermittedURIDomains restricts the URIs the CA may certify to these
-	// hosts, in the certificate's name constraints (OD-8: a SPIRE CA a
-	// standing approval signs vouches for its trust domain's SPIFFE IDs
-	// only).
+	// hosts, in the certificate's name constraints. URI name constraints
+	// cover the host, not the URI scheme.
 	PermittedURIDomains []string
+	ExcludedURIDomains  []string
 	MaxPathLen          int
 	EKUs                []string
 	TTL                 time.Duration
@@ -697,20 +704,28 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 	}
 	now := time.Now()
 	tmpl := &x509.Certificate{
-		SerialNumber:                serial,
-		Subject:                     pkix.Name{CommonName: profile.CommonName},
-		NotBefore:                   IssuanceNotBefore(now),
-		NotAfter:                    now.Add(profile.TTL),
-		KeyUsage:                    x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		BasicConstraintsValid:       true,
-		IsCA:                        true,
-		SubjectKeyId:                ski,
-		PermittedDNSDomains:         profile.PermittedDNSDomains,
-		ExcludedDNSDomains:          profile.ExcludedDNSDomains,
-		PermittedURIDomains:         profile.PermittedURIDomains,
-		PermittedDNSDomainsCritical: len(profile.PermittedDNSDomains) > 0 || len(profile.ExcludedDNSDomains) > 0 || len(profile.PermittedURIDomains) > 0,
-		ExtKeyUsage:                 knownEKUs,
-		UnknownExtKeyUsage:          customEKUs,
+		SerialNumber:            serial,
+		Subject:                 pkix.Name{CommonName: profile.CommonName},
+		NotBefore:               IssuanceNotBefore(now),
+		NotAfter:                now.Add(profile.TTL),
+		KeyUsage:                x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid:   true,
+		IsCA:                    true,
+		SubjectKeyId:            ski,
+		PermittedDNSDomains:     profile.PermittedDNSDomains,
+		ExcludedDNSDomains:      profile.ExcludedDNSDomains,
+		PermittedIPRanges:       profile.PermittedIPRanges,
+		ExcludedIPRanges:        profile.ExcludedIPRanges,
+		PermittedEmailAddresses: profile.PermittedEmailAddresses,
+		ExcludedEmailAddresses:  profile.ExcludedEmailAddresses,
+		PermittedURIDomains:     profile.PermittedURIDomains,
+		ExcludedURIDomains:      profile.ExcludedURIDomains,
+		PermittedDNSDomainsCritical: len(profile.PermittedDNSDomains) > 0 || len(profile.ExcludedDNSDomains) > 0 ||
+			len(profile.PermittedIPRanges) > 0 || len(profile.ExcludedIPRanges) > 0 ||
+			len(profile.PermittedEmailAddresses) > 0 || len(profile.ExcludedEmailAddresses) > 0 ||
+			len(profile.PermittedURIDomains) > 0 || len(profile.ExcludedURIDomains) > 0,
+		ExtKeyUsage:        knownEKUs,
+		UnknownExtKeyUsage: customEKUs,
 	}
 	if profile.MaxPathLen >= 0 {
 		tmpl.MaxPathLen = profile.MaxPathLen

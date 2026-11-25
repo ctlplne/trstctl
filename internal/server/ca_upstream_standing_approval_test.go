@@ -61,6 +61,7 @@ func TestUpstreamStandingApprovalPurposeBindsEveryFieldOD8(t *testing.T) {
 		"no validity":                {caID, "spire-server-a", "od8.test", 0, spec},
 		"more than 90 days":          {caID, "spire-server-a", "od8.test", 90*86400 + 1, spec},
 		"no CA lifetime":             {caID, "spire-server-a", "od8.test", 86400, with(func(s *api.CASpec) { s.TTLSeconds = 0 })},
+		"non-TLS CA purpose":         {caID, "spire-server-a", "od8.test", 86400, with(func(s *api.CASpec) { s.ExtendedKeyUsages = []string{"codeSigning"} })},
 	}
 	for name, v := range refused {
 		if _, err := upstreamStandingApprovalPurpose(v.caID, v.principal, v.trustDomain, v.validFor, v.spec); !errors.Is(err, api.ErrCAHierarchyInvalid) {

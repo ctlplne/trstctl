@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -179,6 +180,9 @@ ttl_seconds = 3600
 	if err != nil || !info.IsCA || info.Issuer != "CN=od8 root" {
 		t.Fatalf("signed SPIRE CA = %+v %v", info, err)
 	}
+	if len(info.ExtKeyUsages) != 2 || !slices.Contains(info.ExtKeyUsages, "serverAuth") || !slices.Contains(info.ExtKeyUsages, "clientAuth") {
+		t.Errorf("SPIRE CA EKUs = %v, want only TLS server and client authentication", info.ExtKeyUsages)
+	}
 	rootBlock, _ := pem.Decode([]byte(root.CertificatePEM))
 	if rootBlock == nil || string(resp.GetUpstreamX509Roots()[0].GetAsn1()) != string(rootBlock.Bytes) {
 		t.Fatal("the upstream root is not the authority's certificate")
@@ -186,14 +190,14 @@ ttl_seconds = 3600
 	// The signed CA vouches for its trust domain only: an SVID SPIRE mints
 	// under it chains to the authority for spiffe://od8.test and not for
 	// another trust domain (the CA's URI name constraint).
-	svid := func(id string) error {
+	svid := func(tmpl crypto.CertificateRequestTemplate) error {
 		t.Helper()
 		leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer leafKey.Destroy()
-		leafCSR, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{URIs: []string{id}}, leafKey)
+		leafCSR, err := crypto.CreateCertificateRequest(tmpl, leafKey)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -209,11 +213,22 @@ ttl_seconds = 3600
 		_, err = crypto.VerifyX509SVID(append(append([]byte{}, leafDER...), spireCA...), rootBlock.Bytes, keyBlock.Bytes, time.Now())
 		return err
 	}
-	if err := svid("spiffe://od8.test/workload"); err != nil {
+	if err := svid(crypto.CertificateRequestTemplate{URIs: []string{"spiffe://od8.test/workload"}}); err != nil {
 		t.Fatalf("an SVID in the trust domain under the signed CA: %v", err)
 	}
-	if err := svid("spiffe://other.test/workload"); err == nil {
+	if err := svid(crypto.CertificateRequestTemplate{URIs: []string{"spiffe://other.test/workload"}}); err == nil {
 		t.Fatal("an SVID for another trust domain chains under the signed CA")
+	}
+	for name, tmpl := range map[string]crypto.CertificateRequestTemplate{
+		"DNS":   {URIs: []string{"spiffe://od8.test/workload"}, DNSNames: []string{"admin.victim.example"}},
+		"IP":    {URIs: []string{"spiffe://od8.test/workload"}, IPAddresses: []net.IP{net.ParseIP("192.0.2.42")}},
+		"email": {URIs: []string{"spiffe://od8.test/workload"}, EmailAddresses: []string{"owner@victim.example"}},
+	} {
+		t.Run("refuse extra "+name+" identity", func(t *testing.T) {
+			if err := svid(tmpl); err == nil {
+				t.Errorf("SPIRE-held CA certified an unrelated %s identity under a valid SPIFFE URI", name)
+			}
+		})
 	}
 
 	list := func() servedStandingApproval {

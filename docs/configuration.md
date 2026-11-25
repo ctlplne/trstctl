@@ -5444,8 +5444,8 @@ environment variables.
 | `common_name` | no | Subject common name for the SPIRE intermediate; defaults to `SPIRE Server CA`. |
 | `ttl_seconds` | no | Intermediate CA TTL. If SPIRE sends a preferred TTL, the plugin honors SPIRE's value for that mint. Under a standing approval, a TTL longer than the approval's `ttl_seconds` is refused. |
 | `max_path_len` | no | Path length for the SPIRE intermediate; use `0` so it can sign workload leaves but not another CA below it. |
-| `permitted_dns_domains` | no | Optional DNS name constraints copied into the intermediate CA profile. |
-| `extended_key_usages` | no | Optional extended key usages to request for the intermediate profile. |
+| `permitted_dns_domains` | no | Optional DNS name constraints copied into the intermediate CA profile. Under a standing approval, omitting this field excludes every DNS name from the signed CA; an explicit list must be part of the reviewed grant. |
+| `extended_key_usages` | no | Optional extended key usages to request for the intermediate profile. Under a standing approval, only `serverAuth` and `clientAuth` are accepted; omitting the field signs both. |
 | `idempotency_prefix` | no | Prefix for the stable `Idempotency-Key`; defaults to `spire-upstream`. |
 | `jwt_key_refresh_seconds` | no | How often an open JWT key subscription, and the local bundle subscription SPIRE keeps open (A205-L3), ask trstctl for keys published since and for the root `ca_authority_id` chains to; defaults to `30`. |
 
