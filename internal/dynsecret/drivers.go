@@ -9,13 +9,16 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/dbdsn"
+	"trstctl.com/trstctl/internal/crypto/scram"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -31,11 +34,17 @@ func connectPostgresAdmin(ctx context.Context, adminDSN []byte, transport *Datab
 	return conn, nil
 }
 
-// createPostgresRole sends the generated password as a bytea bind parameter.
+// createPostgresRole sends only a client-computed SCRAM verifier as a bytea
+// bind parameter; even log_statement=all cannot record the lease password.
 // PostgreSQL utility statements do not accept bind parameters in PASSWORD, so a
-// transaction-local server setting carries the bytes into a short DO block. The
+// transaction-local server setting carries the verifier into a short DO block. The
 // dynamic SQL is built inside PostgreSQL; no Go string ever contains the secret.
 func createPostgresRole(ctx context.Context, conn *pgx.Conn, user string, password []byte, validUntil string) error {
+	verifier, err := scram.PostgreSQLVerifier(password)
+	if err != nil {
+		return errPostgresRoleCreate
+	}
+	defer secret.Wipe(verifier)
 	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return errPostgresRoleCreate
@@ -43,7 +52,7 @@ func createPostgresRole(ctx context.Context, conn *pgx.Conn, user string, passwo
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx,
 		`SELECT set_config('trstctl.dynamic_secret_password', convert_from($1::bytea, 'UTF8'), true)`,
-		password); err != nil {
+		verifier); err != nil {
 		return errPostgresRoleCreate
 	}
 	statement := `DO $trstctl$
@@ -69,6 +78,11 @@ $trstctl$`
 // way createPostgresRole does. It refuses a role that does not exist: a
 // two-user account is provisioned, with its grants, by the database's owner.
 func setPostgresRolePassword(ctx context.Context, conn *pgx.Conn, role string, password []byte) error {
+	verifier, err := scram.PostgreSQLVerifier(password)
+	if err != nil {
+		return errPostgresRolePassword
+	}
+	defer secret.Wipe(verifier)
 	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return errPostgresRolePassword
@@ -80,7 +94,7 @@ func setPostgresRolePassword(ctx context.Context, conn *pgx.Conn, role string, p
 	}
 	if _, err := tx.Exec(ctx,
 		`SELECT set_config('trstctl.dynamic_secret_password', convert_from($1::bytea, 'UTF8'), true)`,
-		password); err != nil {
+		verifier); err != nil {
 		return errPostgresRolePassword
 	}
 	statement := `DO $trstctl$
@@ -108,43 +122,93 @@ func OpenMySQLExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
 	return OpenMySQLExecutorWithTransport(ctx, adminDSN, nil)
 }
 
-// createMySQLUser keeps the generated password as a []byte bind while handling
-// MySQL's CREATE USER grammar, which does not accept a parameter marker directly
-// in IDENTIFIED BY. A pinned database/sql connection stores the byte bind in a
-// session variable, constructs the utility statement inside MySQL, executes it,
-// then clears and deallocates every session object before returning.
-func createMySQLUser(ctx context.Context, executor SQLExecutor, account string, password []byte) error {
+// createMySQLUser keeps lease passwords out of separately logged SQL. MySQL
+// 8.4 creates the password inside its redacted CREATE USER statement and
+// returns it as a result row. MariaDB has no matching result form; it receives
+// only a client-computed mysql_native_password verifier, never plaintext, in
+// the session variable that constructs its CREATE USER statement.
+func createMySQLUser(ctx context.Context, executor SQLExecutor, account, user, host string) ([]byte, error) {
 	type connectionProvider interface {
 		Conn(context.Context) (*sql.Conn, error)
 	}
 	provider, ok := executor.(connectionProvider)
 	if !ok {
 		// Test/third-party executors may natively support parameters in CREATE USER.
-		// The shipped go-sql-driver/mysql path always takes the pinned branch below.
-		if _, err := executor.ExecContext(ctx, "CREATE USER "+account+" IDENTIFIED BY ?", password); err != nil {
-			return errMySQLUserCreate
+		// The shipped go-sql-driver/mysql path always takes a pinned branch below.
+		password, err := randomSecretHex(24)
+		if err != nil {
+			return nil, errMySQLUserCreate
 		}
-		return nil
+		if _, err := executor.ExecContext(ctx, "CREATE USER "+account+" IDENTIFIED BY ?", password); err != nil {
+			secret.Wipe(password)
+			return nil, errMySQLUserCreate
+		}
+		return password, nil
 	}
 	conn, err := provider.Conn(ctx)
 	if err != nil {
-		return errMySQLUserCreate
+		return nil, errMySQLUserCreate
 	}
 	defer func() { _ = conn.Close() }()
-	defer func() {
-		_, _ = conn.ExecContext(context.Background(), `SET @trstctl_dynamic_password = NULL, @trstctl_create_user = NULL`)
-	}()
-	if _, err := conn.ExecContext(ctx, `SET @trstctl_dynamic_password = ?`, password); err != nil {
-		return errMySQLUserCreate
+	var version string
+	if err := conn.QueryRowContext(ctx, `SELECT VERSION()`).Scan(&version); err != nil {
+		return nil, errMySQLUserCreate
 	}
-	prefix := "CREATE USER " + account + " IDENTIFIED BY "
+	if strings.Contains(strings.ToLower(version), "mariadb") {
+		return createMariaDBUser(ctx, conn, account)
+	}
+	rows, err := conn.QueryContext(ctx, "CREATE USER "+account+" IDENTIFIED BY RANDOM PASSWORD")
+	if err != nil {
+		return nil, errMySQLUserCreate
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		return nil, errMySQLUserCreate
+	}
+	var gotUser, gotHost string
+	var factor int
+	var password []byte
+	if err := rows.Scan(&gotUser, &gotHost, &password, &factor); err != nil {
+		secret.Wipe(password)
+		return nil, errMySQLUserCreate
+	}
+	if gotUser != user || gotHost != host || factor != 1 || len(password) == 0 || rows.Next() || rows.Err() != nil {
+		secret.Wipe(password)
+		return nil, errMySQLUserCreate
+	}
+	return password, nil
+}
+
+func createMariaDBUser(ctx context.Context, conn *sql.Conn, account string) ([]byte, error) {
+	password, err := randomSecretHex(24)
+	if err != nil {
+		return nil, errMySQLUserCreate
+	}
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			secret.Wipe(password)
+		}
+	}()
+	verifier, err := crypto.MySQLNativePasswordVerifier(password)
+	if err != nil {
+		return nil, errMySQLUserCreate
+	}
+	defer secret.Wipe(verifier)
+	defer func() {
+		_, _ = conn.ExecContext(context.Background(), `SET @trstctl_dynamic_password_verifier = NULL, @trstctl_create_user = NULL`)
+	}()
+	if _, err := conn.ExecContext(ctx, `SET @trstctl_dynamic_password_verifier = ?`, verifier); err != nil {
+		return nil, errMySQLUserCreate
+	}
+	prefix := "CREATE USER " + account + " IDENTIFIED VIA mysql_native_password USING "
 	if _, err := conn.ExecContext(ctx,
-		`SET @trstctl_create_user = CONCAT(?, QUOTE(CONVERT(@trstctl_dynamic_password USING utf8mb4)))`,
+		`SET @trstctl_create_user = CONCAT(?, QUOTE(CONVERT(@trstctl_dynamic_password_verifier USING utf8mb4)))`,
 		prefix); err != nil {
-		return errMySQLUserCreate
+		return nil, errMySQLUserCreate
 	}
 	if _, err := conn.ExecContext(ctx, `PREPARE trstctl_create_user_stmt FROM @trstctl_create_user`); err != nil {
-		return errMySQLUserCreate
+		return nil, errMySQLUserCreate
 	}
 	prepared := true
 	defer func() {
@@ -153,13 +217,14 @@ func createMySQLUser(ctx context.Context, executor SQLExecutor, account string, 
 		}
 	}()
 	if _, err := conn.ExecContext(ctx, `EXECUTE trstctl_create_user_stmt`); err != nil {
-		return errMySQLUserCreate
+		return nil, errMySQLUserCreate
 	}
 	if _, err := conn.ExecContext(ctx, `DEALLOCATE PREPARE trstctl_create_user_stmt`); err != nil {
-		return errMySQLUserCreate
+		return nil, errMySQLUserCreate
 	}
 	prepared = false
-	return nil
+	succeeded = true
+	return password, nil
 }
 
 // MongoDriverAdmin is the official MongoDB-driver implementation of MongoAdmin.

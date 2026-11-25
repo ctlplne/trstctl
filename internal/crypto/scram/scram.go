@@ -43,6 +43,35 @@ func NewRandom(user string, password []byte) (*Client, error) {
 	return New(user, password, base64.StdEncoding.EncodeToString(nonce)), nil
 }
 
+// PostgreSQLVerifier builds the SCRAM-SHA-256 verifier accepted by CREATE ROLE
+// and ALTER ROLE. The server may log this verifier, but never receives the
+// generated plaintext password in the account-management path (CR-596).
+// The caller must wipe the returned byte slice after the database call.
+func PostgreSQLVerifier(password []byte) ([]byte, error) {
+	if len(password) == 0 {
+		return nil, errors.New("scram: a PostgreSQL verifier needs a password")
+	}
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, err
+	}
+	const iterations = 4096
+	salted := pbkdf2SHA256(password, salt, iterations)
+	defer secret.Wipe(salted)
+	clientKey := hmacSHA256(salted, []byte("Client Key"))
+	defer secret.Wipe(clientKey)
+	storedKey := sha256.Sum256(clientKey)
+	defer secret.Wipe(storedKey[:])
+	serverKey := hmacSHA256(salted, []byte("Server Key"))
+	defer secret.Wipe(serverKey)
+	verifier := []byte("SCRAM-SHA-256$4096:")
+	verifier = base64.StdEncoding.AppendEncode(verifier, salt)
+	verifier = append(verifier, '$')
+	verifier = base64.StdEncoding.AppendEncode(verifier, storedKey[:])
+	verifier = append(verifier, ':')
+	return base64.StdEncoding.AppendEncode(verifier, serverKey), nil
+}
+
 // First is the client-first message (no channel binding).
 func (c *Client) First() []byte { return []byte("n,," + c.firstBare) }
 

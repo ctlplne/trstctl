@@ -524,18 +524,15 @@ func (b *MySQLBackend) CreateCredential(ctx context.Context, req GenerateRequest
 			return "", nil, fmt.Errorf("dynsecret mysql: clean interrupted user: %w", err)
 		}
 	}
-	password, err := randomSecretHex(24)
-	if err != nil {
-		return "", nil, err
-	}
-	defer secret.Wipe(password)
-
 	account := mysqlAccount(user, b.accountHost)
-	if err := createMySQLUser(ctx, b.exec, account, password); err != nil {
+	password, err := createMySQLUser(ctx, b.exec, account, user, b.accountHost)
+	if err != nil {
 		// database/sql drivers may include bind values in their errors. Never return
 		// an error that can retain the generated password as an immutable string.
+		_ = b.Revoke(ctx, user)
 		return "", nil, errMySQLUserCreate
 	}
+	defer secret.Wipe(password)
 	privileges := "SELECT"
 	if access == dbaccess.ReadWrite {
 		privileges = "SELECT, INSERT, UPDATE, DELETE"

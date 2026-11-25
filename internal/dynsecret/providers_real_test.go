@@ -765,9 +765,9 @@ type echoingSQLExec struct {
 }
 
 func (e *echoingSQLExec) ExecContext(_ context.Context, query string, args ...any) (sql.Result, error) {
-	e.query = query
 	if len(args) > 0 {
 		if password, ok := args[0].([]byte); ok {
+			e.query = query
 			e.password = bytes.Clone(password)
 			e.queryContainsPassword = strings.Contains(query, string(password))
 			return nil, fmt.Errorf("driver echoed %s", password)

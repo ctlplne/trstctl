@@ -797,6 +797,15 @@ The MySQL backend requires an explicit `account_host` for every generated
 account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
+On MySQL 8.0.18 or later, the server generates the lease password inside
+`CREATE USER ... IDENTIFIED BY RANDOM PASSWORD` and returns it to trstctl; the
+password never appears in a separate statement that general logging can record.
+MariaDB uses a client-computed `mysql_native_password` verifier, so its
+account-management statement and any general-log entry contain the verifier,
+not the plaintext lease password. PostgreSQL sends a client-computed
+SCRAM-SHA-256 verifier for both create and rotate; a target configured with
+`log_statement=all` can record that verifier but not the lease password or its
+bytea encoding. Workload PostgreSQL clients must support SCRAM-SHA-256.
 
 - `GET /api/v1/secrets/leases/providers` returns fifty-six safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `iosxe`,

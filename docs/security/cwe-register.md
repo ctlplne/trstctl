@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3648 annotated sites across 35 rules. Each row is
+3653 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1142,7 +1142,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (564 sites)
+### G115 — CWE-190 Integer overflow or wraparound (565 sites)
 
 | Location | Reason |
 |---|---|
@@ -1379,9 +1379,10 @@ not this file.
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:305` | preparation is checked at <=64KiB before conversion (CWE-190) |
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:306` | predecessor is checked at <=1024 bytes before conversion (CWE-190) |
 | `internal/dynsecret/active_directory_signin.go:200` | unix is within year 1970..9999, so the FILETIME fits (CWE-190) |
-| `internal/dynsecret/drivers.go:332` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/drivers.go:340` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/providers_real.go:1978` | a string length is never negative (CWE-190) |
+| `internal/dynsecret/cr596_password_logging_test.go:127` | port is returned by a TCP listener and bounded to 16 bits (CWE-190) |
+| `internal/dynsecret/drivers.go:397` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/drivers.go:405` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/providers_real.go:1975` | a string length is never negative (CWE-190) |
 | `internal/dynsecret/providers_real_test.go:734` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp.go:161` | s is checked non-negative above (CWE-190) |
@@ -1766,7 +1767,7 @@ not this file.
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:233` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1782` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1779` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
@@ -2524,7 +2525,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (853 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (854 sites)
 
 | Location | Reason |
 |---|---|
@@ -2995,6 +2996,7 @@ not this file.
 | `internal/discovery/netscan/chain_observation_test.go:53` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/dynsecret/active_directory_signin_lab_test.go:39` | the lab runner's own CA file (CWE-22) |
 | `internal/dynsecret/active_directory_signin_lab_test.go:43` | the lab runner's own protected password file (CWE-22) |
+| `internal/dynsecret/cr596_password_logging_test.go:151` | fixed log filename inside this test's exclusively created temporary directory (CWE-22) |
 | `internal/dynsecret/ldap_dynamic_lab_test.go:33` | the lab runner's own protected password file (CWE-22) |
 | `internal/dynsecret/providers_real_test.go:304` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/eventprotect/verification_keys_file.go:52` | Operator-pinned absolute public trust path is canonicalized outside managed restore roots; only a bounded regular file is read. |
@@ -3533,7 +3535,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G401 — CWE-328 Use of weak hash (19 sites)
+### G401 — CWE-328 Use of weak hash (21 sites)
 
 | Location | Reason |
 |---|---|
@@ -3541,6 +3543,8 @@ not this file.
 | `internal/crypto/deviceattest/cvc.go:370` | verifying a CV signature that names SHA-1 (CWE-327) |
 | `internal/crypto/jks/jceks.go:68` | the JCEKS integrity digest is SHA-1 by definition; verification only (CWE-328) |
 | `internal/crypto/leafca.go:773` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/mysql_native_verifier.go:22` | MariaDB mysql_native_password's specified account verifier, not a general hash (CWE-328) |
+| `internal/crypto/mysql_native_verifier.go:24` | same MariaDB protocol verifier (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:408` | mysql_native_password, when the server demands it (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:409` | mysql_native_password (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:410` | mysql_native_password (CWE-327) |
@@ -3649,7 +3653,7 @@ not this file.
 | `internal/server/secret_repository_https_fixture_test.go:7` | test-only local Git smart-HTTPS fixture (CWE-284) |
 | `internal/server/secret_repository_private_clone_served_test.go:14` | test-only stand-in host: serves the local git-http-backend; the toolchain is far past the CVE-2016-5386 fix (CWE-284) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (17 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (18 sites)
 
 | Location | Reason |
 |---|---|
@@ -3658,6 +3662,7 @@ not this file.
 | `internal/crypto/deviceattest/cvc.go:11` | a card-verifiable certificate may name ECDSA/RSA with SHA-1; verified only, never produced (CWE-327) |
 | `internal/crypto/jks/jceks.go:7` | a JCEKS keystore's integrity digest is defined over SHA-1; this only verifies existing files (CWE-328) |
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
+| `internal/crypto/mysql_native_verifier.go:6` | MariaDB mysql_native_password specifies double SHA-1 for its account verifier (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:15` | MySQL's mysql_native_password protocol requires SHA-1 (CWE-327) |
 | `internal/crypto/opaque_x509.go:14` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/otp.go:7` | RFC 6238 TOTP's default HMAC hash, used as an HMAC, not a collision-resistant digest (CWE-327) |
@@ -3962,7 +3967,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:436` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/providers_real.go:1903` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/providers_real.go:1900` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:240` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |
