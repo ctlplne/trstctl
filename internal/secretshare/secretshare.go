@@ -69,11 +69,14 @@ func (s *Sharer) Create(ctx context.Context, secret []byte, ttl time.Duration) (
 	}
 	shareID := hex.EncodeToString(idb)
 	secretpkg.Wipe(idb)
+	if err := auditsink.Emit(ctx, s.audit, nil, "secret.shared", s.tenantID,
+		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, tokenHash))); err != nil {
+		secretpkg.Wipe(token)
+		return nil, fmt.Errorf("secretshare: audit create: %w", err)
+	}
 	s.mu.Lock()
 	s.links[tokenHash] = &link{secret: append([]byte(nil), secret...), shareID: shareID, expiresAt: s.clock().Add(ttl)}
 	s.mu.Unlock()
-	_ = auditsink.Emit(ctx, s.audit, nil, "secret.shared", s.tenantID,
-		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, tokenHash)))
 	return token, nil
 }
 
@@ -96,18 +99,19 @@ func (s *Sharer) View(ctx context.Context, token []byte) ([]byte, error) {
 		delete(s.links, tokenHash)
 		return nil, fmt.Errorf("secretshare: link expired or already viewed")
 	}
+	// Record the view before consuming the only copy. An append outage leaves the
+	// link live so the recipient can retry after the audit service recovers.
+	if err := auditsink.Emit(ctx, s.audit, nil, "secret.share.viewed", s.tenantID,
+		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, l.shareID, tokenHash))); err != nil {
+		return nil, fmt.Errorf("secretshare: audit view: %w", err)
+	}
 	l.viewed = true
 	// Move the secret out of the link and return it to the caller. The caller now
 	// owns the only copy; the link's reference is cleared and the entry deleted, so
 	// nothing in this package retains the bytes (AN-8).
 	out := l.secret
 	l.secret = nil
-	shareID := l.shareID
 	delete(s.links, tokenHash) // self-destruct on first successful view
-	// Audit the non-secret shareID and a non-reversible hash of the token — never
-	// the token itself, which is the bearer capability (AN-8).
-	_ = auditsink.Emit(ctx, s.audit, nil, "secret.share.viewed", s.tenantID,
-		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, tokenHash)))
 	return out, nil
 }
 
