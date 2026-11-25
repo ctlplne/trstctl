@@ -1870,6 +1870,11 @@ The registrar needs both `access:targets.write` and `secrets:read` for the named
 `account_secret`: choosing a route for a vaulted credential authorizes where
 the gateway will send that credential. A target writer without that secret's
 read authority receives 403 before a target is recorded.
+For a tenant-registered console, the gateway checks the target registrar's
+current read authority again before it opens the account for a session. Revoking
+the registrar's API token or restricted-environment membership stops later
+redemptions of that account; a session already signed in may remain active until
+it ends or is terminated.
 
 A console whose account an in-place account provider manages (ESXi, vCenter single sign-on,
 Redfish or a network device) can name that provider in `provider_id`. The provider must

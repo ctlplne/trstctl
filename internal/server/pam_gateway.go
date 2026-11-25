@@ -447,6 +447,21 @@ func (s *pamService) gatewaySessionCredential(ctx context.Context, tenantID, ses
 		// A261: the vaulted account's current credential, read when the
 		// gateway claims the session (a rotation since the session opened
 		// is honored).
+		if rec.TargetType == pamTargetWebConsole {
+			// A273/CR-072: a tenant-registered route may outlive the token
+			// that registered its secret reference. Check that actor's
+			// standing authority at redemption, before opening the value.
+			if _, configured := s.databases[pamDatabaseID{tenantID, rec.TargetType, rec.TargetID}]; !configured {
+				target, err := s.store.GetPAMTarget(ctx, tenantID, rec.TargetType, rec.TargetID)
+				if err != nil || !target.Enabled || target.AccountSecret != name {
+					return nil, errors.New("gateway session's web console target is unavailable")
+				}
+				resolver := integrationCredentialResolver{store: s.store}
+				if err := resolver.requireCurrentSecretReferenceRead(ctx, tenantID, "secret://"+name, target.RegisteredBy); err != nil {
+					return nil, errors.New("gateway session's vaulted account read authority is unavailable")
+				}
+			}
+		}
 		if s.secretReader == nil {
 			return nil, errors.New("gateway session's vaulted account needs the secrets API")
 		}

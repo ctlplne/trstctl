@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/infratest"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/objectstore/s3test"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -695,7 +696,8 @@ func servedWebConsoleSingleSignOn(t *testing.T, f *gatewayFixture, gatewayID, ac
 	console := infratest.StartSSOWebConsole(idp, "a273-sso-console", "a273-sso-client-secret")
 	t.Cleanup(console.Close)
 	route := map[string]any{"url": console.URL(), "ca_pem": string(console.CAPEM()), "sign_in_url": idp.URL(), "sign_in_ca_pem": string(idp.CAPEM())}
-	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/targets", f.operator, "a273-sso-register",
+	registrar := seedScopedTokenSubject(t, h.store, h.tenant, "cr072-sso-registrar", "access:targets.write", "secrets:read")
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/targets", registrar, "a273-sso-register",
 		map[string]any{"id": "a273-sso-console", "target_type": "webconsole", "account_secret": account, "allowed_roles": []string{account},
 			"gateway_agent_id": gatewayID, "gateway_address": f.gatewayAddr, "web": route}); status != http.StatusCreated || !strings.Contains(string(body), idp.URL()) {
 		t.Fatalf("register the single sign-on console = %d %s", status, body)
@@ -749,6 +751,30 @@ func servedWebConsoleSingleSignOn(t *testing.T, f *gatewayFixture, gatewayID, ac
 		if bytes.Contains(seen, []byte(leak)) {
 			t.Fatalf("the browser's traffic carries %q", leak)
 		}
+	}
+	registered, err := h.store.GetPAMTarget(f.ctx, h.tenant, "webconsole", "a273-sso-console")
+	if err != nil {
+		t.Fatalf("CR-072: lookup target registrar: %v", err)
+	}
+	if registered.RegisteredBy != "cr072-sso-registrar" {
+		t.Fatalf("CR-072: target registrar was not preserved for redemption: actor=%q", registered.RegisteredBy)
+	}
+	before, err := h.srv.pam.gatewaySessionCredential(f.ctx, h.tenant, session.ID)
+	secret.Wipe(before)
+	if err != nil || len(before) == 0 {
+		t.Fatalf("CR-072: authorized registrar's account was not redeemable: %v", err)
+	}
+	tokens, err := h.store.ListAPITokensPage(f.ctx, h.tenant, store.ZeroUUID, "cr072-sso-registrar", false, 10)
+	if err != nil || len(tokens) != 1 {
+		t.Fatalf("CR-072: registrar's active token inventory count=%d err=%v", len(tokens), err)
+	}
+	if err := h.srv.orch.RevokeAPIToken(f.ctx, h.tenant, tokens[0].ID, "CR-072 registrar read authority removed"); err != nil {
+		t.Fatalf("CR-072: revoke registrar token: %v", err)
+	}
+	after, err := h.srv.pam.gatewaySessionCredential(f.ctx, h.tenant, session.ID)
+	secret.Wipe(after)
+	if err == nil {
+		t.Fatal("CR-072: gateway redeemed a vaulted account after its target registrar lost read authority")
 	}
 	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+session.ID+"/terminate", f.operator, "a273-terminate-sso",
 		map[string]any{"reason": "A273-O1 proof complete"}); status != http.StatusAccepted {
