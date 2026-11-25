@@ -235,6 +235,9 @@ then answers using only that evidence — every claim carries a citation (`sourc
 with no evidence it says "insufficient evidence" rather than inventing one. Retrieved data
 is treated as untrusted (a hostile string in a SAN can't become an instruction), the
 pipeline is strictly read-only, and every gather is recorded as an immutable audit event.
+If the event log does not acknowledge an evidence gather or MCP investigation tool
+call, the service withholds the result and answers `503` with `Retry-After`.
+Check event-log health and retry; the response does not expose the append error.
 For a cause question, event IDs or event types alone are context, not a cause: the
 answer is marked sufficient only when a cited record contains an explicit failure
 reason. Renewal-failure reasons are read from the tenant's allowlisted lifecycle

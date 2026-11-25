@@ -27,6 +27,10 @@ import (
 // ErrRateLimited is returned when a caller exceeds its per-tool budget.
 var ErrRateLimited = errors.New("mcpserver: rate limit exceeded")
 
+// ErrAuditUnavailable identifies a tool result withheld after its call audit
+// append failed. Public handlers should answer with a retryable safe error.
+var ErrAuditUnavailable = errors.New("mcpserver: tool-call audit unavailable")
+
 // ErrOutOfScope is returned for a cross-tenant / out-of-scope call.
 var ErrOutOfScope = errors.New("mcpserver: out of scope")
 
@@ -340,7 +344,9 @@ func (s *Server) Call(ctx context.Context, caller, tenantID, tool, subject strin
 	if err != nil {
 		return ToolResult{}, err
 	}
-	_ = auditsink.Emit(ctx, s.audit, nil, "mcp.tool.call", s.tenantID,
-		[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"scope":%q,"citations":%d,"outcome":"ok"}`, caller, tool, tenantID, len(ans.Citations))))
+	if err := auditsink.Emit(ctx, s.audit, nil, "mcp.tool.call", s.tenantID,
+		[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"scope":%q,"citations":%d,"outcome":"ok"}`, caller, tool, tenantID, len(ans.Citations)))); err != nil {
+		return ToolResult{}, fmt.Errorf("%w: %w", ErrAuditUnavailable, err)
+	}
 	return ToolResult{Tool: tool, Citations: ans.Citations, Text: ans.Text, Findings: evidenceFindings(ev), Sufficient: ans.Sufficient}, nil
 }

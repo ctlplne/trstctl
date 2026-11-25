@@ -12,7 +12,9 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/inputtext"
+	"trstctl.com/trstctl/internal/mcpserver"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/rca"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 	"trstctl.com/trstctl/internal/usage"
@@ -31,6 +33,9 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		// server failure. Use the established 499 code so access logs and SLOs do
 		// not turn a harmless client cancellation into a misleading 500.
 		a.writeProblem(w, problem.New(499, "request canceled by client").WithTitle("Client Closed Request"))
+	case errors.Is(err, rca.ErrAuditUnavailable), errors.Is(err, mcpserver.ErrAuditUnavailable):
+		w.Header().Set("Retry-After", "1")
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "evidence audit is unavailable; retry the request"))
 	case crypto.RefusedSubjectKey(err):
 		// A weak or recorded-compromised subject key is the request's fault
 		// and names its check (owner decision, batch 11).

@@ -13,12 +13,18 @@ package rca
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/auditsink"
 )
+
+// ErrAuditUnavailable identifies a read that was withheld because its audit
+// event could not be appended. The underlying append error stays internal.
+var ErrAuditUnavailable = errors.New("rca: evidence audit unavailable")
 
 // Query is the SF.7 semantic-query seam: scoped, read-only record access.
 type Query interface {
@@ -86,12 +92,15 @@ func (p *Pipeline) Gather(ctx context.Context, tenantID, subject, question strin
 	// so a value containing a quote broke the JSON, and one shaped like
 	// `x","items":0}` let the caller rewrite the audit record of their own
 	// evidence gather — including suppressing the item count.
-	auditPayload, marshalErr := json.Marshal(struct {
+	auditPayload, err := json.Marshal(struct {
 		Subject string `json:"subject"`
 		Items   int    `json:"items"`
 	}{Subject: subject, Items: len(ev.Items)})
-	if marshalErr == nil {
-		_ = auditsink.Emit(ctx, p.audit, nil, "rca.evidence.gathered", tenantID, auditPayload)
+	if err != nil {
+		return Evidence{}, fmt.Errorf("rca: encode evidence audit: %w", err)
+	}
+	if err := auditsink.Emit(ctx, p.audit, nil, "rca.evidence.gathered", tenantID, auditPayload); err != nil {
+		return Evidence{}, fmt.Errorf("%w: %w", ErrAuditUnavailable, err)
 	}
 	return ev, nil
 }
