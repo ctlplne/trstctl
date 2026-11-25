@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/config"
@@ -2363,6 +2364,49 @@ func TestServedMachineLogin(t *testing.T) {
 	_ = resp2.Body.Close()
 	if resp2.StatusCode == http.StatusOK {
 		t.Error("machine login accepted a forged token (fail-closed broken)")
+	}
+}
+
+func TestServedMachineLoginAuditFailureWithholdsBearer(t *testing.T) {
+	authSecret := []byte("audit-outage-machine-login-key")
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, authSecret))
+	backend := h.srv.buildSecretsBackend(Deps{
+		Store: h.store, Log: h.log, KEK: h.kek,
+		SecretsAuthSecret: authSecret, SecretsAuthTokenTenantID: h.tenant,
+		SecretsAuthTokenScopes: []string{"secrets:read"},
+	})
+	backend.Audit = auditsink.AuditorFunc(func(_ context.Context, eventType, _ string, _ []byte) error {
+		if eventType == "auth.session.issued" {
+			return errors.New("private audit append detail")
+		}
+		return nil
+	})
+	handler := api.New(h.store, h.srv.idem, h.srv.orch,
+		api.WithInsecureHeaderResolver(), api.WithSecrets(backend))
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+	method := authmethod.TokenMethod{Secret: authSecret, TenantID: h.tenant,
+		Scopes: map[string][]string{"workload-1": {"secrets:read"}}}
+	credential, err := method.Issue("workload-1", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]any{"method": "token", "credential": credential})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/secrets/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", h.tenant)
+	req.Header.Set("Idempotency-Key", "machine-login-audit-outage")
+	response, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	data, _ := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusServiceUnavailable ||
+		!bytes.Contains(data, []byte("machine login audit unavailable")) ||
+		bytes.Contains(data, []byte("private audit append detail")) ||
+		bytes.Contains(data, []byte("trst_")) {
+		t.Fatalf("audit outage returned status=%d body=%s", response.StatusCode, data)
 	}
 }
 

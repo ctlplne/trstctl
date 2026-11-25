@@ -900,8 +900,8 @@ not this file.
 | `internal/server/secret_validity_providers_served_test.go:105` | a key file for a key generated at run time for the stand-in, not a credential (CWE-798) |
 | `internal/server/secret_validity_served_test.go:88` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:260` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:565` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:2507` | fabricated STS exchange fixture; no real credential (CWE-798) |
+| `internal/server/secrets_served_test.go:566` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/secrets_served_test.go:2551` | fabricated STS exchange fixture; no real credential (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:579` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:591` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:602` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -3964,8 +3964,8 @@ not this file.
 | `internal/server/pam_gateway_kubernetes_kind_test.go:72` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/secret_render_served_test.go:134` | the test application or the lab nginx on loopback (CWE-918) |
 | `internal/server/secret_render_served_test.go:136` | the test application or the lab nginx on loopback (CWE-918) |
-| `internal/server/secrets_served_test.go:264` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
-| `internal/server/secrets_served_test.go:277` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/secrets_served_test.go:265` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/secrets_served_test.go:278` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:175` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |

@@ -622,6 +622,9 @@ func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tena
 			// single-use records are at their limit; it is not used up.
 			return 0, nil, loginErr
 		}
+		if errors.Is(loginErr, authmethod.ErrAuditUnavailable) {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "machine login audit unavailable; retry")
+		}
 		if loginErr != nil || sess.TenantID != resolvedTenantID || len(sess.Scopes) == 0 {
 			// Never echo the credential or the verifier's failure detail.
 			return 0, nil, errStatus(http.StatusUnauthorized, "machine login failed")

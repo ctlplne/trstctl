@@ -57,6 +57,10 @@ type Manager struct {
 	methods map[string]Method
 }
 
+// ErrAuditUnavailable means a login decision could not be recorded. Callers
+// must not issue a session or present the outage as a bad credential.
+var ErrAuditUnavailable = errors.New("authmethod: audit unavailable")
+
 // New validates configuration and constructs a Manager.
 func New(cfg Config) (*Manager, error) {
 	if cfg.TenantID == "" {
@@ -106,7 +110,9 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 	}
 	principal, scopes, err := meth.Authenticate(ctx, credential)
 	if err != nil {
-		_ = auditsink.Emit(ctx, m.cfg.Audit, nil, "auth.rejected", m.cfg.TenantID, []byte(fmt.Sprintf(`{"method":%q}`, method)))
+		if auditErr := auditsink.Emit(ctx, m.cfg.Audit, nil, "auth.rejected", m.cfg.TenantID, []byte(fmt.Sprintf(`{"method":%q}`, method))); auditErr != nil {
+			return Session{}, fmt.Errorf("%w: %w", ErrAuditUnavailable, auditErr)
+		}
 		return Session{}, fmt.Errorf("authmethod: %s authentication failed: %w", method, err)
 	}
 	// Fail closed on an RNG failure: a discarded error would leave idb as 16 zero
@@ -123,8 +129,10 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 		TenantID: m.cfg.TenantID, Principal: principal,
 		Method: method, Scopes: scopes, IssuedAt: now, ExpiresAt: now.Add(m.cfg.TTL),
 	}
-	_ = auditsink.Emit(ctx, m.cfg.Audit, nil, "auth.session.issued", m.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"method":%q,"principal":%q,"scopes":%d}`, method, principal, len(scopes))))
+	if auditErr := auditsink.Emit(ctx, m.cfg.Audit, nil, "auth.session.issued", m.cfg.TenantID,
+		[]byte(fmt.Sprintf(`{"method":%q,"principal":%q,"scopes":%d}`, method, principal, len(scopes)))); auditErr != nil {
+		return Session{}, fmt.Errorf("%w: %w", ErrAuditUnavailable, auditErr)
+	}
 	return sess, nil
 }
 

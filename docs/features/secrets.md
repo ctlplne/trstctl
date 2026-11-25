@@ -2268,6 +2268,9 @@ review-first journey:
    response—including the same one-time bearer—instead of issuing a second session.
    Reusing the key for different input returns `409`. The presented credential and
    raw session bearer never enter an event or read model.
+   Login withholds the session if its decision audit cannot be appended. The API
+   returns `503` without exposing the audit backend's error; retry after the audit
+   service recovers, using the same idempotency key for the same request.
 4. **Verify and recover.** The result shows session id, principal, method, scopes,
    expiry, and a one-time reveal panel for the `trst_…` bearer. Copy it directly into
    the workload, then dismiss it; trstctl cannot recover it from the stored hash. The
