@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"runtime"
 )
 
 // SHA256Hex returns the lowercase hex-encoded SHA-256 digest of data. It lives
@@ -59,6 +60,20 @@ func HMACSHA256(key, data []byte) []byte {
 	m := hmac.New(sha256.New, key)
 	m.Write(data)
 	return m.Sum(nil)
+}
+
+// LocalTunnelCapability derives the HTTP loopback client's capability from
+// the gateway ticket. The event log stores only SHA-256(ticket), which cannot
+// reveal this domain-separated HMAC. The derived value is never a gateway
+// preface ticket or an upstream credential.
+func LocalTunnelCapability(ticket []byte) string {
+	mac := HMACSHA256(ticket, []byte("trstctl.local-http-tunnel/v1"))
+	out := hex.EncodeToString(mac)
+	for i := range mac {
+		mac[i] = 0
+	}
+	runtime.KeepAlive(mac)
+	return out
 }
 
 // SHA256HMACDigest streams bytes through SHA-256 and, when a key is supplied,

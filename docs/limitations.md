@@ -9636,8 +9636,9 @@ names a Kubernetes dynamic-secret provider and a gateway; its session's credenti
 TokenRequest token for a service account the provider creates with its role's binding. The
 gateway adds the token to every request and removes a client's own credential and
 impersonation. `TestServedGatewayKubernetesSessionsOnKindA256` proves it with stock kubectl
-on kind through a kubeconfig that names the tunnel and no user: the kubeconfig and the CLI
-output hold no token; the session's service account lists its namespace's pods and is
+on kind through a private kubeconfig that names the tunnel and carries only a local
+capability: neither the kubeconfig nor CLI output holds the upstream cluster token;
+the session's service account lists its namespace's pods and is
 forbidden cluster-scoped reads, by name, even with `--as` (impersonation removed, not
 refused); exec runs and its output is recorded with the token masked; termination ends a
 live exec, the gateway acknowledges it and the service account is deleted; the recording

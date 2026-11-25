@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netconfine"
 	"trstctl.com/trstctl/internal/secretscli"
@@ -444,7 +445,9 @@ func (l *agentLauncher) serve(ctx context.Context, wg *sync.WaitGroup, s *agentS
 	}
 	s.listener = ln
 	s.kubeconfig = prefix + ".kubeconfig"
-	if s.line, err = gatewayClientLine(s.account.TargetType, s.addr, hostKey, prefix+".known_hosts", s.kubeconfig); err != nil {
+	s.delivery.localCapability = crypto.LocalTunnelCapability([]byte(s.ticket))
+	s.delivery.localArtifactDir = dir
+	if s.line, err = gatewayClientLine(s.account.TargetType, s.addr, hostKey, prefix+".known_hosts", s.kubeconfig, s.delivery); err != nil {
 		return err
 	}
 	wg.Add(1)

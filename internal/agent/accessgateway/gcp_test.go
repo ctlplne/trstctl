@@ -153,7 +153,7 @@ func TestGCPRelayReplacesClientAuthAndRefreshesOnlyWithinSession(t *testing.T) {
 			return
 		}
 		expected := fmt.Sprintf("Bearer owned-token-%d", grants.Load())
-		if r.Method != http.MethodPost || r.URL.Path != "/resource" || r.URL.Query().Get("x") != "one two" || len(r.URL.Query()) != 1 || r.Header.Get("Authorization") != expected || r.Header.Get("Cookie") != "" || r.Header.Get("X-Goog-Api-Key") != "" || r.Header.Get("X-Goog-Iam-Authorization-Token") != "" || r.Header.Get("X-Serverless-Authorization") != "" || !bytes.Equal(body, []byte("exact-api-body")) {
+		if r.Method != http.MethodPost || r.URL.Path != "/resource" || r.URL.Query().Get("x") != "one two" || len(r.URL.Query()) != 1 || r.Header.Get("Authorization") != expected || r.Header.Get("Cookie") != "" || r.Header.Get("X-Trstctl-Tunnel-Token") != "" || r.Header.Get("X-Goog-Api-Key") != "" || r.Header.Get("X-Goog-Iam-Authorization-Token") != "" || r.Header.Get("X-Serverless-Authorization") != "" || !bytes.Equal(body, []byte("exact-api-body")) {
 			http.Error(w, "authority or request changed", http.StatusForbidden)
 			return
 		}
@@ -179,7 +179,7 @@ func TestGCPRelayReplacesClientAuthAndRefreshesOnlyWithinSession(t *testing.T) {
 	client, server := net.Pipe()
 	defer func() { _ = client.Close() }()
 	_ = client.SetDeadline(time.Now().Add(5 * time.Second))
-	intent := SessionIntent{OAuthSubject: material.subject, OAuthScopes: []string{"https://www.googleapis.com/auth/devstorage.read_only"}, OAuthTokenEndpoint: target.URL + "/token", UpstreamURL: target.URL, ExpiresAt: time.Now().Add(4 * time.Second)}
+	intent := SessionIntent{OAuthSubject: material.subject, OAuthScopes: []string{"https://www.googleapis.com/auth/devstorage.read_only"}, OAuthTokenEndpoint: target.URL + "/token", UpstreamURL: target.URL, ExpiresAt: time.Now().Add(4 * time.Second), localCapability: localTunnelCapability("gcp-fixture-ticket")}
 	done := make(chan error, 1)
 	go func() { done <- serveGCP(ctx, server, raw, intent, nil, nil) }()
 	reader := bufio.NewReader(client)
@@ -187,7 +187,7 @@ func TestGCPRelayReplacesClientAuthAndRefreshesOnlyWithinSession(t *testing.T) {
 		if n == 2 {
 			time.Sleep(1100 * time.Millisecond)
 		}
-		wire := "POST /resource?x=one+two&access_token=foreign&oauth_token=foreign&key=foreign&api_key=foreign HTTP/1.1\r\nHost: 127.0.0.1:18080\r\nUser-Agent: curl/8.0\r\nAuthorization: Bearer foreign\r\nCookie: session=foreign\r\nX-Goog-Api-Key: foreign\r\nX-Goog-Iam-Authorization-Token: foreign\r\nX-Serverless-Authorization: foreign\r\nContent-Length: 14\r\n\r\nexact-api-body"
+		wire := "POST /resource?x=one+two&access_token=foreign&oauth_token=foreign&key=foreign&api_key=foreign HTTP/1.1\r\nHost: 127.0.0.1:18080\r\nUser-Agent: curl/8.0\r\nX-Trstctl-Tunnel-Token: " + intent.localCapability + "\r\nAuthorization: Bearer foreign\r\nCookie: session=foreign\r\nX-Goog-Api-Key: foreign\r\nX-Goog-Iam-Authorization-Token: foreign\r\nX-Serverless-Authorization: foreign\r\nContent-Length: 14\r\n\r\nexact-api-body"
 		if _, err := io.WriteString(client, wire); err != nil {
 			t.Fatal(err)
 		}

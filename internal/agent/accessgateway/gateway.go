@@ -574,6 +574,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		_ = conn.Close()
 		return
 	}
+	localCapability := localTunnelCapability(fields[2])
 	_ = conn.SetDeadline(s.intent.ExpiresAt)
 	switch s.intent.TargetType {
 	case TargetPostgres:
@@ -628,7 +629,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		}
 		credential := s.credential()
 		defer secret.Wipe(credential)
-		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName}
+		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName, TunnelCapability: localCapability}
 		if err := serveClickHouse(ctx, conn, credential, upstream, g.cfg.Dial, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
@@ -647,42 +648,48 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 	case TargetWeb:
 		credential := s.credential()
 		defer secret.Wipe(credential)
-		if err := serveWebConsole(ctx, conn, credential, s.intent, s.web, g.cfg.Dial, rec); err != nil {
+		intent := s.intent
+		intent.localCapability = localCapability
+		if err := serveWebConsole(ctx, conn, credential, intent, s.web, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: web console: %v", s.intent.SessionID, err)
 		}
 
 	case TargetAzure:
 		credential := s.credential()
 		defer secret.Wipe(credential)
-		if err := serveAzure(ctx, conn, credential, s.intent, g.cfg.Dial, rec); err != nil {
+		intent := s.intent
+		intent.localCapability = localCapability
+		if err := serveAzure(ctx, conn, credential, intent, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: Azure relay ended", s.intent.SessionID)
 		}
 
 	case TargetGCP:
 		credential := s.credential()
 		defer secret.Wipe(credential)
-		if err := serveGCP(ctx, conn, credential, s.intent, g.cfg.Dial, rec); err != nil {
+		intent := s.intent
+		intent.localCapability = localCapability
+		if err := serveGCP(ctx, conn, credential, intent, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: Google Cloud relay ended", s.intent.SessionID)
 		}
 
 	case TargetAWS:
 		credential := s.credential()
 		defer secret.Wipe(credential)
-		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName}
+		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName, TunnelCapability: localCapability}
 		if err := serveAWS(ctx, conn, credential, upstream, s.intent.AWSService, s.intent.AWSRegion, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: AWS relay ended", s.intent.SessionID)
 		}
 	case TargetSnowflake:
 		credential := s.credential()
 		defer secret.Wipe(credential)
-		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName}
+		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName, TunnelCapability: localCapability}
 		if err := serveSnowflake(ctx, conn, credential, upstream, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: Snowflake relay ended", s.intent.SessionID)
 		}
 	case TargetKubernetes:
 		token := s.credential()
 		defer secret.Wipe(token)
-		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName}
+		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName, TunnelCapability: localCapability}
 		if err := serveKubernetes(ctx, conn, token, upstream, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}

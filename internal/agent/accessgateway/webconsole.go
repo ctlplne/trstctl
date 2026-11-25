@@ -857,7 +857,7 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if refuseUntrustedTunnelRequest(w, r) {
+		if refuseUntrustedTunnelRequest(w, r, intent.localCapability, tunnelBrowser) {
 			return
 		}
 		if !reviewed.WithinURL(r.URL) {
@@ -919,7 +919,7 @@ func (c *webConsoleClient) rewrite(r *httputil.ProxyRequest, state *webConsoleSt
 	r.Out.Host = c.target.Host
 	var browser []*http.Cookie
 	for _, cookie := range r.In.Cookies() {
-		if c.in.AllowsBrowserCookie(cookie.Name) {
+		if cookie.Name != tunnelCookieName && c.in.AllowsBrowserCookie(cookie.Name) {
 			browser = append(browser, cookie)
 		}
 	}
@@ -936,7 +936,7 @@ func (c *webConsoleClient) rewrite(r *httputil.ProxyRequest, state *webConsoleSt
 	if r.In.Header.Get("Origin") != "" {
 		r.Out.Header.Set("Origin", webOrigin(c.target))
 	}
-	if referer, err := url.Parse(r.In.Header.Get("Referer")); err == nil && referer.Path != "" {
+	if referer, err := url.Parse(r.In.Header.Get("Referer")); err == nil && referer.Path != "" && !referer.Query().Has(tunnelCookieName) {
 		r.Out.Header.Set("Referer", webOrigin(c.target)+referer.RequestURI())
 	} else {
 		r.Out.Header.Del("Referer")
@@ -958,6 +958,9 @@ func (c *webConsoleClient) response(resp *http.Response, state *webConsoleState,
 	var browser []*http.Cookie
 	dropped := false
 	for _, cookie := range resp.Cookies() {
+		if cookie.Name == tunnelCookieName {
+			continue
+		}
 		if c.in.AllowsBrowserCookie(cookie.Name) {
 			browser = append(browser, cookie)
 			continue

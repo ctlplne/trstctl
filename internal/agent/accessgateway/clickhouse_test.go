@@ -43,11 +43,11 @@ func chConnRecorder(t *testing.T) (*connRecorder, func() string) {
 }
 
 func TestClickHouseRelaySignsEveryRequestInAsTheSessionUser(t *testing.T) {
-	type seen struct{ user, key, auth, query, body string }
+	type seen struct{ user, key, auth, local, query, body string }
 	got := make(chan seen, 4)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		got <- seen{r.Header.Get("X-ClickHouse-User"), r.Header.Get("X-ClickHouse-Key"), r.Header.Get("Authorization"), r.URL.RawQuery, string(body)}
+		got <- seen{r.Header.Get("X-ClickHouse-User"), r.Header.Get("X-ClickHouse-Key"), r.Header.Get("Authorization"), r.Header.Get("X-Trstctl-Tunnel-Token"), r.URL.RawQuery, string(body)}
 		w.Header().Set("X-ClickHouse-Summary", `{"read_rows":"1"}`)
 		_, _ = io.WriteString(w, "1\tghp_"+strings.Repeat("C", 36)+"\n")
 	}))
@@ -66,7 +66,7 @@ func TestClickHouseRelaySignsEveryRequestInAsTheSessionUser(t *testing.T) {
 			served <- err
 			return
 		}
-		served <- serveClickHouse(context.Background(), conn, credential, httpUpstream{URL: upstream.URL}, nil, rec)
+		served <- serveClickHouse(context.Background(), conn, credential, httpUpstream{URL: upstream.URL, TunnelCapability: localTunnelCapability("clickhouse-fixture-ticket")}, nil, rec)
 	}()
 	client := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", ln.Addr().String())
@@ -76,6 +76,7 @@ func TestClickHouseRelaySignsEveryRequestInAsTheSessionUser(t *testing.T) {
 	req.SetBasicAuth("default", "hunter2")
 	req.Header.Set("X-ClickHouse-User", "default")
 	req.Header.Set("X-ClickHouse-Key", "hunter2")
+	req.Header.Set("X-Trstctl-Tunnel-Token", localTunnelCapability("clickhouse-fixture-ticket"))
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -86,11 +87,13 @@ func TestClickHouseRelaySignsEveryRequestInAsTheSessionUser(t *testing.T) {
 		t.Fatalf("response = %d %q", resp.StatusCode, body)
 	}
 	s := <-got
-	if s.user != "trstctl_ch_1" || s.key != "s3ss10n-Pa55word" || s.auth != "" || s.query != "database=orders" || s.body != "SELECT 1, note FROM notes" {
+	if s.user != "trstctl_ch_1" || s.key != "s3ss10n-Pa55word" || s.auth != "" || s.local != "" || s.query != "database=orders" || s.body != "SELECT 1, note FROM notes" {
 		t.Fatalf("upstream saw %+v", s)
 	}
 	// A second request on the same connection is signed in the same way.
-	resp, err = client.Get("http://" + ln.Addr().String() + "/?query=SELECT%202")
+	req, _ = http.NewRequest(http.MethodGet, "http://"+ln.Addr().String()+"/?query=SELECT%202", nil)
+	req.Header.Set("X-Trstctl-Tunnel-Token", localTunnelCapability("clickhouse-fixture-ticket"))
+	resp, err = client.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

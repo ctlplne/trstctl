@@ -63,7 +63,7 @@ func serveOAuthHTTP(ctx context.Context, client net.Conn, intent SessionIntent, 
 		}
 	}()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if refuseUntrustedTunnelRequest(w, r) {
+		if refuseUntrustedTunnelRequest(w, r, intent.localCapability, tunnelHTTPHeader) {
 			return
 		}
 		if r.Method == http.MethodConnect || r.Header.Get("Upgrade") != "" {

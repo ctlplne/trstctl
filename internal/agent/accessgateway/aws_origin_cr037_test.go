@@ -15,6 +15,7 @@ import (
 )
 
 func TestCR037AWSRelayRefusesBrowserOriginsAndReboundHosts(t *testing.T) {
+	capability := localTunnelCapability("cr037-local-ticket")
 	var forwarded atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		forwarded.Add(1)
@@ -23,13 +24,14 @@ func TestCR037AWSRelayRefusesBrowserOriginsAndReboundHosts(t *testing.T) {
 	defer upstream.Close()
 
 	for _, tc := range []struct {
-		name, method, url, origin, fetchSite, userAgent string
-		wantForward                                     bool
+		name, method, url, origin, fetchSite, userAgent, localToken string
+		wantForward                                                 bool
 	}{
-		{"cross-site form", http.MethodPost, "http://127.0.0.1:18080/", "https://attacker.example", "cross-site", "Mozilla/5.0", false},
-		{"rebound host", http.MethodPost, "http://rebound.attacker.example:18080/", "", "same-origin", "Mozilla/5.0", false},
-		{"legacy browser GET", http.MethodGet, "http://127.0.0.1:18080/?Action=CreateUser&UserName=cr037", "", "", "Mozilla/5.0", false},
-		{"stock CLI", http.MethodPost, "http://127.0.0.1:18080/", "", "", "aws-cli/2.0", true},
+		{"cross-site form", http.MethodPost, "http://127.0.0.1:18080/", "https://attacker.example", "cross-site", "Mozilla/5.0", "", false},
+		{"rebound host", http.MethodPost, "http://rebound.attacker.example:18080/", "", "same-origin", "Mozilla/5.0", "", false},
+		{"legacy browser GET", http.MethodGet, "http://127.0.0.1:18080/?Action=CreateUser&UserName=cr037", "", "", "Mozilla/5.0", "", false},
+		{"spoofed browser CLI UA", http.MethodGet, "http://127.0.0.1:18080/?Action=CreateUser&UserName=cr037", "", "", "aws-cli/2.0", "", false},
+		{"stock CLI", http.MethodPost, "http://127.0.0.1:18080/", "", "", "aws-cli/2.0", capability, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := forwarded.Load()
@@ -38,7 +40,7 @@ func TestCR037AWSRelayRefusesBrowserOriginsAndReboundHosts(t *testing.T) {
 			browserEnd, gatewayEnd := net.Pipe()
 			done := make(chan error, 1)
 			go func() {
-				done <- serveAWS(context.Background(), gatewayEnd, raw, httpUpstream{URL: upstream.URL}, "iam", "us-east-1", expires, nil, nil)
+				done <- serveAWS(context.Background(), gatewayEnd, raw, httpUpstream{URL: upstream.URL, TunnelCapability: capability}, "iam", "us-east-1", expires, nil, nil)
 			}()
 			var body io.Reader
 			if tc.method == http.MethodPost {
@@ -56,6 +58,9 @@ func TestCR037AWSRelayRefusesBrowserOriginsAndReboundHosts(t *testing.T) {
 				req.Header.Set("Sec-Fetch-Site", tc.fetchSite)
 			}
 			req.Header.Set("User-Agent", tc.userAgent)
+			if tc.localToken != "" {
+				req.Header.Set("X-Amz-Security-Token", tc.localToken)
+			}
 			transport := &http.Transport{DialContext: func(context.Context, string, string) (net.Conn, error) { return browserEnd, nil }}
 			response, err := (&http.Client{Transport: transport}).Do(req)
 			if err != nil {

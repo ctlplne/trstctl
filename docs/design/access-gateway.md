@@ -18,19 +18,23 @@ separate design with no component in the call path, and does not reuse the gatew
 | CLI | `trstctl access sessions connect <id> --ticket-file F`: a loopback listener; each local connection becomes one TLS connection to the gateway, verified as below. Stock clients (`psql`, `redis-cli`, `ssh`) connect to the loopback address. |
 
 For credentialed HTTP tunnels (web console, Kubernetes, ClickHouse, AWS API,
-GCP/Azure API and Snowflake), the gateway
-checks the browser's Host before it adds the session credential. Host must be a
+GCP/Azure API and Snowflake), the gateway checks both the local origin and a
+per-tunnel capability before adding the upstream credential. Host must be a
 literal loopback address or `localhost` with a port. Origin and Referer, when
 present, must name that exact local HTTP origin; Fetch Metadata must say
-`same-origin` (or `none` for a direct safe navigation). A browser-shaped
-request without either Origin or Fetch Metadata is refused, including older
-browser GETs that might otherwise invoke an AWS query action. Stock CLI clients
-with their own User-Agent remain usable. A foreign-site form, WebSocket or
-DNS-rebound Host therefore reaches no upstream action or read. The web-console
-proxy maps a **verified** local Origin to the console's Origin so its own CSRF
-check still works; it never maps a foreign Origin into a trusted one. The
-session ticket still authenticates the CLI-to-gateway connection, while these
-checks protect the browser-facing loopback port from other web pages.
+`same-origin` (or `none` for a direct safe navigation). WebSockets require an
+Origin. The capability is a domain-separated HMAC of the one-time ticket,
+derived independently by the CLI and by the gateway after ticket admission;
+the event log's ticket digest cannot recover it. The CLI puts it in a 0600
+kubeconfig server-path prefix, a 0600 local AWS credentials file's session token, or a
+0600 curl header file. A web-console link installs an HttpOnly, SameSite=Strict
+loopback cookie through a one-time 303 before any upstream request. These local
+values are stripped before forwarding. Thus even an older browser that can
+override User-Agent but omits Origin and Fetch Metadata cannot act as a stock
+CLI. The web-console proxy maps a **verified** local Origin to the console's
+Origin so its own CSRF check works; it never maps a foreign Origin into a
+trusted one. Command-ruled ClickHouse requests pass the same checks before
+review or forwarding.
 
 The gateway's outbound destinations are the control plane and the targets bound to it.
 Its listener serves a certificate the agent CA signs for it (in the signer process, AN-4):
@@ -240,7 +244,8 @@ are served only through a gateway; the target builder refuses one without a bind
   `-Uid`, `-Extra-*`), adds the session's token to every request, and forwards it over
   HTTPS verified against the cluster CA. Exec, attach and port-forward upgrade the
   connection; the upgraded stream passes through untouched. The connect command writes a
-  kubeconfig that names the tunnel and no user. Recordings keep each API request
+  kubeconfig that names the tunnel with a private capability path, never
+  the cluster service-account token. Recordings keep each API request
   (method, path and query, the body's first 4 KiB) and response (status, the body's first
   4 KiB); a remote-command WebSocket stream is decoded into its stdin, stdout and stderr and
   recorded as a shell session's bytes are (masked), any other stream by its size.
@@ -869,10 +874,12 @@ service and region from the original tenant-scoped session outbox intent and
 prints a command such as:
 
 ```sh
-aws --no-sign-request --endpoint-url http://127.0.0.1:8000 --region us-east-1 s3api get-object --bucket owned-bucket --key note ./note
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE='<printed-private-file>' aws --profile trstctl-tunnel --endpoint-url http://127.0.0.1:8000 --region us-east-1 s3api get-object --bucket owned-bucket --key note ./note
 ```
 
-`--no-sign-request` applies to the local ticket-authenticated tunnel. The gateway
+The CLI creates the private credentials file with a dummy local access key and
+the tunnel capability as its session token; it removes that file when the
+connect process exits. The gateway validates and strips that local token,
 replaces client header/query authentication, signs the exact target method,
 path, query, body and required headers with the held STS identity, and sends its
 Authorization and session-token headers directly from locked bytes. The client

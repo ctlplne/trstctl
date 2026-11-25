@@ -1708,6 +1708,11 @@ bindings that name this agent.
 `trstctl-cli access sessions connect <session-id> --ticket-file FILE [--listen
 127.0.0.1:PORT] [--known-hosts FILE]` carries a stock client's connections to that gateway
 over TLS verified against its agent certificate; the client never receives the credential.
+For HTTP targets, run the printed client command or open the printed web-console
+link: the CLI's private client file or browser bootstrap supplies a separate
+local capability. A raw request to the loopback port is refused. The capability
+comes from the one-time ticket and is removed before upstream forwarding; the
+CLI removes its temporary client files when it exits.
 For an SSH session it writes the gateway's host key to the known_hosts file and prints the
 ssh command to run. `trstctl-cli access sessions watch <session-id>` follows a gateway
 session's recording live (`recordings:read`); `access sessions terminate`, `recording`,

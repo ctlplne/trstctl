@@ -531,12 +531,16 @@ speaks the native protocol, is not served):
 
 ```bash
 trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --listen 127.0.0.1:18123
-curl http://127.0.0.1:18123/ --data-binary 'SELECT currentUser()'
 ```
 
+Run the curl command printed by `connect`, including its private
+`--header @<file>` argument. Replace `SELECT 1` with
+`SELECT currentUser()` for this example; a raw curl call to the port is refused.
+
 A Kubernetes target (`target_type: "kubernetes"`) is reached with kubectl: the connect command
-writes a kubeconfig that names the tunnel and no user (`--kubeconfig`, default: the ticket
-file with `.kubeconfig` appended), and the gateway adds the session's token to every
+writes a private kubeconfig that names the tunnel with a local capability path
+(`--kubeconfig`, default: the ticket file with `.kubeconfig` appended), and the gateway
+removes that prefix and adds the session's cluster token on every
 request, exec and port-forward included. A client's own credential and `--as`
 impersonation are removed. Sessions must last at least ten minutes (`ttl_seconds` ≥ 600).
 

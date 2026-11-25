@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
@@ -133,7 +134,7 @@ func (c kindPAMCluster) serviceAccounts() []string {
 
 // TestServedGatewayKubernetesSessionsOnKindA256: a Kubernetes target is
 // served only through the access gateway, to stock kubectl with a
-// kubeconfig that names the tunnel and no user. The gateway adds the
+// kubeconfig that names the tunnel and carries only a local capability path. The gateway adds the
 // session's TokenRequest token to every request, exec streams included;
 // a client's own credential and impersonation are removed; the service
 // account's role scopes the session; API calls and exec streams are recorded
@@ -162,10 +163,13 @@ func TestServedGatewayKubernetesSessionsOnKindA256(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for what, text := range map[string]string{"kubeconfig": string(raw), "CLI output": tunnelOut} {
-		if strings.Contains(text, "token") || strings.Contains(text, "eyJ") {
-			t.Fatalf("the %s carries a credential: %s", what, text)
-		}
+	localCapability := crypto.LocalTunnelCapability([]byte(session.Gateway.Ticket))
+	info, err := os.Stat(kubeconfig)
+	if err != nil || info.Mode().Perm() != 0o600 || !strings.Contains(string(raw), "/.trstctl/"+localCapability) || strings.Contains(string(raw), "token:") {
+		t.Fatalf("kubeconfig did not privately bind the local capability path: mode=%v err=%v", info, err)
+	}
+	if strings.Contains(string(raw), "eyJ") || strings.Contains(tunnelOut, localCapability) {
+		t.Fatal("the kubeconfig or CLI output exposed an upstream token or the local capability outside its private file")
 	}
 	kubectl := func(stdin string, args ...string) string {
 		cmd := exec.CommandContext(f.ctx, "kubectl", append([]string{"--kubeconfig", kubeconfig, "-n", namespace}, args...)...) // #nosec G204 G702 -- the stock kubectl against the test's own tunnel (CWE-78)

@@ -97,7 +97,7 @@ func serveKubernetes(ctx context.Context, client net.Conn, token []byte, upstrea
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if refuseUntrustedTunnelRequest(w, r) {
+		if refuseUntrustedTunnelRequest(w, r, upstream.TunnelCapability, tunnelKubernetes) {
 			return
 		}
 		if rec != nil {

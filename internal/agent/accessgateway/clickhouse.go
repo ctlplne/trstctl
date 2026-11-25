@@ -81,7 +81,7 @@ func serveClickHouse(ctx context.Context, client net.Conn, credential []byte, up
 		r.Out.Header.Set("X-ClickHouse-Key", string(user.Password))
 	}
 	if len(guards) > 0 && guards[0] != nil {
-		return relayClickHouseCommands(ctx, client, transport, guards[0], rec, rewrite)
+		return relayClickHouseCommands(ctx, client, transport, guards[0], rec, rewrite, upstream.TunnelCapability)
 	}
 	proxy := &httputil.ReverseProxy{Rewrite: rewrite,
 		Transport: transport,
@@ -108,7 +108,7 @@ func serveClickHouse(ctx context.Context, client net.Conn, credential []byte, up
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if refuseUntrustedTunnelRequest(w, r) {
+		if refuseUntrustedTunnelRequest(w, r, upstream.TunnelCapability, tunnelHTTPHeader) {
 			return
 		}
 		if rec != nil {
@@ -149,6 +149,7 @@ func serveClickHouse(ctx context.Context, client net.Conn, credential []byte, up
 // name (no CA: the system roots).
 type httpUpstream struct {
 	URL, CAPEM, ServerName string
+	TunnelCapability       string
 }
 
 // transport parses the URL and builds the transport that reaches it through

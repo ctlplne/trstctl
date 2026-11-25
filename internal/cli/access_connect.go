@@ -13,10 +13,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -65,6 +67,12 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 	}
 	ticket := strings.TrimSpace(string(raw))
 	secret.Wipe(raw)
+	var localArtifacts []string
+	defer func() {
+		for _, path := range localArtifacts {
+			_ = os.Remove(path)
+		}
+	}()
 	httpClient, err := httpClientForEnv(env, caFile)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "trstctl:", err)
@@ -75,6 +83,9 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 		_, _ = fmt.Fprintln(stderr, "trstctl:", err)
 		return 1
 	}
+	delivery.localCapability = crypto.LocalTunnelCapability([]byte(ticket))
+	delivery.localArtifactDir = filepath.Dir(*ticketFile)
+	delivery.localArtifacts = &localArtifacts
 	var hostKey string
 	if targetType == "ssh" || targetType == "netdevice" {
 		if hostKey, err = probeGatewayHostKey(ctx, delivery, sessionID, ticket); err != nil {
@@ -127,13 +138,18 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 }
 
 // gatewayClientLine is the stock client command that reaches a session's
-// tunnel at local with no credential: the gateway signs in as the session's
-// own account. An SSH session's gateway host key is first written to
-// knownHosts; a Kubernetes session gets a kubeconfig at kubeconfig that names
-// the tunnel and no user.
+// tunnel at local without the upstream credential: the gateway signs in as
+// the session's account. An SSH session's gateway host key is written to
+// knownHosts; a Kubernetes session gets a private kubeconfig at kubeconfig
+// with only the local capability in its server path.
 var awsGatewayCLIRegion = regexp.MustCompile(`^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$`)
 
 func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHosts, kubeconfig string, scopes ...gatewayDelivery) (string, error) {
+	if targetType == "kubernetes" || targetType == "aws" || targetType == "webconsole" || targetType == "gcp" || targetType == "azure" || targetType == "snowflake" || targetType == "clickhouse" {
+		if len(scopes) != 1 || len(scopes[0].localCapability) != 64 {
+			return "", errors.New("local HTTP tunnel capability is unavailable; reconnect the session")
+		}
+	}
 	switch targetType {
 	case "ssh", "netdevice":
 		// A270: a network device session is SSH to the gateway, which signs
@@ -156,11 +172,14 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 		// credential (its own sign-in is refused).
 		return fmt.Sprintf("mongosh mongodb://%s:%d/?directConnection=true", local.IP, local.Port), nil
 	case "kubernetes":
-		config := fmt.Sprintf("apiVersion: v1\nkind: Config\nclusters:\n- name: trstctl-gateway\n  cluster:\n    server: http://%s:%d\n"+
+		config := fmt.Sprintf("apiVersion: v1\nkind: Config\nclusters:\n- name: trstctl-gateway\n  cluster:\n    server: http://%s:%d/.trstctl/%s\n"+
 			"users:\n- name: trstctl-session\n  user: {}\ncontexts:\n- name: trstctl-session\n  context:\n    cluster: trstctl-gateway\n    user: trstctl-session\n"+
-			"current-context: trstctl-session\n", local.IP, local.Port)
-		if err := os.WriteFile(kubeconfig, []byte(config), 0o600); err != nil {
+			"current-context: trstctl-session\n", local.IP, local.Port, scopes[0].localCapability)
+		if err := writePrivateGatewayFile(kubeconfig, []byte(config)); err != nil {
 			return "", fmt.Errorf("write kubeconfig: %w", err)
+		}
+		if scopes[0].localArtifacts != nil {
+			*scopes[0].localArtifacts = append(*scopes[0].localArtifacts, kubeconfig)
 		}
 		return fmt.Sprintf("kubectl --kubeconfig %s get pods", kubeconfig), nil
 	case "aws":
@@ -171,7 +190,13 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 		if commandGroup == "s3" {
 			commandGroup = "s3api"
 		}
-		return fmt.Sprintf("aws --no-sign-request --endpoint-url http://%s:%d --region %s %s <operation>", local.IP, local.Port, scopes[0].AWSRegion, commandGroup), nil
+		capability := scopes[0].localCapability
+		credentials := "[trstctl-tunnel]\naws_access_key_id = TRSTCTLLOCAL\naws_secret_access_key = " + capability + "\naws_session_token = " + capability + "\n"
+		path, err := writeTunnelClientFile(scopes[0], "aws", []byte(credentials))
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=%s aws --profile trstctl-tunnel --endpoint-url http://%s:%d --region %s %s <operation>", shellQuote(path), local.IP, local.Port, scopes[0].AWSRegion, commandGroup), nil
 	case "rdp":
 		host := local.IP.String()
 		if strings.Contains(host, ":") {
@@ -181,17 +206,29 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 	case "aws-console":
 		return fmt.Sprintf("Open http://%s/ in your browser", local.String()), nil
 	case "webconsole":
-		// A273: the gateway signs in to the console; the browser holds no
-		// credential and none of the console's session cookies.
-		return fmt.Sprintf("Open http://%s/ in your browser (the gateway signs in to the console for you)", local.String()), nil
+		// A273: the gateway signs in to the console; the browser holds only
+		// this tunnel's local cookie, not the console's session cookies.
+		return fmt.Sprintf("Open http://%s/?trstctl_tunnel=%s in your browser (the gateway signs in to the console for you)", local.String(), scopes[0].localCapability), nil
 	case "gcp", "azure":
-		return fmt.Sprintf("curl --fail-with-body http://%s:%d/<API-path>", local.IP, local.Port), nil
+		path, err := writeTunnelClientFile(scopes[0], "http", []byte("X-Trstctl-Tunnel-Token: "+scopes[0].localCapability+"\n"))
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("curl --fail-with-body --header @%s http://%s:%d/<API-path>", shellQuote(path), local.IP, local.Port), nil
 	case "snowflake":
-		return fmt.Sprintf("curl http://%s:%d/api/v2/statements -H 'Content-Type: application/json' --data-binary '{\"statement\":\"SELECT 1\"}'", local.IP, local.Port), nil
+		path, err := writeTunnelClientFile(scopes[0], "http", []byte("X-Trstctl-Tunnel-Token: "+scopes[0].localCapability+"\n"))
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("curl --header @%s http://%s:%d/api/v2/statements -H 'Content-Type: application/json' --data-binary '{\"statement\":\"SELECT 1\"}'", shellQuote(path), local.IP, local.Port), nil
 	case "clickhouse":
 		// ClickHouse's HTTP interface: the gateway signs each request in as
 		// the session's user; the client sends no credential.
-		return fmt.Sprintf("curl http://%s:%d/ --data-binary 'SELECT 1'", local.IP, local.Port), nil
+		path, err := writeTunnelClientFile(scopes[0], "http", []byte("X-Trstctl-Tunnel-Token: "+scopes[0].localCapability+"\n"))
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("curl --header @%s http://%s:%d/ --data-binary 'SELECT 1'", shellQuote(path), local.IP, local.Port), nil
 	case "redis":
 		// The gateway signs in as the session's user; the client sends no
 		// AUTH (one it sends is refused).
@@ -200,12 +237,59 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 	return "", nil
 }
 
+func writeTunnelClientFile(scope gatewayDelivery, kind string, content []byte) (string, error) {
+	if scope.localArtifactDir == "" {
+		return "", errors.New("local HTTP tunnel artifact directory is unavailable")
+	}
+	f, err := os.CreateTemp(scope.localArtifactDir, "trstctl-"+kind+"-*")
+	if err != nil {
+		return "", fmt.Errorf("create private HTTP tunnel client file: %w", err)
+	}
+	path := f.Name()
+	if _, err := f.Write(content); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return "", fmt.Errorf("write private HTTP tunnel client file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", fmt.Errorf("close private HTTP tunnel client file: %w", err)
+	}
+	if scope.localArtifacts != nil {
+		*scope.localArtifacts = append(*scope.localArtifacts, path)
+	}
+	return path, nil
+}
+
+// Replace the named kubeconfig atomically with a newly private file. os.WriteFile
+// would keep an old file's public mode and follow a symlink while writing the
+// local capability.
+func writePrivateGatewayFile(path string, content []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer func() { _ = os.Remove(tmp) }()
+	if _, err := f.Write(content); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
 type gatewayDelivery struct {
-	AWSService string `json:"aws_service"`
-	AWSRegion  string `json:"aws_region"`
-	Address    string `json:"address"`
-	SPIFFEID   string `json:"spiffe_id"`
-	CAPEM      string `json:"ca_pem"`
+	AWSService       string `json:"aws_service"`
+	AWSRegion        string `json:"aws_region"`
+	Address          string `json:"address"`
+	SPIFFEID         string `json:"spiffe_id"`
+	CAPEM            string `json:"ca_pem"`
+	localCapability  string
+	localArtifactDir string
+	localArtifacts   *[]string
 }
 
 func readGatewayDelivery(ctx context.Context, client *http.Client, server, token, tenant, sessionID string) (gatewayDelivery, string, error) {

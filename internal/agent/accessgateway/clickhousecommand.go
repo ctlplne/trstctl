@@ -78,7 +78,7 @@ func readClickHouseRuleRequest(reader *bufio.Reader, limit *io.LimitedReader, re
 	return frame, nil
 }
 
-func relayClickHouseCommands(parent context.Context, client net.Conn, transport *http.Transport, c *commandConnection, rec *connRecorder, rewrite func(*httputil.ProxyRequest)) error {
+func relayClickHouseCommands(parent context.Context, client net.Conn, transport *http.Transport, c *commandConnection, rec *connRecorder, rewrite func(*httputil.ProxyRequest), capability string) error {
 	ctx, cancel := context.WithCancelCause(parent)
 	frames := make(chan clickhouseRuleRequest, clickhouseRuleQueue)
 	go func() {
@@ -136,7 +136,7 @@ func relayClickHouseCommands(parent context.Context, client net.Conn, transport 
 			if !ok {
 				return context.Cause(ctx)
 			}
-			err := forwardClickHouseRuleRequest(ctx, client, transport, c, rec, rewrite, frame)
+			err := forwardClickHouseRuleRequest(ctx, client, transport, c, rec, rewrite, frame, capability)
 			closeAfter := frame.request.Close
 			frame.done()
 			if err != nil {
@@ -186,8 +186,12 @@ func clickhouseRuleSQL(request *http.Request, body []byte) ([]byte, string, stri
 	return sql, "query", parent
 }
 
-func forwardClickHouseRuleRequest(ctx context.Context, client io.Writer, transport *http.Transport, c *commandConnection, rec *connRecorder, rewrite func(*httputil.ProxyRequest), frame clickhouseRuleRequest) error {
+func forwardClickHouseRuleRequest(ctx context.Context, client io.Writer, transport *http.Transport, c *commandConnection, rec *connRecorder, rewrite func(*httputil.ProxyRequest), frame clickhouseRuleRequest, capability string) error {
 	request := frame.request
+	if !trustedTunnelOrigin(request) || !trustedTunnelCapability(request, capability, tunnelHTTPHeader) {
+		return writeClickHouseRuleProblem(client, request, http.StatusForbidden, "TRSTCTL_LOCAL_SESSION_REFUSED", "")
+	}
+	stripTunnelCapability(request, capability, tunnelHTTPHeader)
 	sql, phase, parent := clickhouseRuleSQL(request, frame.body)
 	defer secret.Wipe(sql)
 	operations := []string{}

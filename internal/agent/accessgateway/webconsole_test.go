@@ -61,11 +61,20 @@ func (b *webBrowser) seen() []byte {
 
 func newWebBrowser(t *testing.T, ctx context.Context, intent SessionIntent, credential string, state *webConsoleState, rec *connRecorder) *webBrowser {
 	t.Helper()
+	if intent.TicketDigest == "" {
+		intent.TicketDigest = TicketDigest("web-browser-fixture:" + intent.SessionID)
+	}
+	intent.localCapability = localTunnelCapability("web-browser-fixture:" + intent.SessionID)
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	b := &webBrowser{jar: jar}
+	local, err := url.Parse(webTunnel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jar.SetCookies(local, []*http.Cookie{{Name: tunnelCookieName, Value: intent.localCapability, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode}}) // #nosec G124 -- test browser connects over plain HTTP loopback, where Secure would suppress the session cookie (CWE-614)
 	transport := &http.Transport{DialContext: func(context.Context, string, string) (net.Conn, error) {
 		browserEnd, gatewayEnd := net.Pipe()
 		go func() {
@@ -171,12 +180,12 @@ func TestWebConsoleFormSignInKeepsTheCredentialFromTheBrowserA273(t *testing.T) 
 
 	local, _ := url.Parse(webTunnel)
 	for _, c := range browser.jar.Cookies(local) {
-		if c.Name != infratest.WebConsoleXSRFCookie {
+		if c.Name != infratest.WebConsoleXSRFCookie && c.Name != tunnelCookieName {
 			t.Fatalf("the browser holds the console's cookie %s", c.Name)
 		}
 	}
-	if len(browser.jar.Cookies(local)) != 1 {
-		t.Fatal("the template-named XSRF cookie did not reach the browser")
+	if len(browser.jar.Cookies(local)) != 2 {
+		t.Fatal("the local capability and template-named XSRF cookie did not reach the browser")
 	}
 	seen := browser.seen()
 	for _, leak := range append([]string{webTestPassword, base64.StdEncoding.EncodeToString([]byte("admin:" + webTestPassword)), infratest.WebConsoleSessionCookie, infratest.WebConsolePreCookie}, console.SessionCookies()...) {

@@ -45,17 +45,18 @@ func TestCR006GatewayBlocksCRCommentedTruncateBeforeForwarding(t *testing.T) {
 		policyDigest: digest, job: relay.Job{JobID: 43, Attempt: 1}, policy: policy, reviewer: reviewer, expiresAt: time.Now().Add(time.Minute)}
 	served := make(chan error, 1)
 	go func() {
-		served <- serveClickHouse(ctx, gatewaySide, []byte(`{"username":"fixture_session","password":"fixture"}`), httpUpstream{URL: srv.URL}, nil, nil, guard)
+		served <- serveClickHouse(ctx, gatewaySide, []byte(`{"username":"fixture_session","password":"fixture"}`), httpUpstream{URL: srv.URL, TunnelCapability: localTunnelCapability("cr006-ticket")}, nil, nil, guard)
 	}()
 	defer func() { _ = client.Close(); <-served }()
 	reader := bufio.NewReader(client)
 	send := func(target, body string) (int, string) {
 		t.Helper()
 		_ = client.SetDeadline(time.Now().Add(20 * time.Second))
-		request, err := http.NewRequest(http.MethodPost, "http://gateway"+target, strings.NewReader(body))
+		request, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:18080"+target, strings.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
 		}
+		request.Header.Set("X-Trstctl-Tunnel-Token", localTunnelCapability("cr006-ticket"))
 		if err := request.Write(client); err != nil {
 			t.Fatal(err)
 		}

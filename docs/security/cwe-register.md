@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3622 annotated sites across 35 rules. Each row is
+3630 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1830,7 +1830,7 @@ not this file.
 | `internal/store/store_isolation_test.go:447` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:495` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 
-### G124 — CWE-1004 Sensitive cookie without protective attributes (50 sites)
+### G124 — CWE-1004 Sensitive cookie without protective attributes (52 sites)
 
 | Location | Reason |
 |---|---|
@@ -1847,7 +1847,9 @@ not this file.
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/agent/accessgateway/webconsole.go:971` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
+| `internal/agent/accessgateway/browser_tunnel.go:144` | CLI loopback uses plain HTTP, so Secure would prevent the required cookie (CWE-614) |
+| `internal/agent/accessgateway/webconsole.go:974` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
+| `internal/agent/accessgateway/webconsole_test.go:77` | test browser connects over plain HTTP loopback, where Secure would suppress the session cookie (CWE-614) |
 | `internal/api/auth.go:1242` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
 | `internal/api/auth.go:1253` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth.go:1277` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
@@ -1906,7 +1908,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (461 sites)
+### G204 — CWE-78 OS command injection (462 sites)
 
 | Location | Reason |
 |---|---|
@@ -2024,6 +2026,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
+| `internal/cli/access_tunnel_cap_cr037_test.go:86` | fixed stock-client command and this test's private kubeconfig (CWE-78) |
 | `internal/cli/cbom_scan.go:91` | the operator names the scanner and its arguments; running it is the command's purpose (CWE-78) |
 | `internal/cli/cli_test.go:2634` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:464` | operator-configured local-ops action command; running it is the feature (CWE-78) |
@@ -2220,8 +2223,8 @@ not this file.
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_fixture_test.go:394` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:175` | the stock kubectl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:198` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:31` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:68` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
@@ -2513,7 +2516,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (844 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (848 sites)
 
 | Location | Reason |
 |---|---|
@@ -2871,9 +2874,13 @@ not this file.
 | `internal/cbom/sourcescan/sourcescan.go:148` | a repository the operator named; reading its files is the product function (CWE-22) |
 | `internal/cbom/sourcescan/sourcescan.go:680` | a repository the operator named; reading its files is the product function (CWE-22) |
 | `internal/cbom/tlssource/tlssource_key_verdict_test.go:19` | a fixed test fixture, named by the test itself (CWE-22) |
-| `internal/cli/access_agent.go:136` | the operator names their own attestation payload file (CWE-22) |
+| `internal/cli/access_agent.go:137` | the operator names their own attestation payload file (CWE-22) |
 | `internal/cli/access_agent_test.go:129` | the file the test's own child wrote in the test's temp dir (CWE-22) |
-| `internal/cli/access_connect.go:61` | the operator names their own ticket file (CWE-22) |
+| `internal/cli/access_aws_connect_test.go:29` | file was created by gatewayClientLine in this test's private temporary directory (CWE-22) |
+| `internal/cli/access_aws_connect_test.go:52` | file was created by gatewayClientLine in this test's private temporary directory (CWE-22) |
+| `internal/cli/access_connect.go:63` | the operator names their own ticket file (CWE-22) |
+| `internal/cli/access_tunnel_cap_cr037_test.go:42` | reads the kubeconfig created in this test's private temporary directory (CWE-22) |
+| `internal/cli/access_tunnel_cap_cr037_test.go:46` | reads this test's fixed symlink target in its private temporary directory (CWE-22) |
 | `internal/cli/assurance_verify.go:41` | operator-named local file (CWE-22) |
 | `internal/cli/assurance_verify.go:46` | operator-named local file (CWE-22) |
 | `internal/cli/audit_verify.go:203` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
@@ -3143,8 +3150,8 @@ not this file.
 | `internal/server/pam_desktop_served_test.go:187` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:460` | unique owned task file under fixed lab account home (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:465` | unique owned task file under fixed lab account home (CWE-22) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:47` | test reads the cluster CA its runner wrote (CWE-22) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:162` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_private_ca_served_test.go:84` | the fixture's own data directory (CWE-22) |
 | `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_gateway_ssh_served_test.go:282` | the test's own temporary files (CWE-22) |
@@ -3362,7 +3369,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (145 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (146 sites)
 
 | Location | Reason |
 |---|---|
@@ -3421,6 +3428,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/cbom/hostsource/hostsource_test.go:23` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/cli/access_tunnel_cap_cr037_test.go:22` | intentionally public old file proves the new kubeconfig is replaced with private mode (CWE-732) |
 | `internal/cli/cbom_scan_test.go:24` | the stand-in scanner must be executable (CWE-276) |
 | `internal/cli/cbom_scan_test.go:41` | executable stand-in (CWE-276) |
 | `internal/cli/cli_test.go:2664` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -3700,8 +3708,8 @@ not this file.
 | `internal/server/pam_gateway_azure_served_test.go:87` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:175` | the stock kubectl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:198` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:164` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
@@ -3839,8 +3847,8 @@ not this file.
 | `internal/server/pam_agent_launcher_served_test.go:38` | the launched agent writes beside the path its own test named (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:47` | the launched agent writes beside the path its own test named (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:187` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:47` | test reads the cluster CA its runner wrote (CWE-22) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:162` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_private_ca_served_test.go:88` | the fixture's own data directory (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:513` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:517` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
@@ -3952,8 +3960,8 @@ not this file.
 | `internal/server/audit_feed_index_template_lab_test.go:38` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:54` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:61` | the runner's own lab search engine (CWE-918) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:65` | test calls the cluster its runner named (CWE-918) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:71` | test calls the cluster its runner named (CWE-918) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:66` | test calls the cluster its runner named (CWE-918) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:72` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/secret_render_served_test.go:134` | the test application or the lab nginx on loopback (CWE-918) |
 | `internal/server/secret_render_served_test.go:136` | the test application or the lab nginx on loopback (CWE-918) |
 | `internal/server/secrets_served_test.go:264` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |

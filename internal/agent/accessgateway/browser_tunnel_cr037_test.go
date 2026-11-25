@@ -318,9 +318,16 @@ func TestCR037GatewayRejectsCrossSiteAndReboundBrowserRequests(t *testing.T) {
 	k8sTunnel := v9Tunnel(t, gatewayAddr, k8sID, k8sTicket)
 	chTunnel := v9Tunnel(t, gatewayAddr, chID, chTicket)
 
+	// The CLI prints a one-time capability URL; its loopback 303 installs a
+	// SameSite cookie before any request reaches the upstream console.
+	resp, _, _, _ := v9Send(t, webTunnel, "GET /?trstctl_tunnel="+localTunnelCapability(webTicket)+" HTTP/1.1\r\nHost: "+webTunnel+"\r\nSec-Fetch-Site: none\r\nConnection: close\r\n\r\n")
+	if resp.StatusCode != http.StatusSeeOther || len(resp.Cookies()) != 1 || !resp.Cookies()[0].HttpOnly || resp.Cookies()[0].SameSite != http.SameSiteStrictMode {
+		t.Fatalf("browser bootstrap = %d cookies=%v, want 303 and one HttpOnly Strict cookie", resp.StatusCode, resp.Cookies())
+	}
+	webCookie := resp.Cookies()[0].Name + "=" + resp.Cookies()[0].Value
 	// Control: the operator's own same-origin form post is served.
 	form := "user=control"
-	resp, _, _, _ := v9Send(t, webTunnel, "POST /console/users/delete HTTP/1.1\r\nHost: "+webTunnel+"\r\nOrigin: http://"+webTunnel+
+	resp, _, _, _ = v9Send(t, webTunnel, "POST /console/users/delete HTTP/1.1\r\nHost: "+webTunnel+"\r\nCookie: "+webCookie+"\r\nOrigin: http://"+webTunnel+
 		"\r\nReferer: http://"+webTunnel+"/console/users\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/x-www-form-urlencoded\r\n"+
 		fmt.Sprintf("Content-Length: %d\r\nConnection: close\r\n\r\n%s", len(form), form))
 	if resp.StatusCode != http.StatusNoContent {
@@ -334,16 +341,16 @@ func TestCR037GatewayRejectsCrossSiteAndReboundBrowserRequests(t *testing.T) {
 	// (1) Web console, cross-site form post (a top-level navigation from
 	// https://evil.example: no preflight).
 	form = "user=admin"
-	resp, _, _, _ = v9Send(t, webTunnel, "POST /console/users/delete HTTP/1.1\r\nHost: "+webTunnel+"\r\nOrigin: https://evil.example"+
+	resp, _, _, _ = v9Send(t, webTunnel, "POST /console/users/delete HTTP/1.1\r\nHost: "+webTunnel+"\r\nCookie: "+webCookie+"\r\nOrigin: https://evil.example"+
 		"\r\nReferer: https://evil.example/landing.html\r\nSec-Fetch-Site: cross-site\r\nSec-Fetch-Mode: navigate\r\nSec-Fetch-Dest: document"+
 		"\r\nContent-Type: application/x-www-form-urlencoded\r\n"+fmt.Sprintf("Content-Length: %d\r\nConnection: close\r\n\r\n%s", len(form), form))
 	acted = append(acted, fmt.Sprintf("web cross-site POST -> %d", resp.StatusCode))
 	// (2) Web console, DNS-rebound read (the page's own origin, Host = its name).
 	resp, body, _, _ := v9Send(t, webTunnel, "GET /console/secrets HTTP/1.1\r\nHost: rebind.attacker.example:"+strings.Split(webTunnel, ":")[1]+
-		"\r\nSec-Fetch-Site: same-origin\r\nConnection: close\r\n\r\n")
+		"\r\nCookie: "+webCookie+"\r\nSec-Fetch-Site: same-origin\r\nConnection: close\r\n\r\n")
 	acted = append(acted, fmt.Sprintf("web rebound GET -> %d %q", resp.StatusCode, body))
 	// (3) Kubernetes, cross-site WebSocket (no CORS for WebSockets): exec in a pod.
-	resp, _, wsConn, wsr := v9Send(t, k8sTunnel, "GET /api/v1/namespaces/default/pods/web/exec?command=sh&stdin=true&stdout=true HTTP/1.1\r\nHost: "+k8sTunnel+
+	resp, _, wsConn, wsr := v9Send(t, k8sTunnel, "GET "+tunnelKubernetesPrefix+localTunnelCapability(k8sTicket)+"/api/v1/namespaces/default/pods/web/exec?command=sh&stdin=true&stdout=true HTTP/1.1\r\nHost: "+k8sTunnel+
 		"\r\nOrigin: https://evil.example\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: "+v9WSKey+
 		"\r\nSec-WebSocket-Protocol: v4.channel.k8s.io\r\nSec-Fetch-Site: cross-site\r\nSec-Fetch-Mode: websocket\r\n\r\n")
 	if resp.StatusCode == http.StatusSwitchingProtocols {
@@ -359,7 +366,7 @@ func TestCR037GatewayRejectsCrossSiteAndReboundBrowserRequests(t *testing.T) {
 	// (3b) Web console, cross-site WebSocket to the console's terminal: the
 	// console checks Origin, the gateway rewrites it to the console's own.
 	resp, _, wsConn, wsr = v9Send(t, webTunnel, "GET /console/terminal HTTP/1.1\r\nHost: "+webTunnel+
-		"\r\nOrigin: https://evil.example\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: "+v9WSKey+
+		"\r\nCookie: "+webCookie+"\r\nOrigin: https://evil.example\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: "+v9WSKey+
 		"\r\nSec-Fetch-Site: cross-site\r\nSec-Fetch-Mode: websocket\r\n\r\n")
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		_, _ = wsConn.Write(wsFrame(0x1, []byte("id\n"), true))
@@ -369,13 +376,13 @@ func TestCR037GatewayRejectsCrossSiteAndReboundBrowserRequests(t *testing.T) {
 		acted = append(acted, fmt.Sprintf("web cross-site WebSocket terminal -> %d", resp.StatusCode))
 	}
 	// (4) Kubernetes, DNS-rebound read of the namespace's secrets.
-	resp, body, _, _ = v9Send(t, k8sTunnel, "GET /api/v1/namespaces/default/secrets HTTP/1.1\r\nHost: rebind.attacker.example:"+strings.Split(k8sTunnel, ":")[1]+
+	resp, body, _, _ = v9Send(t, k8sTunnel, "GET "+tunnelKubernetesPrefix+localTunnelCapability(k8sTicket)+"/api/v1/namespaces/default/secrets HTTP/1.1\r\nHost: rebind.attacker.example:"+strings.Split(k8sTunnel, ":")[1]+
 		"\r\nAccept: application/json\r\nConnection: close\r\n\r\n")
 	acted = append(acted, fmt.Sprintf("k8s rebound GET secrets -> %d %q", resp.StatusCode, body))
 	// (5) ClickHouse, cross-site form post with an empty text/plain body: the
 	// statement is in the action URL's query.
 	resp, _, _, _ = v9Send(t, chTunnel, "POST /?query=DROP%20TABLE%20victim HTTP/1.1\r\nHost: "+chTunnel+"\r\nOrigin: https://evil.example"+
-		"\r\nSec-Fetch-Site: cross-site\r\nSec-Fetch-Mode: navigate\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+		"\r\nX-Trstctl-Tunnel-Token: "+localTunnelCapability(chTicket)+"\r\nSec-Fetch-Site: cross-site\r\nSec-Fetch-Mode: navigate\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
 	acted = append(acted, fmt.Sprintf("clickhouse cross-site POST -> %d", resp.StatusCode))
 
 	time.Sleep(300 * time.Millisecond)

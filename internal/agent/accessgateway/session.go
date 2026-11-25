@@ -111,8 +111,9 @@ type SessionIntent struct {
 	TargetID        string            `json:"target_id"`
 	ExpiresAt       time.Time         `json:"expires_at"`
 	TicketDigest    string            `json:"ticket_digest"`
-	CredentialRef   string            `json:"credential_ref,omitempty"`
-	RequiredAgentID string            `json:"required_agent_id"`
+	localCapability string
+	CredentialRef   string `json:"credential_ref,omitempty"`
+	RequiredAgentID string `json:"required_agent_id"`
 	// SSHAddress (host:port), SSHPrincipal and SSHHostKeyFingerprints
 	// (SHA256:...) route an SSH session; they are public facts.
 	SSHAddress             string   `json:"ssh_address,omitempty"`

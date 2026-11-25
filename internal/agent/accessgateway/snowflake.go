@@ -95,7 +95,7 @@ func serveSnowflake(ctx context.Context, client net.Conn, raw []byte, upstream h
 	}
 	defer key.Destroy()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if refuseUntrustedTunnelRequest(w, r) {
+		if refuseUntrustedTunnelRequest(w, r, upstream.TunnelCapability, tunnelHTTPHeader) {
 			return
 		}
 		if r.URL.RawPath != "" || !snowflakeSQLPath.MatchString(r.URL.Path) || (r.Method != http.MethodGet && r.Method != http.MethodPost) || r.Header.Get("Upgrade") != "" {
