@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -80,6 +81,7 @@ func TestKMIPListenerServesEachTenantsEnrolledClients(t *testing.T) {
 		"11111111-1111-4111-8111-111111111111": {"tenant-a", "secret-a"},
 		"22222222-2222-4222-8222-222222222222": {"tenant-b", "secret-b"},
 	}}
+	var standingBlocked atomic.Bool
 	poolSet := bulkhead.NewSet(bulkhead.Config{Name: bulkhead.SubsystemKMIP, Workers: 4, Queue: 8})
 	t.Cleanup(poolSet.Close)
 	var wrapper *seal.LocalKEK
@@ -105,6 +107,12 @@ func TestKMIPListenerServesEachTenantsEnrolledClients(t *testing.T) {
 		EventLog:   log,
 		KeyWrapper: wrapper,
 		Clients:    directory,
+		ClientCertificateStanding: func(_ context.Context, tenantID string, _ []byte) error {
+			if tenantID == "tenant-a" && standingBlocked.Load() {
+				return errors.New("tenant A client certificate revoked")
+			}
+			return nil
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -192,6 +200,12 @@ func TestKMIPListenerServesEachTenantsEnrolledClients(t *testing.T) {
 	issued := dial(deployment)
 	if ids := locateIDs(t, exchange(issued, kmipRequestFrame(OperationLocate, nil))); len(ids) != 0 {
 		t.Fatalf("the configured tenant's CA-issued client sees %v", ids)
+	}
+	standingBlocked.Store(true)
+	query := kmipRequestFrame(OperationQuery, ttlvStructure(TagRequestPayload,
+		ttlvEnumeration(TagQueryFunction, queryFunctionOperations)))
+	if reason := failureReason(t, exchange(a, query), OperationQuery); reason != resultReasonAuthFailed {
+		t.Fatalf("a registered client denied by live certificate standing = reason %#x", reason)
 	}
 
 	certB, err := readCertificateDER(ownB.ControlPlane.CertFile)

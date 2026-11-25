@@ -1643,9 +1643,21 @@ For legacy gear, the binary can also mount an opt-in KMIP listener:
 - `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE=/path/client-ca.crt`
 - `TRSTCTL_PROTOCOLS_KMIP_CLIENT_REGISTRATIONS=true` (optional: every tenant's own clients)
 
-In the single-tenant listener mode, `client_ca_file` must name a CA dedicated to
-that tenant's KMIP clients. A shared issuing CA would let another tenant's leaf
-pass the TLS client-chain check.
+In the single-tenant listener mode, an external `client_ca_file` must name a CA
+dedicated to that tenant's KMIP clients. A shared external CA would let another
+tenant's leaf pass the TLS client-chain check. When the client CA is this
+deployment's issuing CA, the listener also checks the presented serial in the
+configured tenant's issuer ledger and matches the tenant's inventory row: an
+unknown, pending, or revoked certificate is refused. It checks on a new TLS
+connection and before every KMIP frame, so
+revoking a certificate stops an already-open connection at its next request.
+The listener closes connections after at most 15 minutes and checks the client
+certificate's NotAfter before every frame. Issuer-standing refusals are logged
+and audited.
+For an external client CA, trstctl has no issuer revocation ledger; use a
+dedicated CA. Remove a client's registration when registrations are enabled;
+in single-tenant client-CA mode, replace the trust bundle and restart the
+listener to stop a compromised external certificate.
 
 The listener is raw KMIP over mutual TLS 1.3; the TLS layer verifies the client cert
 chain before the KMIP handler sees a frame. The service stores objects under the

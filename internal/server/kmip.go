@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -56,6 +59,9 @@ type KMIPFactoryDeps struct {
 	// Clients resolves and enrolls tenants' registered KMIP clients; the
 	// runtime uses it when protocols.kmip.client_registrations is on.
 	Clients KMIPClientDirectory
+	// ClientCertificateStanding checks platform-issued client leaves against
+	// the issuing CA's tenant-scoped revocation ledger before any KMIP use.
+	ClientCertificateStanding func(context.Context, string, []byte) error
 }
 
 // kmipClientDirectory is the orchestrator as the KMIP runtime's client
@@ -73,22 +79,56 @@ func (s *Server) configureKMIPSurface(ctx context.Context, d Deps, clients KMIPC
 		return nil
 	}
 	runtime, err := d.KMIPFactory(KMIPFactoryDeps{
-		StartupContext:     ctx,
-		TenantServiceCheck: d.TenantServiceCheck,
-		Protocols:          d.Protocols,
-		ProtocolTenant:     d.ProtocolTenant,
-		Bulkhead:           s.bulk,
-		Log:                s.logger,
-		EventLog:           d.Log,
-		KeyWrapper:         d.KEK,
-		TenantCrypto:       d.TenantCrypto,
-		Clients:            clients,
+		StartupContext:            ctx,
+		TenantServiceCheck:        d.TenantServiceCheck,
+		Protocols:                 d.Protocols,
+		ProtocolTenant:            d.ProtocolTenant,
+		Bulkhead:                  s.bulk,
+		Log:                       s.logger,
+		EventLog:                  d.Log,
+		KeyWrapper:                d.KEK,
+		TenantCrypto:              d.TenantCrypto,
+		Clients:                   clients,
+		ClientCertificateStanding: s.kmipClientCertificateStanding(d),
 	})
 	if err != nil {
 		return fmt.Errorf("server: configure KMIP: %w", err)
 	}
 	s.kmip = runtime
 	return nil
+}
+
+func (s *Server) kmipClientCertificateStanding(d Deps) func(context.Context, string, []byte) error {
+	issuer := append([]byte(nil), s.caCertDER...)
+	return func(ctx context.Context, tenantID string, leafDER []byte) error {
+		if len(issuer) == 0 || crypto.VerifyLeafSignedByCA(leafDER, issuer) != nil {
+			// An external client CA's revocation status is not in our issuer
+			// ledger. The TLS client-CA chain and leaf lifetime still apply.
+			return nil
+		}
+		if d.Store == nil || tenantID == "" {
+			return errors.New("server: KMIP platform client certificate has no tenant-scoped standing reader")
+		}
+		info, err := certinfo.Inspect(leafDER)
+		if err != nil {
+			return fmt.Errorf("server: inspect KMIP client certificate: %w", err)
+		}
+		standing, _, err := issuedCertStatus(ctx, d.Store, tenantID, IssuingCAID(), info.SerialNumber)
+		if err != nil {
+			return fmt.Errorf("server: read KMIP client certificate standing: %w", err)
+		}
+		if standing != issuedCertGood {
+			return errors.New("server: KMIP client certificate is not in good standing at the issuing CA")
+		}
+		row, err := d.Store.GetCertificateByFingerprint(ctx, tenantID, info.SHA256Fingerprint)
+		if err != nil {
+			return fmt.Errorf("server: KMIP client certificate is not in the tenant's inventory: %w", err)
+		}
+		if !strings.EqualFold(row.Serial, info.SerialNumber) || row.Status == "revoked" {
+			return errors.New("server: KMIP client certificate inventory does not match the issuer's good serial")
+		}
+		return nil
+	}
 }
 
 // KMIPServed reports whether the running server has the KMS-02 KMIP listener

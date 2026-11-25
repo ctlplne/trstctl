@@ -391,6 +391,14 @@ func ServerCertFromFiles(certFile, keyFile string) (*ServerCert, error) {
 // crypto/tls and crypto/x509 handling inside the AN-3 boundary while raw TCP
 // protocols such as KMIP consume an ordinary net.Listener.
 func MutualTLSServerListenerFromFiles(ln net.Listener, certFile, keyFile, clientCAFile string) (net.Listener, error) {
+	return MutualTLSServerListenerFromFilesWithClientVerifier(ln, certFile, keyFile, clientCAFile, nil)
+}
+
+// MutualTLSServerListenerFromFilesWithClientVerifier also checks the verified
+// client leaf on every handshake, including a resumed handshake. The caller
+// supplies the current authorization/standing decision; TLS still verifies
+// the chain first. A nil verifier preserves ordinary mutual-TLS behavior.
+func MutualTLSServerListenerFromFilesWithClientVerifier(ln net.Listener, certFile, keyFile, clientCAFile string, verify func([]byte) error) (net.Listener, error) {
 	reload, err := newReloadingServerCert(certFile, keyFile)
 	if err != nil {
 		return nil, err
@@ -402,6 +410,21 @@ func MutualTLSServerListenerFromFiles(ln net.Listener, certFile, keyFile, client
 	cfg := serverTLSConfig(*reload.current.Load(), clientCAs)
 	cfg.Certificates = nil
 	cfg.GetCertificate = reload.GetCertificate
+	if verify != nil {
+		prior := cfg.VerifyConnection
+		cfg.VerifyConnection = func(state tls.ConnectionState) error {
+			if prior != nil {
+				if err := prior(state); err != nil {
+					return err
+				}
+			}
+			if len(state.PeerCertificates) == 0 || state.PeerCertificates[0] == nil {
+				return errors.New("mtls: verified client certificate missing")
+			}
+			return verify(state.PeerCertificates[0].Raw)
+		}
+		cfg.SessionTicketsDisabled = true
+	}
 	return tls.NewListener(ln, cfg), nil
 }
 

@@ -6400,6 +6400,15 @@ and replay rejects duplicate creation IDs. State changes use broker-checked
 stream positions, so a stale rekey cannot commit after another replica's
 revocation. Under concurrent unrelated writes, a state change can return a
 position-conflict error; the client can retry after refreshing the object.
+For KMIP clients whose certificates this deployment's issuing CA signed, the
+listener checks the same tenant-scoped standing as the OCSP responder and the
+exact certificate fingerprint in tenant inventory on a new handshake and before
+each frame. A pending, unknown, or revoked serial is refused
+and the refusal logged and audited; held connections also end after 15 minutes
+or at the certificate's NotAfter. The listener has no revocation source for an
+external client CA: that CA must be dedicated to the tenant. Operators remove a
+registered client or replace the CA trust bundle and restart the listener in
+single-tenant client-CA mode to stop a compromised external certificate.
 PyKMIP 0.10 drives the key-pair path in an opt-in proof
 (`TRSTCTL_PYKMIP_PROOF=1 go test ./internal/kmip -run PyKMIP -v`). With `protocols.kmip.client_registrations`, one
 listener serves every tenant's self-service clients: a tenant registers a

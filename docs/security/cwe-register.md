@@ -3011,7 +3011,7 @@ not this file.
 | `internal/keyposture/keyposture_test.go:14` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/kmip/pykmip_client_test.go:65` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kmip/pykmip_tenants_test.go:68` | test-generated TLS material in the test's temp dir (CWE-22) |
-| `internal/kmip/tenant_router_test.go:226` | test-generated TLS material in the test's temp dir (CWE-22) |
+| `internal/kmip/tenant_router_test.go:240` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:226` | the test's own temp directory (CWE-22) |
 | `internal/kms/tpm/swtpm_nginx_reexec_test.go:147` | the test's own temp directory (CWE-22) |
 | `internal/kms/tpm/swtpm_nginx_reexec_test.go:208` | the test's own temp directory (CWE-22) |

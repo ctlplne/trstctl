@@ -10,16 +10,24 @@ import (
 	"log/slog"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/server"
 )
 
-const defaultAddr = ":5696"
+const (
+	defaultAddr               = ":5696"
+	maxKMIPConnectionLifetime = 15 * time.Minute
+)
 
 // NewFactory adapts the licensed KMIP runtime to the core server seam.
 func NewFactory() server.KMIPFactory {
@@ -82,13 +90,15 @@ func NewFactory() server.KMIPFactory {
 			return service, nil
 		}
 		r := &Runtime{
-			addr:         addr,
-			certFile:     cfg.CertFile,
-			keyFile:      cfg.KeyFile,
-			clientCAFile: cfg.ClientCAFile,
-			pool:         pool,
-			log:          logger,
+			addr:                      addr,
+			certFile:                  cfg.CertFile,
+			keyFile:                   cfg.KeyFile,
+			clientCAFile:              cfg.ClientCAFile,
+			pool:                      pool,
+			log:                       logger,
+			clientCertificateStanding: d.ClientCertificateStanding,
 		}
+		r.connectionLifetime.Store(int64(maxKMIPConnectionLifetime))
 		// A197: with client registrations on, every tenant's enrolled clients
 		// share the listener; the configured tenant, when there is one, keeps
 		// the clients the deployment's client CA issued.
@@ -128,11 +138,13 @@ type Runtime struct {
 	// serve every client.
 	service *Server
 	// clients, tenants and clientCAs serve tenants' registered clients (A197).
-	clients   server.KMIPClientDirectory
-	tenants   *tenantServers
-	clientCAs *mtls.ClientChainVerifier
-	pool      *bulkhead.Pool
-	log       *slog.Logger
+	clients                   server.KMIPClientDirectory
+	tenants                   *tenantServers
+	clientCAs                 *mtls.ClientChainVerifier
+	pool                      *bulkhead.Pool
+	log                       *slog.Logger
+	clientCertificateStanding func(context.Context, string, []byte) error
+	connectionLifetime        atomic.Int64
 }
 
 func (r *Runtime) Addr() string { return r.addr }
@@ -146,7 +158,16 @@ func (r *Runtime) Serve(ctx context.Context, ln net.Listener) error {
 		// then served for the tenant the certificate belongs to, or refused.
 		tlsLn, err = mtls.SelfAuthorizingClientTLSServerListenerFromFiles(ln, r.certFile, r.keyFile)
 	} else {
-		tlsLn, err = mtls.MutualTLSServerListenerFromFiles(ln, r.certFile, r.keyFile, r.clientCAFile)
+		verify := func(leafDER []byte) error {
+			checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			if err := r.checkClientStanding(checkCtx, r.service, leafDER); err != nil {
+				r.refuseClient(ctx, r.service, leafDER, err)
+				return err
+			}
+			return nil
+		}
+		tlsLn, err = mtls.MutualTLSServerListenerFromFilesWithClientVerifier(ln, r.certFile, r.keyFile, r.clientCAFile, verify)
 	}
 	if err != nil {
 		_ = ln.Close()
@@ -177,17 +198,39 @@ func (r *Runtime) serve(ctx context.Context, ln net.Listener) error {
 
 func (r *Runtime) handleConn(ctx context.Context, conn net.Conn) {
 	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+	lifetime := time.Duration(r.connectionLifetime.Load())
+	if lifetime <= 0 {
+		lifetime = maxKMIPConnectionLifetime
+	}
+	end := time.Now().Add(lifetime)
+	_ = conn.SetDeadline(end)
 	chain, err := mtls.PeerCertificateChainDER(conn)
 	if err != nil {
 		r.log.Warn("KMIP mTLS peer rejected", slog.String("error", err.Error()))
+		return
+	}
+	info, err := certinfo.Inspect(chain[0])
+	if err != nil {
+		r.log.Warn("KMIP client certificate inspection failed", slog.String("error", err.Error()))
 		return
 	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		now := time.Now()
+		if !now.Before(end) || now.Before(info.NotBefore) || !now.Before(info.NotAfter) {
+			r.log.Warn("KMIP connection lifetime or client certificate validity ended")
+			return
+		}
+		readUntil := now.Add(30 * time.Second)
+		if readUntil.After(end) || readUntil.After(info.NotAfter) {
+			readUntil = end
+			if info.NotAfter.Before(end) {
+				readUntil = info.NotAfter
+			}
+		}
+		_ = conn.SetReadDeadline(readUntil)
 		frame, err := ReadFrame(conn, 1<<20)
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
@@ -200,27 +243,88 @@ func (r *Runtime) handleConn(ctx context.Context, conn net.Conn) {
 			r.log.Warn("KMIP frame read failed", slog.String("error", err.Error()))
 			return
 		}
+		// A frame may have arrived just before its read deadline. Re-check
+		// validity before resolving a tenant or executing any KMIP operation.
+		now = time.Now()
+		if !now.Before(end) || now.Before(info.NotBefore) || !now.Before(info.NotAfter) {
+			secret.Wipe(frame)
+			r.log.Warn("KMIP connection lifetime or client certificate validity ended")
+			return
+		}
 		var resp []byte
+		refused := false
 		service, err := r.serverFor(ctx, chain, frame)
 		switch {
 		case errors.Is(err, errClientNotRecognized):
 			resp = refusedResponse(frame, err.Error())
 		case err != nil:
+			secret.Wipe(frame)
 			r.log.Warn("KMIP tenant resolution failed", slog.String("error", err.Error()))
 			return
 		default:
-			resp, err = service.HandleFrame(ctx, chain[0], frame)
-			if err != nil {
-				r.log.Warn("KMIP frame handling failed", slog.String("error", err.Error()))
-				return
+			checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			standingErr := r.checkClientStanding(checkCtx, service, chain[0])
+			cancel()
+			if standingErr != nil {
+				r.refuseClient(ctx, service, chain[0], standingErr)
+				resp = refusedResponse(frame, "client certificate is no longer authorized")
+				refused = true
+			} else {
+				resp, err = service.HandleFrame(ctx, chain[0], frame)
+				if err != nil {
+					secret.Wipe(frame)
+					r.log.Warn("KMIP frame handling failed", slog.String("error", err.Error()))
+					return
+				}
 			}
 		}
-		_ = conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
-		if _, err := conn.Write(resp); err != nil {
+		secret.Wipe(frame)
+		writeNow := time.Now()
+		if !writeNow.Before(end) || !writeNow.Before(info.NotAfter) {
+			secret.Wipe(resp)
+			r.log.Warn("KMIP connection lifetime or client certificate validity ended before response")
+			return
+		}
+		writeUntil := writeNow.Add(30 * time.Second)
+		if writeUntil.After(end) {
+			writeUntil = end
+		}
+		if writeUntil.After(info.NotAfter) {
+			writeUntil = info.NotAfter
+		}
+		_ = conn.SetWriteDeadline(writeUntil)
+		_, err = conn.Write(resp)
+		secret.Wipe(resp)
+		if err != nil {
 			r.log.Warn("KMIP frame write failed", slog.String("error", err.Error()))
 			return
 		}
+		if refused {
+			return
+		}
 	}
+}
+
+func (r *Runtime) checkClientStanding(ctx context.Context, service *Server, leafDER []byte) error {
+	if service == nil {
+		return errors.New("kmip: client certificate has no tenant service")
+	}
+	if r.clientCertificateStanding == nil {
+		return nil
+	}
+	return r.clientCertificateStanding(ctx, service.tenantID, leafDER)
+}
+
+func (r *Runtime) refuseClient(ctx context.Context, service *Server, leafDER []byte, cause error) {
+	if service == nil {
+		r.log.Warn("KMIP client certificate refused", slog.String("error", cause.Error()))
+		return
+	}
+	r.log.Warn("KMIP client certificate refused", slog.String("tenant_id", service.tenantID), slog.String("error", cause.Error()))
+	data := []byte(fmt.Sprintf(`{"fingerprint":%q,"reason":"not_in_good_standing"}`, crypto.SHA256Hex(leafDER)))
+	auditCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_ = auditsink.Emit(auditCtx, service.audit, r.log, "kmip.client_certificate_refused", service.tenantID, data)
 }
 
 func (r *Runtime) Close() {
