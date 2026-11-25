@@ -59,7 +59,7 @@ func (r *GatewayRoute) Validate(driver string, explicitTrust bool) error {
 			return ErrGatewayRoute
 		}
 	case MySQL:
-		if len(r.Hosts) != 1 || r.TLS != GatewayPlain {
+		if len(r.Hosts) != 1 || r.TLS != GatewayVerifiedTLS {
 			return ErrGatewayRoute
 		}
 	default:
@@ -150,8 +150,8 @@ func GatewayTLSMode(driver string, target Target, explicitTrust bool) (string, e
 			return GatewayPlain, nil
 		}
 	case MySQL:
-		if !explicitTrust {
-			return GatewayPlain, nil
+		if target.Options["tls"] == "" || target.Options["tls"] == "true" {
+			return GatewayVerifiedTLS, nil
 		}
 	}
 	return "", ErrTrust

@@ -3037,11 +3037,16 @@ destinations the connection may use.
 
 PostgreSQL, MongoDB and MySQL access gateways use a reviewed workload route
 from the provider. MySQL's `addr` and `database` select this route separately
-from its administrator DSN. PostgreSQL and MongoDB gateways require verified
-TLS when configured with an explicit CA or certificate name. Existing MySQL
-gateway sessions use their plaintext database transport inside the configured
-network scope. At redemption, the control plane checks the current credential
-against the recorded route. A change of route or trust requires a fresh session.
+from its administrator DSN. MySQL gateway sessions always require verified TLS;
+the server must offer TLS with a certificate valid for `addr`'s host or the
+configured `tls_server_name`. Set `tls_ca_ref` for a private MySQL CA. A server
+without TLS, a bad certificate, or a credential DSN with `tls=false` is refused
+before any password proof is sent; a peer-supplied RSA key is never trusted.
+Previously issued plaintext MySQL gateway routes fail closed and need a fresh
+session. PostgreSQL and MongoDB gateways require verified TLS when configured
+with an explicit CA or certificate name. At redemption, the control plane checks
+the current credential against the recorded route. A change of route or trust
+requires a fresh session.
 Gateway agents can further limit database sockets with `--relay-egress-allow`.
 PostgreSQL gateway targets use the standard TLS request. Native-only negotiation
 and startup settings such as `sslnegotiation=direct` and `target_session_attrs`

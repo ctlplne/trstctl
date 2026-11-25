@@ -168,10 +168,6 @@ func (p *configuredDynamicProvider) DynamicSecretDatabaseGatewayRoute(ctx contex
 		return dbdsn.GatewayRoute{}, nil, "", err
 	}
 	ca, name := transport.CAPEM, transport.ServerName
-	if p.cfg.Type == dbdsn.MySQL {
-		// The workload gateway and the administrator are different routes.
-		ca, name = nil, ""
-	}
 	explicitTrust := len(ca) != 0 || name != ""
 	mode, err := dbdsn.GatewayTLSMode(p.cfg.Type, target, explicitTrust)
 	if err != nil {

@@ -4,21 +4,19 @@
 // session's account (A256). The gateway answers a stock client's handshake
 // itself and signs in upstream with the session's DSN, using the client's own
 // capability flags so the relayed command phase means the same to both ends.
-// Authentication follows the server: caching_sha2_password (the fast path, or
-// full authentication with the password encrypted to the server's RSA key, as
-// a driver does without TLS) or mysql_native_password. It is a sign-in, not a
+// Authentication follows the server over verified TLS: caching_sha2_password
+// (the fast path or full authentication) or mysql_native_password. It is a sign-in, not a
 // driver: it sends no command, and the agent binary links no database driver.
 package mysqlsignin
 
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha1" // #nosec G505 -- MySQL's mysql_native_password and the RSA-OAEP padding its servers use (CWE-327)
+	"crypto/sha1" // #nosec G505 -- MySQL's mysql_native_password protocol requires SHA-1 (CWE-327)
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -64,6 +62,13 @@ type Target struct {
 	Address, User, Database string
 	Password                []byte
 	passwordOwner           *dbdsn.Target
+}
+
+// Options binds the upstream TLS session to the reviewed database authority.
+// An empty CA uses system roots; an empty name uses the DSN host.
+type Options struct {
+	RootCAPEM  []byte
+	ServerName string
 }
 
 // Wipe clears the password.
@@ -246,10 +251,49 @@ func ParseClientResponse(p []byte) (*ClientResponse, error) {
 	return r, nil
 }
 
-// SignIn answers the server's handshake as the target's account, speaking the
-// client's capability flags (less what each hop chooses for itself), and
-// returns the server's final OK payload.
-func SignIn(conn net.Conn, server *Handshake, target *Target, client *ClientResponse) ([]byte, error) {
+// SignIn upgrades the upstream connection to verified TLS before any credential
+// proof is sent. The returned connection is the TLS one the command relay uses.
+func SignIn(conn net.Conn, server *Handshake, target *Target, client *ClientResponse, opts Options) (net.Conn, []byte, error) {
+	if server.Capabilities&ClientSSL == 0 {
+		return nil, nil, errors.New("mysqlsignin: the database does not offer TLS")
+	}
+	host, _, err := net.SplitHostPort(target.Address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("mysqlsignin: invalid database address: %w", err)
+	}
+	serverName := opts.ServerName
+	if serverName == "" {
+		serverName = host
+	}
+	var roots *x509.CertPool
+	if len(opts.RootCAPEM) != 0 {
+		roots = x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(opts.RootCAPEM) {
+			return nil, nil, errors.New("mysqlsignin: the session CA holds no certificate")
+		}
+	}
+	caps, _ := upstreamCapabilities(server, target, client)
+	request := binary.LittleEndian.AppendUint32(nil, caps)
+	request = binary.LittleEndian.AppendUint32(request, 1<<24)
+	request = append(request, client.Charset)
+	request = append(request, make([]byte, 23)...)
+	err = WritePacket(conn, 1, request)
+	secret.Wipe(request)
+	if err != nil {
+		return nil, nil, err
+	}
+	tlsConn := tls.Client(conn, &tls.Config{ServerName: serverName, RootCAs: roots, MinVersion: tls.VersionTLS12})
+	if err := tlsConn.Handshake(); err != nil {
+		return nil, nil, fmt.Errorf("mysqlsignin: the database's TLS certificate does not verify: %w", err)
+	}
+	ok, err := signInAuthenticated(tlsConn, server, target, client)
+	if err != nil {
+		return nil, nil, err
+	}
+	return tlsConn, ok, nil
+}
+
+func upstreamCapabilities(server *Handshake, target *Target, client *ClientResponse) (uint32, string) {
 	caps := (client.Capabilities&server.Capabilities)&^gatewayOnly | required
 	database := target.Database
 	if database == "" {
@@ -258,6 +302,11 @@ func SignIn(conn net.Conn, server *Handshake, target *Target, client *ClientResp
 	if database != "" {
 		caps |= ClientConnectWithDB
 	}
+	return caps | ClientSSL, database
+}
+
+func signInAuthenticated(conn net.Conn, server *Handshake, target *Target, client *ClientResponse) ([]byte, error) {
+	caps, database := upstreamCapabilities(server, target, client)
 	plugin := server.AuthPlugin
 	if plugin == "" {
 		plugin = "mysql_native_password"
@@ -277,12 +326,11 @@ func SignIn(conn net.Conn, server *Handshake, target *Target, client *ClientResp
 		p = append(append(p, database...), 0)
 	}
 	p = append(append(p, plugin...), 0)
-	err = WritePacket(conn, 1, p)
+	err = WritePacket(conn, 2, p)
 	secret.Wipe(p)
 	if err != nil {
 		return nil, err
 	}
-	nonce := server.Scramble
 	for range 4 {
 		seq, reply, err := ReadPacket(conn)
 		if err != nil {
@@ -302,7 +350,7 @@ func SignIn(conn net.Conn, server *Handshake, target *Target, client *ClientResp
 			if !ok {
 				return nil, errors.New("mysqlsignin: a malformed auth switch")
 			}
-			plugin, nonce = name, bytes.TrimRight(data, "\x00")
+			plugin, nonce := name, bytes.TrimRight(data, "\x00")
 			answer, err := scramble(plugin, target.Password, nonce)
 			if err != nil {
 				return nil, err
@@ -319,22 +367,12 @@ func SignIn(conn net.Conn, server *Handshake, target *Target, client *ClientResp
 			switch reply[1] {
 			case 0x03: // fast authentication succeeded; the OK follows
 				continue
-			case 0x04: // full authentication: ask for the server's RSA key
-				if err := WritePacket(conn, seq+1, []byte{0x02}); err != nil {
-					return nil, err
-				}
-				keySeq, keyReply, err := ReadPacket(conn)
+			case 0x04: // full authentication: only inside verified TLS
+				plain := make([]byte, len(target.Password)+1)
+				copy(plain, target.Password)
+				err := WritePacket(conn, seq+1, plain)
+				secret.Wipe(plain)
 				if err != nil {
-					return nil, err
-				}
-				if len(keyReply) < 2 || keyReply[0] != 0x01 {
-					return nil, errors.New("mysqlsignin: the server sent no RSA key")
-				}
-				encrypted, err := encryptPassword(target.Password, nonce, keyReply[1:])
-				if err != nil {
-					return nil, err
-				}
-				if err := WritePacket(conn, keySeq+1, encrypted); err != nil {
 					return nil, err
 				}
 			default:
@@ -381,31 +419,6 @@ func scramble(plugin string, password, nonce []byte) ([]byte, error) {
 		return out, nil
 	}
 	return nil, fmt.Errorf("mysqlsignin: the server asks for %q, which the gateway does not answer", plugin)
-}
-
-// encryptPassword encrypts the password (with its terminating NUL, mixed
-// with the nonce) to the server's RSA key with OAEP, as a driver does for
-// full authentication without TLS.
-func encryptPassword(password, nonce, keyPEM []byte) ([]byte, error) {
-	block, _ := pem.Decode(keyPEM)
-	if block == nil {
-		return nil, errors.New("mysqlsignin: the server's RSA key is not PEM")
-	}
-	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("mysqlsignin: the server's RSA key: %w", err)
-	}
-	key, ok := parsed.(*rsa.PublicKey)
-	if !ok {
-		return nil, errors.New("mysqlsignin: the server's key is not RSA")
-	}
-	plain := make([]byte, len(password)+1)
-	copy(plain, password)
-	for i := range plain {
-		plain[i] ^= nonce[i%len(nonce)]
-	}
-	defer secret.Wipe(plain)
-	return rsa.EncryptOAEP(sha1.New(), rand.Reader, key, plain, nil) // #nosec G401 -- the OAEP hash MySQL servers use (CWE-327)
 }
 
 func errText(p []byte) string {

@@ -7,13 +7,16 @@ import (
 	"encoding/binary"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/certtest"
 	"trstctl.com/trstctl/internal/crypto/mysqlsignin"
 )
 
@@ -27,6 +30,41 @@ const (
 	mysqlVaultPrefix   = "a261vault"
 	mysqlVaultSeedUser = "a261vault_seed_00000a2610"
 )
+
+// installPAMMySQLTLS replaces the image's auto-generated, nonconforming TLS
+// certificate with a private-CA identity the gateway can verify by name.
+// All files and the container are owned by this test; no Docker-wide cleanup.
+func installPAMMySQLTLS(t *testing.T, id string) string {
+	t.Helper()
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("db.private.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for name, data := range map[string][]byte{"ca.pem": caPEM, "server-cert.pem": certPEM, "server-key.pem": keyPEM} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, data, 0o600); err != nil { // #nosec G703 -- fixed test-only path beneath t.TempDir (CWE-22)
+			t.Fatal(err)
+		}
+		out, err := exec.Command("docker", "cp", path, id+":/var/lib/mysql/"+name).CombinedOutput() // #nosec G204 G702 -- exact container id returned by this fixture, fixed destination (CWE-78)
+		if err != nil {
+			t.Fatalf("copy fixture MySQL TLS file %s: %v %s", name, err, out)
+		}
+	}
+	for _, args := range [][]string{
+		{"exec", "-u", "root", id, "chown", "mysql:mysql", "/var/lib/mysql/ca.pem", "/var/lib/mysql/server-cert.pem", "/var/lib/mysql/server-key.pem"},
+		{"exec", "-u", "root", id, "chmod", "0600", "/var/lib/mysql/server-key.pem"},
+	} {
+		out, err := exec.Command("docker", args...).CombinedOutput() // #nosec G204 G702 -- fixture-owned container, fixed chown/chmod arguments (CWE-78)
+		if err != nil {
+			t.Fatalf("prepare fixture MySQL TLS files: %v %s", err, out)
+		}
+	}
+	if out, err := a201Exec(id, "mysql", "--protocol=TCP", "-h", "127.0.0.1", "-uroot", "-pa256-admin", "-e", "ALTER INSTANCE RELOAD TLS"); err != nil {
+		t.Fatalf("reload fixture MySQL TLS: %v %s", err, out)
+	}
+	return "file:" + filepath.Join(dir, "ca.pem")
+}
 
 // startPAMMySQLWithVault runs the pinned MySQL image with an "app" database
 // holding a note, and returns its container and a provider of per-session
@@ -46,6 +84,7 @@ func startPAMMySQLWithVault(t *testing.T, note string, vault bool) (string, stri
 		_, err := a201Exec(id, "mysql", "--protocol=TCP", "-h", "127.0.0.1", "-uroot", "-pa256-admin", "-e", "SELECT 1")
 		return err == nil
 	})
+	tlsCARef := installPAMMySQLTLS(t, id)
 	if out, err := a201Exec(id, "mysql", "--protocol=TCP", "-h", "127.0.0.1", "-uroot", "-pa256-admin", "app", "-e",
 		"CREATE TABLE notes (id INT PRIMARY KEY, note TEXT); INSERT INTO notes VALUES (1, '"+note+"');"); err != nil {
 		t.Fatalf("seed MySQL: %v %s", err, out)
@@ -54,7 +93,8 @@ func startPAMMySQLWithVault(t *testing.T, note string, vault bool) (string, stri
 	providers := []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "pam-mysql-provider", Type: "mysql",
 		AdminDSNRef: adminDSNRef,
-		Database:    "app", Addr: addr, AccountHost: "%", AllowWildcardAccountHost: true,
+		TLSCARef:    tlsCARef, TLSServerName: "db.private.test",
+		Database: "app", Addr: addr, AccountHost: "%", AllowWildcardAccountHost: true,
 		AllowedRoles: []string{"mysql-reader"}, RoleAccess: map[string]string{"mysql-reader": "read"}, MaxTTL: "1h", UsernamePrefix: "a256_mysql",
 	}}
 	vaultDSN := ""
@@ -67,6 +107,7 @@ func startPAMMySQLWithVault(t *testing.T, note string, vault bool) (string, stri
 		vaultDSN = mysqlVaultSeedUser + ":" + seedPassword + "@tcp(" + addr + ")/app"
 		providers = append(providers, config.DynamicSecretProviderConfig{
 			TenantID: servedTestTenant, ID: "pam-mysql-vault", Type: "mysql", AdminDSNRef: adminDSNRef,
+			TLSCARef: tlsCARef, TLSServerName: "db.private.test",
 			Database: "app", Addr: addr, AccountHost: "%", AllowWildcardAccountHost: true,
 			AllowedRoles: []string{mysqlVaultRole}, RoleAccess: map[string]string{mysqlVaultRole: "readwrite"},
 			MaxTTL: "1h", UsernamePrefix: mysqlVaultPrefix, AllowStaticRotation: true,

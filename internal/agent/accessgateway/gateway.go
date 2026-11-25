@@ -607,7 +607,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		}
 		dsn := s.credential()
 		defer secret.Wipe(dsn)
-		if err := serveMySQL(ctx, conn, dsn, s.intent.ExpiresAt, s.databaseDial, s.intent.DatabaseRoute.Database, rec, guard); err != nil {
+		if err := serveMySQL(ctx, conn, dsn, s.intent.ExpiresAt, s.databaseDial, s.intent.DatabaseRoute.Database, s.intent.upstreamTrust(), rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetMongo:

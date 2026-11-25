@@ -40,7 +40,7 @@ func TestCR005GuardedMySQLRefusesGBKBeforeUpstreamSignIn(t *testing.T) {
 	served := make(chan error, 1)
 	go func() {
 		served <- serveMySQL(context.Background(), gatewaySide, []byte("fixture:fixture@tcp(127.0.0.1:3306)/app"), deadline,
-			func(context.Context, string, string) (net.Conn, error) { return upstream, nil }, "", nil, &commandConnection{})
+			func(context.Context, string, string) (net.Conn, error) { return upstream, nil }, "", upstreamTrust{}, nil, &commandConnection{})
 	}()
 	if _, _, err := mysqlsignin.ReadPacket(client); err != nil {
 		t.Fatalf("gateway greeting: %v", err)

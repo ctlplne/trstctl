@@ -105,7 +105,7 @@ func (p *profile) mongoOption(key string, value []byte) (string, bool) {
 
 func (p *profile) mysqlOption(key string, value []byte) bool {
 	if p.purpose == Gateway {
-		return key == "tls" && oneOf(value, "false") || key == "parseTime" && oneOf(value, "true", "false", "0", "1")
+		return key == "tls" && oneOf(value, "true") || key == "parseTime" && oneOf(value, "true", "false", "0", "1")
 	}
 	switch key {
 	case "allowAllFiles":

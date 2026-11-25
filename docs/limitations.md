@@ -9653,9 +9653,11 @@ What comes next:
 - SQL Server sessions (x86 block) and Oracle sessions.
 - ClickHouse's native protocol (`clickhouse-client`) through the gateway.
 - MongoDB through `mongodb+srv://` (DNS seed lists) and SCRAM-SHA-1 users.
-- MySQL over TLS: the gateway signs in over plaintext, where full authentication trusts the
-  RSA key the server sends (as a driver does without TLS). Verified TLS with the
-  provider's CA, carried as PostgreSQL, Redis and MongoDB sessions carry theirs, comes next.
+
+MySQL gateway sessions now require verified TLS, with the provider's private CA
+carried in the job when configured. Servers using MySQL's auto-generated,
+nonconforming certificate need an operator-issued certificate and a fresh
+session before the gateway will sign in.
 
 ## Agent launcher (A257) — served
 

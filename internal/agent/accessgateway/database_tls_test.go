@@ -12,7 +12,7 @@ import (
 )
 
 // TestDatabaseSessionCarriesItsProvidersCAA256L1 is A256-L1: a PostgreSQL,
-// Redis or MongoDB session's job carries its provider's CA and certificate
+// Redis, MongoDB or MySQL session's job carries its provider's CA and certificate
 // name in fields of their own, which the gateway's sign-in verifies against.
 // No other session type carries them, and a database session still names no
 // HTTP upstream.
@@ -24,7 +24,7 @@ func TestDatabaseSessionCarriesItsProvidersCAA256L1(t *testing.T) {
 	base := SessionIntent{SessionID: "s", TargetID: "db", ExpiresAt: time.Now(),
 		TicketDigest: TicketDigest("t"), CredentialRef: CredentialRef("s"), RequiredAgentID: "gw",
 		DatabaseCAPEM: string(ca), DatabaseServerName: "db.private.test"}
-	for _, target := range []string{TargetPostgres, TargetRedis, TargetMongo} {
+	for _, target := range []string{TargetPostgres, TargetRedis, TargetMongo, TargetMySQL} {
 		in := base
 		in.TargetType = target
 		if err := ValidateSessionIntent(in); err != nil {
@@ -39,7 +39,7 @@ func TestDatabaseSessionCarriesItsProvidersCAA256L1(t *testing.T) {
 			t.Fatalf("%s job payload = %s (%v)", target, raw, err)
 		}
 	}
-	for _, target := range []string{TargetMySQL, TargetClickHouse, TargetKubernetes} {
+	for _, target := range []string{TargetClickHouse, TargetKubernetes} {
 		in := base
 		in.TargetType = target
 		if target == TargetClickHouse || target == TargetKubernetes {

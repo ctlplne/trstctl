@@ -198,8 +198,8 @@ func ValidateSessionIntent(in SessionIntent) error {
 	case in.ExpiresAt.IsZero():
 		return errors.New("accessgateway: a session has a deadline")
 	}
-	if (in.DatabaseCAPEM != "" || in.DatabaseServerName != "") && in.TargetType != TargetPostgres && in.TargetType != TargetRedis && in.TargetType != TargetMongo {
-		return errors.New("accessgateway: only a PostgreSQL, Redis or MongoDB session carries a database CA")
+	if (in.DatabaseCAPEM != "" || in.DatabaseServerName != "") && in.TargetType != TargetPostgres && in.TargetType != TargetRedis && in.TargetType != TargetMongo && in.TargetType != TargetMySQL {
+		return errors.New("accessgateway: only a PostgreSQL, Redis, MongoDB or MySQL session carries a database CA")
 	}
 	if len(in.DatabaseCAPEM) > dbdsn.MaxTrustBytes {
 		return dbdsn.ErrTrust

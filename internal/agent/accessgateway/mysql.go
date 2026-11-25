@@ -45,7 +45,7 @@ const (
 // server's OK and relays commands and results. COM_CHANGE_USER, which would
 // sign the connection in as another account, is refused. The client never
 // receives the DSN.
-func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), database string, rec *connRecorder, guards ...*commandConnection) error {
+func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), database string, trust upstreamTrust, rec *connRecorder, guards ...*commandConnection) error {
 	target, err := mysqlsignin.ParseDSN(dsn)
 	if err != nil {
 		return err
@@ -102,11 +102,13 @@ func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.
 		_ = mysqlRefuse(client, 2, "command rules require a supported SQL connection charset")
 		return errors.New("accessgateway: guarded MySQL session requires a supported SQL connection charset")
 	}
-	ok, err := mysqlsignin.SignIn(server, handshake, target, response)
+	upstream, ok, err := mysqlsignin.SignIn(server, handshake, target, response,
+		mysqlsignin.Options{RootCAPEM: trust.caPEM, ServerName: trust.serverName})
 	if err != nil {
 		_ = mysqlRefuse(client, 2, "the upstream database refused the session's account")
 		return err
 	}
+	server = upstream
 	_ = server.SetDeadline(deadline)
 	if err := mysqlsignin.WritePacket(client, 2, ok); err != nil {
 		return err
