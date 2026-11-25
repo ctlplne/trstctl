@@ -40,6 +40,8 @@ func (s *Store) GetSubjectStandingAuthority(ctx context.Context, tenantID, subje
 		 FROM (SELECT 1) AS seed
 		 LEFT JOIN LATERAL (SELECT roles FROM tenant_members
 		                    WHERE tenant_id = $1 AND subject = $2 AND status = 'active'
+		                      AND NOT EXISTS (SELECT 1 FROM privacy_subject_erasure_preparations AS p
+		                                      WHERE p.tenant_id = $1 AND p.subject_ref = $3)
 		                      AND NOT EXISTS (SELECT 1 FROM tenant_member_upsert_commands AS c
 		                                      WHERE c.tenant_id = $1 AND c.subject_ref = $3 AND c.status = 'pending')
 		                      AND NOT EXISTS (SELECT 1 FROM tenant_member_offboard_commands AS c
@@ -60,6 +62,8 @@ func (s *Store) GetSubjectStandingAuthority(ctx context.Context, tenantID, subje
 		                     AND (c.status = 'pending' OR m.status IS DISTINCT FROM 'active'))
 		   AND NOT EXISTS (SELECT 1 FROM tenant_members AS m
 		                   WHERE m.tenant_id = t.tenant_id AND m.subject_ref = t.subject_ref AND m.status = 'offboarded')
+		   AND NOT EXISTS (SELECT 1 FROM privacy_subject_erasure_preparations AS p
+		                   WHERE p.tenant_id = t.tenant_id AND p.subject_ref IN (t.subject_ref, t.minted_by_ref))
 		 ORDER BY scope`, tenantID, subject, at)
 		if err != nil {
 			return err

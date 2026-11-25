@@ -52,7 +52,9 @@ func (s *Store) CreateBrowserSession(ctx context.Context, session BrowserSession
 		 WHERE c.tenant_id = $1 AND c.subject_ref = $2
 			   AND (c.status = 'pending' OR m.status IS DISTINCT FROM 'active'))
 			 OR EXISTS (SELECT 1 FROM tenant_members AS m
-		            WHERE m.tenant_id = $1 AND m.subject_ref = $2 AND m.status = 'offboarded')`,
+		            WHERE m.tenant_id = $1 AND m.subject_ref = $2 AND m.status = 'offboarded')
+			 OR EXISTS (SELECT 1 FROM privacy_subject_erasure_preparations AS p
+		            WHERE p.tenant_id = $1 AND p.subject_ref = $2)`,
 			session.TenantID, session.SubjectHash).Scan(&denied); err != nil {
 			return err
 		}

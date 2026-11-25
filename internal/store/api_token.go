@@ -247,6 +247,10 @@ func (s *Store) LookupAPITokenByHash(ctx context.Context, hash string) (APIToken
 		      SELECT 1 FROM tenant_members AS m
 		       WHERE m.tenant_id = t.tenant_id AND m.subject_ref IN (t.subject_ref, t.minted_by_ref)
 		         AND m.status = 'offboarded'
+		    )
+		    AND NOT EXISTS (
+		      SELECT 1 FROM privacy_subject_erasure_preparations AS p
+		       WHERE p.tenant_id = t.tenant_id AND p.subject_ref IN (t.subject_ref, t.minted_by_ref)
 		    )`, hash).
 		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.Delegated, &r.MintedBy)
 	return r, err

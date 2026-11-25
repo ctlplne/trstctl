@@ -1155,8 +1155,17 @@ policy and returns the current cutoffs and eligible counts. Neither preview appe
 event, projects a row, reserves an idempotency key, or calls an outside system.
 `POST /api/v1/privacy/subject-erasures` records a tenant-scoped subject erasure, emits
 `privacy.subject.erased`, and projects pseudonymized or cleared personal data while
-keeping audit evidence verifiable. `POST /api/v1/privacy/retention-runs` records a
-non-audit PII retention pass, emits `privacy.retention.enforced`, and applies configured
+keeping audit evidence verifiable.
+
+The durable erasure preparation also closes the subject's sign-in authority
+before the history rewrite and final event projection finish. Every replica
+checks that PostgreSQL preparation when accepting an API token, creating a
+browser session, admitting an existing cookie, or using standing authority
+for background work. If completion needs recovery, these checks keep refusing
+the subject until the erasure completes.
+
+`POST /api/v1/privacy/retention-runs` records a non-audit PII retention pass,
+emits `privacy.retention.enforced`, and applies configured
 retention windows to operational metadata; later runs do not count already-pseudonymized
 rows as fresh work. `POST /api/v1/privacy/subject-exports`
 answers access/portability requests as a read-only export that does not mutate state or
