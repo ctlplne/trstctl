@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/hostaccounts"
 	"trstctl.com/trstctl/internal/servicedependents"
 
@@ -1076,6 +1077,12 @@ type Server struct {
 	// discovery/ingest operations emit a non-sensitive feature/action/outcome signal,
 	// wired into the API via api.WithFeatureObserver. No tenant or secret labels.
 	featureMetrics *observ.FeatureMetrics
+
+	// Audit append failures are process-wide. /metrics exposes only the count,
+	// never the tenant or event payload; any increase needs operator attention.
+	mAuditAppendFailures         *observ.Counter
+	mAuditAppendFailuresMu       sync.Mutex
+	mAuditAppendFailuresObserved int64
 
 	// Idempotency-key GC telemetry (SPINE-002): rows reclaimed by the sweep.
 	mIdemPurged *observ.Counter
@@ -2949,6 +2956,9 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 		s.otlpAudit = otlp.NewAuditStreamer(d.Log, s.otlp)
 	}
 	s.tracer = observ.NewTracer(observ.CombineExporters(d.TraceExporter, s.otlp))
+	s.mAuditAppendFailures = s.registry.CounterVec("trstctl_audit_append_failures_total", "Audit event appends that failed or were not acknowledged in this process; verify the event log before assuming a record is absent.", nil).WithLabelValues()
+	s.mAuditAppendFailuresObserved = auditsink.DroppedEvents()
+	s.mAuditAppendFailures.Add(float64(s.mAuditAppendFailuresObserved))
 	s.mIdemPurged = s.registry.CounterVec("trstctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
 	s.mOutboxPurged = s.registry.CounterVec("trstctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()
 	s.mProjLag = s.registry.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
@@ -4832,10 +4842,24 @@ func (s *Server) sampleStorePools() {
 func (s *Server) metricsHandler() http.Handler {
 	registryHandler := s.registry.Handler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.sampleAuditAppendFailures()
 		s.sampleBulkheads()
 		s.sampleStorePools()
 		registryHandler.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) sampleAuditAppendFailures() {
+	if s.mAuditAppendFailures == nil {
+		return
+	}
+	s.mAuditAppendFailuresMu.Lock()
+	defer s.mAuditAppendFailuresMu.Unlock()
+	current := auditsink.DroppedEvents()
+	if current > s.mAuditAppendFailuresObserved {
+		s.mAuditAppendFailures.Add(float64(current - s.mAuditAppendFailuresObserved))
+		s.mAuditAppendFailuresObserved = current
+	}
 }
 
 // RunRetentionOnce performs one audit retention pass and records its outcome as

@@ -315,7 +315,7 @@
     },
     {
       "id": 12,
-      "title": "Audit retention health",
+      "title": "Audit health",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -335,6 +335,10 @@
         {
           "expr": "increase(trstctl_audit_retention_failures_total[30m])",
           "legendFormat": "failures"
+        },
+        {
+          "expr": "increase(trstctl_audit_append_failures_total[5m])",
+          "legendFormat": "audit append failures"
         }
       ]
     },

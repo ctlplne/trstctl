@@ -85,6 +85,10 @@ The control plane emits, at minimum:
 - `trstctl_audit_retention_runs_total`, `trstctl_audit_retention_failures_total`,
   and `trstctl_audit_retention_last_success_timestamp_seconds` — audit archive and
   retention worker health.
+- `trstctl_audit_append_failures_total` — process-wide count of failed or
+  unacknowledged audit event appends, with no tenant label. Any increase means
+  audit evidence is uncertain; inspect the server warning and event-log health,
+  then verify whether the record exists.
 - `trstctl_agent_enrollments_total{result}` and `trstctl_agent_heartbeats_total{result}`
   — bootstrap enrollment and served agent-channel heartbeat RPC outcomes (`success`
   / `failed`).
@@ -286,6 +290,7 @@ Baseline operator assets ship under
 | Snapshot worker fails or stops producing fresh boot accelerators | `trstctl_read_model_snapshot_failures_total`, `trstctl_read_model_snapshot_last_success_timestamp_seconds` | `TrstctlReadModelSnapshotFailures`, `TrstctlReadModelSnapshotStale` |
 | CRL freshness fails and revocation data can go stale | `trstctl_crl_regeneration_failures_total`, `trstctl_crl_last_regenerated_timestamp_seconds` | `TrstctlCRLRegenerationFailures`, `TrstctlCRLFreshnessStale` |
 | Audit archive/retention stops | `trstctl_audit_retention_failures_total`, `trstctl_audit_retention_last_success_timestamp_seconds` | `TrstctlAuditRetentionFailing`, `TrstctlAuditRetentionStale` |
+| A security audit event fails to append | `trstctl_audit_append_failures_total` | `TrstctlAuditAppendFailures` |
 | Agents cannot bootstrap | `trstctl_agent_enrollments_total{result="failed"}` | `TrstctlAgentEnrollmentFailures` |
 | Agents reach the channel but heartbeat fails | `trstctl_agent_heartbeats_total{result="failed"}` | `TrstctlAgentHeartbeatFailures` |
 | Fleet wave is too large for the agent bulkhead | `trstctl_agent_bulkhead_rejections_total` | `TrstctlAgentBulkheadSaturated` |

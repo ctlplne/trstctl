@@ -60,6 +60,7 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 	reg.CounterVec("trstctl_crl_regeneration_failures_total", "CRL freshness scheduler sweeps that failed.", nil).WithLabelValues().Inc()
 	reg.CounterVec("trstctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues().Inc()
 	reg.CounterVec("trstctl_audit_retention_failures_total", "Audit retention runs that failed.", nil).WithLabelValues().Inc()
+	reg.CounterVec("trstctl_audit_append_failures_total", "Audit events whose append failed in this process.", nil).WithLabelValues().Inc()
 	reg.Gauge("trstctl_audit_retention_last_success_timestamp_seconds", "Unix timestamp of the last successful audit retention run.").Set(123)
 	reg.CounterVec("trstctl_agent_enrollments_total", "Agent bootstrap enrollment attempts by result.", []string{"result"}).WithLabelValues("failed").Inc()
 	reg.CounterVec("trstctl_agent_heartbeats_total", "Agent steady-state heartbeat RPCs by result.", []string{"result"}).WithLabelValues("failed").Inc()
@@ -267,6 +268,7 @@ func opsCriticalMetrics() []string {
 		"trstctl_crl_last_regenerated_timestamp_seconds",
 		"trstctl_crl_regeneration_failures_total",
 		"trstctl_audit_retention_failures_total",
+		"trstctl_audit_append_failures_total",
 		"trstctl_audit_retention_last_success_timestamp_seconds",
 		"trstctl_agent_enrollments_total",
 		"trstctl_agent_heartbeats_total",

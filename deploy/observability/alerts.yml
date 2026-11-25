@@ -663,6 +663,14 @@ groups:
           summary: "trstctl audit retention worker is failing"
           description: "The audit retention/archive worker has failed recently; hot audit storage can grow and archival evidence may lag."
 
+      - alert: TrstctlAuditAppendFailures
+        expr: increase(trstctl_audit_append_failures_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "trstctl failed to append an audit event"
+          description: "At least one security audit append was not confirmed. Check event-log and tenant admission health, identify affected operations from server warnings, and verify whether a record is absent before resuming sensitive work."
+
       - alert: TrstctlAuditRetentionStale
         expr: trstctl_audit_retention_runs_total > 0 and (time() - trstctl_audit_retention_last_success_timestamp_seconds) > 90000
         for: 30m
