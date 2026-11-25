@@ -449,6 +449,9 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(ctx context.Con
 func (p *configuredDynamicProvider) DynamicSecretGatewayTLS(ctx context.Context) ([]byte, string, error) {
 	switch p.cfg.Type {
 	case "redis":
+		if p.cfg.AllowPlaintextRedis {
+			return nil, "", dbdsn.ErrTrust
+		}
 		if p.cfg.RedisTLSCARef == "" {
 			return nil, p.cfg.RedisTLSServerName, nil
 		}

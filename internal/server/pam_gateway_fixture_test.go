@@ -86,6 +86,9 @@ type gatewayFixtureOptions struct {
 	versionedObjects bool
 	// redis adds the Redis target "redis-gw" (A256), bound to the gateway.
 	redis bool
+	// redisPlaintext uses a disposable legacy provider only for fail-closed
+	// gateway admission tests; ordinary Redis gateway fixtures use TLS.
+	redisPlaintext bool
 	// mysqlVaulted (A261-L3) also seeds a vaulted MySQL account and adds the
 	// provider "pam-mysql-vault" that rotates it; mysqlVaultDSN is its
 	// starting DSN. It starts the MySQL target as mysqlNote does.
@@ -145,7 +148,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	}
 	var redisProviders, mysqlProviders, mongoProviders, clickhouseProviders DynamicSecretProviderRegistry
 	if opts.redis {
-		f.redisID, redisProviders = startPAMRedis(t)
+		if opts.redisPlaintext {
+			f.redisID, redisProviders = startPAMRedisPlaintext(t)
+		} else {
+			f.redisID, redisProviders = startPAMRedis(t)
+		}
 	}
 	if opts.mysqlVaulted && opts.mysqlNote == "" {
 		opts.mysqlNote = "a261-mysql-vault"

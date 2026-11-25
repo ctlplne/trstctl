@@ -2,7 +2,7 @@
 
 // Package redissignin signs the access gateway in to a Redis target as one
 // session's ACL user (A256). It reads the session's credential URL
-// (redis://user:password@host:port/db, or rediss:// for TLS), connects, sends
+// (rediss://user:password@host:port/db), connects, sends
 // AUTH and, for a database other than 0, SELECT, and returns the connection
 // for the gateway to relay a stock client's commands over. It is a sign-in,
 // not a client library: it sends nothing else, and the agent binary links no
@@ -111,6 +111,9 @@ func SignIn(ctx context.Context, credential []byte, opts Options) (net.Conn, err
 		return nil, err
 	}
 	defer target.Wipe()
+	if !target.TLS {
+		return nil, errors.New("redissignin: the gateway requires verified TLS")
+	}
 	dial := opts.Dial
 	if dial == nil {
 		dial = (&net.Dialer{}).DialContext
@@ -122,26 +125,24 @@ func SignIn(ctx context.Context, credential []byte, opts Options) (net.Conn, err
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(deadline)
 	}
-	if target.TLS {
-		config := &tls.Config{ServerName: target.Host, MinVersion: tls.VersionTLS12}
-		if opts.ServerName != "" {
-			config.ServerName = opts.ServerName
-		}
-		if len(opts.RootCAPEM) > 0 {
-			roots := x509.NewCertPool()
-			if !roots.AppendCertsFromPEM(opts.RootCAPEM) {
-				_ = conn.Close()
-				return nil, errors.New("redissignin: the session's CA holds no certificate")
-			}
-			config.RootCAs = roots
-		}
-		tlsConn := tls.Client(conn, config)
-		if err := tlsConn.HandshakeContext(ctx); err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("redissignin: the server's TLS certificate does not verify: %w", err)
-		}
-		conn = tlsConn
+	config := &tls.Config{ServerName: target.Host, MinVersion: tls.VersionTLS12}
+	if opts.ServerName != "" {
+		config.ServerName = opts.ServerName
 	}
+	if len(opts.RootCAPEM) > 0 {
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(opts.RootCAPEM) {
+			_ = conn.Close()
+			return nil, errors.New("redissignin: the session's CA holds no certificate")
+		}
+		config.RootCAs = roots
+	}
+	tlsConn := tls.Client(conn, config)
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("redissignin: the server's TLS certificate does not verify: %w", err)
+	}
+	conn = tlsConn
 	if err := signIn(conn, target); err != nil {
 		_ = conn.Close()
 		return nil, err

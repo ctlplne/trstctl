@@ -55,7 +55,7 @@ func TestGatewayDatabaseDialEnforcesSourcePolicyAtResolution(t *testing.T) {
 	defer cancel()
 	intent := SessionIntent{TargetType: TargetPostgres,
 		DatabaseRoute: &dbdsn.GatewayRoute{Revision: dbdsn.GatewayRouteRevision, ProviderID: "postgres-provider",
-			Hosts: []string{address}, Database: "orders", TLS: dbdsn.GatewayPlain, Source: dbdsn.TenantStoredSource}}
+			Hosts: []string{address}, Database: "orders", TLS: dbdsn.GatewayVerifiedTLS, Source: dbdsn.TenantStoredSource}}
 	gateway := &Gateway{}
 	dial, err := gateway.bindDatabaseDial(intent)
 	if err != nil {

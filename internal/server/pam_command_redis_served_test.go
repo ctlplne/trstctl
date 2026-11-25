@@ -65,7 +65,7 @@ func TestServedRedisCommandRuleBlocksAndRecordsA262(t *testing.T) {
 	}
 	exists := func(want string) {
 		t.Helper()
-		out, err := a201Exec(f.redisID, "redis-cli", "--no-auth-warning", "-a", "a256-admin", "EXISTS", key)
+		out, err := a256RedisRoot(f.redisID, "EXISTS", key)
 		if err != nil || strings.TrimSpace(out) != want {
 			t.Fatalf("independent Redis key readback = %v %s; want %s", err, out, want)
 		}
@@ -151,7 +151,7 @@ func TestServedRedisCommandRuleBlocksAndRecordsA262(t *testing.T) {
 	if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
 		t.Fatalf("unsupported transaction did not close: %s", reply)
 	}
-	if out, err := a201Exec(f.redisID, "redis-cli", "--no-auth-warning", "-a", "a256-admin", "EXISTS", hiddenKey); err != nil || strings.TrimSpace(out) != "0" {
+	if out, err := a256RedisRoot(f.redisID, "EXISTS", hiddenKey); err != nil || strings.TrimSpace(out) != "0" {
 		t.Fatalf("transaction tail executed outside MULTI: %v %s", err, out)
 	}
 	status, body = secretsReq(t, f.h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+session.ID+"/actions", f.requester, nil)
@@ -173,7 +173,7 @@ func TestServedRedisCommandRuleBlocksAndRecordsA262(t *testing.T) {
 
 	// Give the exact owned test login script authority. DEL/key authority already
 	// exists, proving a real same-login lexical bypass rather than another account.
-	if out, err := a201Exec(f.redisID, "redis-cli", "--no-auth-warning", "-a", "a256-admin", "ACL", "SETUSER", users[0], "+eval"); err != nil || strings.TrimSpace(out) != "OK" {
+	if out, err := a256RedisRoot(f.redisID, "ACL", "SETUSER", users[0], "+eval"); err != nil || strings.TrimSpace(out) != "OK" {
 		t.Fatalf("seed owned script authority: %v %s", err, out)
 	}
 	if out, err := query("EVAL", "return redis.call('DEL',KEYS[1])", "1", key); err != nil || out != "1" {
@@ -216,12 +216,12 @@ func TestServedRedisCommandReviewWaitsAndCancelsA262(t *testing.T) {
 				})
 			})
 			key := "a256:a262-review-" + uuid.NewString()
-			if out, err := a201Exec(f.redisID, "redis-cli", "--no-auth-warning", "-a", "a256-admin", "SET", key, "a262-review-value"); err != nil || out != "OK" {
+			if out, err := a256RedisRoot(f.redisID, "SET", key, "a262-review-value"); err != nil || out != "OK" {
 				t.Fatalf("seed Redis review key: %v %s", err, out)
 			}
 			exists := func(want string) {
 				t.Helper()
-				out, err := a201Exec(f.redisID, "redis-cli", "--no-auth-warning", "-a", "a256-admin", "EXISTS", key)
+				out, err := a256RedisRoot(f.redisID, "EXISTS", key)
 				if err != nil || strings.TrimSpace(out) != want {
 					t.Fatalf("independent Redis review readback = %v %s; want %s", err, out, want)
 				}

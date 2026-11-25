@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3642 annotated sites across 35 rules. Each row is
+3645 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -818,7 +818,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:35` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_integrations.go:1753` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1756` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:150` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:166` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -1908,7 +1908,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (469 sites)
+### G204 — CWE-78 OS command injection (470 sites)
 
 | Location | Reason |
 |---|---|
@@ -2164,6 +2164,7 @@ not this file.
 | `internal/server/codesign_stock_tools_served_test.go:262` | test runs the plugin it just built (CWE-78) |
 | `internal/server/compliance_report_retention_versions_served_test.go:28` | fixed local Docker tool and approved fixture image (CWE-78) |
 | `internal/server/compose_e2e_tls_test.go:245` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
+| `internal/server/cr039_redis_gateway_tls_served_test.go:21` | fixed pinned fixture image (CWE-78) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:44` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:116` | the lab's own container name (CWE-78) |
 | `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:148` | kind and kubectl with the lab's own arguments (CWE-78) |
@@ -2221,7 +2222,7 @@ not this file.
 | `internal/server/pam_gateway_azure_served_test.go:87` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_fixture_test.go:394` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_fixture_test.go:401` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:175` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:198` | the stock kubectl against the test's own tunnel (CWE-78) |
@@ -2237,8 +2238,8 @@ not this file.
 | `internal/server/pam_gateway_mysql_served_test.go:58` | fixture-owned container, fixed chown/chmod arguments (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:76` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:205` | the stock mysql client against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_redis_served_test.go:28` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_redis_served_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_gateway_redis_served_test.go:127` | the stock redis-cli against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_snowflake_served_test.go:101` | stock curl against the test-owned gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_ssh_served_test.go:259` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_ssh_served_test.go:294` | the stock ssh client against the test's own sshd (CWE-78) |
@@ -3724,7 +3725,7 @@ not this file.
 | `internal/server/pam_gateway_mysql_served_test.go:49` | exact container id returned by this fixture, fixed destination (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:58` | fixture-owned container, fixed chown/chmod arguments (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:205` | the stock mysql client against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_redis_served_test.go:127` | the stock redis-cli against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_snowflake_served_test.go:101` | stock curl against the test-owned gateway tunnel (CWE-78) |
 | `internal/server/pqc_pilot_refusal_served_test.go:154` | the lab's own OpenSSL binary and test-owned arguments (CWE-78) |
 | `internal/server/pqc_pilot_refusal_served_test.go:168` | the lab's own OpenSSL binary and test-owned arguments (CWE-78) |
@@ -3745,7 +3746,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1340` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:978` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (178 sites)
+### G703 — CWE-22 Path traversal (taint) (180 sites)
 
 | Location | Reason |
 |---|---|
@@ -3852,6 +3853,7 @@ not this file.
 | `internal/server/compose_e2e_tls_test.go:160` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:240` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:398` | fixed invalid.pem filename below this test's private t.TempDir; deliberately invalid public fixture bytes are content only (CWE-22). |
+| `internal/server/cr039_redis_gateway_tls_served_test.go:25` | fixed fixture file under t.TempDir (CWE-22) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:39` | disposable lab inputs the container reads (CWE-22) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:50` | the lab runner's build output (CWE-22) |
 | `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:70` | disposable lab configuration the kind node reads (CWE-22) |
@@ -3865,6 +3867,7 @@ not this file.
 | `internal/server/pam_gateway_mongo_served_test.go:49` | fixed file name in test-owned directory (CWE-22) |
 | `internal/server/pam_gateway_mysql_served_test.go:46` | fixed test-only path beneath t.TempDir (CWE-22) |
 | `internal/server/pam_gateway_private_ca_served_test.go:88` | the fixture's own data directory (CWE-22) |
+| `internal/server/pam_gateway_redis_served_test.go:48` | fixed fixture files under t.TempDir (CWE-22) |
 | `internal/server/pam_served_test.go:742` | fixed fixture file names in the test-owned directory (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:513` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:517` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |

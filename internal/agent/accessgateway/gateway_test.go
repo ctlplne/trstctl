@@ -93,7 +93,7 @@ func sessionJob(t *testing.T, id, ticket string, expires time.Time) relay.Job {
 	payload, err := json.Marshal(SessionIntent{SessionID: id, TargetType: TargetPostgres, TargetID: "pg", ExpiresAt: expires,
 		TicketDigest: TicketDigest(ticket), CredentialRef: CredentialRef(id), RequiredAgentID: "gw",
 		DatabaseRoute: &dbdsn.GatewayRoute{Revision: dbdsn.GatewayRouteRevision, ProviderID: "pg", Hosts: []string{"127.0.0.1:1"},
-			Database: "db", TLS: dbdsn.GatewayPreferTLS, Source: dbdsn.OperatorFileSource}})
+			Database: "db", TLS: dbdsn.GatewayVerifiedTLS, Source: dbdsn.OperatorFileSource}})
 	if err != nil {
 		t.Fatal(err)
 	}

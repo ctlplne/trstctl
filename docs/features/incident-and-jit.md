@@ -558,9 +558,11 @@ needs no copy on the gateway's host. With none, the gateway uses system roots an
 the database's host name. MySQL refuses a server without TLS or with an untrusted or
 misnamed certificate before sending a password proof. PostgreSQL likewise refuses a
 TLSless server before sending startup traffic. MongoDB also requires verified TLS
-before its SCRAM exchange. Reopen sessions created with older plaintext or
-downgrade-capable PostgreSQL, MongoDB or MySQL routes after upgrading the gateway
-and configuring database TLS.
+before its SCRAM exchange. Redis refuses a `redis://` gateway credential before
+opening a socket; configure the provider's verified TLS settings before requesting
+a gateway session. Reopen sessions created with older plaintext or downgrade-capable
+PostgreSQL, MongoDB, MySQL or Redis routes after upgrading the gateway and
+configuring database TLS.
 
 A session can be worked in from the console instead (A259). Open it with `"browser": true`
 (Request privileged session → "Open in the browser"): the control plane keeps the session's

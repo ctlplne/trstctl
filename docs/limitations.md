@@ -9663,6 +9663,8 @@ TLS is rejected before startup, and existing plaintext routes need a fresh
 session.
 MongoDB gateway sessions require verified TLS before SCRAM; `tls=false` and
 older plaintext routes are refused.
+Redis gateway sessions require `rediss://`; an explicit plaintext Redis provider
+can issue direct local-lab leases but cannot back a gateway session.
 
 ## Agent launcher (A257) — served
 

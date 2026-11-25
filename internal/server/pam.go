@@ -1602,6 +1602,13 @@ func (s *pamService) openDatabaseProvider(ctx context.Context, tenantID, idempot
 			return api.PAMSession{}, fmt.Errorf("%w: %w", api.ErrPAMRejected, dbdsn.ErrGatewayRoute)
 		}
 	}
+	if req.TargetType == pamTargetRedis && target.cfg.GatewayAgentID != "" {
+		// A plaintext Redis provider may still issue direct local-lab leases,
+		// but a gateway must refuse it before creating a lease or ticket.
+		if _, _, err := s.databaseTLS(ctx, tenantID, req.TargetType, req.TargetID); err != nil {
+			return api.PAMSession{}, fmt.Errorf("%w: Redis gateway requires verified TLS", api.ErrPAMRejected)
+		}
+	}
 	if target.cfg.AccountSecret != "" {
 		// A261: a vaulted account. The session mints nothing: the gateway
 		// signs in as the account with the secret's current value when it

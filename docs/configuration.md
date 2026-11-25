@@ -3052,9 +3052,14 @@ issued plaintext or downgrade-capable routes require a fresh session. MongoDB
 gateway sign-ins also require verified TLS with the provider's CA or system
 roots; `tls=false` is refused, and an omitted `tls` option no longer means
 plaintext. Existing plaintext MongoDB routes require a fresh session. At
-redemption, the control plane checks
-the current credential against the recorded route. A change of route or trust
+redemption, the control plane checks the current credential against the
+recorded route. A change of route or trust
 requires a fresh session.
+Redis gateway sessions also require verified TLS. A provider with
+`allow_plaintext_redis: true` cannot open a gateway session, and an older
+`redis://` gateway job is refused before dialing or sending AUTH. Configure
+the Redis server's TLS listener, `redis_tls_server_name`, and a private
+`redis_tls_ca_ref` when needed, then open a fresh session.
 Gateway agents can further limit database sockets with `--relay-egress-allow`.
 PostgreSQL gateway targets use the standard TLS request. Native-only negotiation
 and startup settings such as `sslnegotiation=direct` and `target_session_attrs`
@@ -3680,7 +3685,8 @@ administrator password belongs in a mode-0600 `file:` reference or tenant
 `secret://` reference; never inline it in JSON.
 `allow_plaintext_redis: true` is an explicit local-lab exception for a literal
 loopback or private IP address. It cannot be combined with TLS settings and
-returns a `redis://` lease. Do not use it across an untrusted network.
+returns a `redis://` lease for direct use. It cannot back an access gateway
+session. Do not use it across an untrusted network.
 
 For LDAP (A239), set `addr` (the directory's LDAPS `host:port`), `bind_dn` and
 `password_ref` (an administrator allowed to add and delete entries under

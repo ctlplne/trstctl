@@ -17,8 +17,15 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/certtest"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/redisacl"
 )
+
+func a256RedisRoot(id string, args ...string) (string, error) {
+	return a201Exec(id, append([]string{"redis-cli", "--tls", "--cacert", "/acl/ca.pem", "-h", "localhost",
+		"--no-auth-warning", "-a", "a256-admin"}, args...)...)
+}
 
 // startPAMRedis runs the pinned Redis image with an administrator ACL and
 // returns its container and a provider of per-session ACL users in the
@@ -32,15 +39,28 @@ func startPAMRedis(t *testing.T) (string, DynamicSecretProviderRegistry) {
 	if err := os.WriteFile(filepath.Join(aclDir, "users.acl"), []byte("user default on >a256-admin ~* +@all\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(keyPEM)
+	for name, body := range map[string][]byte{"ca.pem": caPEM, "server.crt": certPEM, "server.key": keyPEM} {
+		if err := os.WriteFile(filepath.Join(aclDir, name), body, 0o600); err != nil { // #nosec G703 -- fixed fixture files under t.TempDir (CWE-22)
+			t.Fatal(err)
+		}
+	}
 	id, addr := a201Container(t, "6379", "--user", currentUID(t), "--mount", "type=bind,src="+aclDir+",dst=/acl",
-		"--entrypoint", "redis-server", a201RedisImage, "--aclfile", "/acl/users.acl", "--save", "", "--appendonly", "no")
+		"--entrypoint", "redis-server", a201RedisImage, "--aclfile", "/acl/users.acl", "--save", "", "--appendonly", "no",
+		"--port", "0", "--tls-port", "6379", "--tls-cert-file", "/acl/server.crt", "--tls-key-file", "/acl/server.key",
+		"--tls-ca-cert-file", "/acl/ca.pem", "--tls-auth-clients", "no")
 	a201Await(t, "Redis", func() bool {
-		out, err := a201Exec(id, "redis-cli", "--no-auth-warning", "-a", "a256-admin", "PING")
+		out, err := a256RedisRoot(id, "PING")
 		return err == nil && out == "PONG"
 	})
 	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "pam-redis-provider", Type: "redis", Addr: addr,
-		PasswordRef: writeServedCredentialFile(t, "redis-admin-password", "a256-admin"), AllowPlaintextRedis: true,
+		PasswordRef:   writeServedCredentialFile(t, "redis-admin-password", "a256-admin"),
+		RedisTLSCARef: writeServedCredentialFile(t, "redis-ca", string(caPEM)), RedisTLSServerName: "localhost",
 		AllowedRoles:  []string{"redis-writer"},
 		RedisACLRoles: map[string]redisacl.Role{"redis-writer": {KeyPrefixes: []string{"a256:"}, Commands: []string{"get", "set", "del"}}},
 		MaxTTL:        "1h", UsernamePrefix: "a256_redis",
@@ -56,7 +76,7 @@ var fixtureRedisCommand = regexp.MustCompile(`redis-cli -h 127\.0\.0\.1 -p (\d+)
 // redisSessionUsers lists the per-session ACL users the provider created.
 func redisSessionUsers(t *testing.T, redisID string) []string {
 	t.Helper()
-	out, err := a201Exec(redisID, "redis-cli", "--no-auth-warning", "-a", "a256-admin", "ACL", "USERS")
+	out, err := a256RedisRoot(redisID, "ACL", "USERS")
 	if err != nil {
 		t.Fatalf("ACL USERS: %v %s", err, out)
 	}
@@ -143,7 +163,7 @@ func TestServedGatewayRedisSessionsA256(t *testing.T) {
 	}
 	// Without the gateway the target admits no one with this client's
 	// (absent) credential.
-	if out, _ := a201Exec(f.redisID, "redis-cli", "GET", "a256:note"); !strings.Contains(out, "NOAUTH") {
+	if out, _ := a201Exec(f.redisID, "redis-cli", "--tls", "--cacert", "/acl/ca.pem", "-h", "localhost", "GET", "a256:note"); !strings.Contains(out, "NOAUTH") {
 		t.Fatalf("the target answered a client with no credential: %q", out)
 	}
 

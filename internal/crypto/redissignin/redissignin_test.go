@@ -107,10 +107,12 @@ func readCommand(r *bufio.Reader) ([]string, error) {
 }
 
 func TestSignInAuthenticatesSelectsAndHandsOverAtTheNextReply(t *testing.T) {
-	addr, seen := fakeRedis(t, "trstctl_lease_7", "p@ss:w/rd", false)
+	caPEM, serverTLS := redisFixtureTLS(t)
+	addr, seen := fakeRedis(t, "trstctl_lease_7", "p@ss:w/rd", false, serverTLS)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn, err := SignIn(ctx, []byte("redis://trstctl_lease_7:p%40ss%3Aw%2Frd@"+addr+"/2"), Options{})
+	conn, err := SignIn(ctx, []byte("rediss://trstctl_lease_7:p%40ss%3Aw%2Frd@"+addr+"/2"),
+		Options{RootCAPEM: caPEM, ServerName: "cache.private.test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,13 +134,27 @@ func TestSignInAuthenticatesSelectsAndHandsOverAtTheNextReply(t *testing.T) {
 }
 
 func TestSignInRefusedClosesWithoutTheServersCredentialEcho(t *testing.T) {
-	addr, _ := fakeRedis(t, "u", "right", true)
+	caPEM, serverTLS := redisFixtureTLS(t)
+	addr, _ := fakeRedis(t, "u", "right", true, serverTLS)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err := SignIn(ctx, []byte("redis://u:wrong@"+addr+"/0"), Options{})
+	_, err := SignIn(ctx, []byte("rediss://u:wrong@"+addr+"/0"), Options{RootCAPEM: caPEM, ServerName: "cache.private.test"})
 	if err == nil || !strings.Contains(err.Error(), "refused AUTH") || strings.Contains(err.Error(), "wrong") {
 		t.Fatalf("err = %v", err)
 	}
+}
+
+func redisFixtureTLS(t *testing.T) ([]byte, *tls.Config) {
+	t.Helper()
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("cache.private.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return caPEM, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 }
 
 func TestSignInVerifiesTLS(t *testing.T) {
