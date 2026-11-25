@@ -74,6 +74,11 @@ prompted). The listener reuses the main listener's server identity and TLS floor
 so cisco libest `estclient -r -c <cert> -k <key>` renews against it with
 `TRSTCTL_SERVER_TLS_MIN_VERSION=1.2`. Closes DP2-037.
 
+For a device rekey, copy the complete DER-encoded subject from the current
+certificate and retain every subject alternative name, including internationalized
+mailboxes. The new key may differ, and the SANs may appear in a different order.
+Adding, dropping or changing an identity requires a new enrollment.
+
 The enrollment CA is the platform issuing CA every tenant shares, so a chain to it
 proves nothing about whose certificate it is. A renewal goes through only when the
 presented certificate is one EST enrollment obtained for the EST mount's own
@@ -204,6 +209,11 @@ removing that exact pin and reloading the mount. By default, the CSR may request
 already asserted by that authenticated protection certificate. Third-party
 registration-authority enrollment is possible only when
 `protocols.cmp_allow_ra_enrollment` is explicitly enabled.
+
+The default CMP binding checks the complete DER-encoded subject, including
+organizational units. The request may select a subset of the protection
+certificate's SANs. A DNS name may also match its subject common name.
+Mailbox comparisons preserve the local part and the SAN type.
 
 #### Check CMP safely before connecting a client
 

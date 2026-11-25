@@ -404,7 +404,7 @@ func (c *CA) SignClientCSRWithTenant(
 	now := time.Now()
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               csr.Subject,
+		Subject:               pkix.Name{CommonName: csr.Subject.CommonName},
 		URIs:                  uris,
 		NotBefore:             boundary.IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),

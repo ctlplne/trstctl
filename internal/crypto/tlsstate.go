@@ -3,10 +3,14 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 )
 
@@ -14,102 +18,113 @@ import (
 // authenticated enrollment certificate does not itself assert.
 var ErrCSRNotBoundToIdentity = errors.New("crypto: CSR identifiers are not authorized by the authenticated identity")
 
-// CSRBoundToCertificateIdentity is the shared enrollment binding: every
-// identifier a CSR requests (CN, DNS, IP, email, URI) must already be asserted by
-// authority — the authenticated certificate whose holder is enrolling. An
-// authenticated credential may re-key its OWN identity but must never mint a
-// different name the issuance profile happens to admit, or one stolen credential
-// is tenant-wide in blast radius. CMP's protection-identity binding and EST's RFC
-// 7030 §4.2.2 re-enrollment check are the same rule; it lives here so no
-// enrollment front-end can skip it (AN-3, AUD-201 follow-up).
+// enrollmentIdentity retains the complete subject and typed GeneralNames from
+// the PKCS#10. Reconstructing a name from pkix.Name drops some RDNs and their
+// grouping. Looking only at DNSNames and EmailAddresses also loses otherNames.
+type enrollmentIdentity struct {
+	subject []byte
+	san     []byte
+}
+
+func enrollmentIdentityFromCSR(csr *x509.CertificateRequest) enrollmentIdentity {
+	return enrollmentIdentity{subject: bytes.Clone(csr.RawSubject), san: bytes.Clone(enrollmentSANExtension(csr.Extensions))}
+}
+
+func enrollmentSANExtension(extensions []pkix.Extension) []byte {
+	for _, ext := range extensions {
+		if ext.Id.Equal(oidSubjectAltNameExt) {
+			return ext.Value
+		}
+	}
+	return nil
+}
+
+// enrollmentSANs keeps the DER tag and value together so distinct GeneralName
+// alternatives cannot match. DNS lookup is case-insensitive. Mailbox local
+// parts and URI paths retain their original case.
+func enrollmentSANs(der []byte) (map[string]int, error) {
+	names := make(map[string]int)
+	if der == nil {
+		return names, nil
+	}
+	var values []asn1.RawValue
+	if rest, err := asn1.Unmarshal(der, &values); err != nil || len(rest) != 0 || len(values) == 0 {
+		return nil, fmt.Errorf("%w: invalid subjectAltName", ErrCSRNotBoundToIdentity)
+	}
+	for _, v := range values {
+		if v.Class != asn1.ClassContextSpecific || v.Tag > 8 {
+			return nil, fmt.Errorf("%w: invalid GeneralName", ErrCSRNotBoundToIdentity)
+		}
+		key := string(v.FullBytes)
+		if v.Tag == 2 && !v.IsCompound {
+			key = "dns:" + strings.ToLower(string(v.Bytes))
+		}
+		names[key]++
+	}
+	return names, nil
+}
+
+func (id enrollmentIdentity) bind(authority *x509.Certificate, exactSANs bool) error {
+	if authority == nil || len(id.subject) == 0 || !bytes.Equal(id.subject, authority.RawSubject) {
+		return fmt.Errorf("%w: full subject differs from the authenticated certificate", ErrCSRNotBoundToIdentity)
+	}
+	requested, err := enrollmentSANs(id.san)
+	if err != nil {
+		return err
+	}
+	if len(requested) == 0 && strings.TrimSpace(authority.Subject.CommonName) == "" {
+		return fmt.Errorf("%w: the CSR requests no identifiers", ErrCSRNotBoundToIdentity)
+	}
+	allowed, err := enrollmentSANs(enrollmentSANExtension(authority.Extensions))
+	if err != nil {
+		return err
+	}
+	if exactSANs {
+		if !maps.Equal(requested, allowed) {
+			return fmt.Errorf("%w: subjectAltName differs from the authenticated certificate", ErrCSRNotBoundToIdentity)
+		}
+		return nil
+	}
+	// CMP also permits a DNS name that equals the protection certificate's
+	// subject CN. EST re-enrollment requires the original SANs themselves.
+	if cn := strings.TrimSpace(authority.Subject.CommonName); cn != "" {
+		allowed["dns:"+strings.ToLower(cn)]++
+	}
+	for name := range requested {
+		if allowed[name] == 0 {
+			return fmt.Errorf("%w: subjectAltName is outside the protection identity", ErrCSRNotBoundToIdentity)
+		}
+	}
+	return nil
+}
+
+// CSRBoundToCertificateIdentity checks the full subject and authorized SANs
+// for CMP enrollment under a verified protection certificate.
 func CSRBoundToCertificateIdentity(csrDER []byte, authority *x509.Certificate) error {
-	if authority == nil {
-		return errors.New("crypto: no authenticated certificate to bind the CSR to")
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return fmt.Errorf("crypto: parse CSR for identity binding: %w", err)
+	}
+	return enrollmentIdentityFromCSR(csr).bind(authority, false)
+}
+
+// CSRInfoBoundToCertificateIdentity applies the same check to the signed name
+// fields retained by the classical or opaque public-key inspector.
+func CSRInfoBoundToCertificateIdentity(info CSRInfo, authority *x509.Certificate) error {
+	return info.identity.bind(authority, false)
+}
+
+// CSRBoundToTLSClientIdentity requires the authenticated EST subject and SANs
+// on the renewal CSR. The key may change and SAN order is immaterial.
+func CSRBoundToTLSClientIdentity(state *tls.ConnectionState, csrDER []byte) error {
+	if state == nil || len(state.PeerCertificates) == 0 {
+		return errors.New("crypto: TLS client certificate required to bind the CSR")
 	}
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
 		return fmt.Errorf("crypto: parse CSR for identity binding: %w", err)
 	}
-	info := CSRInfo{CommonName: csr.Subject.CommonName, DNSNames: csr.DNSNames, EmailAddresses: csr.EmailAddresses}
-	for _, ip := range csr.IPAddresses {
-		info.IPAddresses = append(info.IPAddresses, ip.String())
-	}
-	for _, uri := range csr.URIs {
-		info.URIs = append(info.URIs, uri.String())
-	}
-	return CSRInfoBoundToCertificateIdentity(info, authority)
-}
-
-// CSRInfoBoundToCertificateIdentity is CSRBoundToCertificateIdentity on names an
-// inspector already parsed. It is the binding step for subject algorithms the
-// core parser cannot read (a pure ML-DSA PKCS#10 verified through the PQC
-// seam): the names come from that verified parse, and the policy is identical.
-func CSRInfoBoundToCertificateIdentity(info CSRInfo, authority *x509.Certificate) error {
-	if authority == nil {
-		return errors.New("crypto: no authenticated certificate to bind the CSR to")
-	}
-	authorized := map[string]bool{}
-	if cn := strings.TrimSpace(authority.Subject.CommonName); cn != "" {
-		authorized["dns:"+strings.ToLower(cn)] = true
-		authorized["cn:"+strings.ToLower(cn)] = true
-	}
-	for _, dns := range authority.DNSNames {
-		authorized["dns:"+strings.ToLower(dns)] = true
-	}
-	for _, ip := range authority.IPAddresses {
-		authorized["ip:"+ip.String()] = true
-	}
-	for _, email := range authority.EmailAddresses {
-		authorized["email:"+strings.ToLower(email)] = true
-	}
-	for _, uri := range authority.URIs {
-		authorized["uri:"+uri.String()] = true
-	}
-
-	var requested []string
-	if cn := strings.TrimSpace(info.CommonName); cn != "" {
-		requested = append(requested, "cn:"+strings.ToLower(cn))
-	}
-	for _, dns := range info.DNSNames {
-		requested = append(requested, "dns:"+strings.ToLower(dns))
-	}
-	for _, ip := range info.IPAddresses {
-		requested = append(requested, "ip:"+ip)
-	}
-	for _, email := range info.EmailAddresses {
-		requested = append(requested, "email:"+strings.ToLower(email))
-	}
-	for _, uri := range info.URIs {
-		requested = append(requested, "uri:"+uri)
-	}
-	if len(requested) == 0 {
-		// Nothing to authorize is not authorization: an identifier-free CSR under
-		// the binding policy is refused rather than minted blind.
-		return fmt.Errorf("%w: the CSR requests no identifiers", ErrCSRNotBoundToIdentity)
-	}
-	for _, want := range requested {
-		if authorized[want] {
-			continue
-		}
-		// A CSR CN is also satisfied by a matching SAN (cn: falls back to dns:
-		// above); anything else is a cross-identity request.
-		if strings.HasPrefix(want, "cn:") && authorized["dns:"+strings.TrimPrefix(want, "cn:")] {
-			continue
-		}
-		return fmt.Errorf("%w: %q is not asserted by the authenticated certificate", ErrCSRNotBoundToIdentity, want)
-	}
-	return nil
-}
-
-// CSRBoundToTLSClientIdentity binds a CSR to the certificate the peer
-// authenticated with on a TLS request. EST re-enrollment uses it so an mTLS
-// credential can re-key only its own name (RFC 7030 §4.2.2), keeping x509 inside
-// the crypto boundary (AN-3).
-func CSRBoundToTLSClientIdentity(state *tls.ConnectionState, csrDER []byte) error {
-	if state == nil || len(state.PeerCertificates) == 0 {
-		return errors.New("crypto: TLS client certificate required to bind the CSR")
-	}
-	return CSRBoundToCertificateIdentity(csrDER, state.PeerCertificates[0])
+	return enrollmentIdentityFromCSR(csr).bind(state.PeerCertificates[0], true)
 }
 
 // TLSConnectionState is a small wrapper for tests and protocol packages that

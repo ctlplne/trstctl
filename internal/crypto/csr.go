@@ -126,10 +126,11 @@ func VerifyCertificateRequest(der []byte) error {
 // against a certificate profile (S8.1), so profile enforcement never imports
 // crypto/x509 (AN-3).
 type CSRInfo struct {
-	KeyAlgorithm string   // "RSA" | "ECDSA" | "Ed25519"
-	KeyBits      int      // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
-	DNSNames     []string // SAN dNSNames in the request
-	IPAddresses  []string // SAN iPAddresses in the request, string form
+	identity     enrollmentIdentity // complete signed name fields, including names outside the profile view
+	KeyAlgorithm string             // "RSA" | "ECDSA" | "Ed25519"
+	KeyBits      int                // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
+	DNSNames     []string           // SAN dNSNames in the request
+	IPAddresses  []string           // SAN iPAddresses in the request, string form
 	// EmailAddresses are the request's mailboxes: its SAN rfc822Names and,
 	// since P15-L4, its SmtpUTF8Mailboxes, which a profile polices alike (RFC
 	// 9598 §6).
@@ -285,6 +286,7 @@ func InspectCSR(der []byte) (CSRInfo, error) {
 		return CSRInfo{}, err
 	}
 	info := CSRInfo{
+		identity:          enrollmentIdentityFromCSR(csr),
 		DNSNames:          csr.DNSNames,
 		IPAddresses:       ipStrings(csr.IPAddresses),
 		EmailAddresses:    append(append([]string(nil), csr.EmailAddresses...), mailboxes...),

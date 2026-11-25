@@ -3544,7 +3544,7 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:408` | mysql_native_password, when the server demands it (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:409` | mysql_native_password (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:410` | mysql_native_password (CWE-327) |
-| `internal/crypto/opaque_x509.go:274` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/opaque_x509.go:275` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/pgsignin/pgsignin.go:296` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin.go:301` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin_test.go:183` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |

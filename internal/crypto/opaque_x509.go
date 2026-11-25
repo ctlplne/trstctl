@@ -77,6 +77,7 @@ func InspectOpaqueCSR(der []byte) (OpaqueCSR, error) {
 	}
 	return OpaqueCSR{
 		Info: CSRInfo{
+			identity:       enrollmentIdentityFromCSR(csr),
 			KeyAlgorithm:   "unknown",
 			DNSNames:       append([]string(nil), csr.DNSNames...),
 			IPAddresses:    ipStrings(csr.IPAddresses),
