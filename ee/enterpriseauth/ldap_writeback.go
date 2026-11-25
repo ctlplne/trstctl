@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"sort"
 	"strings"
 	"time"
@@ -111,7 +110,7 @@ func (w *ldapWriteback) apply(ctx context.Context, target ldapWritebackTarget, m
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	conn, err := ldap.DialURL(target.URL, ldap.DialWithDialer(&net.Dialer{Timeout: timeout}))
+	conn, err := dialLDAPWithTrust(target.URL, timeout)
 	if err != nil {
 		return nil, nil, fmt.Errorf("enterpriseauth: LDAP writeback dial: %w", err)
 	}

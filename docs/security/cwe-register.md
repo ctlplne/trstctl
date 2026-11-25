@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3653 annotated sites across 35 rules. Each row is
+3654 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1909,7 +1909,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (470 sites)
+### G204 — CWE-78 OS command injection (471 sites)
 
 | Location | Reason |
 |---|---|
@@ -1981,6 +1981,7 @@ not this file.
 | `ee/enterpriseauth/auth_ldap_served_test.go:171` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/auth_ldap_served_test.go:182` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/auth_ldap_served_test.go:188` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/enterpriseauth/cr071_ldap_distrust_test.go:25` | this test reruns its own fixed binary with a fixed test selector, no shell or untrusted argument (CWE-78) |
 | `ee/enterpriseauth/ldap_writeback_test.go:89` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/ntlm.go:112` | operator-pinned absolute helper path from deployment configuration, validated at startup (CWE-78) |
 | `ee/managedkeys/signerwiring/softhsm_container_test.go:83` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -3687,12 +3688,13 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1482` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:741` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (62 sites)
+### G702 — CWE-78 OS command injection (taint) (63 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
 | `ee/auditcompliance/protected_archive_minio_fixture_test.go:42` | test runs a fixed local tool with the image the operator named (CWE-78) |
+| `ee/enterpriseauth/cr071_ldap_distrust_test.go:25` | this test reruns its own fixed binary with a fixed test selector, no shell or untrusted argument (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
 | `internal/agent/sessionobserve/observer_linux_test.go:101` | the proof's own traffic script, named by the proof runner (CWE-78) |
 | `internal/crypto/secret/protected_darwin_test.go:61` | execute this test binary with a fixed test selector and no shell |

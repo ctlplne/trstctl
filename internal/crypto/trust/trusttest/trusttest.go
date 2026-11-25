@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/certtest"
 	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
@@ -89,6 +90,56 @@ func New(t *testing.T) *Server {
 		IntermediateList: list(t, "trusttest intermediate key", trust.KindIntermediate, inter, false),
 		RootList:         list(t, "trusttest root", trust.KindRoot, root, true),
 	}
+}
+
+// NewFallbackRootTLSListener creates a disposable TLS listener whose root is
+// trusted through Go's process-local fallback roots and simultaneously placed
+// on the operator distrust list. Call only in an isolated test process: Go's
+// fallback roots can be set once and affect all TLS clients in that process.
+// The listener speaks no application protocol; the caller observes what a
+// client sends after its handshake.
+func NewFallbackRootTLSListener(t *testing.T) net.Listener {
+	t.Helper()
+	t.Setenv("GODEBUG", "x509usefallbackroots=1")
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _ := pem.Decode(caPEM)
+	if block == nil {
+		t.Fatal("trusttest: fixture CA PEM has no certificate")
+	}
+	root, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(root)
+	x509.SetFallbackRoots(roots)
+	leafBlock, _ := pem.Decode(certPEM)
+	if leafBlock == nil {
+		t.Fatal("trusttest: fixture leaf PEM has no certificate")
+	}
+	leaf, err := x509.ParseCertificate(leafBlock.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := leaf.Verify(x509.VerifyOptions{DNSName: "127.0.0.1"}); err != nil {
+		t.Fatalf("trusttest: test CA is not a fallback system root: %v", err)
+	}
+	Install(t, list(t, "operator-distrusted test root", trust.KindRoot, root, true))
+	pair, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
+		Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	return listener
 }
 
 // TrustRoots makes transport verify servers against pemRoots (in place).

@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -81,7 +80,7 @@ func (v LDAPVerifier) Verify(ctx context.Context, username string, password []by
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	conn, err := ldap.DialURL(v.URL, ldap.DialWithDialer(&net.Dialer{Timeout: timeout}))
+	conn, err := dialLDAPWithTrust(v.URL, timeout)
 	if err != nil {
 		return auth.Claims{}, fmt.Errorf("auth: LDAP dial: %w", err)
 	}
@@ -357,7 +356,7 @@ func (v LDAPVerifier) ChangePassword(ctx context.Context, username string, curre
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	conn, err := ldap.DialURL(v.URL, ldap.DialWithDialer(&net.Dialer{Timeout: timeout}))
+	conn, err := dialLDAPWithTrust(v.URL, timeout)
 	if err != nil {
 		return fmt.Errorf("auth: LDAP dial: %w", err)
 	}
