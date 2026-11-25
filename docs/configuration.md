@@ -3113,6 +3113,14 @@ nothing more. Any other role takes its class from `role_access`, for example
 is never read from part of a name, so `reporting`, `viewer` or `support-read` must say which
 they are. PostgreSQL's `decoy` role and a role with `rotation_accounts` carry their own grants.
 
+MySQL lease revocation drops the generated user, enumerates its existing
+connections, ends each one, and rereads the process list before reporting
+completion. The provider administrator needs a direct global `PROCESS` grant
+so that the process list includes other users' sessions, plus authority to
+`KILL CONNECTION` for the lease accounts. If either read or kill fails, the
+lease's revocation remains failed and can be retried; a dropped user alone is
+not completion because its old sessions can keep working.
+
 `secret_environment` places the provider in a secrets project environment,
 `"<project>/<environment>"`, for example `"payments/prod"` (A235-L2). When that environment is
 restricted, only the members granted it can see the provider. That covers the catalog and the

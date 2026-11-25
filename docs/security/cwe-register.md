@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3646 annotated sites across 35 rules. Each row is
+3647 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1381,7 +1381,7 @@ not this file.
 | `internal/dynsecret/active_directory_signin.go:200` | unix is within year 1970..9999, so the FILETIME fits (CWE-190) |
 | `internal/dynsecret/drivers.go:284` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/drivers.go:292` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/providers_real.go:1857` | a string length is never negative (CWE-190) |
+| `internal/dynsecret/providers_real.go:1881` | a string length is never negative (CWE-190) |
 | `internal/dynsecret/providers_real_test.go:733` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp.go:161` | s is checked non-negative above (CWE-190) |
@@ -1766,7 +1766,7 @@ not this file.
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:233` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1661` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1685` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
@@ -2524,7 +2524,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (851 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (852 sites)
 
 | Location | Reason |
 |---|---|
@@ -3127,6 +3127,7 @@ not this file.
 | `internal/server/cmp_qualification.go:135` | operator-configured local public CRL path, not request input; read bounded below (CWE-22) |
 | `internal/server/code_signing_config.go:97` | operator-configured certificate chain path (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:69` | the lab runner's build output (CWE-22) |
+| `internal/server/cr260_mysql_sessions_served_test.go:35` | test-owned CA file path returned by the pinned MySQL fixture (CWE-22) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:50` | the lab runner's build output (CWE-22) |
 | `internal/server/discovery_key_posture_test.go:18` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/server/distrust_removal_served_test.go:34` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -3960,7 +3961,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:436` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/providers_real.go:1782` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/providers_real.go:1806` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:240` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |

@@ -782,6 +782,12 @@ func (r *recordingSQLExec) ExecContext(_ context.Context, q string, _ ...any) (s
 	return nil, nil
 }
 
+// This recording fixture models no established client sessions. CR-260's
+// separate executor keeps live IDs and proves revoke cannot complete with them.
+func (*recordingSQLExec) mysqlSessionIDs(context.Context, string) ([]int64, error) {
+	return nil, nil
+}
+
 func (r *recordingSQLExec) requireContains(t *testing.T, want string) {
 	t.Helper()
 	r.mu.Lock()

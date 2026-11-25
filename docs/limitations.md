@@ -9609,15 +9609,14 @@ token masked.
 
 A `target_type: "mysql"` target names a MySQL dynamic-secret provider and a gateway; its
 session's credential is an account the provider creates with its role's privileges. The
-gateway answers the stock client's handshake itself, signs in upstream with the client's
-capability flags (the first sign-in takes `caching_sha2_password`'s full authentication,
-the password encrypted to the server's RSA key as a driver does without TLS), and refuses
+gateway answers the stock client's handshake itself, signs in upstream over verified
+TLS with the client's capability flags, and refuses
 `COM_CHANGE_USER`. `TestServedGatewayMySQLSessionsA256` proves it with the stock `mysql`
 client in its image: the client holds no password and nothing it reads carries the
 session's account; `CURRENT_USER()` is the session's account and a write outside its grants
 is denied; `COM_CHANGE_USER` is refused and the connection is still the session's account;
-termination closes a live connection, the gateway acknowledges it and the account is
-dropped; the recording seals, verifies and holds each statement, the columns, the rows with
+termination closes a live connection, the gateway acknowledges it, and the provider drops
+the account and kills/rechecks its remaining MySQL sessions; the recording seals, verifies and holds each statement, the columns, the rows with
 the token masked, the denial and the refusal.
 
 A `target_type: "mongodb"` target names a MongoDB dynamic-secret provider and a gateway; its

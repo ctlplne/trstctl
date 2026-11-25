@@ -508,6 +508,30 @@ func (b *MySQLBackend) Revoke(ctx context.Context, ref string) error {
 	if _, err := b.exec.ExecContext(ctx, "DROP USER IF EXISTS "+mysqlAccount(ref, b.accountHost)); err != nil {
 		return fmt.Errorf("dynsecret mysql: drop user: %w", err)
 	}
+	// DROP USER denies new logins but MySQL keeps already-authenticated
+	// connections alive. Re-list after every KILL and report completion only
+	// when the server no longer exposes a session for this generated name.
+	for attempt := 0; attempt < 4; attempt++ {
+		ids, err := mysqlLeaseSessionIDs(ctx, b.exec, ref)
+		if err != nil {
+			return fmt.Errorf("dynsecret mysql: inspect revoked user sessions: %w", err)
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		for _, id := range ids {
+			if _, err := b.exec.ExecContext(ctx, "KILL CONNECTION "+strconv.FormatInt(id, 10)); err != nil {
+				return fmt.Errorf("dynsecret mysql: end revoked user session %d: %w", id, err)
+			}
+		}
+	}
+	remaining, err := mysqlLeaseSessionIDs(ctx, b.exec, ref)
+	if err != nil {
+		return fmt.Errorf("dynsecret mysql: recheck revoked user sessions: %w", err)
+	}
+	if len(remaining) > 0 {
+		return errors.New("dynsecret mysql: revoked user still has active sessions")
+	}
 	return nil
 }
 
