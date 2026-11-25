@@ -119,7 +119,9 @@ func (s *WorkloadAPIServer) refuseX509Keygen(ctx context.Context) error {
 		return nil
 	}
 	if err := s.x509KeygenCheck(ctx); err != nil {
-		s.recordLocalSocketDeprecation(ctx, "x509_refused", localSocketKeygenRefusedDetail)
+		if auditErr := s.recordLocalSocketDeprecation(ctx, "x509_refused", localSocketKeygenRefusedDetail); auditErr != nil {
+			return status.Error(codes.Unavailable, "spiffe: socket-use audit unavailable; retry the request")
+		}
 		return status.Error(codes.PermissionDenied, "spiffe: "+err.Error())
 	}
 	return nil
@@ -129,7 +131,9 @@ func (s *WorkloadAPIServer) refuseX509Keygen(ctx context.Context) error {
 // retention release used, so an operator can still see which workloads dial
 // the old path, and returns the refusal.
 func (s *WorkloadAPIServer) refuseLocalIssuance(ctx context.Context, kind string) error {
-	s.recordLocalSocketDeprecation(ctx, kind+"_refused", localSocketRefusedDetail)
+	if err := s.recordLocalSocketDeprecation(ctx, kind+"_refused", localSocketRefusedDetail); err != nil {
+		return status.Error(codes.Unavailable, "spiffe: socket-use audit unavailable; retry the request")
+	}
 	return status.Error(codes.PermissionDenied, LocalWorkloadsRefusedMessage)
 }
 
@@ -243,12 +247,12 @@ func (s *WorkloadAPIServer) sendX509SVIDResponse(stream workloadpb.SpiffeWorkloa
 // "we think everything moved" is exactly the kind of belief this workstream
 // exists to replace with evidence.
 //
-// Best-effort: failing to record the deprecation must not fail an issuance a
-// workload is depending on today. The detail says what happened — an SVID
+// If this sole record fails, the request returns Unavailable without an SVID.
+// The detail says what happened — an SVID
 // issued here, or a request refused and why — so a refusal never reads as an
 // issuance.
-func (s *WorkloadAPIServer) recordLocalSocketDeprecation(ctx context.Context, kind, detail string) {
-	_ = auditsink.Emit(ctx, s.wl.cfg.Audit, nil, "spiffe.workload_api.local_socket_used", s.wl.cfg.TenantID,
+func (s *WorkloadAPIServer) recordLocalSocketDeprecation(ctx context.Context, kind, detail string) error {
+	return auditsink.Emit(ctx, s.wl.cfg.Audit, nil, "spiffe.workload_api.local_socket_used", s.wl.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"type":%q,"detail":%q}`, kind, detail)))
 }
 
@@ -354,7 +358,9 @@ func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloa
 	// Recorded AFTER the issuance, and only on success. "The deprecated socket
 	// was used" is a statement about an SVID that exists; a refused request did
 	// not use the old path, it was turned away by it.
-	s.recordLocalSocketDeprecation(ctx, "x509", localSocketX509IssuedDetail)
+	if err := s.recordLocalSocketDeprecation(ctx, "x509", localSocketX509IssuedDetail); err != nil {
+		return nil, status.Error(codes.Unavailable, "spiffe: socket-use audit unavailable; retry the request")
+	}
 	complete = true
 	return resp, nil
 }
@@ -438,7 +444,9 @@ func (s *WorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *workloadpb.JW
 	if len(resp.Svids) == 0 {
 		return nil, status.Error(codes.PermissionDenied, "spiffe: requested SPIFFE ID is not authorized for caller selectors")
 	}
-	s.recordLocalSocketDeprecation(ctx, "jwt", localSocketJWTIssuedDetail)
+	if err := s.recordLocalSocketDeprecation(ctx, "jwt", localSocketJWTIssuedDetail); err != nil {
+		return nil, status.Error(codes.Unavailable, "spiffe: socket-use audit unavailable; retry the request")
+	}
 	return resp, nil
 }
 

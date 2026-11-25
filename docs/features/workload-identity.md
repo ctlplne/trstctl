@@ -436,6 +436,9 @@ X.509-SVID and JWT-SVID fetches append the issuance event before returning an
 identity. If the audit event log does not acknowledge the append, the Workload API
 returns `Unavailable` without an SVID or key. Retry after event-log health is
 restored; the internal append error is not sent to the workload.
+The control-plane socket also requires its local-socket use or refusal notice to
+be acknowledged. If that append fails, it returns `Unavailable` instead of a
+success response or the usual policy refusal; retry after event-log recovery.
 
 ### SPIRE upstream authority — keep SPIRE, anchor it in trstctl
 
