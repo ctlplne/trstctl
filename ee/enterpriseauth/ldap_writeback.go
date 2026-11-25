@@ -133,21 +133,12 @@ func (w *ldapWriteback) apply(ctx context.Context, target ldapWritebackTarget, m
 		}
 	}
 	sort.Strings(groups)
-	memberKey := strings.ToLower(normalizeGroupDN(memberDN))
 	for _, group := range groups {
-		req := ldap.NewSearchRequest(group, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 1, 5, false, "(objectClass=*)", []string{"member"}, nil)
-		res, err := conn.Search(req)
-		if err != nil {
-			return added, removed, classifyWritebackError(err, "the role group "+group+" could not be read")
-		}
-		present := false
-		if len(res.Entries) > 0 {
-			for _, value := range res.Entries[0].GetAttributeValues("member") {
-				if strings.ToLower(normalizeGroupDN(value)) == memberKey {
-					present = true
-					break
-				}
-			}
+		// A search may return only the first range of a large AD group.
+		// Compare checks this DN across the complete attribute at the directory.
+		present, err := conn.Compare(group, "member", memberDN)
+		if err != nil && !ldap.IsErrorWithCode(err, ldap.LDAPResultNoSuchAttribute) {
+			return added, removed, classifyWritebackError(err, "membership of the role group "+group+" could not be checked")
 		}
 		switch {
 		case wanted[group] && !present:

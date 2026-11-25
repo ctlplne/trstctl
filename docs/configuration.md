@@ -2560,6 +2560,11 @@ tenant. Startup refuses writeback for multiple tenants because one shared
 of a group that grants access in another. Multi-tenant LDAP login remains
 available with writeback disabled. This also covers nested group mappings.
 
+The writeback service account needs LDAP Compare permission on each role
+group's `member` attribute and permission to add or delete individual values.
+The worker asks the directory about one member DN at a time, including for
+Active Directory groups too large to return in one search response.
+
 ## ABAC deny overlay
 
 ABAC is an optional deny-only overlay on top of RBAC. RBAC must grant the permission
