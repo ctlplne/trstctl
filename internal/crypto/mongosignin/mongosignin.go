@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/scram"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // Wire protocol operation codes.
@@ -181,7 +182,7 @@ func connect(ctx context.Context, dial func(context.Context, string, string) (ne
 		config.RootCAs = roots
 
 	}
-	tlsConn := tls.Client(conn, config)
+	tlsConn := tls.Client(conn, trust.HardenTLSConfig(config))
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("mongosignin: the server's TLS certificate does not verify: %w", err)

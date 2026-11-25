@@ -25,6 +25,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // Capability flags the sign-in reads or sets.
@@ -282,7 +283,7 @@ func SignIn(conn net.Conn, server *Handshake, target *Target, client *ClientResp
 	if err != nil {
 		return nil, nil, err
 	}
-	tlsConn := tls.Client(conn, &tls.Config{ServerName: serverName, RootCAs: roots, MinVersion: tls.VersionTLS12})
+	tlsConn := tls.Client(conn, trust.HardenTLSConfig(&tls.Config{ServerName: serverName, RootCAs: roots, MinVersion: tls.VersionTLS12}))
 	if err := tlsConn.Handshake(); err != nil {
 		return nil, nil, fmt.Errorf("mysqlsignin: the database's TLS certificate does not verify: %w", err)
 	}

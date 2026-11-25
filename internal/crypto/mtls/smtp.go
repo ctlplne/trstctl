@@ -5,13 +5,15 @@ package mtls
 import (
 	"crypto/tls"
 	"net"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // SMTPClientTLSConfig preserves verified STARTTLS for an external SMTP relay.
 // System roots and the exact relay hostname remain mandatory. TLS 1.2 is the
 // compatibility floor for this external integration, as for directory clients.
 func SMTPClientTLSConfig(serverName string) *tls.Config {
-	return &tls.Config{ServerName: serverName, MinVersion: tls.VersionTLS12}
+	return trust.HardenTLSConfig(&tls.Config{ServerName: serverName, MinVersion: tls.VersionTLS12})
 }
 
 // SMTPStartTLS upgrades an SMTP connection after the server accepted STARTTLS

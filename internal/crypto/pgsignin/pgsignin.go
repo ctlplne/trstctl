@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/scram"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // Target is a parsed session DSN. Password is byte-backed; Wipe clears it.
@@ -228,7 +229,7 @@ func negotiateTLS(conn net.Conn, target *Target) (net.Conn, error) {
 		}
 		config.RootCAs = roots
 	}
-	tlsConn := tls.Client(conn, config)
+	tlsConn := tls.Client(conn, trust.HardenTLSConfig(config))
 	if err := tlsConn.Handshake(); err != nil {
 		return nil, fmt.Errorf("pgsignin: the database's TLS certificate does not verify: %w", err)
 	}

@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // GatewayListen opens an access gateway's TLS listener (A254) on addr,
@@ -48,7 +50,7 @@ func GatewayClientTLSConfig(agentCAPEM []byte, serverName, spiffeID string) (*tl
 	if serverName == "" || spiffeID == "" {
 		return nil, errors.New("mtls: gateway host name and SPIFFE ID are required")
 	}
-	return &tls.Config{
+	return trust.HardenTLSConfig(&tls.Config{
 		MinVersion: tls.VersionTLS13,
 		RootCAs:    roots,
 		ServerName: serverName,
@@ -63,7 +65,7 @@ func GatewayClientTLSConfig(agentCAPEM []byte, serverName, spiffeID string) (*tl
 			}
 			return fmt.Errorf("mtls: gateway certificate is not %s", spiffeID)
 		},
-	}, nil
+	}), nil
 }
 
 // GatewayDial opens one TLS connection to an access gateway at addr

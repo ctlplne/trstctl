@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // HTTPTransport returns an http.Transport that trusts the CA certificate(s) in
@@ -28,13 +30,13 @@ func HTTPTransportForServerName(caPEM []byte, serverName string) (*http.Transpor
 	if !pool.AppendCertsFromPEM(caPEM) {
 		return nil, errors.New("mtls: no CA certificates found in PEM")
 	}
-	return &http.Transport{
+	return trust.HardenTransport(&http.Transport{
 		TLSClientConfig: &tls.Config{
 			RootCAs:    pool,
 			ServerName: serverName,
 			MinVersion: tls.VersionTLS12,
 		},
-	}, nil
+	}), nil
 }
 
 // MutualTLSHTTPTransportFromFiles returns an HTTP transport that presents the
@@ -74,7 +76,7 @@ func HTTPTransportWithSystemRootsAndCA(caPEM []byte) (*http.Transport, error) {
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
-	return transport, nil
+	return trust.HardenTransport(transport), nil
 }
 
 // AgentHTTPTransport returns an HTTP transport for the agent-facing HTTPS renewal

@@ -8,6 +8,8 @@ import (
 	"crypto/x509"
 	"errors"
 	"net"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // DialVerifiedTCP verifies a service identity before any application bytes are
@@ -42,7 +44,7 @@ func VerifiedClientTLSConfig(serverName string, caPEM []byte) (*tls.Config, erro
 			return nil, errors.New("mtls: no CA certificates found in PEM")
 		}
 	}
-	return &tls.Config{RootCAs: roots, ServerName: serverName, MinVersion: tls.VersionTLS12}, nil
+	return trust.HardenTLSConfig(&tls.Config{RootCAs: roots, ServerName: serverName, MinVersion: tls.VersionTLS12}), nil
 }
 
 // VerifyClientConnection upgrades an already dialed connection without bypassing
@@ -52,15 +54,12 @@ func VerifyClientConnection(ctx context.Context, conn net.Conn, serverName strin
 		_ = conn.Close()
 		return nil, errors.New("mtls: expected TCP server name required")
 	}
-	var roots *x509.CertPool
-	if len(caPEM) > 0 {
-		roots = x509.NewCertPool()
-		if !roots.AppendCertsFromPEM(caPEM) {
-			_ = conn.Close()
-			return nil, errors.New("mtls: no CA certificates found in PEM")
-		}
+	config, err := VerifiedClientTLSConfig(serverName, caPEM)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
 	}
-	secured := tls.Client(conn, &tls.Config{RootCAs: roots, ServerName: serverName, MinVersion: tls.VersionTLS12})
+	secured := tls.Client(conn, config)
 	if err := secured.HandshakeContext(ctx); err != nil {
 		_ = secured.Close()
 		return nil, err

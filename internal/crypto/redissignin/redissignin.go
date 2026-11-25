@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // maxReplyLine bounds a sign-in reply the gateway reads.
@@ -137,7 +138,7 @@ func SignIn(ctx context.Context, credential []byte, opts Options) (net.Conn, err
 		}
 		config.RootCAs = roots
 	}
-	tlsConn := tls.Client(conn, config)
+	tlsConn := tls.Client(conn, trust.HardenTLSConfig(config))
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("redissignin: the server's TLS certificate does not verify: %w", err)

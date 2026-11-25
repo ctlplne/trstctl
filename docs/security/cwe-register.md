@@ -1305,26 +1305,26 @@ not this file.
 | `internal/crypto/mongosignin/bson.go:81` | a command document is short (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:194` | a BSON int32's two's-complement bits (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:196` | a BSON int64's two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:310` | a message length is bounded by its reader (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:311` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:311` | a message length is bounded by its reader (CWE-190) |
 | `internal/crypto/mongosignin/mongosignin.go:312` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:313` | an op code is a small constant (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:131` | the 3-byte little-endian length of a payload checked above (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:193` | the capability flags' lower half (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:196` | the capability flags' upper half (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:474` | bounded by maxLenenc just above (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:487` | a one-byte length below 251 (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:489` | a two-byte length below 1<<16 (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:491` | the three bytes of a value under 1<<24 (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:493` | a length, never negative (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:313` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:314` | an op code is a small constant (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:132` | the 3-byte little-endian length of a payload checked above (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:194` | the capability flags' lower half (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:197` | the capability flags' upper half (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:475` | bounded by maxLenenc just above (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:488` | a one-byte length below 251 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:490` | a two-byte length below 1<<16 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:492` | the three bytes of a value under 1<<24 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:494` | a length, never negative (CWE-190) |
 | `internal/crypto/pfx/certonly.go:178` | r is at most 0xFFFF here, so its two bytes are exact (CWE-190) |
 | `internal/crypto/pfx/certonly.go:190` | id is the KDF purpose, 1 to 3 (CWE-190) |
 | `internal/crypto/pfx/certonly.go:226` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
 | `internal/crypto/pfx/certonly.go:400` | pad is at most the block size (CWE-190) |
 | `internal/crypto/pfx/rc2.go:55` | 255 modulo a power of two up to 256 fits a byte (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:156` | a startup message is a few hundred bytes (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:337` | a SCRAM client-first message is under 100 bytes (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:395` | sign-in messages are bounded and small (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:157` | a startup message is a few hundred bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:338` | a SCRAM client-first message is under 100 bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:396` | sign-in messages are bounded and small (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin_test.go:102` | a fake server's messages are a few bytes (CWE-190) |
 | `internal/crypto/quicinitial/quicinitial.go:108` | the token length was checked against the datagram above (CWE-190) |
 | `internal/crypto/quicinitial/quicinitial.go:118` | the length was checked against the datagram above (CWE-190) |
@@ -3545,12 +3545,12 @@ not this file.
 | `internal/crypto/leafca.go:773` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/mysql_native_verifier.go:22` | MariaDB mysql_native_password's specified account verifier, not a general hash (CWE-328) |
 | `internal/crypto/mysql_native_verifier.go:24` | same MariaDB protocol verifier (CWE-328) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:408` | mysql_native_password, when the server demands it (CWE-327) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:409` | mysql_native_password (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:409` | mysql_native_password, when the server demands it (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:410` | mysql_native_password (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:411` | mysql_native_password (CWE-327) |
 | `internal/crypto/opaque_x509.go:275` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
-| `internal/crypto/pgsignin/pgsignin.go:296` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
-| `internal/crypto/pgsignin/pgsignin.go:301` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:297` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:302` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin_test.go:183` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 | `internal/crypto/pqc_x509.go:96` | key identifier, not integrity (CWE-328) |
 | `internal/crypto/thumbprint.go:15` | an identifier a CA API requires, not integrity (CWE-328) |
@@ -3565,7 +3565,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/crypto/mtls/mtls.go:386` | operator-selected lab escape hatch, off by default, and |
+| `internal/crypto/mtls/mtls.go:387` | operator-selected lab escape hatch, off by default, and |
 | `internal/crypto/mtls/rawclient_test.go:101` | the test server models a KMIP server whose TLS stops at 1.2 (CWE-327) |
 | `internal/crypto/mtls/reload_test.go:64` | reload probe of the test's own loopback listener; reads only the served serial, carries no data (CWE-295) |
 | `internal/crypto/mtls/server_test.go:251` | test TLS client speaking to the test's own server (CWE-295) |

@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // ClientCertTTL is the validity period of an agent client certificate. Agents
@@ -310,7 +311,7 @@ func clientTLSConfig(src ClientCertSource, serverCAs *x509.CertPool, serverName 
 		// guarantee cannot silently vanish if a cache is ever added (CWE-295).
 		cfg.VerifyConnection = p.verifyConn
 	}
-	return cfg
+	return trust.HardenTLSConfig(cfg)
 }
 
 // ServerCredentials returns gRPC transport credentials for the agent-facing
@@ -381,13 +382,13 @@ func init() {
 // inventory taken without verifying the directory's identity is weaker evidence
 // and must not read identically to one taken with it.
 func DirectoryClientTLSConfig(insecureSkipVerify bool) *tls.Config {
-	return &tls.Config{
+	return trust.HardenTLSConfig(&tls.Config{
 		MinVersion: tls.VersionTLS12,
 		// #nosec G402 -- operator-selected lab escape hatch, off by default, and
 		// the caller reports which mode was used so an unverified read is never
 		// mistaken for a verified one (CWE-295).
 		InsecureSkipVerify: insecureSkipVerify,
-	}
+	})
 }
 
 // DirectoryClientTLSConfigPinned trusts only the supplied directory CA and
