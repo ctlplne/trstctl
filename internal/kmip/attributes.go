@@ -177,6 +177,9 @@ func (s *Server) GetAttributes(ctx context.Context, clientCertDER []byte, id str
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return nil, err
+	}
 	obj, ok := s.objects[id]
 	if !ok {
 		return nil, fmt.Errorf("kmip: object %q not found", id)
@@ -394,6 +397,9 @@ func (s *Server) ChangeAttribute(ctx context.Context, clientCertDER []byte, op O
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return attributeInstance{}, err
+	}
 	obj, ok := s.objects[id]
 	if !ok {
 		return attributeInstance{}, fmt.Errorf("kmip: object %q not found", id)

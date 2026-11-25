@@ -136,6 +136,8 @@ type Server struct {
 	mu                 sync.Mutex
 	objects            map[string]*ManagedObject
 	n                  int
+	through            uint64
+	catchUpErr         error
 }
 
 // New constructs a KMIP Server.
@@ -162,7 +164,7 @@ func NewDurable(ctx context.Context, tenantID string, auth Authenticator, audit 
 	if len(tenantCrypto) > 0 {
 		s.crypto = tenantCrypto[0]
 	}
-	if err := s.replay(ctx); err != nil {
+	if err := s.replay(ctx, 0); err != nil {
 		s.Close()
 		return nil, err
 	}
@@ -233,6 +235,9 @@ func (s *Server) authClient(ctx context.Context, op string, clientCertDER []byte
 	if err := s.tenantServiceCheck.Check(ctx, s.tenantID); err != nil {
 		return "", err
 	}
+	if err := s.catchUp(ctx); err != nil {
+		return "", err
+	}
 	return id, nil
 }
 
@@ -273,14 +278,15 @@ func (s *Server) register(ctx context.Context, algorithm string, key []byte, aud
 	defer secret.Wipe(key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.n++
-	id := fmt.Sprintf("kmip-%d", s.n)
+	if err := s.catchUpLocked(ctx); err != nil {
+		return "", err
+	}
+	id := s.nextObjectIDLocked()
 	now := time.Now().UTC()
 	obj := &ManagedObject{ID: id, Algorithm: algorithm, State: StateActive, Version: 1,
 		Length: 256, Extractable: true, Initial: now, Activated: now, LastChange: now}
 	sealedKey, err := s.persistKeyState(ctx, stateEventType, obj, key)
 	if err != nil {
-		s.n--
 		return "", err
 	}
 	obj.sealedKey = sealedKey
@@ -306,6 +312,9 @@ func (s *Server) GetObject(ctx context.Context, clientCertDER []byte, id string)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return ManagedObjectView{}, err
+	}
 	obj, ok := s.objects[id]
 	if !ok || obj.State != StateActive || obj.Type != ObjectSymmetricKey {
 		return ManagedObjectView{}, fmt.Errorf("kmip: object %q not available", id)
@@ -354,6 +363,10 @@ func (s *Server) ReKey(ctx context.Context, clientCertDER []byte, id string) (in
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		secret.Wipe(key)
+		return 0, err
+	}
 	obj, ok := s.objects[id]
 	if !ok || obj.State != StateActive || obj.Type != ObjectSymmetricKey {
 		secret.Wipe(key)
@@ -391,6 +404,9 @@ func (s *Server) Destroy(ctx context.Context, clientCertDER []byte, id string) e
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return err
+	}
 	obj, ok := s.objects[id]
 	if !ok {
 		return fmt.Errorf("kmip: object %q not found", id)
@@ -419,12 +435,31 @@ func (s *Server) Close() {
 	clear(s.objects)
 }
 
+// Standalone tests retain their numbered IDs. Durable replicas use a
+// collision-resistant NUID rather than deriving a number from their separate
+// projections. Replay refuses a duplicate created ID if one ever occurs.
+func (s *Server) nextObjectIDLocked() string {
+	if s.log == nil {
+		s.n++
+		return fmt.Sprintf("kmip-%d", s.n)
+	}
+	for {
+		id := "kmip-" + events.NewID()
+		if s.objects[id] == nil {
+			return id
+		}
+	}
+}
+
 func (s *Server) transition(ctx context.Context, clientCertDER []byte, op, id string, to ObjectState) error {
 	if _, err := s.authClient(ctx, op, clientCertDER); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return err
+	}
 	obj, ok := s.objects[id]
 	if !ok {
 		return fmt.Errorf("kmip: object %q not found", id)
@@ -470,15 +505,62 @@ func (s *Server) persistState(ctx context.Context, eventType string, payload any
 	if err != nil {
 		return err
 	}
-	if _, err := s.log.Append(ctx, events.Event{Type: eventType, TenantID: s.tenantID, Data: data}); err != nil {
+	position, err := s.log.ObserveAppendStream(ctx, s.tenantID)
+	if err != nil {
+		return fmt.Errorf("kmip: observe shared state head: %w", err)
+	}
+	if position.Sequence() != s.through {
+		// The caller made its transition decision from an older object. It
+		// must retry after a fresh operation, not commit that stale decision.
+		return fmt.Errorf("kmip: shared state changed during operation: %w", events.ErrAppendPositionChanged)
+	}
+	appended, err := s.log.AppendAtStreamPosition(ctx, events.Event{Type: eventType, TenantID: s.tenantID, Data: data}, position)
+	if err != nil {
 		return fmt.Errorf("kmip: append state event: %w", err)
+	}
+	s.through = appended.Sequence
+	return nil
+}
+
+func (s *Server) catchUp(ctx context.Context) error {
+	if s.log == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.catchUpLocked(ctx)
+}
+
+func (s *Server) catchUpLocked(ctx context.Context) error {
+	if s.log == nil {
+		return nil
+	}
+	if s.catchUpErr != nil {
+		return s.catchUpErr
+	}
+	head, err := s.log.LastSequence(ctx)
+	if err != nil {
+		return fmt.Errorf("kmip: read shared state head: %w", err)
+	}
+	if head <= s.through {
+		return nil
+	}
+	if err := s.replay(ctx, s.through+1); err != nil {
+		s.catchUpErr = fmt.Errorf("kmip: shared state replay failed closed: %w", err)
+		return s.catchUpErr
 	}
 	return nil
 }
 
-func (s *Server) replay(ctx context.Context) error {
-	return s.log.Replay(ctx, 0, func(ev events.Event) error {
+// replay is called during construction or while s.mu is held. through tracks
+// all tenants' stream positions. A successful conditional local append advances
+// through by exactly one, so replay never applies that event twice.
+func (s *Server) replay(ctx context.Context, from uint64) error {
+	return s.log.Replay(ctx, from, func(ev events.Event) error {
 		if ev.TenantID != s.tenantID {
+			if ev.Sequence > s.through {
+				s.through = ev.Sequence
+			}
 			return nil
 		}
 		switch ev.Type {
@@ -491,7 +573,16 @@ func (s *Server) replay(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			if old := s.objects[payload.ID]; old != nil {
+			old := s.objects[payload.ID]
+			if ev.Type != kmipStateRekeyedEventType && old != nil {
+				secret.Wipe(obj.sealedKey)
+				return fmt.Errorf("kmip: replay duplicate created object ID %q", payload.ID)
+			}
+			if ev.Type == kmipStateRekeyedEventType && (old == nil || old.State != StateActive || obj.Version != old.Version+1) {
+				secret.Wipe(obj.sealedKey)
+				return fmt.Errorf("kmip: replay rekey of unavailable object %q", payload.ID)
+			}
+			if old != nil {
 				secret.Wipe(old.sealedKey)
 				if ev.Type == kmipStateRekeyedEventType {
 					obj.Initial, obj.Activated, obj.Names, obj.Contact, obj.Custom = old.Initial, old.Activated, old.Names, old.Contact, old.Custom
@@ -520,6 +611,9 @@ func (s *Server) replay(ctx context.Context) error {
 			}
 			applyAttributes(obj, payload)
 			obj.LastChange = ev.Time.UTC()
+		}
+		if ev.Sequence > s.through {
+			s.through = ev.Sequence
 		}
 		return nil
 	})

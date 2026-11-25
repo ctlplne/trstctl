@@ -2854,6 +2854,7 @@ func (l *Log) publishToActive(
 ) (*jetstream.PubAck, error) {
 	const attempts = 8
 	position, conditional := ctx.Value(appendSubjectPositionKey{}).(AppendSubjectPosition)
+	streamPosition, streamConditional := ctx.Value(appendStreamPositionKey{}).(AppendStreamPosition)
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
 		// This hook announces an attempted cross-cutover append. Keep it before
@@ -2865,6 +2866,9 @@ func (l *Log) publishToActive(
 		name, stream, err := l.resolveActiveStream(ctx)
 		if err == nil {
 			if conditional && (name != position.stream || subject != position.subject) {
+				return nil, ErrAppendPositionChanged
+			}
+			if streamConditional && name != streamPosition.stream {
 				return nil, ErrAppendPositionChanged
 			}
 			// The metadata check gives ordinary retries the fixed fail-closed
@@ -2880,6 +2884,9 @@ func (l *Log) publishToActive(
 				if conditional {
 					opts = append(opts, jetstream.WithExpectLastSequencePerSubject(position.sequence))
 				}
+				if streamConditional {
+					opts = append(opts, jetstream.WithExpectLastSequence(streamPosition.sequence))
+				}
 				ack, publishErr := l.js.Publish(ctx, subject, payload, opts...)
 				if publishErr == nil {
 					if active, streamErr := l.js.Stream(ctx, ack.Stream); streamErr == nil {
@@ -2887,7 +2894,7 @@ func (l *Log) publishToActive(
 					}
 					return ack, nil
 				}
-				if conditional && appendPositionConflict(publishErr) {
+				if (conditional || streamConditional) && appendPositionConflict(publishErr) {
 					return nil, ErrAppendPositionChanged
 				}
 				err = publishErr

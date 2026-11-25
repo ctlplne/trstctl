@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -113,7 +114,10 @@ func (s *Server) CreateKeyPair(ctx context.Context, clientCertDER []byte, spec K
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	privateID, publicID := fmt.Sprintf("kmip-%d", s.n+1), fmt.Sprintf("kmip-%d", s.n+2)
+	if err := s.catchUpLocked(ctx); err != nil {
+		return "", "", err
+	}
+	privateID, publicID := s.nextObjectIDLocked(), s.nextObjectIDLocked()
 	priv := &ManagedObject{ID: privateID, Type: ObjectPrivateKey, Algorithm: spec.Algorithm, Length: spec.Length,
 		State: StatePreActive, Version: 1, UsageMask: privateMask, Link: publicID,
 		Extractable: extractable, NeverExtractable: !extractable, Initial: now, LastChange: now}
@@ -124,17 +128,35 @@ func (s *Server) CreateKeyPair(ctx context.Context, clientCertDER []byte, spec K
 	if err != nil {
 		return "", "", err
 	}
-	// Both identifiers are spent once the private half is recorded.
-	s.n += 2
+	// The private half is durable already. Keep the local projection in step
+	// even if the public-half append loses a broker position race.
 	priv.sealedKey = sealed
+	s.objects[privateID] = priv
 	if err := s.persistState(ctx, kmipStateCreatedEventType, stateEventFor(pub, nil)); err != nil {
 		// Destroy the recorded private half rather than leave a pair with no
-		// public key.
-		_ = s.persistState(ctx, kmipStateDestroyedEventType, kmipStateEvent{ID: privateID, State: StateDestroyed, Version: 1})
+		// public key. A competing append can advance the stream between the
+		// failed public-half append and compensation, so refresh and retry
+		// broker position conflicts within a fixed bound.
+		var stopErr error
+		for attempt := 0; attempt < 8; attempt++ {
+			if stopErr = s.catchUpLocked(ctx); stopErr != nil {
+				break
+			}
+			stopErr = s.persistState(ctx, kmipStateDestroyedEventType, kmipStateEvent{ID: privateID, State: StateDestroyed, Version: 1})
+			if !errors.Is(stopErr, events.ErrAppendPositionChanged) {
+				break
+			}
+		}
+		if stopErr != nil {
+			s.catchUpErr = fmt.Errorf("kmip: partial key pair could not be destroyed: %w", stopErr)
+			return "", "", errors.Join(err, s.catchUpErr)
+		}
 		secret.Wipe(priv.sealedKey)
+		priv.sealedKey = nil
+		priv.State = StateDestroyed
 		return "", "", err
 	}
-	s.objects[privateID], s.objects[publicID] = priv, pub
+	s.objects[publicID] = pub
 	for _, half := range []struct {
 		obj   *ManagedObject
 		names []string
@@ -161,6 +183,9 @@ func (s *Server) Activate(ctx context.Context, clientCertDER []byte, id string) 
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return err
+	}
 	obj, ok := s.objects[id]
 	if !ok {
 		return fmt.Errorf("kmip: object %q not found", id)
@@ -184,6 +209,9 @@ func (s *Server) Sign(ctx context.Context, clientCertDER []byte, id string, para
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return nil, err
+	}
 	obj, ok := s.objects[id]
 	if !ok {
 		return nil, fmt.Errorf("kmip: object %q not found", id)
@@ -236,6 +264,9 @@ func (s *Server) SignatureVerify(ctx context.Context, clientCertDER []byte, id s
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return false, err
+	}
 	obj, ok := s.objects[id]
 	if !ok {
 		return false, fmt.Errorf("kmip: object %q not found", id)
@@ -296,8 +327,11 @@ func (s *Server) GetKey(ctx context.Context, clientCertDER []byte, id string) (K
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return KeyView{}, err
+	}
 	obj, ok := s.objects[id]
-	if !ok || obj.State == StateDestroyed {
+	if !ok || obj.State == StateDestroyed || obj.State == StateRevoked || obj.State == StateCompromised {
 		return KeyView{}, fmt.Errorf("kmip: object %q not available", id)
 	}
 	view := KeyView{ID: obj.ID, Type: obj.Type, Algorithm: obj.Algorithm, Length: obj.Length}
@@ -338,6 +372,9 @@ func (s *Server) LocateMatching(ctx context.Context, clientCertDER []byte, f Loc
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.catchUpLocked(ctx); err != nil {
+		return nil, err
+	}
 	var out []string
 	for id, o := range s.objects {
 		if o.State != StateActive && o.State != StatePreActive {

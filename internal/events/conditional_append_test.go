@@ -47,3 +47,29 @@ func TestConditionalAppendFencesCompetingWritersOnOneSubject(t *testing.T) {
 		t.Fatalf("a pooled writer did not advance the shared broker subject: %v", err)
 	}
 }
+
+func TestConditionalAppendFencesDifferentTransitionSubjects(t *testing.T) {
+	log := openEmbedded(t)
+	ctx := t.Context()
+	const tenant = "fixture-tenant"
+	position, err := log.ObserveAppendStream(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{TenantID: tenant, Type: "fixture.object.revoked"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.AppendAtStreamPosition(ctx, events.Event{TenantID: tenant, Type: "fixture.object.rekeyed"}, position); !errors.Is(err, events.ErrAppendPositionChanged) {
+		t.Fatalf("stale rekey appended after revoke: %v", err)
+	}
+	if _, err := log.AppendAtStreamPosition(ctx, events.Event{TenantID: "fixture-other", Type: "fixture.object.rekeyed"}, position); !errors.Is(err, events.ErrAppendPositionChanged) {
+		t.Fatalf("another tenant reused observed stream authority: %v", err)
+	}
+	position, err = log.ObserveAppendStream(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.AppendAtStreamPosition(ctx, events.Event{TenantID: tenant, Type: "fixture.object.destroyed"}, position); err != nil {
+		t.Fatalf("current transition did not append: %v", err)
+	}
+}

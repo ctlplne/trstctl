@@ -56,6 +56,9 @@ func (s *Server) HandleFrame(ctx context.Context, clientCertDER []byte, frame []
 	}
 	var response []byte
 	err := s.withTenantCipher(ctx, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
+		if err := s.catchUp(scoped); err != nil {
+			return err
+		}
 		response, err = s.handleFrame(scoped, clientCertDER, frame)
 		return err
 	})

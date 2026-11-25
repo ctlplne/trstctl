@@ -6392,6 +6392,14 @@ the server; KMIP 1.4 would default Extractable to true, and trstctl
 deliberately does not. Not served: Register of asymmetric keys, certificates,
 Re-key Key Pair, Encrypt/Decrypt, digested or streamed signing, Sensitive
 objects, templates, and the ID Placeholder (each request names its object).
+Durable KMIP listeners on separate replicas read the shared event stream before
+using an object. A destroy or compromise revocation committed on one replica
+therefore stops Get and Sign on the others; an extractable private key also
+stops leaving the server after revocation. Durable object IDs use random NUIDs
+and replay rejects duplicate creation IDs. State changes use broker-checked
+stream positions, so a stale rekey cannot commit after another replica's
+revocation. Under concurrent unrelated writes, a state change can return a
+position-conflict error; the client can retry after refreshing the object.
 PyKMIP 0.10 drives the key-pair path in an opt-in proof
 (`TRSTCTL_PYKMIP_PROOF=1 go test ./internal/kmip -run PyKMIP -v`). With `protocols.kmip.client_registrations`, one
 listener serves every tenant's self-service clients: a tenant registers a
