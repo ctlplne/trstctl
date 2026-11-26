@@ -4,11 +4,13 @@ package safefile
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"io"
 	"math"
 	"os"
 
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -82,6 +84,48 @@ func ReadRegularFileNoFollow(ctx context.Context, root *os.Root, name string, ma
 	return readRegularOpened(ctx, info, func() (*os.File, error) {
 		return root.OpenFile(name, readOnlyNonblockingNoFollow, 0)
 	}, maxBytes)
+}
+
+// SHA256RegularFileNoFollow hashes a root-confined regular file through a
+// checked descriptor. It never materializes the file in memory and detects a
+// file that grows beyond the configured limit while being read.
+func SHA256RegularFileNoFollow(ctx context.Context, root *os.Root, name string, maxBytes int64) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if maxBytes <= 0 || maxBytes == math.MaxInt64 {
+		return nil, ErrFileLimit
+	}
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, ErrNotRegular
+	}
+	file, err := root.OpenFile(name, readOnlyNonblockingNoFollow, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err = file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, ErrNotRegular
+	}
+	if info.Size() > maxBytes {
+		return nil, ErrFileLimit
+	}
+	hexDigest, readBytes, err := boundarycrypto.SHA256ReaderHex(io.LimitReader(contextReader{ctx: ctx, reader: file}, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if readBytes > maxBytes || readBytes > info.Size() {
+		return nil, ErrFileLimit
+	}
+	return hex.DecodeString(hexDigest)
 }
 
 // ReadRegularPath is for an agent's own operator-configured path, where a

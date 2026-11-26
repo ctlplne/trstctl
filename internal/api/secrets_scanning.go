@@ -580,6 +580,20 @@ func (a *API) ingestThirdPartySecretScan(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			return 0, nil, err
 		}
+		if cfg.Collect == nil {
+			validator, ok := a.secrets.be.SecretScanner.(secretScannerPathValidator)
+			if !ok {
+				return 0, nil, errStatus(http.StatusServiceUnavailable, "root-confined secret scan file access is unavailable")
+			}
+			for _, path := range []string{cfg.ArtifactPath, cfg.SignaturePath} {
+				if path == "" {
+					continue
+				}
+				if err := validator.ValidateLocalTarget(path); err != nil {
+					return 0, nil, secretScanRequestError(err)
+				}
+			}
+		}
 		if err := a.requireAnnotationAllowed(ctx, tenantID, secretscan.ThirdPartySourceKind, cfg.Annotation); err != nil {
 			return 0, nil, err
 		}

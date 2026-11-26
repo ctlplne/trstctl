@@ -26,9 +26,10 @@ func TestServedThirdPartySecretScanningCAPSCAN04EndToEnd(t *testing.T) {
 		"slack":              writeSecretArtifact(t, root, "slack/export.jsonl", `{"text":"token `+rawSecret+`"}`+"\n"),
 		"jira":               writeSecretArtifact(t, root, "jira/issues.jsonl", `{"description":"leaked `+rawSecret+`"}`+"\n"),
 	}
-	fake := &fakeThirdPartySecretScanner{called: make(chan string, len(artifacts))}
+	fake := &fakeThirdPartySecretScanner{called: make(chan string, len(artifacts)), files: secretscan.NewServedGitleaksRunner("", []string{root})}
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
+		d.SecretScanRoots = []string{root}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "graph:read")
 
@@ -114,6 +115,23 @@ type fakeThirdPartySecretScanner struct {
 	called chan string
 	mu     sync.Mutex
 	seen   []string
+	files  *secretscan.GitleaksRunner
+}
+
+func (f *fakeThirdPartySecretScanner) ValidateLocalTarget(path string) error {
+	return f.files.ValidateLocalTarget(path)
+}
+
+func (f *fakeThirdPartySecretScanner) ReadLocalRegular(ctx context.Context, path string, maxBytes int64) ([]byte, error) {
+	return f.files.ReadLocalRegular(ctx, path, maxBytes)
+}
+
+func (f *fakeThirdPartySecretScanner) HashLocalRegular(ctx context.Context, path string, maxBytes int64) ([]byte, error) {
+	return f.files.HashLocalRegular(ctx, path, maxBytes)
+}
+
+func (f *fakeThirdPartySecretScanner) RemoveLocalRegular(path string) error {
+	return f.files.RemoveLocalRegular(path)
 }
 
 func (f *fakeThirdPartySecretScanner) Scan(_ context.Context, path string) (secretscan.Report, error) {

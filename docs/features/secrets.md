@@ -2949,7 +2949,12 @@ scanner version, and credential-ref. When the provider signs its export, add
 base64) and `signer_public_key_pem`. Raw signature bytes are read exactly as supplied;
 only base64 text may have surrounding whitespace. trstctl verifies the signature before the scanner
 opens the artifact, fails the run without scanning when it does not verify, and stamps
-every finding with `signature_verified` and the signer key's SHA-256. Set
+every finding with `signature_verified` and the signer key's SHA-256.
+Both local paths must be inside an operator-configured secret scan root when the
+run is queued and when its worker executes. The signature must be a regular file
+of at most 64 KiB; a signed artifact must be one regular file of at most 256 MiB,
+hashed through a checked file descriptor. A refused path or signature cannot
+make the worker read a device or a file outside those roots. Set
 `require_signature` on sources that must never scan an unsigned export; the ingest is
 refused with 400 when the signature inputs are missing. Add
 `delete_artifact_after_scan` when the export must not outlive its scan: trstctl removes

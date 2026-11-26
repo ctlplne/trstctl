@@ -4,6 +4,7 @@ package secretscan
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/base64"
 	"encoding/pem"
@@ -63,6 +64,7 @@ func TestArtifactSignaturePreservesBinaryWhitespace(t *testing.T) {
 				t.Fatal(err)
 			}
 			cfg := ThirdPartyScanConfig{SignaturePath: signaturePath, SignerPublicKeyPEM: string(fixture.publicPEM), RequireSignature: true}
+			files := NewServedGitleaksRunner("", []string{dir})
 			encodings := map[string][]byte{
 				"raw":                         fixture.signature,
 				"base64":                      []byte(base64.StdEncoding.EncodeToString(fixture.signature)),
@@ -73,7 +75,7 @@ func TestArtifactSignaturePreservesBinaryWhitespace(t *testing.T) {
 					if err := os.WriteFile(signaturePath, encoded, 0o600); err != nil {
 						t.Fatal(err)
 					}
-					evidence, err := VerifyThirdPartyArtifactSignature(cfg, artifactPath)
+					evidence, err := VerifyThirdPartyArtifactSignature(context.Background(), cfg, artifactPath, files)
 					if err != nil || !evidence.Verified || evidence.SignerKeySHA256 != boundarycrypto.SHA256Hex(block.Bytes) {
 						t.Fatalf("valid %s signature refused: %v, evidence=%+v", name, err, evidence)
 					}
@@ -87,7 +89,7 @@ func TestArtifactSignaturePreservesBinaryWhitespace(t *testing.T) {
 			if err := os.WriteFile(artifactPath, changed, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if evidence, err := VerifyThirdPartyArtifactSignature(cfg, artifactPath); err == nil || evidence.Verified || evidence.SignerKeySHA256 != "" {
+			if evidence, err := VerifyThirdPartyArtifactSignature(context.Background(), cfg, artifactPath, files); err == nil || evidence.Verified || evidence.SignerKeySHA256 != "" {
 				t.Fatalf("changed artifact accepted: %v, evidence=%+v", err, evidence)
 			}
 			if err := os.WriteFile(artifactPath, fixture.artifact, 0o600); err != nil {
@@ -97,7 +99,7 @@ func TestArtifactSignaturePreservesBinaryWhitespace(t *testing.T) {
 			if err := os.WriteFile(signaturePath, truncated, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if evidence, err := VerifyThirdPartyArtifactSignature(cfg, artifactPath); err == nil || evidence.Verified {
+			if evidence, err := VerifyThirdPartyArtifactSignature(context.Background(), cfg, artifactPath, files); err == nil || evidence.Verified {
 				t.Fatalf("truncated signature accepted: %v, evidence=%+v", err, evidence)
 			}
 		})

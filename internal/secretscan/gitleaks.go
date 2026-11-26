@@ -124,6 +124,67 @@ func (r *GitleaksRunner) ValidateLocalTarget(path string) error {
 	return err
 }
 
+// allowedLocalFile opens the operator-approved root again for each file
+// operation. The descriptor-based helper then confines every path component
+// even if a tenant swaps a symlink after the preliminary path check.
+func (r *GitleaksRunner) allowedLocalFile(path string) (*os.Root, string, error) {
+	roots, err := r.scanRoots()
+	if err != nil {
+		return nil, "", err
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, "", err
+	}
+	resolved, configuredRoot, err := resolveAllowedPath(abs, roots)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: path is outside configured scan roots", ErrInvalidScanTarget)
+	}
+	rel, err := filepath.Rel(configuredRoot, resolved)
+	if err != nil || rel == "." {
+		return nil, "", fmt.Errorf("%w: path must name a file inside a scan root", ErrInvalidScanTarget)
+	}
+	root, err := os.OpenRoot(configuredRoot)
+	return root, rel, err
+}
+
+// ReadLocalRegular reads a bounded signature file under an operator scan root.
+func (r *GitleaksRunner) ReadLocalRegular(ctx context.Context, path string, maxBytes int64) ([]byte, error) {
+	root, rel, err := r.allowedLocalFile(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	return safefile.ReadRegularFileNoFollow(ctx, root, rel, maxBytes)
+}
+
+// HashLocalRegular streams an artifact digest from a root-confined descriptor.
+func (r *GitleaksRunner) HashLocalRegular(ctx context.Context, path string, maxBytes int64) ([]byte, error) {
+	root, rel, err := r.allowedLocalFile(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	return safefile.SHA256RegularFileNoFollow(ctx, root, rel, maxBytes)
+}
+
+// RemoveLocalRegular removes only one file under an operator scan root.
+func (r *GitleaksRunner) RemoveLocalRegular(path string) error {
+	root, rel, err := r.allowedLocalFile(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	info, err := root.Lstat(rel)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return safefile.ErrNotRegular
+	}
+	return root.Remove(rel)
+}
+
 // Scan runs the default workspace scan for compatibility with older embedders.
 func (r *GitleaksRunner) Scan(ctx context.Context, target string) (Report, error) {
 	return r.ScanWithOptions(ctx, target, ScanOptions{})

@@ -4,11 +4,10 @@ package secretscan
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -76,6 +75,16 @@ type ArtifactSignatureEvidence struct {
 var ErrArtifactSignatureRequired = errors.New("secretscan: this source requires a provider signature (signature_path and signer_public_key_pem)")
 
 const maxSignedArtifactBytes = 256 << 20
+const maxThirdPartySignatureBytes = 64 << 10
+
+// ThirdPartyArtifactAccess is the root-confined file authority supplied by
+// the served scanner. A tenant's path cannot grant filesystem authority.
+type ThirdPartyArtifactAccess interface {
+	ValidateLocalTarget(path string) error
+	ReadLocalRegular(ctx context.Context, path string, maxBytes int64) ([]byte, error)
+	HashLocalRegular(ctx context.Context, path string, maxBytes int64) ([]byte, error)
+	RemoveLocalRegular(path string) error
+}
 
 // VerifyThirdPartyArtifactSignature checks the provider's detached signature
 // over the artifact file before anything reads it as scan input. The artifact
@@ -84,53 +93,54 @@ const maxSignedArtifactBytes = 256 << 20
 // base64 text; the public key is PEM (PKIX). RSA PKCS#1 v1.5 and ECDSA over
 // SHA-256 are accepted, the same primitive the platform's attestation
 // verification uses.
-func VerifyThirdPartyArtifactSignature(cfg ThirdPartyScanConfig, artifactPath string) (ArtifactSignatureEvidence, error) {
+func VerifyThirdPartyArtifactSignature(ctx context.Context, cfg ThirdPartyScanConfig, artifactPath string, files ThirdPartyArtifactAccess) (ArtifactSignatureEvidence, error) {
 	signaturePath := strings.TrimSpace(cfg.SignaturePath)
 	keyPEM := strings.TrimSpace(cfg.SignerPublicKeyPEM)
+	if (signaturePath == "") != (keyPEM == "") {
+		return ArtifactSignatureEvidence{}, ErrArtifactSignatureRequired
+	}
 	if signaturePath == "" || keyPEM == "" {
 		if cfg.RequireSignature {
 			return ArtifactSignatureEvidence{}, ErrArtifactSignatureRequired
 		}
 		return ArtifactSignatureEvidence{}, nil
 	}
-	block, _ := pem.Decode([]byte(keyPEM))
-	if block == nil || block.Type != "PUBLIC KEY" {
-		return ArtifactSignatureEvidence{}, errors.New("secretscan: signer_public_key_pem must be a PEM PUBLIC KEY")
+	if files == nil {
+		return ArtifactSignatureEvidence{}, errors.New("secretscan: root-confined artifact file access is unavailable")
 	}
-	info, err := os.Lstat(artifactPath)
+	pub, err := boundarycrypto.ParsePublicKeyPEM([]byte(keyPEM))
 	if err != nil {
-		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: artifact: %w", err)
+		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: signer_public_key_pem must be a PEM PUBLIC KEY: %w", err)
 	}
-	if !info.Mode().IsRegular() {
-		return ArtifactSignatureEvidence{}, errors.New("secretscan: a provider signature can only cover a single regular artifact file")
-	}
-	if info.Size() > maxSignedArtifactBytes {
-		return ArtifactSignatureEvidence{}, errors.New("secretscan: signed artifact exceeds 256 MiB")
-	}
-	content, err := os.ReadFile(artifactPath) // #nosec G304 -- operator-owned artifact path from the reviewed source config, bounded by size above (CWE-22)
+	digest, err := files.HashLocalRegular(ctx, artifactPath, maxSignedArtifactBytes)
 	if err != nil {
-		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: read artifact: %w", err)
+		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: read regular artifact: %w", err)
 	}
-	sigRaw, err := os.ReadFile(signaturePath) // #nosec G304 -- operator-owned signature path from the reviewed source config (CWE-22)
+	sigRaw, err := files.ReadLocalRegular(ctx, signaturePath, maxThirdPartySignatureBytes)
 	if err != nil {
-		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: read signature: %w", err)
+		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: read bounded regular signature: %w", err)
 	}
-	if err := verifyDetachedArtifactSignature(block.Bytes, content, sigRaw); err != nil {
+	if err := verifyDetachedArtifactDigest(pub, digest, sigRaw); err != nil {
 		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: artifact signature verification failed: %w", err)
 	}
-	return ArtifactSignatureEvidence{Verified: true, SignerKeySHA256: boundarycrypto.SHA256Hex(block.Bytes)}, nil
+	return ArtifactSignatureEvidence{Verified: true, SignerKeySHA256: boundarycrypto.SHA256Hex(pub.DER)}, nil
 }
 
 // verifyDetachedArtifactSignature accepts base64 text or the exact binary
 // signature. Only the text candidate may have surrounding whitespace removed:
 // an RSA or ECDSA signature can itself begin or end with a whitespace byte.
 func verifyDetachedArtifactSignature(publicDER, content, signature []byte) error {
+	return verifyDetachedArtifactDigest(boundarycrypto.PublicKey{DER: publicDER}, boundarycrypto.SHA256Sum(content), signature)
+}
+
+func verifyDetachedArtifactDigest(pub boundarycrypto.PublicKey, digest, signature []byte) error {
+	opts := boundarycrypto.SignOptions{Hash: boundarycrypto.SHA256, RSAPadding: boundarycrypto.RSAPKCS1v15}
 	if decoded, err := base64.StdEncoding.DecodeString(string(bytes.TrimSpace(signature))); err == nil && len(decoded) > 0 {
-		if err := boundarycrypto.VerifyMessage(publicDER, content, decoded); err == nil {
+		if err := boundarycrypto.VerifyDigest(pub, digest, decoded, opts); err == nil {
 			return nil
 		}
 	}
-	return boundarycrypto.VerifyMessage(publicDER, content, signature)
+	return boundarycrypto.VerifyDigest(pub, digest, signature, opts)
 }
 
 type ThirdPartyTarget struct {
@@ -198,19 +208,14 @@ func PrepareThirdPartyTarget(cfg ThirdPartyScanConfig) (ThirdPartyTarget, error)
 // file (the artifact itself; a directory export or archive tree is left in
 // place) and reports what happened as a note for the run record. Removal
 // failures are reported, never fatal: the scan result stands on its own.
-func RemoveThirdPartyArtifactAfterScan(cfg ThirdPartyScanConfig) string {
+func RemoveThirdPartyArtifactAfterScan(cfg ThirdPartyScanConfig, files ThirdPartyArtifactAccess) string {
 	if !cfg.DeleteArtifactAfterScan {
 		return ""
 	}
-	path := filepath.Clean(strings.TrimSpace(cfg.ArtifactPath))
-	info, err := os.Lstat(path)
-	if err != nil {
-		return "artifact not removed after scan: " + err.Error()
+	if files == nil {
+		return "artifact not removed after scan: root-confined file access is unavailable"
 	}
-	if !info.Mode().IsRegular() {
-		return "artifact not removed after scan: only a single regular file is removed"
-	}
-	if err := os.Remove(path); err != nil {
+	if err := files.RemoveLocalRegular(filepath.Clean(strings.TrimSpace(cfg.ArtifactPath))); err != nil {
 		return "artifact not removed after scan: " + err.Error()
 	}
 	return "artifact removed after scan"

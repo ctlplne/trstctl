@@ -17,24 +17,41 @@ import (
 	"trstctl.com/trstctl/internal/secretscan"
 )
 
-type emptyRetentionScanner struct{}
+type emptyRetentionScanner struct{ files *secretscan.GitleaksRunner }
 
 func (emptyRetentionScanner) Scan(context.Context, string) (secretscan.Report, error) {
 	return secretscan.Report{}, nil
 }
 
+func (s emptyRetentionScanner) ValidateLocalTarget(path string) error {
+	return s.files.ValidateLocalTarget(path)
+}
+func (s emptyRetentionScanner) ReadLocalRegular(ctx context.Context, path string, maxBytes int64) ([]byte, error) {
+	return s.files.ReadLocalRegular(ctx, path, maxBytes)
+}
+func (s emptyRetentionScanner) HashLocalRegular(ctx context.Context, path string, maxBytes int64) ([]byte, error) {
+	return s.files.HashLocalRegular(ctx, path, maxBytes)
+}
+func (s emptyRetentionScanner) RemoveLocalRegular(path string) error {
+	return s.files.RemoveLocalRegular(path)
+}
+
 func TestServedThirdPartySecretScanReportsCleanupWithNoFindings(t *testing.T) {
+	root := t.TempDir()
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.SecretScanner = emptyRetentionScanner{}
+		d.SecretScanner = emptyRetentionScanner{files: secretscan.NewServedGitleaksRunner("", []string{root})}
+		d.SecretScanRoots = []string{root}
 	})
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read")
-	directory := t.TempDir()
-	artifact := writeSecretArtifact(t, t.TempDir(), "export.jsonl", `{}`)
-	missing := filepath.Join(t.TempDir(), "missing-export.jsonl")
+	directory := filepath.Join(root, "directory")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	artifact := writeSecretArtifact(t, root, "export.jsonl", `{}`)
+	missing := filepath.Join(root, "missing-export.jsonl")
 	for _, tc := range []struct{ name, path, result string }{
 		{"removed", artifact, "artifact removed after scan"},
 		{"directory-retained", directory, "artifact not removed after scan"},
-		{"missing", missing, "artifact not removed after scan"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/third-party/slack/ingest", token, "cleanup-"+tc.name,
@@ -55,6 +72,10 @@ func TestServedThirdPartySecretScanReportsCleanupWithNoFindings(t *testing.T) {
 			}
 		})
 	}
+	if status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/third-party/slack/ingest", token, "cleanup-missing",
+		map[string]any{"source": "fixture/missing", "artifact_path": missing, "delete_artifact_after_scan": true}); status != http.StatusBadRequest {
+		t.Fatalf("missing artifact queued: HTTP %d", status)
+	}
 	if _, err := os.Stat(artifact); !os.IsNotExist(err) {
 		t.Fatalf("removed artifact remains: %v", err)
 	}
@@ -71,11 +92,12 @@ func TestServedThirdPartySecretScanReportsCleanupWithNoFindings(t *testing.T) {
 func TestServedThirdPartySecretScanRetention(t *testing.T) {
 	root := t.TempDir()
 	artifact := writeSecretArtifact(t, root, "slack/export.jsonl", `{"text":"xoxb-retention-fixture-value"}`+"\n") // #nosec G101 -- fabricated fixture (CWE-798)
-	fake := &fakeThirdPartySecretScanner{called: make(chan string, 4)}
+	fake := &fakeThirdPartySecretScanner{called: make(chan string, 4), files: secretscan.NewServedGitleaksRunner("", []string{root})}
 	policy := privacy.DefaultRetentionPolicy()
 	policy.ThirdPartyScanFindingsAfter = 24 * time.Hour
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
+		d.SecretScanRoots = []string{root}
 		d.PrivacyRetentionEnabled = true
 		d.PrivacyRetentionPolicy = policy
 	})

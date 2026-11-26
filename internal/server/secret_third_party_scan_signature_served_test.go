@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/secretscan"
 )
 
 // An exported artifact can carry the provider's detached signature. When the
@@ -52,8 +53,11 @@ func TestServedThirdPartySecretScanVerifiesProviderSignature(t *testing.T) {
 	}
 	pubPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.Public().DER}))
 
-	fake := &fakeThirdPartySecretScanner{called: make(chan string, 4)}
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) { d.SecretScanner = fake })
+	fake := &fakeThirdPartySecretScanner{called: make(chan string, 4), files: secretscan.NewServedGitleaksRunner("", []string{root})}
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.SecretScanner = fake
+		d.SecretScanRoots = []string{root}
+	})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read")
 
 	ingest := func(key string, body map[string]any, want int) map[string]json.RawMessage {

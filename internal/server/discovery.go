@@ -1621,7 +1621,23 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		return netscan.Report{}, "", "", err
 	}
 	defer target.Cleanup()
-	signature, sigErr := secretscan.VerifyThirdPartyArtifactSignature(cfg, target.Path)
+	var files secretscan.ThirdPartyArtifactAccess
+	if target.Mode == "artifact_path" {
+		var ok bool
+		files, ok = d.secretRepoScanner.(secretscan.ThirdPartyArtifactAccess)
+		if !ok {
+			return netscan.Report{}, "failed", "root-confined secret scan file access is unavailable", nil
+		}
+		for _, path := range []string{target.Path, cfg.SignaturePath} {
+			if path == "" {
+				continue
+			}
+			if err := files.ValidateLocalTarget(path); err != nil {
+				return netscan.Report{}, "failed", "artifact path is outside configured scan roots or is not a regular file", nil
+			}
+		}
+	}
+	signature, sigErr := secretscan.VerifyThirdPartyArtifactSignature(ctx, cfg, target.Path, files)
 	if sigErr != nil {
 		// Nothing was read as scan input: a failing or missing required
 		// signature stops the run before the scanner opens the artifact.
@@ -1741,7 +1757,7 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 	if rep.Discovered == 0 && rep.Failed == 0 {
 		msg = "third-party secret scan completed with no findings"
 	}
-	switch note := secretscan.RemoveThirdPartyArtifactAfterScan(cfg); note {
+	switch note := secretscan.RemoveThirdPartyArtifactAfterScan(cfg, files); note {
 	case "":
 	case string(netscan.ArtifactRemoved):
 		rep.ArtifactCleanup = netscan.ArtifactRemoved
