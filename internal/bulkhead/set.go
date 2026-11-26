@@ -55,6 +55,11 @@ const (
 	// protocol mounts. Enrollment then uses SubsystemProtocols; keeping the two
 	// pools distinct avoids a worker waiting on a task in its own full pool.
 	SubsystemProtocolHTTP = "protocol_http"
+	// Public credential exchange and revocation reads have separate request
+	// capacity. A slow unauthenticated body cannot consume REST/API or OCSP/CRL
+	// workers, and a busy REST tenant cannot delay revocation status.
+	SubsystemPublicHTTP     = "public_http"
+	SubsystemRevocationHTTP = "revocation_http"
 
 	// SubsystemKMIP is KMIP's OWN pool. KMIP is long-lived and connection
 	// oriented: a worker is held for a whole client connection, TLS handshake
@@ -138,6 +143,8 @@ func DefaultConfigs() []Config {
 		// concurrency against the signer.
 		{Name: SubsystemProtocols, Workers: 8, Queue: 256},
 		{Name: SubsystemProtocolHTTP, Workers: 8, Queue: 64},
+		{Name: SubsystemPublicHTTP, Workers: 8, Queue: 64},
+		{Name: SubsystemRevocationHTTP, Workers: 4, Queue: 64},
 		// Connection-scoped, so workers here are held far longer than a request.
 		{Name: SubsystemKMIP, Workers: 8, Queue: 128},
 		// The agent steady-state pool (SPINE-001/AN-7): heartbeat is cheap but can fan

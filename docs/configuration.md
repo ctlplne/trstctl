@@ -5633,6 +5633,11 @@ HTTP request parsing and authentication separately from REST API workers. The
 `bulkheads.protocols` lane handles enrollment work after parsing. Both pools
 must have positive worker and queue limits; `TRSTCTL_BULKHEAD_PROTOCOL_HTTP_WORKERS`
 and `TRSTCTL_BULKHEAD_PROTOCOL_HTTP_QUEUE` override the HTTP lane.
+`bulkheads.public_http` isolates sign-in, enrollment, SCIM, OAuth exchange,
+and published key routes; `bulkheads.revocation_http` isolates OCSP and CRL.
+The main listener allows one minute to receive a complete request and caps
+each client's simultaneous body-bearing requests at half that route pool's
+workers. A full per-client slot returns 429 with `Retry-After`.
 
 Every outbox family owns a separate queue and worker set even when all limits are
 inherited from `bulkheads.outbox`. In plain terms, a connector endpoint that stops

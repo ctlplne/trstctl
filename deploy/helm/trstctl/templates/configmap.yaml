@@ -54,6 +54,10 @@ data:
   TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE: {{ .Values.bulkheads.protocols.queue | quote }}
   TRSTCTL_BULKHEAD_PROTOCOL_HTTP_WORKERS: {{ .Values.bulkheads.protocol_http.workers | quote }}
   TRSTCTL_BULKHEAD_PROTOCOL_HTTP_QUEUE: {{ .Values.bulkheads.protocol_http.queue | quote }}
+  TRSTCTL_BULKHEAD_PUBLIC_HTTP_WORKERS: {{ .Values.bulkheads.public_http.workers | quote }}
+  TRSTCTL_BULKHEAD_PUBLIC_HTTP_QUEUE: {{ .Values.bulkheads.public_http.queue | quote }}
+  TRSTCTL_BULKHEAD_REVOCATION_HTTP_WORKERS: {{ .Values.bulkheads.revocation_http.workers | quote }}
+  TRSTCTL_BULKHEAD_REVOCATION_HTTP_QUEUE: {{ .Values.bulkheads.revocation_http.queue | quote }}
   TRSTCTL_BULKHEAD_AGENT_WORKERS: {{ .Values.bulkheads.agent.workers | quote }}
   TRSTCTL_BULKHEAD_AGENT_QUEUE: {{ .Values.bulkheads.agent.queue | quote }}
   {{- if eq .Values.tls.mode "file" }}

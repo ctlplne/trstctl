@@ -3127,7 +3127,11 @@ func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 }
 
 func (s *Server) configureRootMux(d Deps, a *api.API) {
-	apiHandler := bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a)
+	apiLimit := clientLimitForPool(s.bulk, bulkhead.SubsystemAPI)
+	publicLimit := clientLimitForPool(s.bulk, bulkhead.SubsystemPublicHTTP)
+	revocationLimit := clientLimitForPool(s.bulk, bulkhead.SubsystemRevocationHTTP)
+	apiHandler := apiLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a))
+	publicHandler := publicLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemPublicHTTP, a))
 	heavyHandler := apiHandler
 	if s.bulk.Pool(bulkhead.SubsystemQuery) != nil {
 		heavyHandler = bulkheadHandler(s.bulk, bulkhead.SubsystemQuery, a)
@@ -3152,39 +3156,41 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux.Handle("POST /api/v1/switching/imports", switchingImports)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/v1/", apiHandler)
-	mux.Handle("/auth/", apiHandler)
-	mux.Handle("/enroll/", apiHandler)
-	mux.Handle("/scim/", apiHandler)
+	mux.Handle("/auth/", publicHandler)
+	mux.Handle("/enroll/", publicHandler)
+	mux.Handle("/scim/", publicHandler)
 	if s.revoc != nil || s.caHierarchy != nil {
 		revMux := http.NewServeMux()
 		if s.revoc != nil {
 			s.revoc.routes(revMux)
 		}
 		s.managedCARoutes(revMux)
-		revHandler := bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, revMux)
+		revHandler := revocationLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemRevocationHTTP, revMux))
 		mux.Handle("/ocsp/", revHandler)
 		mux.Handle("/crl/", revHandler)
 	}
 	// Public like /crl/ and /ocsp/: each agent's current public keys, for the
 	// customer's authorization server to check the agent's client assertions.
-	mux.Handle(agentKeySetPrefix, bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.agentKeySetHandler()))
+	mux.Handle(agentKeySetPrefix, publicLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemPublicHTTP, s.agentKeySetHandler())))
 	// M4: OAuth token exchange (RFC 8693) and the key its JWT-SVIDs verify against.
-	mux.Handle("POST /oauth2/token", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.tokenExchangeHandler(d.MachineAuthMethods)))
+	mux.Handle("POST /oauth2/token", publicLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemPublicHTTP, s.tokenExchangeHandler(d.MachineAuthMethods))))
 	// N8: Slack's install redirect, button presses and /trstctl command, each
 	// checked against the app's signing secret (the redirect against its state).
 	if s.slack != nil {
-		s.slack.routes(mux, func(h http.Handler) http.Handler { return bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, h) })
+		s.slack.routes(mux, func(h http.Handler) http.Handler {
+			return publicLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemPublicHTTP, h))
+		})
 	}
-	mux.Handle("GET /oauth2/jwks", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.tokenExchangeJWKSHandler()))
+	mux.Handle("GET /oauth2/jwks", publicLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemPublicHTTP, s.tokenExchangeJWKSHandler())))
 	// N5: each tenant's published OpenID issuer, which clouds trust those tokens through.
-	mux.Handle("GET /oidc/{tenant}/.well-known/openid-configuration", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.oidcIssuerDocumentHandler()))
-	mux.Handle("GET /oidc/{tenant}/jwks.json", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.oidcIssuerJWKSHandler()))
+	mux.Handle("GET /oidc/{tenant}/.well-known/openid-configuration", publicLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemPublicHTTP, s.oidcIssuerDocumentHandler())))
+	mux.Handle("GET /oidc/{tenant}/jwks.json", publicLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemPublicHTTP, s.oidcIssuerJWKSHandler())))
 	if s.protocols != nil {
 		s.protocols.routes(mux, s.bulk)
 	}
 	registerProtocolNamespaceFallbacks(mux, s.protocols)
 	if d.ProviderHandler != nil {
-		mux.Handle("/provider/", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, d.ProviderHandler))
+		mux.Handle("/provider/", apiLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, d.ProviderHandler)))
 	} else {
 		mux.HandleFunc("/provider/", http.NotFound)
 	}

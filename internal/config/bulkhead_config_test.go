@@ -20,6 +20,10 @@ func TestBulkheadEnvOverridesAndConfigs(t *testing.T) {
 		"TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE":           "377",
 		"TRSTCTL_BULKHEAD_PROTOCOL_HTTP_WORKERS":     "7",
 		"TRSTCTL_BULKHEAD_PROTOCOL_HTTP_QUEUE":       "37",
+		"TRSTCTL_BULKHEAD_PUBLIC_HTTP_WORKERS":       "6",
+		"TRSTCTL_BULKHEAD_PUBLIC_HTTP_QUEUE":         "36",
+		"TRSTCTL_BULKHEAD_REVOCATION_HTTP_WORKERS":   "3",
+		"TRSTCTL_BULKHEAD_REVOCATION_HTTP_QUEUE":     "33",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -45,6 +49,8 @@ func TestBulkheadEnvOverridesAndConfigs(t *testing.T) {
 		bulkhead.SubsystemOutboxAuditFeeds:    {Name: bulkhead.SubsystemOutboxAuditFeeds, Workers: 5, Queue: 99},
 		bulkhead.SubsystemProtocols:           {Name: bulkhead.SubsystemProtocols, Workers: 13, Queue: 377},
 		bulkhead.SubsystemProtocolHTTP:        {Name: bulkhead.SubsystemProtocolHTTP, Workers: 7, Queue: 37},
+		bulkhead.SubsystemPublicHTTP:          {Name: bulkhead.SubsystemPublicHTTP, Workers: 6, Queue: 36},
+		bulkhead.SubsystemRevocationHTTP:      {Name: bulkhead.SubsystemRevocationHTTP, Workers: 3, Queue: 33},
 	} {
 		if got[name] != want {
 			t.Fatalf("%s config = %+v, want %+v", name, got[name], want)

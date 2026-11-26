@@ -216,6 +216,8 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 		"{Name: SubsystemPolicy",
 		"{Name: SubsystemProtocols",
 		"{Name: SubsystemProtocolHTTP",
+		"{Name: SubsystemPublicHTTP",
+		"{Name: SubsystemRevocationHTTP",
 		"{Name: SubsystemAgent",
 	} {
 		if !strings.Contains(set, want) {

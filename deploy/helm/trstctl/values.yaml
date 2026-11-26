@@ -154,6 +154,12 @@ bulkheads:
   protocol_http:
     workers: 8
     queue: 64
+  public_http:
+    workers: 8
+    queue: 64
+  revocation_http:
+    workers: 4
+    queue: 64
   agent:
     workers: 16
     queue: 1024

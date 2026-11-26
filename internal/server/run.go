@@ -1820,7 +1820,7 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 }
 
 func serveRuntime(ctx context.Context, cfg *config.Config, srv *Server, logger *slog.Logger, stopBackground func(), runtimeFailure <-chan error) error {
-	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second, MaxHeaderBytes: 64 << 10}
+	httpSrv := mainHTTPServer(srv.Handler())
 	ln, err := net.Listen("tcp", cfg.Server.Addr)
 	if err != nil {
 		stopBackground()
@@ -1849,6 +1849,17 @@ func serveRuntime(ctx context.Context, cfg *config.Config, srv *Server, logger *
 	defer cancel()
 	_ = httpSrv.Shutdown(shutCtx)
 	return srv.Shutdown(shutCtx)
+}
+
+// mainHTTPServer caps the time a peer may take to send a body or receive a
+// response. ReadHeaderTimeout alone clears the deadline after headers and lets
+// a slow POST hold an API worker indefinitely.
+func mainHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Handler: handler, ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout: time.Minute, WriteTimeout: 2 * time.Minute,
+		IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10,
+	}
 }
 
 // agentCACertFile resolves where the agent CA certificate is persisted (WIRE-004), so

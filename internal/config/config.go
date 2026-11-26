@@ -2933,6 +2933,8 @@ type Bulkheads struct {
 	Policy                    BulkheadLimit  `json:"policy"`
 	Protocols                 BulkheadLimit  `json:"protocols"`
 	ProtocolHTTP              BulkheadLimit  `json:"protocol_http"`
+	PublicHTTP                BulkheadLimit  `json:"public_http"`
+	RevocationHTTP            BulkheadLimit  `json:"revocation_http"`
 	// KMIP is connection-scoped: a worker is held for a whole client
 	// connection, TLS handshake included, so it must never share the
 	// request-scoped protocols lane (AN-7). This field was missing after the
@@ -2975,6 +2977,10 @@ func defaultBulkheads() Bulkheads {
 			out.Protocols = limit
 		case bulkhead.SubsystemProtocolHTTP:
 			out.ProtocolHTTP = limit
+		case bulkhead.SubsystemPublicHTTP:
+			out.PublicHTTP = limit
+		case bulkhead.SubsystemRevocationHTTP:
+			out.RevocationHTTP = limit
 		case bulkhead.SubsystemKMIP:
 			out.KMIP = limit
 		case bulkhead.SubsystemAgent:
@@ -3020,6 +3026,8 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
 		{name: bulkhead.SubsystemProtocols, limit: b.Protocols},
 		{name: bulkhead.SubsystemProtocolHTTP, limit: b.ProtocolHTTP},
+		{name: bulkhead.SubsystemPublicHTTP, limit: b.PublicHTTP},
+		{name: bulkhead.SubsystemRevocationHTTP, limit: b.RevocationHTTP},
 		{name: bulkhead.SubsystemKMIP, limit: b.KMIP},
 		{name: bulkhead.SubsystemAgent, limit: b.Agent},
 		{name: bulkhead.SubsystemGatewayCommands, limit: b.GatewayCommands},
@@ -4608,6 +4616,10 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	setInt(getenv, "TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE", &b.Protocols.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_PROTOCOL_HTTP_WORKERS", &b.ProtocolHTTP.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_PROTOCOL_HTTP_QUEUE", &b.ProtocolHTTP.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_PUBLIC_HTTP_WORKERS", &b.PublicHTTP.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_PUBLIC_HTTP_QUEUE", &b.PublicHTTP.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_REVOCATION_HTTP_WORKERS", &b.RevocationHTTP.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_REVOCATION_HTTP_QUEUE", &b.RevocationHTTP.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_KMIP_WORKERS", &b.KMIP.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_KMIP_QUEUE", &b.KMIP.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_WORKERS", &b.Agent.Workers)
