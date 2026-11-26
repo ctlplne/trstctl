@@ -16,8 +16,14 @@ package listenersessions
 
 import (
 	"errors"
+	"math"
 	"time"
 )
+
+// PostgreSQL stores each count as integer and the observation times as
+// timestamptz. Keep agent admission inside those columns' common Go/Postgres
+// range so a signed report cannot append an event that replay cannot project.
+const maxObservationUnix = 253402300799 // 9999-12-31 23:59:59 UTC
 
 // ErrUnsupported reports a platform whose sockets and processes this package
 // cannot read; the caller reports nothing rather than an empty observation.
@@ -44,8 +50,11 @@ type Observation struct {
 
 // Valid reports whether the counts are consistent with each other.
 func (o Observation) Valid() bool {
-	return o.Port > 0 && o.Port <= 65535 && o.Established >= 0 && o.HeldByOlder >= 0 && o.Unattributed >= 0 &&
-		o.HeldByOlder+o.Unattributed <= o.Established && o.SinceUnix > 0 && o.SinceUnix <= o.CheckedAtUnix
+	return o.Port > 0 && o.Port <= 65535 &&
+		o.Established >= 0 && o.Established <= math.MaxInt32 &&
+		o.HeldByOlder >= 0 && o.HeldByOlder <= o.Established &&
+		o.Unattributed >= 0 && o.Unattributed <= o.Established-o.HeldByOlder &&
+		o.SinceUnix > 0 && o.SinceUnix <= o.CheckedAtUnix && o.CheckedAtUnix <= maxObservationUnix
 }
 
 // Observe counts the established connections on port and how many a process

@@ -633,6 +633,13 @@ that refuses private addresses.
 
 ### Revocation report: existing sessions (A245-L2)
 
+Host agents report established listener sessions after a verified deploy. The
+control plane rejects a signed report whose counts exceed PostgreSQL integer
+columns or whose observation time falls outside the supported timestamp range;
+the job stays open for a corrected report. An invalid observation already in
+the event log is skipped during replay because session counts are optional
+evidence and must not stop certificate state projection for other tenants.
+
 A session negotiated with a certificate keeps its keys for as long as its connection lives,
 after the listener serves a replacement. When a Linux host agent deploys or renews a
 certificate and its own handshake verifies the listener, it also counts the established

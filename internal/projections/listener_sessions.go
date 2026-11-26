@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -40,9 +41,13 @@ type ListenerSessionsObserved struct {
 
 // ValidateListenerSessionsObserved checks the payload's closed shape.
 func ValidateListenerSessionsObserved(o ListenerSessionsObserved) error {
-	if o.ID == "" || o.TargetID == "" || o.Target == "" || o.Fingerprint == "" || o.Port <= 0 || o.Port > 65535 ||
-		o.Established < 0 || o.HeldByOlder < 0 || o.Unattributed < 0 || o.HeldByOlder+o.Unattributed > o.Established ||
-		o.SinceUnix <= 0 || o.SinceUnix > o.CheckedAtUnix {
+	// Mirror the agent's SQL-shaped bounds. Historical invalid observations
+	// are ignored below, while the orchestrator rejects new ones before append.
+	const maxObservationUnix = 253402300799 // 9999-12-31 23:59:59 UTC
+	if o.ID == "" || len(o.ID) > 200 || o.TargetID == "" || o.Target == "" || o.Fingerprint == "" || o.Port <= 0 || o.Port > 65535 ||
+		o.Established < 0 || o.Established > math.MaxInt32 || o.HeldByOlder < 0 || o.HeldByOlder > o.Established ||
+		o.Unattributed < 0 || o.Unattributed > o.Established-o.HeldByOlder ||
+		o.SinceUnix <= 0 || o.SinceUnix > o.CheckedAtUnix || o.CheckedAtUnix > maxObservationUnix {
 		return errors.New("projections: a listener session count names its target, certificate and port, with counts that hold together")
 	}
 	return nil
@@ -61,7 +66,10 @@ func (p *Projector) applyListenerSessionsTx(ctx context.Context, tx pgx.Tx, e ev
 		return true, fmt.Errorf("projections: decode %s: %w", e.Type, err)
 	}
 	if err := ValidateListenerSessionsObserved(o); err != nil {
-		return true, err
+		// Counts are optional evidence about old TCP sessions, not authority
+		// for certificate state. A historical invalid count must not stop the
+		// shared tail or make every tenant's boot catch-up fail.
+		return true, nil
 	}
 	return true, p.store.ApplyListenerSessionsObservedTx(ctx, tx, e.TenantID, store.ListenerSessionObservation{
 		ID: o.ID, IdentityID: o.IdentityID, TargetID: o.TargetID, Target: o.Target, Fingerprint: o.Fingerprint,

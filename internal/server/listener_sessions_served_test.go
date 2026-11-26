@@ -4,6 +4,8 @@ package server
 
 import (
 	"encoding/json"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -97,6 +99,14 @@ func TestServedHostDeployCountsListenerSessionsA245L2(t *testing.T) {
 	impossible := count
 	impossible.HeldByOlder = 4
 	refused("counts that cannot hold together", encode(result(impossible)), relay.DeploymentEvidenceDigest(result(impossible)))
+	if strconv.IntSize > 32 {
+		unprojectable := count
+		unprojectable.Established = int(int64(math.MaxInt32) + 1)
+		refused("count above PostgreSQL integer", encode(result(unprojectable)), relay.DeploymentEvidenceDigest(result(unprojectable)))
+	}
+	tooLate := count
+	tooLate.CheckedAtUnix = 253402300800
+	refused("timestamp beyond PostgreSQL window", encode(result(tooLate)), relay.DeploymentEvidenceDigest(result(tooLate)))
 	var rows int
 	if err := h.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM listener_session_observations WHERE tenant_id = $1`, h.tenant).Scan(&rows); err != nil || rows != 0 {
 		t.Fatalf("a refused count was recorded: %d %v", rows, err)
