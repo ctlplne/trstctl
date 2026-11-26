@@ -15,6 +15,7 @@ import (
 	"math/big"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -60,9 +61,9 @@ func SelfSignedCACert(signer DigestSigner, commonName string, ttl time.Duration)
 // It lives inside the crypto boundary (AN-3) so the issuance code never names
 // crypto/x509. The zero value adds no extension and no configurable constraint;
 // the reserved automatic-workload namespace is still protected. SignLeafFromCSR
-// uses it, preserving the legacy leaf shape for callers that have
-// no served revocation infrastructure (test/library CAs, breakglass, the protocol
-// servers' own CAs).
+// uses it, preserving legacy extension and validity defaults for callers that
+// have no served revocation infrastructure (test/library CAs, breakglass, the
+// protocol servers' own CAs). Even the zero profile omits unchecked CSR RDNs.
 type LeafProfile struct {
 	// Revocation + chain-building pointers (PKIGOV-001). Empty slices omit the
 	// corresponding extension.
@@ -90,6 +91,14 @@ type LeafProfile struct {
 	PermittedIPCIDRs      []string      // IP SAN CIDR ranges; set to permit IP SANs under a SAN policy
 	PermittedEmailDomains []string      // email SAN domains; set to permit rfc822Name SANs under a SAN policy
 	PermittedURIPrefixes  []string      // URI SAN prefixes; set to permit URI SANs under a SAN policy
+	// EnforceBoundSubject refuses CSR subject attributes other than one common
+	// name that matches an authorized identifier. Served issuers set this even
+	// when they have no SAN profile. A SAN allow-list also enables it.
+	EnforceBoundSubject bool `json:"EnforceBoundSubject,omitempty"`
+	// AuthorizedSubjectNames are names checked by the issuing protocol or
+	// enrollment binding outside the CSR's SAN list (for example a legacy
+	// protocol's CN-only request). Never fill this from an unchecked CSR.
+	AuthorizedSubjectNames []string `json:"AuthorizedSubjectNames,omitempty"`
 
 	// RefuseTimeStamping refuses a timeStamping leaf (CR-052). The platform's
 	// issuing CA sets it: its own TSA certificate, minted separately, anchors
@@ -320,9 +329,12 @@ func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csr
 	if err != nil {
 		return IssuedLeaf{}, err
 	}
+	// Only the CN can enter a leaf. A served profile also verifies that CN
+	// against authorized identifiers; other CSR RDNs are never issuer claims.
+	subject := pkix.Name{CommonName: csr.Subject.CommonName}
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               csr.Subject,
+		Subject:               subject,
 		DNSNames:              csr.DNSNames,
 		IPAddresses:           csr.IPAddresses,
 		EmailAddresses:        csr.EmailAddresses,
@@ -354,7 +366,7 @@ func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csr
 		return IssuedLeaf{}, fmt.Errorf("crypto: the CSR's subjectAltName: %w", err)
 	}
 	if len(mailboxes) > 0 {
-		san, err := subjectAltNameWithMailboxes(len(csr.Subject.ToRDNSequence()) == 0, csr.DNSNames, csr.EmailAddresses, csr.IPAddresses, csr.URIs, mailboxes)
+		san, err := subjectAltNameWithMailboxes(len(subject.ToRDNSequence()) == 0, csr.DNSNames, csr.EmailAddresses, csr.IPAddresses, csr.URIs, mailboxes)
 		if err != nil {
 			return IssuedLeaf{}, err
 		}
@@ -661,6 +673,7 @@ func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof Le
 		return &leafProfileError{"the CSR's subjectAltName does not parse"}
 	}
 	return EnforceLeafProfileInfo(CSRInfo{
+		identity:          enrollmentIdentityFromCSR(csr),
 		DNSNames:          append([]string(nil), csr.DNSNames...),
 		IPAddresses:       ipStrings(csr.IPAddresses),
 		EmailAddresses:    append(append([]string(nil), csr.EmailAddresses...), mailboxes...),
@@ -682,6 +695,16 @@ func EnforceLeafProfileInfo(info CSRInfo, ttl time.Duration, prof LeafProfile) e
 	for _, uri := range info.URIs {
 		if IsReservedWorkloadSPIFFEID(uri) {
 			return &leafProfileError{"URI SAN claims the reserved trstctl workload namespace; use authenticated workload issuance"}
+		}
+	}
+	if leafSubjectPolicyEnabled(prof) {
+		if len(info.identity.subject) > 0 {
+			authorized := append(append([]string(nil), info.DNSNames...), prof.AuthorizedSubjectNames...)
+			if err := info.CheckExternalProfileSubject(authorized); err != nil {
+				return &leafProfileError{err.Error()}
+			}
+		} else if info.CommonName != "" && !leafSubjectNameAuthorized(info, prof.AuthorizedSubjectNames) {
+			return &leafProfileError{"common name is outside the profile-checked identifiers"}
 		}
 	}
 	// ExtraExtensions is a non-core extension seam, not a second way to set
@@ -754,6 +777,24 @@ func EnforceLeafProfileInfo(info CSRInfo, ttl time.Duration, prof LeafProfile) e
 		}
 	}
 	return nil
+}
+
+func leafSubjectPolicyEnabled(prof LeafProfile) bool {
+	return prof.EnforceBoundSubject || leafSANPolicyConfigured(prof)
+}
+
+func leafSubjectNameAuthorized(info CSRInfo, extra []string) bool {
+	for _, name := range append(append([]string(nil), info.DNSNames...), extra...) {
+		if strings.EqualFold(strings.TrimSuffix(info.CommonName, "."), strings.TrimSuffix(name, ".")) {
+			return true
+		}
+	}
+	for _, names := range [][]string{info.IPAddresses, info.EmailAddresses, info.URIs} {
+		if slices.Contains(names, info.CommonName) {
+			return true
+		}
+	}
+	return false
 }
 
 // subjectKeyID computes the RFC 5280 §4.2.1.2 method-1 key identifier: the SHA-1

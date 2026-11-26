@@ -563,9 +563,9 @@ func authorizeAgentCSRWithInspector(csrDER []byte, permitted, permittedIPs, perm
 
 	// EVERY identifier the leaf will carry has to be checked, not just the DNS
 	// ones — and the set that matters is decided by the SIGNER, not by this
-	// function. crypto.SignLeafFromCSRWithProfile copies csr.Subject,
-	// csr.DNSNames, csr.IPAddresses, csr.EmailAddresses and csr.URIs verbatim
-	// into the certificate. A check that read only DNSNames and the CommonName
+	// function. The signer checks the complete CSR subject under the served
+	// profile and copies its SANs into the certificate. A check that read only
+	// DNSNames and the CommonName
 	// left four of those unguarded: an agent holding a legitimate renewal for
 	// api.example.test could add an iPAddress SAN, or a spiffe:// URI, or an
 	// rfc822Name, and the control plane would sign every one of them.

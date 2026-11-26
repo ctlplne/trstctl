@@ -239,6 +239,13 @@ func (p *protocolIssuer) issueProtocolLeafChainForProfile(ctx context.Context, t
 		if err != nil {
 			return nil, err
 		}
+		if len(csrInfo.DNSNames) == 0 && len(dnsNames) == 1 && dnsNames[0] == csrInfo.CommonName {
+			// Legacy EST/SCEP/CMP enrollments commonly carry only a subject CN.
+			// The authenticated protocol enrollment and selected profile have
+			// admitted that exact name. Bind it explicitly so the signer can
+			// distinguish this from a CSR with a different authorized SAN.
+			leafProfile.AuthorizedSubjectNames = []string{dnsNames[0]}
+		}
 		if err := refuseCompromisedCSRKey(ctx, p.store, tenantID, csrDER); err != nil {
 			return nil, err
 		}

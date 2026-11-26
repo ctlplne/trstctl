@@ -3208,7 +3208,7 @@ not this file.
 | `internal/server/run.go:608` | operator-configured public recovery kit (CWE-22) |
 | `internal/server/run.go:1254` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1441` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1930` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1931` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:92` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/s7_l1_verify_served_test.go:31` | test reads its own fixture path |
@@ -3550,13 +3550,13 @@ not this file.
 | `internal/crypto/certinfo/certinfo.go:430` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
 | `internal/crypto/deviceattest/cvc.go:370` | verifying a CV signature that names SHA-1 (CWE-327) |
 | `internal/crypto/jks/jceks.go:68` | the JCEKS integrity digest is SHA-1 by definition; verification only (CWE-328) |
-| `internal/crypto/leafca.go:773` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/leafca.go:814` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/mysql_native_verifier.go:22` | MariaDB mysql_native_password's specified account verifier, not a general hash (CWE-328) |
 | `internal/crypto/mysql_native_verifier.go:24` | same MariaDB protocol verifier (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:409` | mysql_native_password, when the server demands it (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:410` | mysql_native_password (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:411` | mysql_native_password (CWE-327) |
-| `internal/crypto/opaque_x509.go:275` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/opaque_x509.go:282` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/pgsignin/pgsignin.go:297` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin.go:302` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin_test.go:183` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
@@ -3672,7 +3672,7 @@ not this file.
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/mysql_native_verifier.go:6` | MariaDB mysql_native_password specifies double SHA-1 for its account verifier (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:15` | MySQL's mysql_native_password protocol requires SHA-1 (CWE-327) |
-| `internal/crypto/opaque_x509.go:14` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
+| `internal/crypto/opaque_x509.go:15` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/otp.go:7` | RFC 6238 TOTP's default HMAC hash, used as an HMAC, not a collision-resistant digest (CWE-327) |
 | `internal/crypto/pfx/certonly.go:12` | the PKCS#12 KDF, legacy MACs and PBES2 default PRF are defined over SHA-1; this only verifies and decrypts existing files (CWE-328) |
 | `internal/crypto/pqc_x509.go:6` | RFC 5280 4.2.1.2 method-1 key identifiers only (CWE-328) |

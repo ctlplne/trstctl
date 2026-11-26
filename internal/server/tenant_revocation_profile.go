@@ -16,6 +16,7 @@ import (
 // leaf. Operator-owned issuer-wide responders remain untouched. A literal
 // {tenant_id} in a configured path is also expanded for new deployments.
 func tenantBoundPlatformRevocationProfile(base crypto.LeafProfile, tenantID string) crypto.LeafProfile {
+	base.EnforceBoundSubject = true
 	base.CRLDistributionPoints = append([]string(nil), base.CRLDistributionPoints...)
 	base.OCSPServers = append([]string(nil), base.OCSPServers...)
 	for i, raw := range base.CRLDistributionPoints {

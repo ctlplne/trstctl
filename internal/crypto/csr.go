@@ -25,11 +25,16 @@ import (
 // CertificateRequestTemplate is a backend-agnostic PKCS#10 CSR template so
 // callers never touch crypto/x509 directly (AN-3).
 type CertificateRequestTemplate struct {
-	CommonName     string
-	DNSNames       []string
-	IPAddresses    []net.IP
-	EmailAddresses []string
-	URIs           []string
+	CommonName string
+	// Organization and OrganizationalUnit let callers construct signed CSR
+	// subjects for interoperability; the issuing profile must authorize every
+	// requested RDN before a leaf can be minted.
+	Organization       []string
+	OrganizationalUnit []string
+	DNSNames           []string
+	IPAddresses        []net.IP
+	EmailAddresses     []string
+	URIs               []string
 	// SmtpUTF8Mailboxes are mailboxes whose local part has non-ASCII
 	// characters, requested as SmtpUTF8Mailbox otherNames (RFC 9598; P15-L4).
 	SmtpUTF8Mailboxes []string
@@ -57,7 +62,7 @@ func CreateCertificateRequest(tmpl CertificateRequestTemplate, signer DigestSign
 		return nil, err
 	}
 	req := &x509.CertificateRequest{
-		Subject:        pkix.Name{CommonName: tmpl.CommonName},
+		Subject:        pkix.Name{CommonName: tmpl.CommonName, Organization: tmpl.Organization, OrganizationalUnit: tmpl.OrganizationalUnit},
 		DNSNames:       tmpl.DNSNames,
 		IPAddresses:    tmpl.IPAddresses,
 		EmailAddresses: tmpl.EmailAddresses,
@@ -155,10 +160,16 @@ func (info CSRInfo) CheckExternalProfileSubject(authorizedDNS []string) error {
 		return errors.New("crypto: invalid certificate request subject")
 	}
 	if len(subject) == 0 {
+		if info.CommonName != "" {
+			return errors.New("crypto: inspected common name differs from the empty signed subject")
+		}
 		return nil
 	}
 	if len(subject) != 1 || len(subject[0]) != 1 || !subject[0][0].Type.Equal(asn1.ObjectIdentifier{2, 5, 4, 3}) || info.CommonName == "" {
 		return errors.New("crypto: external issuance profile does not authorize additional subject attributes")
+	}
+	if signedCN, ok := subject[0][0].Value.(string); !ok || signedCN != info.CommonName {
+		return errors.New("crypto: inspected common name differs from the signed subject")
 	}
 	for _, dns := range authorizedDNS {
 		if strings.EqualFold(strings.TrimSuffix(dns, "."), strings.TrimSuffix(info.CommonName, ".")) {

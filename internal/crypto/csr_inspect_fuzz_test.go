@@ -65,6 +65,7 @@ func FuzzInspectCSR(f *testing.F) {
 	f.Add([]byte{0x30, 0x80})       // indefinite-length DER preamble, no body
 	f.Add([]byte{0x30, 0x84})       // long-form length, truncated
 	f.Add([]byte{0x30, 0x05, 0x06}) // SEQUENCE claiming 5 bytes, truncated
+	f.Add([]byte{0x30, 0x00})       // empty signed subject RDN sequence
 
 	f.Fuzz(func(t *testing.T, der []byte) {
 		// InspectCSR must never panic on hostile input; a malformed CSR or a bad EKU
@@ -75,5 +76,10 @@ func FuzzInspectCSR(f *testing.F) {
 		// so the fuzzer can explore that parser directly (not only the subset of
 		// bytes that survive full CSR parsing first). It too must never panic.
 		_, _ = extKeyUsageNamesFromDER(der)
+
+		// CR-067: the subject policy also decodes attacker-controlled RDN
+		// bytes. Fuzz that decoder directly, including bytes that cannot pass
+		// a complete CSR parse, and require an ordinary error instead of panic.
+		_ = (CSRInfo{identity: enrollmentIdentity{subject: der}, CommonName: "seed"}).CheckExternalProfileSubject([]string{"seed"})
 	})
 }

@@ -1521,6 +1521,7 @@ func privacyRetentionFromConfig(cfg config.PrivacyRetention) (bool, time.Duratio
 
 func leafProfileFromConfig(cfg *config.Config) crypto.LeafProfile {
 	return crypto.LeafProfile{
+		EnforceBoundSubject:   true,
 		CRLDistributionPoints: cfg.CA.CRLDistributionPoints,
 		OCSPServers:           cfg.CA.OCSPServers,
 		IssuingCertificateURL: cfg.CA.IssuerURLs,

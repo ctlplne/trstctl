@@ -1822,6 +1822,7 @@ func applyAuthorityLane(profile crypto.LeafProfile, ca store.CAAuthority) crypto
 // this exact leaf. The global ca.* pointers describe the built-in issuer and
 // would send managed-CA relying parties to a different authority's responder.
 func (h *caHierarchyService) leafProfileForAuthority(tenantID string, ca store.CAAuthority, profile crypto.LeafProfile) (crypto.LeafProfile, error) {
+	profile.EnforceBoundSubject = true
 	profile = applyAuthorityLane(profile, ca)
 	profile.CRLDistributionPoints = nil
 	profile.OCSPServers = nil

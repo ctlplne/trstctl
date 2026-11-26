@@ -643,6 +643,15 @@ known protocol, validity, and subject-name rules before recording `identity.issu
 The signing worker still checks the actual CSR, including key strength and requested
 usages, before signing. A ready lifecycle preview therefore cannot turn an
 ACME-only profile into a queued API issuance.
+For a trstctl-signed leaf, the CSR subject is checked as a whole: the only
+permitted RDN is a single common name matching a checked DNS, IP, email or URI
+identifier. Organization, organizational unit and other DN attributes are
+refused; they are not copied from a CSR into a client-auth certificate. A CSR
+whose common name differs from its SANs must be corrected before issuance.
+An empty subject with authorized SANs is accepted. This check applies to the
+managed CA API and the served ACME, EST, SCEP, CMP and agent signing paths.
+Authenticated legacy protocol enrollments that contain only a CN keep that
+exact enrollment name; adding an unrelated SAN does not authorize a different CN.
 
 Each AD CS issuer's health is on Posture → **AD CS issuers** (and `GET
 /api/v1/adcs/issuers/health`): healthy, degraded, failing or idle over the last

@@ -49,7 +49,30 @@ func TestReenrollmentBindsSubjectAndMailbox(t *testing.T) {
 	names := []string{"printer.example.test", "print.example.test"}
 	const mailbox = "renée@example.test"
 	first := request("Accounts", mailbox, names)
-	certDER, err := SignLeafFromCSR(caDER, ca, first, time.Hour)
+	// This pre-fix certificate carries a department RDN. Keep a real signed
+	// legacy leaf as the renewal peer: reenrollment must continue to bind the
+	// full old subject even though newly issued leaves omit unapproved RDNs.
+	firstCSR, err := x509.ParseCertificateRequest(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caCert, err := x509.ParseCertificate(caDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caAdapter, err := newX509Signer(ca)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serial, err := randomSerial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: serial, Subject: firstCSR.Subject,
+		NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtraExtensions: firstCSR.Extensions,
+	}, caCert, firstCSR.PublicKey, caAdapter)
 	if err != nil {
 		t.Fatal(err)
 	}

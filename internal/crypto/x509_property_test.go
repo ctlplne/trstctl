@@ -34,7 +34,7 @@ func (x509PropertyInput) Generate(r *rand.Rand, size int) reflect.Value {
 		eku = "clientAuth"
 	}
 	return reflect.ValueOf(x509PropertyInput{
-		CommonName: "subject-" + x509PropertyToken(r, 1+minX509Property(size, 24)),
+		CommonName: dnsNames[0],
 		DNSNames:   dnsNames,
 		EKU:        eku,
 	})
@@ -114,7 +114,7 @@ func TestPropertyX509CSRAndCertificateCanonicalization(t *testing.T) {
 			t.Logf("DER/PEM X.509 normalization drift: der=%+v pem=%+v canonical_equal=%t", derInfo, pemInfo, bytes.Equal(canonicalDER, leafDER))
 			return false
 		}
-		if derInfo.IsCA || !reflect.DeepEqual(derInfo.DNSNames, g.DNSNames) || !reflect.DeepEqual(derInfo.ExtKeyUsages, []string{g.EKU}) || !reflect.DeepEqual(derInfo.CRLDistributionPoints, profile.CRLDistributionPoints) || !reflect.DeepEqual(derInfo.OCSPServers, profile.OCSPServers) || !reflect.DeepEqual(derInfo.IssuingCertificateURL, profile.IssuingCertificateURL) || !reflect.DeepEqual(derInfo.PolicyOIDs, profile.CertificatePolicyOIDs) || derInfo.SubjectKeyID == "" {
+		if derInfo.IsCA || derInfo.CommonName != g.CommonName || !reflect.DeepEqual(derInfo.DNSNames, g.DNSNames) || !reflect.DeepEqual(derInfo.ExtKeyUsages, []string{g.EKU}) || !reflect.DeepEqual(derInfo.CRLDistributionPoints, profile.CRLDistributionPoints) || !reflect.DeepEqual(derInfo.OCSPServers, profile.OCSPServers) || !reflect.DeepEqual(derInfo.IssuingCertificateURL, profile.IssuingCertificateURL) || !reflect.DeepEqual(derInfo.PolicyOIDs, profile.CertificatePolicyOIDs) || derInfo.SubjectKeyID == "" {
 			t.Logf("generated leaf profile changed: info=%+v generated=%+v", derInfo, g)
 			return false
 		}

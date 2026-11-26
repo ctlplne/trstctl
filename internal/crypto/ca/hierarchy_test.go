@@ -112,7 +112,7 @@ func TestIssueLeafEnforcesNameConstraints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := root.IssueLeaf(leafCSR(t, "ok", []string{"ok.acme.test"}), time.Hour); err != nil {
+	if _, err := root.IssueLeaf(leafCSR(t, "ok.acme.test", []string{"ok.acme.test"}), time.Hour); err != nil {
 		t.Errorf("a permitted SAN was rejected: %v", err)
 	}
 	if _, err := root.IssueLeaf(leafCSR(t, "evil", []string{"evil.example.com"}), time.Hour); err == nil {

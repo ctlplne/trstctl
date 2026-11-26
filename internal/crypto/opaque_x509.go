@@ -10,6 +10,7 @@ package crypto
 // AN-3 boundary.
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha1" // #nosec G505 -- SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328)
 	"crypto/x509"
@@ -228,6 +229,12 @@ func signOpaqueLeafWithPreparation(caCertDER []byte, caSigner DigestSigner, req 
 	if err := EnforceLeafProfileInfo(req.Info, ttl, prof); err != nil {
 		return IssuedLeaf{}, err
 	}
+	if leafSubjectPolicyEnabled(prof) && len(req.RawSubject) == 0 {
+		return IssuedLeaf{}, &leafProfileError{"opaque CSR has no signed subject to verify"}
+	}
+	if len(req.RawSubject) > 0 && !bytes.Equal(req.RawSubject, req.Info.identity.subject) {
+		return IssuedLeaf{}, &leafProfileError{"opaque CSR subject differs from its checked subject"}
+	}
 	if req.SignatureOnly {
 		if u := prof.AllowedKeyUsages; u != nil && (u.KeyEncipherment || u.KeyAgreement || u.DataEncipherment) {
 			return IssuedLeaf{}, &leafProfileError{"signature-only subject key cannot use keyEncipherment, keyAgreement, or dataEncipherment"}
@@ -325,21 +332,6 @@ func signOpaqueLeafWithPreparation(caCertDER []byte, caSigner DigestSigner, req 
 	metadataDER, err := x509.CreateCertificate(rand.Reader, leaf, &metadataParent, metadataAdapter.Public(), metadataAdapter)
 	if err != nil {
 		return IssuedLeaf{}, fmt.Errorf("crypto: build opaque leaf metadata: %w", err)
-	}
-	if len(req.RawSubject) > 0 {
-		var subject pkix.RDNSequence
-		if rest, err := asn1.Unmarshal(req.RawSubject, &subject); err != nil || len(rest) != 0 {
-			return IssuedLeaf{}, errors.New("crypto: opaque leaf subject is malformed")
-		}
-		var cert opaqueCertificate
-		if rest, err := asn1.Unmarshal(metadataDER, &cert); err != nil || len(rest) != 0 {
-			return IssuedLeaf{}, errors.New("crypto: decode opaque leaf metadata certificate")
-		}
-		cert.TBS.Subject = asn1.RawValue{FullBytes: append([]byte(nil), req.RawSubject...)}
-		cert.TBS.Raw = nil
-		if metadataDER, err = asn1.Marshal(cert); err != nil {
-			return IssuedLeaf{}, fmt.Errorf("crypto: marshal opaque leaf metadata: %w", err)
-		}
 	}
 	der, err := completeOpaqueCertificate(caSigner, metadataDER, req.SubjectPublicKeyInfoDER)
 	if err != nil {
