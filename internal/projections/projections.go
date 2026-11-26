@@ -8703,6 +8703,17 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" {
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
+		dependent, err := p.store.WorkloadAttesterTrustSourceHasSecretSyncDependentsTx(ctx, tx, e.TenantID, pl.ID)
+		if err != nil {
+			return err
+		}
+		if dependent {
+			// A legacy producer may have appended the deletion before checking
+			// the FK. Keep the source and its dependent intact for review while
+			// allowing later tenants to replay.
+			return p.store.RecordProjectionTenantQuarantineTx(ctx, tx, e.TenantID,
+				e.Sequence, "attester_trust_source_referenced")
+		}
 		if err := p.store.ApplyWorkloadAttesterTrustSourceDeletedTx(ctx, tx, e.TenantID, pl.ID); err != nil {
 			return err
 		}

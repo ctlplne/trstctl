@@ -254,32 +254,8 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 		}
 	}
 	req.AllowedRemoteKeyPrefixes = prefixes
-	trust, err := a.store.GetEffectiveWorkloadAttesterTrustSource(ctx, tenantID, req.TrustSourceID)
-	if err != nil {
-		if errors.Is(err, store.ErrWorkloadAttesterTrustSourceNotFound) {
-			return req, errStatus(http.StatusBadRequest, "trust_source_id must name a tenant workload attester trust source")
-		}
+	if err := a.validateSecretSyncWorkloadTrustSource(ctx, tenantID, req); err != nil {
 		return req, err
-	}
-	if trust.AdminReviewRequired {
-		if trust.RequiresImmutableGitHubPin() {
-			return req, errStatus(http.StatusBadRequest, "issuer administrator must review the selected GitHub trust source and update it with an immutable pin")
-		}
-		return req, errStatus(http.StatusBadRequest, "issuer administrator must review and replace this historical trust source before use")
-	}
-	if trust.AuthorityPending || !trust.Enabled || trust.RevokedAt != nil {
-		return req, errStatus(http.StatusBadRequest, "trust_source_id must be enabled and not revoked")
-	}
-	if trust.RequiresImmutableGitHubPin() {
-		return req, errStatus(http.StatusBadRequest, "update the selected GitHub trust source with an immutable pin")
-	}
-	switch trust.Method {
-	case "k8s_sat", "gcp_iit", "github_oidc":
-	default:
-		return req, errStatus(http.StatusBadRequest, "trust_source_id must use a JWT/JWKS workload attestation method")
-	}
-	if trust.Audience != req.Audience {
-		return req, errStatus(http.StatusBadRequest, "audience must exactly match the selected trust source")
 	}
 	if a.secrets == nil {
 		return req, errStatus(http.StatusServiceUnavailable, "secret-sync targets are not configured")
@@ -289,6 +265,37 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 		return req, errStatus(http.StatusBadRequest, "target_id must name a configured tenant target for this provider with workload identity enabled")
 	}
 	return req, nil
+}
+
+func (a *API) validateSecretSyncWorkloadTrustSource(ctx context.Context, tenantID string, req secretSyncWorkloadIdentitySourceRequest) error {
+	trust, err := a.store.GetEffectiveWorkloadAttesterTrustSource(ctx, tenantID, req.TrustSourceID)
+	if err != nil {
+		if errors.Is(err, store.ErrWorkloadAttesterTrustSourceNotFound) {
+			return errStatus(http.StatusBadRequest, "trust_source_id must name a tenant workload attester trust source")
+		}
+		return err
+	}
+	if trust.AdminReviewRequired {
+		if trust.RequiresImmutableGitHubPin() {
+			return errStatus(http.StatusBadRequest, "issuer administrator must review the selected GitHub trust source and update it with an immutable pin")
+		}
+		return errStatus(http.StatusBadRequest, "issuer administrator must review and replace this historical trust source before use")
+	}
+	if trust.AuthorityPending || !trust.Enabled || trust.RevokedAt != nil {
+		return errStatus(http.StatusBadRequest, "trust_source_id must be enabled and not revoked")
+	}
+	if trust.RequiresImmutableGitHubPin() {
+		return errStatus(http.StatusBadRequest, "update the selected GitHub trust source with an immutable pin")
+	}
+	switch trust.Method {
+	case "k8s_sat", "gcp_iit", "github_oidc":
+	default:
+		return errStatus(http.StatusBadRequest, "trust_source_id must use a JWT/JWKS workload attestation method")
+	}
+	if trust.Audience != req.Audience {
+		return errStatus(http.StatusBadRequest, "audience must exactly match the selected trust source")
+	}
+	return nil
 }
 
 func secretSyncWorkloadIdentityTargetMatches(target *secretsync.Target, provider string) bool {
@@ -329,10 +336,15 @@ func (a *API) emitSecretSyncWorkloadIdentitySource(ctx context.Context, tenantID
 		if owner != "" && owner != id {
 			return errStatus(http.StatusConflict, "a workload identity source already owns this provider and target")
 		}
-		return a.appendAndProjectSecretSyncWorkloadIdentitySource(work, tenantID, projections.EventSecretSyncWorkloadIdentityUpserted, data)
+		return a.store.WithTenantResourceCreation(work, tenantID, workloadAttesterTrustReferenceFence(req.TrustSourceID), func(trustWork context.Context) error {
+			if err := a.validateSecretSyncWorkloadTrustSource(trustWork, tenantID, req); err != nil {
+				return err
+			}
+			return a.appendAndProjectSecretSyncWorkloadIdentitySource(trustWork, tenantID, projections.EventSecretSyncWorkloadIdentityUpserted, data)
+		})
 	})
 	if errors.Is(err, store.ErrResourceAdmissionBusy) {
-		return errStatus(http.StatusConflict, "another workload identity source for this target is being admitted; retry the request")
+		return errStatus(http.StatusConflict, "another workload identity source or its trust source is being changed; retry the request")
 	}
 	return err
 }

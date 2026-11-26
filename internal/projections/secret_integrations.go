@@ -1077,6 +1077,16 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		if !validProviderConfig {
 			return true, fmt.Errorf("projections: %s provider configuration is invalid", e.Type)
 		}
+		trustExists, err := p.store.WorkloadAttesterTrustSourceExistsTx(ctx, tx, e.TenantID, payload.TrustSourceID)
+		if err != nil {
+			return true, err
+		}
+		if !trustExists {
+			// A legacy concurrent delete can leave this FK-less append in the
+			// immutable stream. Isolate this tenant instead of stopping replay.
+			return true, p.store.RecordProjectionTenantQuarantineTx(ctx, tx, e.TenantID,
+				e.Sequence, "secret_sync_trust_source_missing")
+		}
 		status := store.SecretSyncWorkloadIdentityReady
 		reason := "configured"
 		if !payload.Enabled {

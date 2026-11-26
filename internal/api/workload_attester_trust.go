@@ -401,19 +401,36 @@ func (a *API) deleteWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		} else if replay {
 			return http.StatusNoContent, nil, nil
 		}
-		if _, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id); err != nil {
-			return 0, nil, err
-		}
 		payload, err := json.Marshal(projections.WorkloadAttesterTrustSourceDeleted{ID: id})
 		if err != nil {
 			return 0, nil, err
 		}
-		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
-			projections.EventWorkloadAttesterTrustSourceDeleted, payload, store.WorkloadAttesterTrustCommand{TargetDisabled: true}); err != nil {
+		err = a.store.WithTenantResourceCreation(ctx, tenantID, workloadAttesterTrustReferenceFence(id), func(work context.Context) error {
+			if _, err := a.store.GetWorkloadAttesterTrustSource(work, tenantID, id); err != nil {
+				return err
+			}
+			dependent, err := a.store.WorkloadAttesterTrustSourceHasSecretSyncDependents(work, tenantID, id)
+			if err != nil {
+				return err
+			}
+			if dependent {
+				return errStatus(http.StatusConflict, "delete secret-sync workload identity sources that reference this trust source first")
+			}
+			return a.appendAndProjectWorkloadAttesterTrustSource(work, tenantID, id, idempotencyKey, requestBinding,
+				projections.EventWorkloadAttesterTrustSourceDeleted, payload, store.WorkloadAttesterTrustCommand{TargetDisabled: true})
+		})
+		if errors.Is(err, store.ErrResourceAdmissionBusy) {
+			return 0, nil, errStatus(http.StatusConflict, "trust source is being changed; retry the request")
+		}
+		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusNoContent, nil, nil
 	})
+}
+
+func workloadAttesterTrustReferenceFence(id string) string {
+	return crypto.SHA256Hex([]byte("workload-attester-trust-reference\x00" + id))
 }
 
 func (a *API) emitWorkloadAttesterTrustSource(ctx context.Context, tenantID, id, idempotencyKey, requestBinding string, req workloadAttesterTrustSourceRequest, rotationVersion int, create bool) error {

@@ -1769,7 +1769,12 @@ never live in the API process. What you can do end to end against the running bi
   changes deny old proof while exact-event recovery completes. Completed
   commands retain a request-bound response snapshot for a lost-response retry,
   including a retry after a newer trust change. Subject erasure removes any
-  affected response snapshot but preserves its opaque replay fence.
+  affected response snapshot but preserves its opaque replay fence. Deleting a
+  trust source still referenced by a secret-sync workload identity source returns
+  `409`; delete the dependent sync source first. Admission fences serialize that
+  deletion with new sync sources. Historical events that violated this foreign
+  key quarantine only the affected tenant for operator review during catch-up
+  and rebuild.
 - Authentication and RBAC via scoped API tokens (`Authorization: Bearer`),
   multi-tenancy with PostgreSQL row-level security, and a tamper-evident audit
   chain. A fresh boot fails closed (every route `401`s until a credential exists);

@@ -260,6 +260,36 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceDeletedTx(ctx context.Context, t
 	return err
 }
 
+// WorkloadAttesterTrustSourceHasSecretSyncDependents checks the FK that would
+// make a trust-source deletion unprojectable. Admission calls it while holding
+// the same source fence used by secret-sync source creation.
+func (s *Store) WorkloadAttesterTrustSourceHasSecretSyncDependents(ctx context.Context, tenantID, id string) (bool, error) {
+	var dependent bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		dependent, err = s.WorkloadAttesterTrustSourceHasSecretSyncDependentsTx(ctx, tx, tenantID, id)
+		return err
+	})
+	return dependent, err
+}
+
+func (s *Store) WorkloadAttesterTrustSourceHasSecretSyncDependentsTx(ctx context.Context, tx pgx.Tx, tenantID, id string) (bool, error) {
+	var dependent bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM secret_sync_workload_identity_sources
+		 WHERE tenant_id=$1 AND trust_source_id=$2)`, tenantID, id).Scan(&dependent)
+	return dependent, err
+}
+
+// WorkloadAttesterTrustSourceExistsTx sees rows staged by an atomic rebuild.
+func (s *Store) WorkloadAttesterTrustSourceExistsTx(ctx context.Context, tx pgx.Tx, tenantID, id string) (bool, error) {
+	var exists bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM workload_attester_trust_sources
+		 WHERE tenant_id=$1 AND id=$2)`, tenantID, id).Scan(&exists)
+	return exists, err
+}
+
 // GetWorkloadAttesterTrustSource loads one tenant-scoped trust source.
 func (s *Store) GetWorkloadAttesterTrustSource(ctx context.Context, tenantID, id string) (WorkloadAttesterTrustSource, error) {
 	var out WorkloadAttesterTrustSource
