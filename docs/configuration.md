@@ -4078,6 +4078,11 @@ Cassandra roles per allowed role (comma separated), each holding the permissions
 lease should carry, for example a role with `SELECT` on one keyspace. Only that node is
 contacted. Each lease is a login role granted exactly those roles; revocation drops it.
 `allow_plaintext` permits plaintext to a literal loopback or private IP only.
+New lease references retain the issuing `username_prefix`, native-protocol
+address and TLS identity. A prefix edit still permits revocation; a target edit
+fails before contacting another node. Historical bare-role references lack
+their original target: find and drop the exact role at that node and verify
+new sign-ins fail before reconciling the lease.
 
 ```json
 {

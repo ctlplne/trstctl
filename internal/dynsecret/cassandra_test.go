@@ -72,16 +72,16 @@ func TestCassandraLeaseIsAHashedLoginRoleWithOnlyItsRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 	var credential struct{ Username, Password string }
-	if err := json.Unmarshal(raw, &credential); err != nil || credential.Username != ref || len(credential.Password) != 32 {
+	if err := json.Unmarshal(raw, &credential); err != nil || credential.Username == "" || len(credential.Password) != 32 {
 		t.Fatalf("credential %s: %v", raw, err)
 	}
-	if !issuedPrincipalName("", ref) {
-		t.Fatalf("role name %q is not an issued name", ref)
+	if !issuedPrincipalName("", credential.Username) || !strings.HasPrefix(ref, "v1:") {
+		t.Fatalf("role name %q or reference %q is not issued", credential.Username, ref)
 	}
 	if len(fake.statements) != 4 {
 		t.Fatalf("statements = %q", fake.statements)
 	}
-	quoted := `"` + ref + `"`
+	quoted := `"` + credential.Username + `"`
 	for i, want := range []string{"CREATE ROLE IF NOT EXISTS " + quoted + " WITH HASHED PASSWORD = '", "ALTER ROLE " + quoted + " WITH HASHED PASSWORD = '"} {
 		statement := fake.statements[i]
 		if !strings.HasPrefix(statement, want) || strings.Contains(statement, credential.Password) {
@@ -103,7 +103,7 @@ func TestCassandraLeaseIsAHashedLoginRoleWithOnlyItsRoles(t *testing.T) {
 	}
 
 	// The retry of an uncertain issue meets the grant it already made.
-	retry := &fakeCassandra{fail: map[string]error{"GRANT": cassandraRequestError{code: gocql.ErrCodeInvalid, message: ref + " is a member of orders_reader"}}}
+	retry := &fakeCassandra{fail: map[string]error{"GRANT": cassandraRequestError{code: gocql.ErrCodeInvalid, message: credential.Username + " is a member of orders_reader"}}}
 	b.connect = func(context.Context) (cassandraAdmin, error) { return retry, nil }
 	again, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 	if err != nil || again != ref {
@@ -131,15 +131,19 @@ func TestCassandraFailedGrantDropsTheNewRole(t *testing.T) {
 func TestCassandraRevokeDropsOnlyIssuedRoles(t *testing.T) {
 	fake := &fakeCassandra{}
 	b := newTestCassandra(t, fake)
-	ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-3", PrincipalSuffix: testPrincipalSuffix("lease-3")})
+	ref, raw, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-3", PrincipalSuffix: testPrincipalSuffix("lease-3")})
 	if err != nil {
 		t.Fatal(err)
+	}
+	var credential struct{ Username string }
+	if err := json.Unmarshal(raw, &credential); err != nil || credential.Username == "" {
+		t.Fatalf("credential username: %v", err)
 	}
 	fake.statements = nil
 	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatal(err)
 	}
-	if len(fake.statements) != 1 || fake.statements[0] != `DROP ROLE IF EXISTS "`+ref+`"` {
+	if len(fake.statements) != 1 || fake.statements[0] != `DROP ROLE IF EXISTS "`+credential.Username+`"` {
 		t.Fatalf("revoke ran %q", fake.statements)
 	}
 	for _, ref := range []string{"cassandra", "orders_reader", "trstctl_admin", `trstctl_reader" OR 1_0123456789`, "other_reader_0123456789"} {
@@ -149,6 +153,45 @@ func TestCassandraRevokeDropsOnlyIssuedRoles(t *testing.T) {
 	}
 	if len(fake.statements) != 1 {
 		t.Fatalf("a refused revocation reached the node: %q", fake.statements)
+	}
+}
+
+func TestCR597CassandraRevokesAfterPrefixEditOnlyAtIssuingNode(t *testing.T) {
+	ctx := context.Background()
+	fake := &fakeCassandra{}
+	issued := newTestCassandra(t, fake)
+	issued.prefix = "earlier"
+	ref, raw, err := issued.CreateCredential(ctx, GenerateRequest{
+		Role: "reader", LeaseID: "cr597-cassandra", PrincipalSuffix: testPrincipalSuffix("cr597-cassandra"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var proof struct{ Username string }
+	if err := json.Unmarshal(raw, &proof); err != nil || proof.Username == "" {
+		t.Fatalf("issued credential: %v", err)
+	}
+	if !strings.HasPrefix(ref, "v1:") || !strings.HasSuffix(ref, ":"+proof.Username) {
+		t.Fatalf("lease did not retain its issuing prefix and target: %q", ref)
+	}
+	wrong := &fakeCassandra{}
+	elsewhere := newTestCassandra(t, wrong)
+	elsewhere.addr = "127.0.0.1:9142"
+	elsewhere.prefix = "newer"
+	if err := elsewhere.Revoke(ctx, ref); err == nil || len(wrong.statements) != 0 {
+		t.Fatal("different Cassandra node got a revoke or reported success")
+	}
+	if err := elsewhere.Revoke(ctx, proof.Username); err == nil || len(wrong.statements) != 0 {
+		t.Fatal("historical target-unbound reference was accepted")
+	}
+	current := newTestCassandra(t, fake)
+	current.prefix = "newer"
+	fake.statements = nil
+	if err := current.Revoke(ctx, ref); err != nil {
+		t.Fatalf("revoke after prefix edit: %v", err)
+	}
+	if len(fake.statements) != 1 || fake.statements[0] != `DROP ROLE IF EXISTS "`+proof.Username+`"` {
+		t.Fatalf("old role was not dropped on the issuing node: %q", fake.statements)
 	}
 }
 

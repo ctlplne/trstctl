@@ -183,7 +183,11 @@ func (b *CassandraBackend) CreateCredential(ctx context.Context, req GenerateReq
 	if err != nil {
 		return "", nil, err
 	}
-	return user, credential, nil
+	return b.leaseRef(user), credential, nil
+}
+
+func (b *CassandraBackend) leaseRef(user string) string {
+	return boundPrincipalRef("cassandra", b.prefix, user, b.addr, fmt.Sprint(b.tls), b.serverName, crypto.SHA256Hex(b.caPEM))
 }
 
 // Revoke implements Backend: the role is dropped, which removes its
@@ -191,7 +195,11 @@ func (b *CassandraBackend) CreateCredential(ctx context.Context, req GenerateReq
 // connection is refused once the node's caches expire. Only roles this
 // provider names are touched; one already gone counts as revoked.
 func (b *CassandraBackend) Revoke(ctx context.Context, ref string) error {
-	if !cassandraName.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
+	user, err := principalFromBoundRef(ref, "cassandra", b.addr, fmt.Sprint(b.tls), b.serverName, crypto.SHA256Hex(b.caPEM))
+	if err != nil {
+		return err
+	}
+	if !cassandraName.MatchString(user) {
 		return fmt.Errorf("dynsecret cassandra: refusing to revoke %q, which this provider did not create", ref)
 	}
 	admin, err := b.connect(ctx)
@@ -199,8 +207,8 @@ func (b *CassandraBackend) Revoke(ctx context.Context, ref string) error {
 		return err
 	}
 	defer admin.Close()
-	if err := admin.Exec(ctx, `DROP ROLE IF EXISTS "`+ref+`"`); err != nil {
-		return fmt.Errorf("dynsecret cassandra: drop role %s failed (%s)", ref, cassandraErrorCode(err))
+	if err := admin.Exec(ctx, `DROP ROLE IF EXISTS "`+user+`"`); err != nil {
+		return fmt.Errorf("dynsecret cassandra: drop role %s failed (%s)", user, cassandraErrorCode(err))
 	}
 	return nil
 }
