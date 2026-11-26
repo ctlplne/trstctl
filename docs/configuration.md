@@ -3153,6 +3153,12 @@ so that the process list includes other users' sessions, plus authority to
 `KILL CONNECTION` for the lease accounts. If either read or kill fails, the
 lease's revocation remains failed and can be retried; a dropped user alone is
 not completion because its old sessions can keep working.
+New MySQL lease references retain the issuing `username_prefix`, the validated
+administrator DSN hosts, workload address, database and account host. A prefix
+edit keeps revocation possible; a changed target fails closed before SQL. Leases
+issued before this binding have only a bare username. Match them to the original
+administrator target using owned history, remove each user and live session
+there, and verify that it can no longer log in before reconciling the lease.
 
 `secret_environment` places the provider in a secrets project environment,
 `"<project>/<environment>"`, for example `"payments/prod"` (A235-L2). When that environment is

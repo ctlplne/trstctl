@@ -59,7 +59,7 @@ func TestCR260MySQLRevokeEndsExistingSessionsBeforeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Revoke(context.Background(), "trstctl_r_0123456789"); err != nil {
+	if err := b.Revoke(context.Background(), b.leaseRef("trstctl_r_0123456789")); err != nil {
 		t.Fatal(err)
 	}
 	if len(exec.sessions) != 0 {
@@ -73,7 +73,7 @@ func TestCR260MySQLRevokeFailsWhileSessionSurvives(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Revoke(context.Background(), "trstctl_r_0123456789"); err == nil {
+	if err := b.Revoke(context.Background(), b.leaseRef("trstctl_r_0123456789")); err == nil {
 		t.Fatal("revoke succeeded after KILL was refused")
 	}
 }
@@ -84,7 +84,7 @@ func TestCR260MySQLRevokeChecksAfterLastKill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Revoke(context.Background(), "trstctl_r_0123456789"); err != nil {
+	if err := b.Revoke(context.Background(), b.leaseRef("trstctl_r_0123456789")); err != nil {
 		t.Fatalf("fourth KILL ended the session but revoke did not re-list: %v", err)
 	}
 }
@@ -95,7 +95,7 @@ func TestCR260MySQLRevokeRejectsAStillLiveSessionAfterAllKills(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Revoke(context.Background(), "trstctl_r_0123456789"); err == nil {
+	if err := b.Revoke(context.Background(), b.leaseRef("trstctl_r_0123456789")); err == nil {
 		t.Fatal("revoke succeeded after every KILL was accepted but the session stayed live")
 	}
 }

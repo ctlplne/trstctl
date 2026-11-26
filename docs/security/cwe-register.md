@@ -818,7 +818,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:35` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_integrations.go:1756` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1762` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:150` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:166` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -1382,7 +1382,7 @@ not this file.
 | `internal/dynsecret/cr596_password_logging_test.go:127` | port is returned by a TCP listener and bounded to 16 bits (CWE-190) |
 | `internal/dynsecret/drivers.go:397` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/drivers.go:405` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/providers_real.go:1975` | a string length is never negative (CWE-190) |
+| `internal/dynsecret/providers_real.go:1988` | a string length is never negative (CWE-190) |
 | `internal/dynsecret/providers_real_test.go:734` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp.go:161` | s is checked non-negative above (CWE-190) |
@@ -1767,7 +1767,7 @@ not this file.
 | `internal/dynsecret/openai.go:128` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:233` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1779` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1792` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
@@ -3969,7 +3969,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:264` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:436` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/providers_real.go:1900` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/providers_real.go:1913` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:240` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |

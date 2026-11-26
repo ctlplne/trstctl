@@ -915,12 +915,18 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		if err != nil {
 			return o.fail(err)
 		}
+		adminTarget, err := dbdsn.Parse(dbdsn.MySQL, dsn, dbdsn.Admin)
+		if err != nil {
+			return o.fail(err)
+		}
+		adminHosts := strings.Join(adminTarget.Hosts, "\x00")
+		adminTarget.Wipe()
 		db, err := dynsecret.OpenMySQLExecutorWithTransport(o.ctx, dsn, transport)
 		if err != nil {
 			return o.fail(err)
 		}
 		backend, err := dynsecret.NewMySQLBackend(db, dynsecret.MySQLConfig{
-			Database: cfg.Database, Addr: cfg.Addr, AccountHost: cfg.AccountHost,
+			Database: cfg.Database, Addr: cfg.Addr, AdminTarget: adminHosts, AccountHost: cfg.AccountHost,
 			AllowWildcardAccountHost: cfg.AllowWildcardAccountHost, UsernamePrefix: cfg.UsernamePrefix,
 			DatabaseRoleAccess: o.provider.databaseRoleAccess(),
 		})

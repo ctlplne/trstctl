@@ -39,10 +39,15 @@ type SQLQuerier interface {
 // (SHOW GRANTS for the user at the provider's account host). USAGE on *.*,
 // which MySQL lists for every account and which grants nothing, is left out.
 func (b *MySQLBackend) ResolveAccess(ctx context.Context, backendRef string) (Access, error) {
-	access := Access{TargetKind: AccessTargetMySQLDatabase, TargetRef: "mysql://" + b.addr + "/" + b.database, Login: strings.TrimSpace(backendRef)}
-	if access.Login == "" {
+	access := Access{TargetKind: AccessTargetMySQLDatabase, TargetRef: "mysql://" + b.addr + "/" + b.database}
+	if strings.TrimSpace(backendRef) == "" {
 		return access, fmt.Errorf("%w: the lease names no login", ErrAccessLoginMissing)
 	}
+	login, err := principalFromBoundRef(backendRef, "mysql", b.adminTarget, b.addr, b.database, b.accountHost)
+	if err != nil {
+		return access, fmt.Errorf("%w: the lease reference does not match this database", ErrAccessLoginMissing)
+	}
+	access.Login = login
 	querier, ok := b.exec.(SQLQuerier)
 	if !ok {
 		return access, ErrAccessUnsupported

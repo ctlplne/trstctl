@@ -451,8 +451,12 @@ func (b *PostgresBackend) Revoke(ctx context.Context, ref string) error {
 
 // MySQLConfig configures a MySQL or MariaDB dynamic-secret backend.
 type MySQLConfig struct {
-	Database                 string
-	Addr                     string
+	Database string
+	Addr     string
+	// AdminTarget is the canonical administrator DSN host set, without secrets.
+	// Production sets it from the validated DSN so changing admin_dsn_ref's
+	// target cannot turn a missing user on another server into a revoke success.
+	AdminTarget              string
 	AccountHost              string
 	AllowWildcardAccountHost bool
 	// Host is the legacy dial address. The MySQL account host must be explicit
@@ -467,6 +471,7 @@ type MySQLBackend struct {
 	exec           SQLExecutor
 	database       string
 	addr           string
+	adminTarget    string
 	accountHost    string
 	usernamePrefix string
 	access         DatabaseRoleAccess
@@ -501,7 +506,10 @@ func NewMySQLBackend(exec SQLExecutor, cfg MySQLConfig) (*MySQLBackend, error) {
 	if cfg.UsernamePrefix == "" {
 		cfg.UsernamePrefix = defaultDynsecretPrefix
 	}
-	return &MySQLBackend{exec: exec, database: cfg.Database, addr: cfg.Addr, accountHost: cfg.AccountHost, usernamePrefix: cfg.UsernamePrefix,
+	if cfg.AdminTarget == "" {
+		cfg.AdminTarget = cfg.Addr
+	}
+	return &MySQLBackend{exec: exec, database: cfg.Database, addr: cfg.Addr, adminTarget: cfg.AdminTarget, accountHost: cfg.AccountHost, usernamePrefix: cfg.UsernamePrefix,
 		access: cfg.clone()}, nil
 }
 
@@ -520,7 +528,7 @@ func (b *MySQLBackend) CreateCredential(ctx context.Context, req GenerateRequest
 		return "", nil, err
 	}
 	if req.LeaseID != "" {
-		if err := b.Revoke(ctx, user); err != nil {
+		if err := b.Revoke(ctx, b.leaseRef(user)); err != nil {
 			return "", nil, fmt.Errorf("dynsecret mysql: clean interrupted user: %w", err)
 		}
 	}
@@ -529,7 +537,7 @@ func (b *MySQLBackend) CreateCredential(ctx context.Context, req GenerateRequest
 	if err != nil {
 		// database/sql drivers may include bind values in their errors. Never return
 		// an error that can retain the generated password as an immutable string.
-		_ = b.Revoke(ctx, user)
+		_ = b.Revoke(ctx, b.leaseRef(user))
 		return "", nil, errMySQLUserCreate
 	}
 	defer secret.Wipe(password)
@@ -538,10 +546,14 @@ func (b *MySQLBackend) CreateCredential(ctx context.Context, req GenerateRequest
 		privileges = "SELECT, INSERT, UPDATE, DELETE"
 	}
 	if _, err := b.exec.ExecContext(ctx, "GRANT "+privileges+" ON "+mysqlQuoteIdent(b.database)+".* TO "+account); err != nil {
-		_ = b.Revoke(ctx, user)
+		_ = b.Revoke(ctx, b.leaseRef(user))
 		return "", nil, fmt.Errorf("dynsecret mysql: grant: %w", err)
 	}
-	return user, mysqlCredential(b.database, b.addr, user, password), nil
+	return b.leaseRef(user), mysqlCredential(b.database, b.addr, user, password), nil
+}
+
+func (b *MySQLBackend) leaseRef(user string) string {
+	return boundPrincipalRef("mysql", b.usernamePrefix, user, b.adminTarget, b.addr, b.database, b.accountHost)
 }
 
 // Revoke implements Backend.
@@ -549,17 +561,18 @@ func (b *MySQLBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
 	}
-	if !issuedPrincipalName(b.usernamePrefix, ref) {
-		return fmt.Errorf("dynsecret mysql: refusing to drop %q, which this provider did not create", ref)
+	user, err := principalFromBoundRef(ref, "mysql", b.adminTarget, b.addr, b.database, b.accountHost)
+	if err != nil {
+		return err
 	}
-	if _, err := b.exec.ExecContext(ctx, "DROP USER IF EXISTS "+mysqlAccount(ref, b.accountHost)); err != nil {
+	if _, err := b.exec.ExecContext(ctx, "DROP USER IF EXISTS "+mysqlAccount(user, b.accountHost)); err != nil {
 		return fmt.Errorf("dynsecret mysql: drop user: %w", err)
 	}
 	// DROP USER denies new logins but MySQL keeps already-authenticated
 	// connections alive. Re-list after every KILL and report completion only
 	// when the server no longer exposes a session for this generated name.
 	for attempt := 0; attempt < 4; attempt++ {
-		ids, err := mysqlLeaseSessionIDs(ctx, b.exec, ref)
+		ids, err := mysqlLeaseSessionIDs(ctx, b.exec, user)
 		if err != nil {
 			return fmt.Errorf("dynsecret mysql: inspect revoked user sessions: %w", err)
 		}
@@ -572,7 +585,7 @@ func (b *MySQLBackend) Revoke(ctx context.Context, ref string) error {
 			}
 		}
 	}
-	remaining, err := mysqlLeaseSessionIDs(ctx, b.exec, ref)
+	remaining, err := mysqlLeaseSessionIDs(ctx, b.exec, user)
 	if err != nil {
 		return fmt.Errorf("dynsecret mysql: recheck revoked user sessions: %w", err)
 	}

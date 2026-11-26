@@ -47,11 +47,13 @@ func TestBackendsRefuseToDeleteWhatTheyDidNotIssue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	refused("mysql", mysql.Revoke(ctx, foreign))
+	if err := mysql.Revoke(ctx, mysql.leaseRef(foreign)); err == nil {
+		t.Fatal("mysql accepted a target-bound reference for a foreign principal")
+	}
 	if len(exec.queries) != 0 {
 		t.Fatalf("mysql sent %v for a refused name", exec.queries)
 	}
-	if err := mysql.Revoke(ctx, issued); err != nil {
+	if err := mysql.Revoke(ctx, mysql.leaseRef(issued)); err != nil {
 		t.Fatal(err)
 	}
 	exec.requireContains(t, "DROP USER IF EXISTS")

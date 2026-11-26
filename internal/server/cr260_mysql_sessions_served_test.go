@@ -54,6 +54,9 @@ func TestCR260MySQLLeaseRevokeEndsVerifiedTLSSession(t *testing.T) {
 	if err := conn.QueryRowContext(t.Context(), "SELECT note FROM notes WHERE id=1").Scan(&note); err != nil || note != "cr260-live-session" {
 		t.Fatalf("lease read before revoke: match=%t err=%v", note == "cr260-live-session", err)
 	}
+	// CR-597: the provider is reopened from current configuration on revoke.
+	// Editing the name prefix must not strand this already-issued account.
+	provider.cfg.UsernamePrefix = "a256_mysql_new"
 	if err := provider.Revoke(t.Context(), credential.BackendRef); err != nil {
 		t.Fatalf("revoke with an open lease session: %v", err)
 	}
