@@ -52,7 +52,7 @@ func (s *Server) dispatchTicketStatusJob(ctx context.Context, tenantID string, s
 	for _, r := range waiting {
 		refs = append(refs, strings.TrimPrefix(r.TicketRef, sched.SNTable+":"))
 	}
-	intent := ticketintake.StatusIntent{Schedule: ticketintake.ScheduleName(sched.Name), StatusID: uuid.NewString(),
+	intent := ticketintake.StatusIntent{Schedule: ticketintake.ScheduleName(sched.Name), ConfigRevision: sched.ConfigRevision, StatusID: uuid.NewString(),
 		InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef, SNTable: sched.SNTable, SourceRefs: refs}
 	if _, err := ticketintake.StatusEndpoint(intent); err != nil {
 		s.logger.Warn("ticket status dispatch: intent refused", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))

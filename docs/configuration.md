@@ -5702,6 +5702,18 @@ The caller needs `certs:write` and `secrets:read`: the network relay sends the
 secret named by `token_ref` to `instance_url`, so naming that secret is a read
 capability. The caller must also have access to the secret's environment. Use
 an HTTP(S) instance base URL with no userinfo, query, or fragment.
+For `ticket.sync`, `ticket.status` and `ticket.note`, each queued job names the saved schedule revision. At
+redemption the control plane compares the complete saved destination and token
+reference, then rechecks the configuring person's current `secrets:read` and
+environment access. Removing that access or changing the destination stops
+the job before the token is opened. A schedule saved by an older release has no
+recorded configurer and must be saved again by an authorized operator; an old
+queued job cannot inherit the new operator's authority. Saving the same source
+under a new authorized operator preserves an incomplete page cursor and queues
+a job for the new revision; the earlier job cannot redeem the token.
+If a one-off `ticket.note` was queued under the earlier revision, inspect the
+original ServiceNow ticket for its note marker and reconcile any missing note
+with the ITSM administrator. Reauthorization does not recreate a prior decision.
 Create another name with its own table, or use `system: jira` and `jira_project`
 instead of `sn_table`. List all sources with `intake-schedule list`; read one with
 `intake-schedule show --system servicenow --name service-requests`. The Approvals

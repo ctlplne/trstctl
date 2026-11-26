@@ -1002,6 +1002,9 @@ func (s *Store) HasPendingTicketSyncJob(ctx context.Context, tenantID, system st
 			       AND claim_completed_at IS NULL
 			       AND convert_from(payload, 'UTF8')::jsonb ->> 'system' = $2
 			       AND coalesce(nullif(convert_from(payload, 'UTF8')::jsonb ->> 'schedule', ''), 'default') = $3
+			       AND coalesce(convert_from(payload, 'UTF8')::jsonb ->> 'config_revision', '') =
+			           (SELECT config_revision FROM ticket_intake_schedules
+			            WHERE tenant_id = $1 AND system = $2 AND name = $3)
 			)`, tenantID, system, intakeScheduleName(names)).Scan(&pending)
 	})
 	return pending, err

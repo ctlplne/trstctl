@@ -83,7 +83,10 @@ func (s *Store) HasPendingTicketStatusJob(ctx context.Context, tenantID, schedul
 		return tx.QueryRow(ctx, `SELECT EXISTS (
 			SELECT 1 FROM outbox WHERE tenant_id = $1 AND destination = 'ticket.status'
 			   AND status IN ('pending', 'processing') AND claim_completed_at IS NULL
-			   AND coalesce(nullif(convert_from(payload, 'UTF8')::jsonb ->> 'schedule', ''), 'default') = $2)`,
+			   AND coalesce(nullif(convert_from(payload, 'UTF8')::jsonb ->> 'schedule', ''), 'default') = $2
+			   AND coalesce(convert_from(payload, 'UTF8')::jsonb ->> 'config_revision', '') =
+			       (SELECT config_revision FROM ticket_intake_schedules
+			        WHERE tenant_id = $1 AND system = 'servicenow' AND name = $2))`,
 			tenantID, ticketintake.ScheduleName(schedule)).Scan(&pending)
 	})
 	return pending, err

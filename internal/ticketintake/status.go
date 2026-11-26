@@ -59,12 +59,13 @@ var numberPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{0,40}$`)
 // StatusIntent is durable outbox data for one status read. TokenRef names the
 // intake schedule's token, redeemed for one attempt.
 type StatusIntent struct {
-	Schedule    string   `json:"schedule,omitempty"`
-	StatusID    string   `json:"status_id"`
-	InstanceURL string   `json:"instance_url"`
-	TokenRef    string   `json:"token_ref"`
-	SNTable     string   `json:"sn_table"`
-	SourceRefs  []string `json:"source_refs"`
+	Schedule       string   `json:"schedule,omitempty"`
+	ConfigRevision string   `json:"config_revision,omitempty"`
+	StatusID       string   `json:"status_id"`
+	InstanceURL    string   `json:"instance_url"`
+	TokenRef       string   `json:"token_ref"`
+	SNTable        string   `json:"sn_table"`
+	SourceRefs     []string `json:"source_refs"`
 }
 
 // TicketStatus is one ticket's approval and state as ServiceNow reports them.

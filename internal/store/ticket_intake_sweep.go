@@ -157,22 +157,22 @@ func (s *Store) ValidateTicketIntakeIntentTx(
 	tenantID string,
 	intent ticketintake.SyncIntent,
 ) error {
-	var sweepID, cursor string
+	var sweepID, cursor, configRevision string
 	var readCount int
 	var expected *int
 	var complete bool
 	err := tx.QueryRow(ctx,
-		`SELECT coalesce(current_sweep_id::text, ''), cursor, read_count, expected_count, coverage_complete
+		`SELECT coalesce(current_sweep_id::text, ''), cursor, read_count, expected_count, coverage_complete, config_revision
 		   FROM ticket_intake_schedules
 		  WHERE tenant_id = $1 AND system = $2 AND name = $3 FOR UPDATE`, tenantID, intent.System, ticketintake.ScheduleName(intent.Schedule)).
-		Scan(&sweepID, &cursor, &readCount, &expected, &complete)
+		Scan(&sweepID, &cursor, &readCount, &expected, &complete, &configRevision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("store: ticket intake schedule not found")
 	}
 	if err != nil {
 		return err
 	}
-	if complete || sweepID != intent.SweepID || cursor != intent.Cursor || readCount != intent.ReadCount ||
+	if complete || sweepID != intent.SweepID || configRevision != intent.ConfigRevision || cursor != intent.Cursor || readCount != intent.ReadCount ||
 		!sameOptionalInt(expected, intent.ExpectedCount) {
 		return fmt.Errorf("store: ticket intake continuation differs from the durable checkpoint")
 	}

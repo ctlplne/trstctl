@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
+	"trstctl.com/trstctl/internal/ticketintake"
 )
 
 // Just-in-time credential resolution for relay jobs (epic A3).
@@ -130,14 +131,11 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// same schedule's token for its one call.
 		return r.resolveJobReferences(ctx, tenantID, job)
 	case "ticket.status":
-		// P13: the same intake token, for one approval read.
-		return r.resolveJobReferences(ctx, tenantID, job)
+		return r.resolveTicketStatusReferences(ctx, tenantID, job)
 	case relay.KindTicketNote:
-		// P13-L1: the same intake token, for one work note.
-		return r.resolveJobReferences(ctx, tenantID, job)
+		return r.resolveTicketNoteReferences(ctx, tenantID, job)
 	case "ticket.sync":
-		// I3: the ServiceNow ticket token is redeemed for one relay attempt.
-		return r.resolveJobReferences(ctx, tenantID, job)
+		return r.resolveTicketSyncReferences(ctx, tenantID, job)
 	case orchestrator.DestinationConnectorRightSize:
 		// A64: the binding's bearer token and endpoint for one relay attempt.
 		// The queued operation names only the tenant's connector; the binding
@@ -251,6 +249,90 @@ func (r *relayCredentialResolver) resolveJobReferences(
 	job store.AgentJobForRedemption,
 ) (redeemedMaterial, error) {
 	return r.resolveReferenceNames(ctx, tenantID, collectSecretRefs(job.Payload))
+}
+
+// A queued ticket page must still name the exact active intake revision. The
+// actor is read from that event-derived schedule rather than trusted from the
+// agent job, and every attempt checks the actor before opening its token.
+func (r *relayCredentialResolver) resolveTicketSyncReferences(
+	ctx context.Context, tenantID string, job store.AgentJobForRedemption,
+) (redeemedMaterial, error) {
+	var intent ticketintake.SyncIntent
+	if err := decodeStrictJSON(job.Payload, &intent); err != nil {
+		return redeemedMaterial{}, credref.ErrReadAuthorityRevoked
+	}
+	schedule, err := r.ticketScheduleForRedemption(ctx, tenantID, intent.System, intent.Schedule,
+		intent.ConfigRevision, intent.InstanceURL, intent.TokenRef, intent.SNTable)
+	if err != nil {
+		return redeemedMaterial{}, err
+	}
+	want := ticketSyncIntent(schedule)
+	want.SweepID, want.Cursor, want.ReadCount, want.ExpectedCount =
+		intent.SweepID, intent.Cursor, intent.ReadCount, intent.ExpectedCount
+	refs := collectSecretRefs(job.Payload)
+	if !reflect.DeepEqual(want, intent) || len(refs) != 1 || refs[0] != intent.TokenRef {
+		return redeemedMaterial{}, credref.ErrReadAuthorityRevoked
+	}
+	return r.resolveReferenceNames(ctx, tenantID, refs)
+}
+
+func (r *relayCredentialResolver) resolveTicketStatusReferences(
+	ctx context.Context, tenantID string, job store.AgentJobForRedemption,
+) (redeemedMaterial, error) {
+	var intent ticketintake.StatusIntent
+	if decodeStrictJSON(job.Payload, &intent) != nil || !ticketintake.StatusTables[intent.SNTable] {
+		return redeemedMaterial{}, credref.ErrReadAuthorityRevoked
+	}
+	if _, err := r.ticketScheduleForRedemption(ctx, tenantID, ticketintake.SystemServiceNow, intent.Schedule,
+		intent.ConfigRevision, intent.InstanceURL, intent.TokenRef, intent.SNTable); err != nil {
+		return redeemedMaterial{}, err
+	}
+	return r.resolveOnlyTicketToken(ctx, tenantID, job.Payload, intent.TokenRef)
+}
+
+func (r *relayCredentialResolver) resolveTicketNoteReferences(
+	ctx context.Context, tenantID string, job store.AgentJobForRedemption,
+) (redeemedMaterial, error) {
+	var intent ticketintake.NoteIntent
+	if decodeStrictJSON(job.Payload, &intent) != nil || ticketintake.ValidateNoteIntent(intent) != nil {
+		return redeemedMaterial{}, credref.ErrReadAuthorityRevoked
+	}
+	if _, err := r.ticketScheduleForRedemption(ctx, tenantID, ticketintake.SystemServiceNow, intent.Schedule,
+		intent.ConfigRevision, intent.InstanceURL, intent.TokenRef, intent.SNTable); err != nil {
+		return redeemedMaterial{}, err
+	}
+	return r.resolveOnlyTicketToken(ctx, tenantID, job.Payload, intent.TokenRef)
+}
+
+func (r *relayCredentialResolver) ticketScheduleForRedemption(
+	ctx context.Context, tenantID, system, name, revision, endpoint, tokenRef, table string,
+) (store.TicketIntakeSchedule, error) {
+	if r == nil || r.store == nil || revision == "" {
+		return store.TicketIntakeSchedule{}, credref.ErrReadAuthorityRevoked
+	}
+	schedule, found, err := r.store.GetTicketIntakeSchedule(ctx, tenantID, system, name)
+	if err != nil {
+		return store.TicketIntakeSchedule{}, err
+	}
+	if !found || !schedule.Enabled || schedule.ConfiguredBy == "" || schedule.ConfigRevision != revision ||
+		schedule.InstanceURL != endpoint || schedule.TokenRef != tokenRef || schedule.SNTable != table {
+		return store.TicketIntakeSchedule{}, credref.ErrReadAuthorityRevoked
+	}
+	authority := integrationCredentialResolver{store: r.store}
+	if err := authority.requireCurrentSecretReferenceRead(ctx, tenantID, tokenRef, schedule.ConfiguredBy); err != nil {
+		return store.TicketIntakeSchedule{}, err
+	}
+	return schedule, nil
+}
+
+func (r *relayCredentialResolver) resolveOnlyTicketToken(
+	ctx context.Context, tenantID string, payload []byte, tokenRef string,
+) (redeemedMaterial, error) {
+	refs := collectSecretRefs(payload)
+	if len(refs) != 1 || refs[0] != tokenRef {
+		return redeemedMaterial{}, credref.ErrReadAuthorityRevoked
+	}
+	return r.resolveReferenceNames(ctx, tenantID, refs)
 }
 
 func (r *relayCredentialResolver) resolveReferenceNames(ctx context.Context, tenantID string, refs []string) (redeemedMaterial, error) {

@@ -177,6 +177,11 @@ func ticketIntakeOutboxEntry(tenantID string, intent ticketintake.SyncIntent) (E
 	if cursor == "" {
 		cursor = "start"
 	}
+	// A new configurer at the same in-progress cursor needs a distinct job.
+	// Historical intents without a revision retain their original key.
+	if intent.ConfigRevision != "" {
+		cursor += ":" + intent.ConfigRevision
+	}
 	return Entry{
 		TenantID: tenantID, Destination: ticketSyncDestination,
 		IdempotencyKey: "ticket-sync:" + tenantID + ":" + ticketIntakeLane(intent) + ":" + intent.SweepID + ":" + cursor,

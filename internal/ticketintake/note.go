@@ -28,13 +28,14 @@ const MaxNoteText = 2000
 
 // NoteIntent is one work note on one ServiceNow ticket.
 type NoteIntent struct {
-	Schedule    string `json:"schedule,omitempty"`
-	NoteID      string `json:"note_id"`
-	InstanceURL string `json:"instance_url"`
-	TokenRef    string `json:"token_ref"`
-	SNTable     string `json:"sn_table"`
-	SourceRef   string `json:"source_ref"`
-	Text        string `json:"text"`
+	Schedule       string `json:"schedule,omitempty"`
+	ConfigRevision string `json:"config_revision,omitempty"`
+	NoteID         string `json:"note_id"`
+	InstanceURL    string `json:"instance_url"`
+	TokenRef       string `json:"token_ref"`
+	SNTable        string `json:"sn_table"`
+	SourceRef      string `json:"source_ref"`
+	Text           string `json:"text"`
 }
 
 // NoteReport is what the relay returns: whether it added the note or found it

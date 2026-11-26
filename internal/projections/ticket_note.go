@@ -41,7 +41,7 @@ func (p *Projector) queueTicketNoteTx(ctx context.Context, tx pgx.Tx, tenantID, 
 		// The decision still commits; the operator can inspect the request.
 		return nil
 	}
-	intent := ticketintake.NoteIntent{Schedule: sched.Name, NoteID: ticketintake.NoteID(tenantID, req.ID, decision),
+	intent := ticketintake.NoteIntent{Schedule: sched.Name, ConfigRevision: sched.ConfigRevision, NoteID: ticketintake.NoteID(tenantID, req.ID, decision),
 		InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef, SNTable: table, SourceRef: sysID,
 		Text: ticketNoteText(req.ID, req.Subject, decision, req.DecidedBy, req.DecisionReason)}
 	if ticketintake.ValidateNoteIntent(intent) != nil {

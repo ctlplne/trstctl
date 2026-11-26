@@ -55,7 +55,7 @@ func ticketSyncIntent(sched store.TicketIntakeSchedule) ticketintake.SyncIntent 
 		name = ""
 	}
 	return ticketintake.SyncIntent{
-		Schedule: name, OwnerField: sched.OwnerField,
+		Schedule: name, OwnerField: sched.OwnerField, ConfigRevision: sched.ConfigRevision,
 		System: sched.System, InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef,
 		SNTable: sched.SNTable, JiraProject: sched.JiraProject, Query: sched.Query,
 		SubjectField: sched.SubjectField, ProfileField: sched.ProfileField,

@@ -56,6 +56,7 @@ var allowedTables = map[string]bool{
 // attempt; it is never the bearer token itself.
 type SyncIntent struct {
 	Schedule           string `json:"schedule,omitempty"`
+	ConfigRevision     string `json:"config_revision,omitempty"`
 	System             string `json:"system"`
 	InstanceURL        string `json:"instance_url"`
 	TokenRef           string `json:"token_ref"`

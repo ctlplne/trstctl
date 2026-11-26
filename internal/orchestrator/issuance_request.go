@@ -540,12 +540,9 @@ func (o *Orchestrator) CompleteIssuanceRequestForIdentity(ctx context.Context, t
 // certificate-request tickets (I3). TokenRef is a reference, never a value.
 func (o *Orchestrator) ConfigureTicketIntake(ctx context.Context, tenantID string, in projections.TicketIntakeConfigured) error {
 	in.Name = ticketintake.ScheduleName(in.Name)
+	in.ReauthorizeOnly = false // derived from the current projected source, never from a caller
 	if !ticketintake.ValidScheduleName(in.Name) {
 		return errors.New("orchestrator: invalid ticket intake schedule name")
-	}
-	payload, err := json.Marshal(in)
-	if err != nil {
-		return err
 	}
 	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
 		if current, found, loadErr := o.store.GetTicketIntakeSchedule(lockCtx, tenantID, in.System, in.Name); loadErr != nil {
@@ -553,14 +550,21 @@ func (o *Orchestrator) ConfigureTicketIntake(ctx context.Context, tenantID strin
 		} else if found {
 			// A lost Save response can be retried with a new HTTP key. Reusing the
 			// exact instruction leaves the durable sweep and cursor untouched.
-			if sameTicketIntakeConfig(current, in) {
+			actor, _ := events.ActorFromContext(ctx)
+			same := sameTicketIntakeConfig(current, in)
+			if same && current.ConfiguredBy == actor.Subject && current.ConfigRevision != "" {
 				return nil
 			}
-			if current.CurrentSweepID != "" && !current.CoverageComplete {
+			if current.CurrentSweepID != "" && !current.CoverageComplete && !same {
 				return ErrTicketIntakeSweepInProgress
 			}
+			in.ReauthorizeOnly = same
 		}
-		_, err := o.emitVersioned(lockCtx, projections.EventTicketIntakeConfigured, tenantID, 2, payload)
+		payload, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		_, err = o.emitVersioned(lockCtx, projections.EventTicketIntakeConfigured, tenantID, 2, payload)
 		return err
 	})
 }

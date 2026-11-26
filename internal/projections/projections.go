@@ -823,6 +823,7 @@ type IssuanceRequestOpened struct {
 // TokenRef is a REFERENCE, never a token value.
 type TicketIntakeConfigured struct {
 	Name               string   `json:"name,omitempty"`
+	ReauthorizeOnly    bool     `json:"reauthorize_only,omitempty"`
 	OwnerField         string   `json:"owner_field,omitempty"`
 	System             string   `json:"system"`
 	InstanceURL        string   `json:"instance_url"`
@@ -6681,15 +6682,20 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyTicketIntakeConfiguredTx(ctx, tx, e.TenantID, store.TicketIntakeSchedule{
+		schedule := store.TicketIntakeSchedule{
 			Name: pl.Name, OwnerField: pl.OwnerField,
+			ConfiguredBy: e.Actor.Subject, ConfigRevision: e.ID,
 			System: pl.System, InstanceURL: pl.InstanceURL, TokenRef: pl.TokenRef,
 			SNTable: pl.SNTable, JiraProject: pl.JiraProject, Query: pl.Query,
 			SubjectField: pl.SubjectField, ProfileField: pl.ProfileField,
 			RequesterField: pl.RequesterField, JustificationField: pl.JustificationField,
 			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
-		})
+		}
+		if pl.ReauthorizeOnly {
+			return p.store.ApplyTicketIntakeReauthorizedTx(ctx, tx, e.TenantID, schedule)
+		}
+		return p.store.ApplyTicketIntakeConfiguredTx(ctx, tx, e.TenantID, schedule)
 	case EventTicketIntakeSweepDispatched:
 		var pl TicketIntakeSweepDispatched
 		if err := decode(e, &pl); err != nil {

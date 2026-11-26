@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -157,12 +158,14 @@ var ErrIssuanceRequestNotFound = errors.New("store: issuance request not found")
 // TicketIntakeSchedule is a tenant's standing instruction to read its ITSM for
 // certificate-request tickets (I3).
 type TicketIntakeSchedule struct {
-	Name        string
-	OwnerField  string
-	TenantID    string
-	System      string
-	InstanceURL string
-	TokenRef    string
+	Name           string
+	OwnerField     string
+	TenantID       string
+	System         string
+	InstanceURL    string
+	TokenRef       string
+	ConfiguredBy   string
+	ConfigRevision string
 	// SNTable is bounded by the schema CHECK to the request-shaped tables.
 	SNTable     string
 	JiraProject string
@@ -196,7 +199,7 @@ const ticketIntakeCols = `tenant_id::text, system, instance_url, token_ref, sn_t
 	interval_seconds, enabled, allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
 	last_run_at, last_error, coalesce(current_sweep_id::text, ''), sweep_started_at,
 	last_attempt_at, cursor, read_count, expected_count, pages_completed, coverage_complete,
-	eligible_count, skipped_count, name, owner_field`
+	eligible_count, skipped_count, name, owner_field, configured_by, config_revision`
 
 // Keep this statement literal so the AN-1 analyzer can prove the tenant
 // predicate instead of having to trust a dynamically assembled SELECT list.
@@ -206,7 +209,7 @@ const ticketIntakeDueSQL = `SELECT tenant_id::text, system, instance_url, token_
 	coalesce(private_egress_cidrs, '{}'), last_run_at, last_error,
 	coalesce(current_sweep_id::text, ''), sweep_started_at, last_attempt_at,
 	cursor, read_count, expected_count, pages_completed, coverage_complete,
-	eligible_count, skipped_count, name, owner_field
+	eligible_count, skipped_count, name, owner_field, configured_by, config_revision
 	FROM ticket_intake_schedules WHERE tenant_id = $1 AND enabled AND interval_seconds > 0
 	ORDER BY system, name`
 
@@ -217,7 +220,7 @@ func scanTicketIntake(row pgx.Row) (TicketIntakeSchedule, error) {
 		&s.IntervalSeconds, &s.Enabled, &s.AllowPrivateEndpoint, &s.PrivateEgressCIDRs,
 		&s.LastRunAt, &s.LastError, &s.CurrentSweepID, &s.SweepStartedAt, &s.LastAttemptAt,
 		&s.Cursor, &s.ReadCount, &s.ExpectedCount, &s.PagesCompleted, &s.CoverageComplete,
-		&s.EligibleCount, &s.SkippedCount, &s.Name, &s.OwnerField)
+		&s.EligibleCount, &s.SkippedCount, &s.Name, &s.OwnerField, &s.ConfiguredBy, &s.ConfigRevision)
 	return s, err
 }
 
@@ -306,10 +309,12 @@ func (s *Store) ApplyTicketIntakeConfiguredTx(ctx context.Context, tx pgx.Tx, te
 		`INSERT INTO ticket_intake_schedules
 		   (tenant_id, system, instance_url, token_ref, sn_table, jira_project, query,
 		    subject_field, profile_field, requester_field, justification_field,
-		    interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs, name, owner_field)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		    interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs, name, owner_field,
+		    configured_by, config_revision)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		 ON CONFLICT (tenant_id, system, name) DO UPDATE SET
 		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref, owner_field = EXCLUDED.owner_field,
+		   configured_by = EXCLUDED.configured_by, config_revision = EXCLUDED.config_revision,
 		   sn_table = EXCLUDED.sn_table, jira_project = EXCLUDED.jira_project, query = EXCLUDED.query,
 		   subject_field = EXCLUDED.subject_field, profile_field = EXCLUDED.profile_field,
 		   requester_field = EXCLUDED.requester_field, justification_field = EXCLUDED.justification_field,
@@ -322,7 +327,35 @@ func (s *Store) ApplyTicketIntakeConfiguredTx(ctx context.Context, tx pgx.Tx, te
 		   last_error = '', updated_at = now()`,
 		tenantID, in.System, in.InstanceURL, in.TokenRef, in.SNTable, in.JiraProject, in.Query,
 		in.SubjectField, in.ProfileField, in.RequesterField, in.JustificationField,
-		in.IntervalSeconds, in.Enabled, false, nil, ticketintake.ScheduleName(in.Name), in.OwnerField)
+		in.IntervalSeconds, in.Enabled, false, nil, ticketintake.ScheduleName(in.Name), in.OwnerField,
+		in.ConfiguredBy, in.ConfigRevision)
+	return err
+}
+
+// ApplyTicketIntakeReauthorizedTx changes only the actor and revision when a
+// different authorized operator saves the exact same source. The active page
+// cursor stays intact; its old queued job becomes stale, and recovery can
+// enqueue this revision at that checkpoint.
+func (s *Store) ApplyTicketIntakeReauthorizedTx(ctx context.Context, tx pgx.Tx, tenantID string, in TicketIntakeSchedule) error {
+	current, err := scanTicketIntake(tx.QueryRow(ctx,
+		`SELECT `+ticketIntakeCols+` FROM ticket_intake_schedules
+		 WHERE tenant_id=$1 AND system=$2 AND name=$3 FOR UPDATE`,
+		tenantID, in.System, ticketintake.ScheduleName(in.Name)))
+	if err != nil {
+		return err
+	}
+	if current.InstanceURL != in.InstanceURL || current.TokenRef != in.TokenRef ||
+		current.SNTable != in.SNTable || current.JiraProject != in.JiraProject || current.Query != in.Query ||
+		current.SubjectField != in.SubjectField || current.ProfileField != in.ProfileField ||
+		current.RequesterField != in.RequesterField || current.JustificationField != in.JustificationField ||
+		current.OwnerField != in.OwnerField || current.IntervalSeconds != in.IntervalSeconds ||
+		current.Enabled != in.Enabled || current.AllowPrivateEndpoint != in.AllowPrivateEndpoint ||
+		!slices.Equal(current.PrivateEgressCIDRs, in.PrivateEgressCIDRs) {
+		return fmt.Errorf("store: ticket intake reauthorization changed the active source")
+	}
+	_, err = tx.Exec(ctx, `UPDATE ticket_intake_schedules
+		SET configured_by=$4, config_revision=$5, updated_at=now()
+		WHERE tenant_id=$1 AND system=$2 AND name=$3`, tenantID, in.System, ticketintake.ScheduleName(in.Name), in.ConfiguredBy, in.ConfigRevision)
 	return err
 }
 
