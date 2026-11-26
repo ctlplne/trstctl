@@ -452,8 +452,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `workloads tokens introspect` (905). Three missing read paths for the
 	// application view and project member access brought the set to 908;
 	// CR-332 adds offline PCAS approval prepare/assemble (910).
-	if len(out) != 910 {
-		t.Fatalf("CLI commands = %d, want 910", len(out))
+	// CR-126 publishes the AGID revocation evidence pin (911).
+	if len(out) != 911 {
+		t.Fatalf("CLI commands = %d, want 911", len(out))
 	}
 	return out
 }

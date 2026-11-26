@@ -38,8 +38,8 @@
 //
 // It reuses the core store, its RLS-scoped transaction, the core event log, and the
 // core outbox table; it forks none of them (AN-6). It holds no issuance key material; the
-// per-job/aggregate evidence signer is a control-plane software signer (AN-3), distinct
-// from the isolated AN-4 signer.
+// per-job/aggregate evidence signer is a durable purpose-constrained key in the isolated
+// AN-4 signer. The control plane holds only its remote handle and public key.
 package orchestrator
 
 import (
@@ -94,14 +94,11 @@ func NewLicensedOutboxFactory() editionseam.LicensedOutboxFactory {
 		if d.Store == nil {
 			return nil, errors.New("agentid outbox: nil store")
 		}
-		// A control-plane software evidence signer (AN-3) for per-job completion evidence
-		// and the aggregate terminal artifact. It is NOT the isolated AN-4 issuance signer
-		// (this worker performs no credential key op); it signs only revocation evidence,
-		// exactly as the AGID-10/11 mechanisms require a crypto.Signer for evidence. ECDSA
-		// P-256 is keygen-able by the software backend and is the control-plane norm.
-		evidenceSigner, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+		// Every process reopens the same evidence-only handle. An absent signer fails
+		// closed instead of minting a self-authorizing local proof.
+		evidenceSigner, err := revoke.BindEvidenceSigner(context.Background(), d.AGIDEvidenceCustody)
 		if err != nil {
-			return nil, fmt.Errorf("agentid outbox: generate evidence signer: %w", err)
+			return nil, fmt.Errorf("agentid outbox: %w", err)
 		}
 		h, err := newHandler(d, evidenceSigner)
 		if err != nil {

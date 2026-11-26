@@ -3,6 +3,7 @@
 package revoke
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -21,8 +22,8 @@ import (
 // terminal revoked state.
 //
 // The artifact is THIRD-PARTY VERIFIABLE OFFLINE: an auditor or counterparty verifies it
-// against ONLY the published per-job evidence digests (the same digests the per-job
-// CompletionEvidence documents hash to) plus the artifact's embedded verifying key — no
+// against the published per-job evidence digests (the same digests the per-job
+// CompletionEvidence documents hash to) plus an independently pinned verifying key — no
 // control-plane access, no database, no signer. VerifyAggregateOffline is that check.
 
 // aggregateDomain is the domain-separation tag prefixed to the canonical aggregate bytes
@@ -47,7 +48,7 @@ const completionDigestDomain = "agid/agentid/revocation-aggregate/completion-set
 //     watermark, and the ledger head AS OF the terminal revoked state.
 //
 // Signature is over the canonical body (aggregateBodyBytes) via internal/crypto (AN-3);
-// PublicKey is the PKIX/DER verifying key so verification needs no control-plane access.
+// PublicKey is the PKIX/DER key hint, checked against the verifier's saved pin.
 type AggregateEvidence struct {
 	TenantID    string      `json:"tenant_id"`
 	DirectiveID string      `json:"directive_id"`
@@ -154,30 +155,28 @@ func DecodeAggregate(b []byte) (AggregateEvidence, error) {
 	return a, nil
 }
 
-// VerifyAggregateSignature checks the artifact's signature against its embedded public
-// key, over the canonical body. It is the signature half of offline verification; a
-// missing signature/key or a signature that does not verify is an error (fail-closed —
-// an unverifiable artifact is not proof).
-func VerifyAggregateSignature(a AggregateEvidence) error {
+// VerifyAggregateSignature checks the artifact against an independently pinned key.
+func VerifyAggregateSignature(a AggregateEvidence, pinnedPublicKey []byte) error {
 	if len(a.Signature) == 0 {
 		return fmt.Errorf("revoke: aggregate artifact has no signature")
 	}
-	if len(a.PublicKey) == 0 {
-		return fmt.Errorf("revoke: aggregate artifact has no public key")
+	if len(pinnedPublicKey) == 0 || !bytes.Equal(a.PublicKey, pinnedPublicKey) {
+		return fmt.Errorf("revoke: aggregate artifact key does not match the pinned key")
 	}
 	body, err := a.aggregateBodyBytes()
 	if err != nil {
 		return err
 	}
-	if err := crypto.Verify(crypto.PublicKey{DER: a.PublicKey}, body, a.Signature, crypto.SignOptions{Hash: crypto.SHA256}); err != nil {
+	if err := crypto.Verify(crypto.PublicKey{DER: pinnedPublicKey}, body, a.Signature, crypto.SignOptions{Hash: crypto.SHA256}); err != nil {
 		return fmt.Errorf("revoke: aggregate artifact signature invalid: %w", err)
 	}
 	return nil
 }
 
 // VerifyAggregateOffline is the THIRD-PARTY, control-plane-free verification (AGID-claim-18):
-// given the signed aggregate artifact and ONLY the published per-job completion-evidence
-// digests, it (1) verifies the artifact signature against its embedded key and (2)
+// given the signed aggregate artifact, the independently pinned SPKI and the published
+// per-job completion-evidence digests, it (1) verifies the artifact signature against
+// the pin and (2)
 // recomputes the completion-evidence digest over the published digests and requires it to
 // equal the digest the artifact binds, AND the published count to equal the bound
 // JobCount. An auditor runs this with no database and no signer: the artifact plus the
@@ -189,8 +188,8 @@ func VerifyAggregateSignature(a AggregateEvidence) error {
 // alongside the artifact. VerifyAggregateOffline does NOT need the evidence bodies, only
 // their digests — the auditor can be given digests without the (potentially sensitive)
 // evidence contents and still verify completeness.
-func VerifyAggregateOffline(a AggregateEvidence, publishedEvidenceDigests [][]byte) error {
-	if err := VerifyAggregateSignature(a); err != nil {
+func VerifyAggregateOffline(a AggregateEvidence, publishedEvidenceDigests [][]byte, pinnedPublicKey []byte) error {
+	if err := VerifyAggregateSignature(a, pinnedPublicKey); err != nil {
 		return err
 	}
 	if len(publishedEvidenceDigests) != a.JobCount {

@@ -3,6 +3,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,31 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 )
+
+func TestCR126EvidenceVerificationKeyIsIndependentOfArtifact(t *testing.T) {
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{
+		EvidencePublicKey: key.Public().DER,
+	})
+	pin, err := svc.EvidenceVerificationKey(t.Context(), "tenant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(pin.PublicDER, key.Public().DER) || pin.SPKISHA256 != crypto.SHA256Hex(key.Public().DER) {
+		t.Fatal("published evidence key differs from the configured signer public key")
+	}
+	pin.PublicDER[0] ^= 0xff
+	again, err := svc.EvidenceVerificationKey(t.Context(), "tenant")
+	if err != nil || !bytes.Equal(again.PublicDER, key.Public().DER) {
+		t.Fatalf("response mutation changed the published key: %v", err)
+	}
+	if _, err := agidapi.NewService(nil, nil, nil).EvidenceVerificationKey(t.Context(), "tenant"); !errors.Is(err, agidapi.ErrEvidenceKeyUnavailable) {
+		t.Fatalf("missing signer key did not fail closed: %v", err)
+	}
+}
 
 // TestRoutes_Surface asserts the AGID REST surface: the root-anchor provisioning routes,
 // the two mutating journey routes, and receipt/credential/evidence reads exist with the expected
@@ -59,6 +85,7 @@ func TestRoutes_Surface(t *testing.T) {
 		{"GET /api/v1/agent-delegation/chain", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/revocations/incomplete-jobs", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/revocations/evidence", false, "200", authz.AgentsRead},
+		{"GET /api/v1/agent-delegation/revocations/evidence-key", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/issuing-ca", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/credential-status", false, "200", authz.AgentsRead},
 	}
@@ -109,6 +136,7 @@ func TestOpenAPI_Surface(t *testing.T) {
 		"/api/v1/agent-delegation/chain",
 		"/api/v1/agent-delegation/revocations/incomplete-jobs",
 		"/api/v1/agent-delegation/revocations/evidence",
+		"/api/v1/agent-delegation/revocations/evidence-key",
 		"/api/v1/agent-delegation/issuing-ca",
 		"/api/v1/agent-delegation/credential-status",
 	} {

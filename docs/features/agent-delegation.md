@@ -208,9 +208,10 @@ GET  /api/v1/agent-delegation/issuing-ca         # the tenant's issuing CA, for 
 POST /api/v1/agent-delegation/revocations        # {"subject":"agent:...","reason":"compromise","publish_downstream":true}
 GET  /api/v1/agent-delegation/revocations/incomplete-jobs?directive_id=...
 GET  /api/v1/agent-delegation/revocations/evidence?directive_id=...
+GET  /api/v1/agent-delegation/revocations/evidence-key  # stable signer-owned SPKI to pin
 ```
 
-The downloadable `trstctl-cli` exposes the same thirteen routes. Set
+The downloadable `trstctl-cli` exposes the same fourteen routes. Set
 `TRSTCTL_SERVER`, `TRSTCTL_TOKEN`, `TRSTCTL_TENANT`, and `TRSTCTL_CA_FILE` for
 the deployment, then use a stable idempotency key for each mutation. Request
 JSON can be supplied from a private file or standard input; the CLI does not
@@ -231,7 +232,20 @@ trstctl-cli agent-delegation chain get --credential_id '<credential_id from the 
 trstctl-cli --idempotency-key revoke-qa-1 agent-delegation revoke -f revocation.json --force
 trstctl-cli agent-delegation revocations incomplete-jobs --directive_id directive-1
 trstctl-cli agent-delegation revocations evidence --directive_id directive-1
+trstctl-cli agent-delegation revocations evidence-key
 ```
+
+Before trusting a revocation proof, fetch `evidence-key` during a trusted
+enrollment, retain its `public_der` or `spki_sha256` outside the proof, and
+compare later reads with that saved pin. Verify the aggregate with
+`revoke.VerifyAggregateOffline(artifact, evidenceDigests, pinnedPublicDER)`;
+verify each per-job proof with
+`revoke.VerifyCompletionEvidence(jobEvidence, pinnedPublicDER)`. The key carried
+inside an artifact is only a hint and cannot authorize itself. The evidence
+key lives in the isolated signer under a dedicated audit-evidence purpose and
+survives control-plane restarts. Proofs minted by older builds under ephemeral
+software keys do not verify against the durable pin; retain them as historical
+records, not authenticated completion proof.
 
 The revoke command returns `queued` while the outbox worker records the
 directive. Once the directive is recorded, issuance and renewal check every
@@ -378,7 +392,8 @@ agent than it meant to are refused. Finding A2A endpoints is not part of this.
   `.../issuances`, `.../revocations`.
 - **Reads:** `.../root-anchors`, `.../attestors`, `.../issuance?issuance_id=`, `.../credential?credential_id=`,
   `.../credential-status?credential_id=`, `.../chain?credential_id=`, `.../issuing-ca`,
-  `.../revocations/incomplete-jobs?directive_id=`, `.../revocations/evidence?directive_id=`.
+  `.../revocations/incomplete-jobs?directive_id=`, `.../revocations/evidence?directive_id=`,
+  `.../revocations/evidence-key`.
 - **Outbox job:** `agentid.issue-chain-bound`; signer calls: `GatedIssue`,
   `GetAgentIssuingCA`.
 - **Trust floors:** the key-store layout above; all tenant-scoped storage is

@@ -10343,7 +10343,8 @@
                 "getAgentDelegationCredentialStatus",
                 "getAgentDelegationIssuingCA",
                 "getRevocationIncompleteJobs",
-                "getRevocationEvidence"
+                "getRevocationEvidence",
+                "getRevocationEvidenceKey"
             ],
             "api_na": "",
             "cli_surface": [
@@ -10364,7 +10365,8 @@
                 "agent-delegation credential status",
                 "agent-delegation issuing-ca get",
                 "agent-delegation revocations incomplete-jobs",
-                "agent-delegation revocations evidence"
+                "agent-delegation revocations evidence",
+                "agent-delegation revocations evidence-key"
             ],
             "cli_na": "",
             "facet_evidence": {

@@ -107,7 +107,11 @@ func TestAGID_Wire_CascadeRevokeWithEvidence_RealInfra(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeAggregate: %v", err)
 	}
-	if err := revoke.VerifyAggregateOffline(artifact, ev.EvidenceDigests); err != nil {
+	pin, err := h.api.EvidenceVerificationKey(h.ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("EvidenceVerificationKey: %v", err)
+	}
+	if err := revoke.VerifyAggregateOffline(artifact, ev.EvidenceDigests, pin.PublicDER); err != nil {
 		t.Fatalf("VerifyAggregateOffline: %v", err)
 	}
 	if artifact.SubjectID != "manager" || artifact.JobCount != 1 {
@@ -115,6 +119,58 @@ func TestAGID_Wire_CascadeRevokeWithEvidence_RealInfra(t *testing.T) {
 	}
 	if got := h.countRows(t, `SELECT count(*) FROM agent_revocation_effects WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND credential_id = $1`, issued.credentialID); got != 1 {
 		t.Fatalf("recorded effects for credential = %d, want 1", got)
+	}
+}
+
+func TestCR126EvidenceKeyPersistsAcrossControlPlaneRestart_RealInfra(t *testing.T) {
+	h := newHarness(t, tenantCascade)
+	h.issueAgent(t, "agent-cr126", "nonce-cr126")
+	revocation, err := h.api.Revoke(h.ctx, h.tenant, agidapi.RevokeRequest{Subject: "manager", Reason: "compromise"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.drain(t, 20)
+	evidence, err := h.api.RevocationEvidence(h.ctx, h.tenant, revocation.DirectiveID)
+	if err != nil || !evidence.Terminal {
+		t.Fatalf("before restart: terminal=%t err=%v", evidence.Terminal, err)
+	}
+	artifact, err := revoke.DecodeAggregate(evidence.Artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := h.api.EvidenceVerificationKey(h.ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("first evidence key: %v", err)
+	}
+	h.restartSigner(t) // Restarts both the signer process and the control plane.
+	second, err := h.api.EvidenceVerificationKey(h.ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("restarted evidence key: %v", err)
+	}
+	if !bytes.Equal(first.PublicDER, second.PublicDER) || first.SPKISHA256 != second.SPKISHA256 {
+		t.Fatal("control-plane restart changed the evidence verification pin")
+	}
+	if err := revoke.VerifyAggregateOffline(artifact, evidence.EvidenceDigests, second.PublicDER); err != nil {
+		t.Fatalf("old aggregate failed under the restarted signer's pin: %v", err)
+	}
+	wrongPurpose, err := h.client.SignerForHandleWithPurpose(h.ctx, revoke.EvidenceSignerHandle, signing.PurposeCASign)
+	if err != nil {
+		t.Fatalf("bind wrong-purpose view: %v", err)
+	}
+	if _, err := crypto.SignMessage(wrongPurpose, []byte("CA signature attempt")); err == nil {
+		t.Fatal("revocation evidence key signed with a CA purpose")
+	}
+}
+
+func TestCR126OutboxRequiresIsolatedEvidenceSigner_RealInfra(t *testing.T) {
+	h := newHarness(t, tenantCascade)
+	_, err := agidorch.NewLicensedOutboxFactory()(editionseam.LicensedOutboxDeps{
+		Store: h.store, Log: h.log, SignerKeyStoreDir: h.keystore,
+		OutboxIntegrityKey: h.wrapper, AGIDReachabilityKeys: h.client,
+		IssuanceGate: h.client, // No evidence-key custody: refuse local signing.
+	})
+	if err == nil {
+		t.Fatal("AGID outbox minted a local evidence key without the isolated signer")
 	}
 }
 
@@ -251,7 +307,11 @@ func TestAGID_Wire_Hardening_31_32_33_RealInfra(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeAggregate: %v", err)
 	}
-	if err := revoke.VerifyAggregateOffline(artifact, ev.EvidenceDigests); err != nil {
+	pin, err := h.api.EvidenceVerificationKey(h.ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("EvidenceVerificationKey: %v", err)
+	}
+	if err := revoke.VerifyAggregateOffline(artifact, ev.EvidenceDigests, pin.PublicDER); err != nil {
 		t.Fatalf("AGID-claim-33 aggregate proof did not verify: %v", err)
 	}
 	if got := h.countRows(t, `SELECT count(*) FROM agent_revocation_effects WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND credential_id = $1`, issued.credentialID); got != 1 {
@@ -606,8 +666,13 @@ func (h *harness) dispatchDirectiveOnly(t *testing.T) {
 func (h *harness) restartControlPlane(t *testing.T) {
 	t.Helper()
 	h.outbox = newTestOutbox(h.store)
+	evidenceSigner, err := revoke.BindEvidenceSigner(h.ctx, h.client)
+	if err != nil {
+		t.Fatalf("BindEvidenceSigner: %v", err)
+	}
 	h.api = agidapi.NewServiceWithSignerFloors(h.store, h.log, h.outbox, agidapi.SignerFloors{
 		RootAnchors: delegation.NewDurableAnchorStore(h.keystore), Attestors: h.client, IssuingCA: h.client,
+		EvidencePublicKey: evidenceSigner.Public().DER,
 	})
 	licensed, err := agidorch.NewLicensedOutboxFactory()(editionseam.LicensedOutboxDeps{
 		Store:                h.store,
@@ -615,6 +680,7 @@ func (h *harness) restartControlPlane(t *testing.T) {
 		SignerKeyStoreDir:    h.keystore,
 		OutboxIntegrityKey:   h.wrapper,
 		AGIDReachabilityKeys: h.client,
+		AGIDEvidenceCustody:  h.client,
 		IssuanceGate:         h.client,
 	})
 	if err != nil {

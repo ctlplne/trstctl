@@ -1852,11 +1852,12 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	if d.LicensedAPIOptionsFactory != nil {
 		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
-			AGIDRootAnchors: s.agidRootAnchors(),
-			AGIDAttestors:   s.agidAttestors(),
-			AGIDIssuingCA:   s.agidIssuingCA(),
-			DefaultProfile:  d.DefaultProfile,
-			KEMCustody:      s.kemCustody(), PCASLeafIssuer: pcasLeafIssuer,
+			AGIDEvidenceCustody: s.agidEvidenceCustody(),
+			AGIDRootAnchors:     s.agidRootAnchors(),
+			AGIDAttestors:       s.agidAttestors(),
+			AGIDIssuingCA:       s.agidIssuingCA(),
+			DefaultProfile:      d.DefaultProfile,
+			KEMCustody:          s.kemCustody(), PCASLeafIssuer: pcasLeafIssuer,
 			TLSPostureDeployer: d.ConnectorRegistry,
 			OutboxIntegrityKey: d.KEK,
 			TenantCrypto:       d.TenantCrypto,
@@ -2525,6 +2526,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			TenantCrypto:          d.TenantCrypto,
 			FeatureObserver:       s.featureObserver(),
 			SignerKeyStoreDir:     d.SignerKeyStoreDir,
+			AGIDEvidenceCustody:   s.agidEvidenceCustody(),
 			AGIDReachabilityKeys:  s.agidReachabilityKeys(),
 			Minter:                s.successionMinter(),
 			IssuanceGate:          s.issuanceGate(),
@@ -2652,6 +2654,13 @@ func (s *Server) agidIssuingCA() editionseam.AgentIssuingCAReader {
 }
 
 func (s *Server) agidReachabilityKeys() editionseam.AgentReachabilityKeyProvisioner {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+func (s *Server) agidEvidenceCustody() *signing.Client {
 	if s.signer == nil {
 		return nil
 	}

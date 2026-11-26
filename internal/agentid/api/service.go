@@ -69,6 +69,7 @@ type service struct {
 	anchorProvisioner   RootAnchorProvisioner
 	attestorProvisioner AttestorProvisioner
 	issuingCA           IssuingCAReader
+	evidencePublicKey   []byte
 }
 
 // NewService builds the store/log/outbox-backed AGID API Service. It is exported so the
@@ -87,9 +88,10 @@ func NewService(store *corestore.Store, log *events.Log, outbox *orchestrator.Ou
 // client; only the signer-local operator ceremony can add trust. A nil floor
 // makes its registration routes answer unavailable.
 type SignerFloors struct {
-	RootAnchors RootAnchorProvisioner
-	Attestors   AttestorProvisioner
-	IssuingCA   IssuingCAReader
+	RootAnchors       RootAnchorProvisioner
+	Attestors         AttestorProvisioner
+	IssuingCA         IssuingCAReader
+	EvidencePublicKey []byte
 }
 
 // NewServiceWithSignerFloors builds the AGID API service with the signer's
@@ -100,6 +102,7 @@ func NewServiceWithSignerFloors(store *corestore.Store, log *events.Log, outbox 
 		s.anchorProvisioner = floors.RootAnchors
 		s.attestorProvisioner = floors.Attestors
 		s.issuingCA = floors.IssuingCA
+		s.evidencePublicKey = append([]byte(nil), floors.EvidencePublicKey...)
 	}
 	return svc
 }

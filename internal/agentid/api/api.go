@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agentid/delegation"
+	"trstctl.com/trstctl/internal/agentid/revoke"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/editionseam"
@@ -173,7 +174,7 @@ type IncompleteJobsResponse struct {
 // follow-on job completed, plus whether the directive has reached the terminal
 // revoked-with-evidence state. Terminal=false with the artifact absent means the directive
 // is still draining. The Artifact is the encoded AggregateEvidence a relying party verifies
-// offline with VerifyAggregateOffline.
+// offline with VerifyAggregateOffline and the separately published evidence-key pin.
 type RevocationEvidenceResponse struct {
 	DirectiveID     string   `json:"directive_id"`
 	Terminal        bool     `json:"terminal"`
@@ -181,6 +182,13 @@ type RevocationEvidenceResponse struct {
 	Missing         []string `json:"missing,omitempty"`
 	EvidenceDigests [][]byte `json:"evidence_digests,omitempty"`
 	Artifact        []byte   `json:"artifact,omitempty"`
+}
+
+// EvidenceVerificationKeyResponse publishes the signer-owned SPKI an operator
+// pins independently before trusting a portable revocation artifact.
+type EvidenceVerificationKeyResponse struct {
+	PublicDER  []byte `json:"public_der"`
+	SPKISHA256 string `json:"spki_sha256"`
 }
 
 // RootAnchorRequest registers one tenant-scoped AGID root anchor. Its key ID binds
@@ -270,6 +278,7 @@ type Service interface {
 	// RevocationEvidence returns a directive's aggregate revocation-evidence artifact and
 	// terminal verdict (AGID-11).
 	RevocationEvidence(ctx context.Context, tenantID, directiveID string) (RevocationEvidenceResponse, error)
+	EvidenceVerificationKey(ctx context.Context, tenantID string) (EvidenceVerificationKeyResponse, error)
 	// IssuingCA returns the tenant's agent issuing CA for relying services to pin.
 	IssuingCA(ctx context.Context, tenantID string) (IssuingCAResponse, error)
 	// CredentialStatus returns an issued credential's status for relying services.
@@ -282,8 +291,17 @@ type Service interface {
 // NewAPIOptionsFactory.
 func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
+		var evidencePublicKey []byte
+		if d.AGIDEvidenceCustody != nil {
+			signer, err := revoke.BindEvidenceSigner(context.Background(), d.AGIDEvidenceCustody)
+			if err != nil {
+				return nil, err
+			}
+			evidencePublicKey = signer.Public().DER
+		}
 		svc := NewServiceWithSignerFloors(d.Store, d.Log, d.Outbox, SignerFloors{
 			RootAnchors: d.AGIDRootAnchors, Attestors: d.AGIDAttestors, IssuingCA: d.AGIDIssuingCA,
+			EvidencePublicKey: evidencePublicKey,
 		})
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),
@@ -377,6 +395,12 @@ func Routes(svc Service) []api.LicensedRoute {
 			Handler:        func(a *api.API) http.HandlerFunc { return evidenceHandler(a, svc) },
 			Query:          []api.RouteParam{{Name: "directive_id", Type: "string", Description: "revocation directive id", Required: true}},
 			ResponseSchema: "AGIDRevocationEvidence", SuccessCode: "200", Permission: authz.AgentsRead,
+		},
+		{
+			Method: "GET", Path: "/api/v1/agent-delegation/revocations/evidence-key", OperationID: "getRevocationEvidenceKey",
+			Summary:        "Fetch the durable revocation-evidence SPKI for independent pinning",
+			Handler:        func(a *api.API) http.HandlerFunc { return evidenceKeyHandler(a, svc) },
+			ResponseSchema: "AGIDEvidenceVerificationKey", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 		{
 			Method: "GET", Path: "/api/v1/agent-delegation/issuing-ca", OperationID: "getAgentDelegationIssuingCA",
@@ -731,9 +755,30 @@ func evidenceHandler(a *api.API, svc Service) http.HandlerFunc {
 		resp, err := svc.RevocationEvidence(r.Context(), tenantID, directiveID)
 		a.ObserveFeature("agentid", "revocation-evidence", start, err)
 		if err != nil {
+			if errors.Is(err, ErrEvidenceUnverifiable) {
+				writeProblem(w, http.StatusServiceUnavailable, "revocation proof is unverifiable; check signer key continuity and review historical evidence before relying on this terminal state")
+				return
+			}
 			writeProblem(w, http.StatusInternalServerError, "failed to fetch revocation evidence")
 			return
 		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func evidenceKeyHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		resp, err := svc.EvidenceVerificationKey(r.Context(), tenantID)
+		if err != nil {
+			writeProblem(w, http.StatusServiceUnavailable, "revocation evidence key is unavailable")
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, resp)
 	}
 }
@@ -891,5 +936,9 @@ func baseSchemas() map[string]*api.Schema {
 			"evidence_digests": api.ArraySchema(api.StringSchema()),
 			"artifact":         api.StringSchema(), // base64-encoded aggregate evidence artifact
 		}, "directive_id", "terminal"),
+		"AGIDEvidenceVerificationKey": api.ObjectSchema(map[string]*api.Schema{
+			"public_der":  api.StringSchema(),
+			"spki_sha256": api.StringSchema(),
+		}, "public_der", "spki_sha256"),
 	}
 }

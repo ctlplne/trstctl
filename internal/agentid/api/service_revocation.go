@@ -4,10 +4,25 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"trstctl.com/trstctl/internal/agentid/revoke"
 	"trstctl.com/trstctl/internal/crypto"
 )
+
+var ErrEvidenceKeyUnavailable = errors.New("agentid api: revocation evidence key is unavailable")
+var ErrEvidenceUnverifiable = errors.New("agentid api: terminal revocation evidence is unverifiable")
+
+func (s *service) EvidenceVerificationKey(_ context.Context, _ string) (EvidenceVerificationKeyResponse, error) {
+	if len(s.evidencePublicKey) == 0 {
+		return EvidenceVerificationKeyResponse{}, ErrEvidenceKeyUnavailable
+	}
+	return EvidenceVerificationKeyResponse{
+		PublicDER:  append([]byte(nil), s.evidencePublicKey...),
+		SPKISHA256: crypto.SHA256Hex(s.evidencePublicKey),
+	}, nil
+}
 
 // service_revocation.go serves the AGID-11 aggregate revocation-evidence read model. It
 // imports internal/agentid/revoke ONLY for its pure read helpers (LoadTerminalArtifact, a log
@@ -70,8 +85,22 @@ func (s *service) RevocationEvidence(ctx context.Context, tenantID, directiveID 
 			return RevocationEvidenceResponse{}, err
 		}
 		if ok {
+			if resp.Terminal {
+				decoded, err := revoke.DecodeAggregate(artifact)
+				if err != nil || decoded.TenantID != tenantID || decoded.DirectiveID != directiveID ||
+					decoded.SubjectID != dir.SubjectID || decoded.ReasonClass != revoke.ReasonClass(dir.Reason) ||
+					decoded.Watermark != dir.Watermark || decoded.JobCount != len(jobs) || len(resp.Missing) != 0 ||
+					revoke.VerifyAggregateOffline(decoded, resp.EvidenceDigests, s.evidencePublicKey) != nil {
+					return RevocationEvidenceResponse{}, fmt.Errorf("%w: artifact does not match the pinned signer key or directive", ErrEvidenceUnverifiable)
+				}
+			}
 			resp.Artifact = artifact
 		}
+		if resp.Terminal && !ok {
+			return RevocationEvidenceResponse{}, fmt.Errorf("%w: signed artifact is missing", ErrEvidenceUnverifiable)
+		}
+	} else if resp.Terminal {
+		return RevocationEvidenceResponse{}, fmt.Errorf("%w: event log is unavailable", ErrEvidenceUnverifiable)
 	}
 	return resp, nil
 }

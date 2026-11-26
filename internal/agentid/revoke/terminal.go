@@ -55,11 +55,12 @@ const RevocationTerminalSchemaV1 = 1
 // terminal event), an aggregate-artifact signer (internal/crypto, AN-3), and a clock
 // (injected so terminal_at is deterministic in tests). It performs no credential key op.
 type TerminalTransition struct {
-	repo   *agidstore.Repo
-	core   repoTxAccess
-	log    EventLog
-	signer crypto.Signer
-	clock  Clock
+	repo            *agidstore.Repo
+	core            repoTxAccess
+	log             EventLog
+	signer          crypto.Signer
+	clock           Clock
+	verificationKey []byte
 }
 
 // NewTerminalTransition builds the terminal engine over the AGID-02 repo, the core store
@@ -71,11 +72,20 @@ func NewTerminalTransition(repo *agidstore.Repo, core repoTxAccess, log EventLog
 	if repo == nil || core == nil || log == nil || signer == nil {
 		return nil, fmt.Errorf("revoke: NewTerminalTransition requires repo, core store, log, and signer")
 	}
-	tt := &TerminalTransition{repo: repo, core: core, log: log, signer: signer, clock: func() int64 { return 0 }}
+	tt := &TerminalTransition{repo: repo, core: core, log: log, signer: signer, clock: func() int64 { return 0 }, verificationKey: append([]byte(nil), signer.Public().DER...)}
 	for _, opt := range opts {
 		opt(tt)
 	}
 	return tt, nil
+}
+
+// WithEvidenceVerificationKey pins the public evidence authority supplied by an
+// independent trust source. Replay readers need this even if their own signer
+// handle is different from the handle that signed the stored evidence.
+func WithEvidenceVerificationKey(publicKey []byte) TerminalOption {
+	return func(tt *TerminalTransition) {
+		tt.verificationKey = append([]byte(nil), publicKey...)
+	}
 }
 
 // TerminalOption configures a TerminalTransition.
@@ -134,7 +144,7 @@ func (tt *TerminalTransition) VerifyTerminal(ctx context.Context, tenantID, dire
 			verdict.Missing = append(verdict.Missing, j.IdempotencyKey)
 			continue
 		}
-		if err := VerifyCompletionEvidence(ev); err != nil {
+		if ev.TenantID != tenantID || ev.DirectiveID != directiveID || ev.IdempotencyKey != j.IdempotencyKey || ev.CredentialID != j.CredentialID || VerifyCompletionEvidence(ev, tt.verificationKey) != nil {
 			// Recorded but unverifiable evidence does not count as completion.
 			verdict.Missing = append(verdict.Missing, j.IdempotencyKey)
 			continue
@@ -221,6 +231,12 @@ func (tt *TerminalTransition) Transition(ctx context.Context, tenantID, directiv
 			return TransitionResult{}, err
 		}
 		if found {
+			if persisted.TenantID != tenantID || persisted.DirectiveID != directiveID ||
+				persisted.SubjectID != dir.SubjectID || persisted.ReasonClass != reason ||
+				persisted.JobCount != verdict.JobCount ||
+				VerifyAggregateOffline(persisted, verdict.EvidenceDigests, tt.verificationKey) != nil {
+				return TransitionResult{}, fmt.Errorf("revoke: persisted terminal artifact does not verify against the pinned evidence key")
+			}
 			encoded, err := EncodeAggregate(persisted)
 			if err != nil {
 				return TransitionResult{}, err

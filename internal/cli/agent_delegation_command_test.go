@@ -25,6 +25,7 @@ func TestAgentDelegationCommandsCoverServedRouteFamily(t *testing.T) {
 		"agent-delegation issuing-ca get":              "GET /api/v1/agent-delegation/issuing-ca",
 		"agent-delegation revocations incomplete-jobs": "GET /api/v1/agent-delegation/revocations/incomplete-jobs",
 		"agent-delegation revocations evidence":        "GET /api/v1/agent-delegation/revocations/evidence",
+		"agent-delegation revocations evidence-key":    "GET /api/v1/agent-delegation/revocations/evidence-key",
 	}
 	got := map[string]cli.Command{}
 	for _, command := range cli.Commands() {

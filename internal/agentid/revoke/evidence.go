@@ -3,6 +3,7 @@
 package revoke
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -21,8 +22,8 @@ const evidenceDomain = "agid/agentid/revocation-completion-evidence/v1"
 // was performed, the completion timestamp, and the executor identity — exactly the
 // fields the card enumerates. It is SIGNED (Signature over the canonical body via
 // internal/crypto, AN-3) so AGID-11's terminal state rests on unforgeable per-job
-// proof. PublicKey is the verifying key (PKIX/DER) so a relying party or the terminal
-// gate verifies offline without contacting the signer.
+// proof. PublicKey is the signer key's PKIX/DER hint; a relying party must
+// compare it with an independently retained pin before verifying offline.
 type CompletionEvidence struct {
 	TenantID       string      `json:"tenant_id"`
 	DirectiveID    string      `json:"directive_id"`
@@ -83,24 +84,20 @@ func signCompletionEvidence(signer crypto.Signer, e CompletionEvidence) (Complet
 	return e, body, nil
 }
 
-// VerifyCompletionEvidence checks the signature on a CompletionEvidence against its
-// embedded public key, over the canonical body. It is the offline verification the
-// AGID-11 terminal gate (and relying parties) run: it reconstructs the signed body
-// deterministically and calls internal/crypto Verify. A missing signature or public
-// key, or a signature that does not verify, is an error (fail-closed — unverifiable
-// evidence is not proof).
-func VerifyCompletionEvidence(e CompletionEvidence) error {
+// VerifyCompletionEvidence checks the signature against an independently pinned
+// public key. The embedded key is only a key identifier; it cannot authorize itself.
+func VerifyCompletionEvidence(e CompletionEvidence, pinnedPublicKey []byte) error {
 	if len(e.Signature) == 0 {
 		return fmt.Errorf("revoke: completion evidence has no signature")
 	}
-	if len(e.PublicKey) == 0 {
-		return fmt.Errorf("revoke: completion evidence has no public key")
+	if len(pinnedPublicKey) == 0 || !bytes.Equal(e.PublicKey, pinnedPublicKey) {
+		return fmt.Errorf("revoke: completion evidence key does not match the pinned key")
 	}
 	body, err := e.evidenceBodyBytes()
 	if err != nil {
 		return err
 	}
-	pub := crypto.PublicKey{DER: e.PublicKey}
+	pub := crypto.PublicKey{DER: pinnedPublicKey}
 	if err := crypto.Verify(pub, body, e.Signature, crypto.SignOptions{Hash: crypto.SHA256}); err != nil {
 		return fmt.Errorf("revoke: completion evidence signature invalid: %w", err)
 	}
@@ -111,7 +108,7 @@ func VerifyCompletionEvidence(e CompletionEvidence) error {
 // the detached signature + public key back into a CompletionEvidence. The body bytes
 // stored in the ledger are the domain-tagged canonical form produced by
 // evidenceBodyBytes; this strips the domain tag and unmarshals, then reattaches the
-// signature/public key so VerifyCompletionEvidence can re-derive and check them.
+// signature/public key so VerifyCompletionEvidence can check them against a pin.
 func decodeCompletionEvidence(body, sig, pub []byte) (CompletionEvidence, error) {
 	prefix := evidenceDomain + ":"
 	if len(body) < len(prefix) || string(body[:len(prefix)]) != prefix {

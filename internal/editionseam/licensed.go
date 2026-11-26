@@ -45,19 +45,20 @@ type LicensedAPIOptionsFactory func(LicensedAPIOptionsDeps) ([]api.Option, error
 type LicensedOutboxFactory func(LicensedOutboxDeps) (LicensedOutboxHandler, error)
 
 type LicensedAPIOptionsDeps struct {
-	Store              *store.Store
-	Log                *events.Log
-	Outbox             *orchestrator.Outbox
-	DefaultProfile     string
-	TLSPostureDeployer connector.TLSPostureDeployer
-	OutboxIntegrityKey seal.KeyWrapper
-	TenantCrypto       tenantseal.Access
-	SignerKeyStoreDir  string
-	AGIDRootAnchors    AgentRootAnchorProvisioner
-	AGIDAttestors      AgentAttestorProvisioner
-	AGIDIssuingCA      AgentIssuingCAReader
-	KEMCustody         KEMCustody
-	PCASLeafIssuer     PCASLeafIssuer
+	Store               *store.Store
+	Log                 *events.Log
+	Outbox              *orchestrator.Outbox
+	DefaultProfile      string
+	TLSPostureDeployer  connector.TLSPostureDeployer
+	OutboxIntegrityKey  seal.KeyWrapper
+	TenantCrypto        tenantseal.Access
+	SignerKeyStoreDir   string
+	AGIDEvidenceCustody *signing.Client
+	AGIDRootAnchors     AgentRootAnchorProvisioner
+	AGIDAttestors       AgentAttestorProvisioner
+	AGIDIssuingCA       AgentIssuingCAReader
+	KEMCustody          KEMCustody
+	PCASLeafIssuer      PCASLeafIssuer
 }
 
 // AgentRootAnchorProvisioner writes and reads only public tenant-bound trust
@@ -178,6 +179,7 @@ type LicensedOutboxDeps struct {
 	// SignerKeyStoreDir is this process's durable key directory. It need not share
 	// a volume with the isolated signer; public AGID trust crosses its RPC instead.
 	SignerKeyStoreDir    string
+	AGIDEvidenceCustody  *signing.Client
 	AGIDReachabilityKeys AgentReachabilityKeyProvisioner
 	// Minter is the out-of-process signer as a succession minter (INT-04); nil when no
 	// signer is configured. A PCAS licensed-outbox handler uses it to mint on a

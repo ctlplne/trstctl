@@ -118,18 +118,18 @@ func TestRevoke_PerJobSignedCompletionEvidence(t *testing.T) {
 		t.Fatal("evidence has no executor identity")
 	}
 
-	// The evidence is SIGNED and verifies against its embedded public key (unforgeable).
+	// The evidence is signed and verifies against an independent public-key pin.
 	if len(ev.Signature) == 0 || len(ev.PublicKey) == 0 {
 		t.Fatal("evidence is not signed (missing signature or public key)")
 	}
-	if err := revoke.VerifyCompletionEvidence(ev); err != nil {
+	if err := revoke.VerifyCompletionEvidence(ev, h.signer.Public().DER); err != nil {
 		t.Fatalf("completion evidence signature does not verify: %v", err)
 	}
 
 	// Tampering with any evidenced field breaks the signature (proves the sig binds it).
 	tampered := ev
 	tampered.CredentialID = "cred-tampered"
-	if err := revoke.VerifyCompletionEvidence(tampered); err == nil {
+	if err := revoke.VerifyCompletionEvidence(tampered, h.signer.Public().DER); err == nil {
 		t.Fatal("tampered evidence verified; the signature does not bind the credential")
 	}
 }

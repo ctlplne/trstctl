@@ -138,7 +138,16 @@ func TestRevoke_TerminalStateReplayVerifiable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("other signer: %v", err)
 	}
-	tt2, err := revoke.NewTerminalTransition(h.repo, h.core, h.log, otherSigner)
+	unpinned, err := revoke.NewTerminalTransition(h.repo, h.core, h.log, otherSigner)
+	if err != nil {
+		t.Fatalf("NewTerminalTransition (wrong pin): %v", err)
+	}
+	wrongVerdict, err := unpinned.VerifyTerminal(ctx, tenantA, res.DirectiveID)
+	if err != nil || wrongVerdict.Terminal {
+		t.Fatalf("unrelated replay key accepted stored completion proof: terminal=%t err=%v", wrongVerdict.Terminal, err)
+	}
+	tt2, err := revoke.NewTerminalTransition(h.repo, h.core, h.log, otherSigner,
+		revoke.WithEvidenceVerificationKey(h.signer.Public().DER))
 	if err != nil {
 		t.Fatalf("NewTerminalTransition (replay): %v", err)
 	}
@@ -194,7 +203,7 @@ func TestRevoke_AggregateEvidenceThirdPartyVerifiable(t *testing.T) {
 	if len(published) != 2 {
 		t.Fatalf("expected 2 published evidence digests, got %d", len(published))
 	}
-	if err := revoke.VerifyAggregateOffline(artifact, published); err != nil {
+	if err := revoke.VerifyAggregateOffline(artifact, published, h.signer.Public().DER); err != nil {
 		t.Fatalf("aggregate did not verify offline against the published digests: %v", err)
 	}
 
@@ -205,20 +214,20 @@ func TestRevoke_AggregateEvidenceThirdPartyVerifiable(t *testing.T) {
 	}
 
 	// Truncated set (drop one digest) fails closed.
-	if err := revoke.VerifyAggregateOffline(artifact, published[:1]); err == nil {
+	if err := revoke.VerifyAggregateOffline(artifact, published[:1], h.signer.Public().DER); err == nil {
 		t.Fatal("aggregate verified against a TRUNCATED digest set; offline verify is not fail-closed")
 	}
 
 	// Substituted digest fails closed.
 	bad := [][]byte{published[0], crypto.SHA256Sum([]byte("not-a-real-evidence-digest"))}
-	if err := revoke.VerifyAggregateOffline(artifact, bad); err == nil {
+	if err := revoke.VerifyAggregateOffline(artifact, bad, h.signer.Public().DER); err == nil {
 		t.Fatal("aggregate verified against a SUBSTITUTED digest; offline verify is not fail-closed")
 	}
 
 	// Tampering with the signed body (flip the bound subject) breaks the signature.
 	tampered := artifact
 	tampered.SubjectID = "someone-else"
-	if err := revoke.VerifyAggregateOffline(tampered, published); err == nil {
+	if err := revoke.VerifyAggregateOffline(tampered, published, h.signer.Public().DER); err == nil {
 		t.Fatal("tampered aggregate verified; the signature does not bind the body")
 	}
 }
@@ -288,7 +297,7 @@ func TestRevoke_AggregateArtifactBindsSubjectReasonWatermarkHead(t *testing.T) {
 			return a
 		}},
 	} {
-		if err := revoke.VerifyAggregateSignature(mut.f(artifact)); err == nil {
+		if err := revoke.VerifyAggregateSignature(mut.f(artifact), h.signer.Public().DER); err == nil {
 			t.Fatalf("mutating %s did not break the signature; the artifact does not bind it", mut.name)
 		}
 	}
