@@ -49,6 +49,16 @@ type ImportedCertificate struct {
 // about 8,000 components (each certificate, its key and its algorithms).
 const MaxImportComponents = 50000
 
+// An imported component can multiply its evidence locations by every cipher
+// suite it names. Check all three bounds before constructing findings.
+const (
+	MaxImportFindings     = 50000
+	maxImportOccurrences  = 256
+	maxImportCipherSuites = 256
+	maxImportTextBytes    = 4096
+	maxImportSuiteBytes   = 256
+)
+
 // ImportedBOM is what an import read from the document.
 type ImportedBOM struct {
 	SerialNumber string
@@ -253,7 +263,14 @@ func ParseCycloneDXImport(data []byte, source string, p Policy) (ImportedBOM, er
 	out := ImportedBOM{SerialNumber: strings.TrimSpace(doc.SerialNumber), Version: doc.Version, SpecVersion: doc.SpecVersion, Components: len(flat)}
 	graph := readDependencyGraph(doc.Dependencies, byRef)
 	for _, c := range flat {
-		for _, f := range importFindings(c, byRef, graph, source) {
+		if err := validateImportExpansion(c, source, MaxImportFindings-len(out.Findings)); err != nil {
+			return ImportedBOM{}, err
+		}
+		findings := importFindings(c, byRef, graph, source)
+		if len(findings) > MaxImportFindings-len(out.Findings) {
+			return ImportedBOM{}, fmt.Errorf("cbom: an import holds at most %d findings", MaxImportFindings)
+		}
+		for _, f := range findings {
 			out.Findings = append(out.Findings, f.Classified(p))
 		}
 	}
@@ -262,6 +279,54 @@ func ParseCycloneDXImport(data []byte, source string, p Policy) (ImportedBOM, er
 	}
 	sort.SliceStable(out.Findings, func(i, j int) bool { return out.Findings[i].Location < out.Findings[j].Location })
 	return out, nil
+}
+
+func validateImportExpansion(c importComponent, source string, remaining int) error {
+	if len(c.BOMRef) > maxImportTextBytes || len(c.Name) > maxImportTextBytes || len(c.Version) > maxImportTextBytes {
+		return errors.New("cbom: component reference, name or version is too long")
+	}
+	if c.Evidence != nil {
+		if len(c.Evidence.Occurrences) > maxImportOccurrences {
+			return fmt.Errorf("cbom: a component holds at most %d occurrences", maxImportOccurrences)
+		}
+		for _, occurrence := range c.Evidence.Occurrences {
+			if len(occurrence.Location) > maxImportTextBytes {
+				return errors.New("cbom: occurrence location is too long")
+			}
+		}
+	}
+	locations := occurrenceLocations(c, source)
+	factor := 0
+	if c.Type == "library" && cryptoLibraries[strings.ToLower(c.Name)] {
+		factor = 1
+	} else if c.Type == "cryptographic-asset" && c.CryptoProperties != nil {
+		switch c.CryptoProperties.AssetType {
+		case "algorithm", "related-crypto-material", "certificate":
+			factor = 1
+		case "protocol":
+			if pp := c.CryptoProperties.ProtocolProperties; pp != nil {
+				if len(pp.Type) > maxImportSuiteBytes || len(pp.Version) > maxImportSuiteBytes {
+					return errors.New("cbom: protocol type or version is too long")
+				}
+				if len(pp.CipherSuites) > maxImportCipherSuites {
+					return fmt.Errorf("cbom: a protocol holds at most %d cipher suites", maxImportCipherSuites)
+				}
+				if importedProtocol(pp.Type, pp.Version) != "" {
+					factor++
+				}
+				for _, suite := range pp.CipherSuites {
+					if strings.TrimSpace(suite.Name) == "" || len(suite.Name) > maxImportSuiteBytes {
+						return errors.New("cbom: cipher suite name must be nonempty and at most 256 bytes")
+					}
+					factor++
+				}
+			}
+		}
+	}
+	if factor > 0 && len(locations) > remaining/factor {
+		return fmt.Errorf("cbom: an import holds at most %d findings", MaxImportFindings)
+	}
+	return nil
 }
 
 func flattenComponents(in []importComponent, out []importComponent) []importComponent {
@@ -379,6 +444,7 @@ func versionSuffix(v string) string {
 // occurrence (with its line), or the component's reference when none is given.
 func occurrenceLocations(c importComponent, source string) []string {
 	var out []string
+	seen := map[string]struct{}{}
 	if c.Evidence != nil {
 		for _, o := range c.Evidence.Occurrences {
 			loc := strings.TrimSpace(o.Location)
@@ -388,7 +454,11 @@ func occurrenceLocations(c importComponent, source string) []string {
 			if o.Line > 0 {
 				loc += ":" + strconv.Itoa(o.Line)
 			}
-			out = append(out, source+":"+loc)
+			loc = source + ":" + loc
+			if _, exists := seen[loc]; !exists {
+				seen[loc] = struct{}{}
+				out = append(out, loc)
+			}
 		}
 	}
 	if len(out) == 0 {

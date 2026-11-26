@@ -500,7 +500,10 @@ or the algorithm of a key it depends on), and a certificate with no issuer name 
 the subject of a certificate it depends on. A reference into another BOM (`urn:cdx:`
 BOM-Link) is not followed. A document that is
 not a CycloneDX BOM, or holds no crypto, is refused; one import takes at most 50,000
-components and 32 MiB.
+components, 50,000 findings and 32 MiB. Each component may name at most 256
+evidence occurrences, and a protocol may name at most 256 nonempty cipher suites.
+Repeated evidence locations are counted once. Imports that exceed these limits
+are refused before multiplying locations by suites into findings.
 
 Each import is a discovery run keyed by the source and the BOM's serial number and
 version (its SHA-256 when it has no serial number). Importing the same BOM again returns
