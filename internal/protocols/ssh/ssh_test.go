@@ -17,6 +17,33 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+func TestKRLContainsAllRetainsEveryServedDenial(t *testing.T) {
+	older := NewKRL()
+	older.RevokeSerial(42)
+	older.RevokeKeyID("retired-host")
+	older.RevokeSerialRanges([][2]uint64{{100, 200}})
+	older.RevokeKey([]byte("key-blob"))
+	older.RevokeKeySHA1([]byte("sha1"))
+	older.RevokeKeySHA256([]byte("sha256"))
+	if !older.ContainsAll(older) {
+		t.Fatal("identical KRL dropped a denial")
+	}
+	current := older.Clone()
+	current.RevokeSerial(43)
+	if !current.ContainsAll(older) || older.ContainsAll(current) {
+		t.Fatal("KRL containment did not distinguish added revocation")
+	}
+	missing := NewKRL()
+	missing.RevokeSerialRanges([][2]uint64{{42, 42}, {100, 199}})
+	missing.RevokeKeyID("retired-host")
+	missing.RevokeKey([]byte("key-blob"))
+	missing.RevokeKeySHA1([]byte("sha1"))
+	missing.RevokeKeySHA256([]byte("sha256"))
+	if missing.ContainsAll(older) {
+		t.Fatal("KRL accepted a missing serial from an adopted range")
+	}
+}
+
 func newCA(t *testing.T, rec auditsink.Auditor) (*CA, crypto.DigestSigner) {
 	t.Helper()
 	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

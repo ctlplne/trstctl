@@ -83,12 +83,21 @@ type sshProtocol struct {
 	// deletion and retained-size changes force another full safety preflight.
 	verifiedSnapshot events.StreamSnapshot
 	replayCount      uint64 // guarded by syncMu; exposes repeated full scans to tests
+	// rebuild is private until a replacement generation has been read through
+	// its head and proven to retain every revocation already served to hosts.
+	rebuild *sshKRLRebuild
 	// listedIn maps each applied ssh.cert.revoked event's ID to the KRL
 	// version that first listed it (A245-L1), guarded by syncMu. A host whose
 	// installed list carries that version or a newer one enforces the
 	// revocation: served lists only grow, and a host refuses one that drops a
 	// revocation it enforces.
 	listedIn map[string]uint64
+}
+
+type sshKRLRebuild struct {
+	name       string
+	generation string
+	candidate  *sshProtocol
 }
 
 // sshMutationGuard wraps a raw SSH mutation in the API mutation guard for perm.
@@ -306,15 +315,19 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 	if err != nil {
 		return fmt.Errorf("server: inspect SSH revocation generation: %w", err)
 	}
-	if p.verifiedSnapshot.Generation != "" &&
-		(before.Name != p.verifiedSnapshot.Name || before.Generation != p.verifiedSnapshot.Generation) {
-		return errors.New("server: SSH revocation generation changed; reconcile the host KRL lineage before restarting this issuer")
+	generationChanged := p.verifiedSnapshot.Generation != "" &&
+		(before.Name != p.verifiedSnapshot.Name || before.Generation != p.verifiedSnapshot.Generation)
+	if generationChanged {
+		if err := p.log.HistoryRewriteReady(); err != nil {
+			return fmt.Errorf("server: SSH replacement generation lacks the signed rewrite verifier: %w", err)
+		}
 	}
-	if p.applied > before.LastSequence {
+	if !generationChanged && p.applied > before.LastSequence {
 		return errors.New("server: SSH revocation cursor is beyond the retained event log head")
 	}
 	started := time.Now()
 	if !force && before == p.verifiedSnapshot {
+		p.rebuild = nil
 		p.syncedFrom = started
 		return nil
 	}
@@ -325,17 +338,34 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 	// advance the live cursor or publish a partial revocation list.
 	// The candidate collects only this catch-up's revocations; they join
 	// listedIn when the catch-up is published.
-	candidate := &sshProtocol{krl: p.krl.Clone(), tenantID: p.tenantID, applied: p.applied, listedIn: map[string]uint64{}}
-	candidate.krlVersion.Store(p.krlVersion.Load())
+	var candidate *sshProtocol
+	if generationChanged {
+		if p.rebuild == nil || p.rebuild.name != before.Name || p.rebuild.generation != before.Generation {
+			p.rebuild = &sshKRLRebuild{name: before.Name, generation: before.Generation,
+				candidate: &sshProtocol{krl: ssh.NewKRL(), tenantID: p.tenantID, listedIn: map[string]uint64{}}}
+		}
+		previous := p.rebuild.candidate
+		candidate = &sshProtocol{krl: previous.krl.Clone(), tenantID: p.tenantID,
+			applied: previous.applied, listedIn: maps.Clone(previous.listedIn)}
+		candidate.krlVersion.Store(previous.krlVersion.Load())
+	} else {
+		p.rebuild = nil
+		candidate = &sshProtocol{krl: p.krl.Clone(), tenantID: p.tenantID,
+			applied: p.applied, listedIn: map[string]uint64{}}
+		candidate.krlVersion.Store(p.krlVersion.Load())
+	}
 	through := before.LastSequence
-	if limit != 0 && through-p.applied > limit {
-		through = p.applied + limit
+	if candidate.applied > through {
+		return errors.New("server: SSH revocation rebuild cursor is beyond the replacement head")
+	}
+	if limit != 0 && through-candidate.applied > limit {
+		through = candidate.applied + limit
 	}
 	p.replayCount++
 	// The indexed selector must include every event applyRevocationEvent can
 	// use to change the KRL. Omitting a type makes a durable PAM revocation
 	// invisible even though the decoder below knows how to apply it.
-	if err := p.log.ReplayTenantTypesThrough(ctx, p.tenantID, p.applied+1, through,
+	if err := p.log.ReplayTenantTypesThrough(ctx, p.tenantID, candidate.applied+1, through,
 		[]string{eventSSHCertRevoked, eventSSHKRLAdopted, projections.EventPAMSessionRevocationRequested, projections.EventPAMSSHSigningRecoveryRequested}, candidate.applyRevocationEvent); err != nil {
 		return fmt.Errorf("server: replay SSH revocations: %w", err)
 	}
@@ -352,13 +382,28 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 	if through > candidate.applied {
 		candidate.applied = through // a retained trailing gap is still covered
 	}
+	if generationChanged {
+		if through < before.LastSequence {
+			p.rebuild.candidate = candidate
+			p.syncedFrom = time.Time{}
+			return fmt.Errorf("%w: rebuilt %d of %d replacement positions", errSSHKRLBehind, through, before.LastSequence)
+		}
+		if !candidate.krl.ContainsAll(p.krl) || candidate.krlVersion.Load() < p.krlVersion.Load() {
+			return errors.New("server: replacement SSH revocation generation omits an already served denial")
+		}
+	}
 	p.krl = candidate.krl
 	p.krlVersion.Store(candidate.krlVersion.Load())
 	p.applied = candidate.applied
-	if p.listedIn == nil {
+	if generationChanged {
+		p.listedIn = candidate.listedIn
+		p.rebuild = nil
+	} else if p.listedIn == nil {
 		p.listedIn = make(map[string]uint64, len(candidate.listedIn))
 	}
-	maps.Copy(p.listedIn, candidate.listedIn)
+	if !generationChanged {
+		maps.Copy(p.listedIn, candidate.listedIn)
+	}
 	if through < before.LastSequence {
 		// Keep the verified head and poll throttle behind the source. The
 		// partial projection is private to this process; every served read

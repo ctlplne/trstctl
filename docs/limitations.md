@@ -8345,7 +8345,12 @@ approval standing (A245-L5). What it reads from, and what comes next:
   KRL enforces a list at or past the version that first listed it. A host that
   runs no KRL watcher reports nothing and is not counted, so a fleet with such
   hosts reads verified on the reporting ones alone; the KRL fleet view lists the
-  hosts that report.
+  hosts that report. After a signed privacy or retention rewrite switches the
+  event generation, the served SSH CA rebuilds its KRL in bounded private
+  pages. It serves the replacement only after reading the new head and proving
+  that every previously served denial remains present. A rewrite that removes
+  a denial keeps SSH KRL reads and readiness unavailable until the history is
+  repaired; an unrelated tenant's erasure does not latch the SSH CA offline.
 - **Sessions are counted on Linux hosts only (A245-L2).** Existing sessions read
   confirmed from a containment stop or removal receipt after the revocation, or
   from a Linux host agent's own count, taken right after it deploys or renews a

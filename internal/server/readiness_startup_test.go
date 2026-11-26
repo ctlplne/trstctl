@@ -41,8 +41,8 @@ func TestReadinessProvesSSHKRLAndAuditReads(t *testing.T) {
 
 	ssh := h.srv.protocols.ssh
 	ssh.syncMu.Lock()
-	verified := ssh.verifiedSnapshot
-	ssh.verifiedSnapshot.Generation = "another-generation"
+	verifiedCursor := ssh.applied
+	ssh.applied = ssh.verifiedSnapshot.LastSequence + 1
 	ssh.syncedFrom = time.Time{}
 	ssh.syncMu.Unlock()
 	code, checks = readyz()
@@ -55,7 +55,7 @@ func TestReadinessProvesSSHKRLAndAuditReads(t *testing.T) {
 	}
 
 	ssh.syncMu.Lock()
-	ssh.verifiedSnapshot = verified
+	ssh.applied = verifiedCursor
 	ssh.syncedFrom = time.Time{}
 	ssh.syncMu.Unlock()
 	if code, checks = readyz(); code != http.StatusOK || checks["ssh_krl"] != "ok" {

@@ -1455,7 +1455,7 @@ not this file.
 | `internal/protocols/est/property_test.go:142` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/protocols/est/property_test.go:155` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/protocols/ssh/krl_binary_test.go:29` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/protocols/ssh/ssh.go:528` | SSH wire string length, far under the uint32 bound for certificate fields (CWE-190) |
+| `internal/protocols/ssh/ssh.go:567` | SSH wire string length, far under the uint32 bound for certificate fields (CWE-190) |
 | `internal/query/adversarial_test.go:52` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/reconcile/stepcasource_test.go:50` | a TCP port from the kernel (CWE-190) |
 | `internal/scancollect/cilogs.go:187` | bounded by the archive's own size check below (CWE-190) |
@@ -2114,7 +2114,7 @@ not this file.
 | `internal/protocols/ssh/krl_binary_test.go:197` | fixed reference tool and task-owned test files (CWE-78) |
 | `internal/protocols/ssh/krl_binary_test.go:289` | fixed reference tool and task-owned test files (CWE-78) |
 | `internal/protocols/ssh/krl_binary_test.go:293` | fixed reference tool and task-owned test files (CWE-78) |
-| `internal/protocols/ssh/ssh_test.go:66` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/protocols/ssh/ssh_test.go:93` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:264` | fixed docker subcommands with test-owned arguments (CWE-78) |
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:278` | fixed docker cleanup of test-owned resources (CWE-78) |
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:321` | fixed docker probe of the test's own container (CWE-78) |
@@ -3474,7 +3474,7 @@ not this file.
 | `internal/projections/discovery_store_test.go:93` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/discovery_store_test.go:96` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:225` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/protocols/ssh/ssh_test.go:63` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/protocols/ssh/ssh_test.go:90` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:423` | step-ca's lab config, read by the container's user (CWE-276) |
 | `internal/reconcile/kmipsource_pykmip_test.go:67` | test-named files in the test's temp dir, readable by the container's server user (CWE-22, CWE-276) |
 | `internal/reconcile/kmipsource_pykmip_test.go:80` | a public certificate (CWE-276) |

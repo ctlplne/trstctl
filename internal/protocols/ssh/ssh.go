@@ -284,6 +284,45 @@ func (k *KRL) Clone() *KRL {
 	return out
 }
 
+// ContainsAll reports whether this list still denies every entry in older.
+// A history rewrite may replace the event stream, but it must never make a
+// certificate that an already distributed KRL denied usable again.
+func (k *KRL) ContainsAll(older *KRL) bool {
+	current, previous := k.Clone(), older.Clone()
+	for serial := range previous.serials {
+		if !current.serials[serial] && !current.inRange(serial) {
+			return false
+		}
+	}
+	for id := range previous.keyIDs {
+		if !current.keyIDs[id] {
+			return false
+		}
+	}
+	for _, oldRange := range previous.ranges {
+		covered := false
+		for _, newRange := range current.ranges {
+			if newRange.lo <= oldRange.lo && newRange.hi >= oldRange.hi {
+				covered = true
+				break
+			}
+		}
+		if !covered && (oldRange.lo != oldRange.hi || !current.serials[oldRange.lo]) {
+			return false
+		}
+	}
+	for _, pair := range []struct{ old, now map[string]bool }{
+		{previous.keys, current.keys}, {previous.sha1, current.sha1}, {previous.sha256, current.sha256},
+	} {
+		for value := range pair.old {
+			if !pair.now[value] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // RevokeSerialRanges revokes every serial in each inclusive [lo, hi] pair.
 // Serial zero names no certificate, so a pair starting at zero or inverted is
 // ignored; callers validate before recording.
