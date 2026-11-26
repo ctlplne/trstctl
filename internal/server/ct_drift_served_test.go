@@ -622,6 +622,18 @@ func TestServedDriftRemediationDashboardRecordsOperatorDecision(t *testing.T) {
 	if row.RecommendedAction == "" || !containsString(row.AvailableDecisions, "investigate") || !containsString(row.EvidenceRefs, "discovery.finding:"+findingID) {
 		t.Fatalf("drift dashboard row lacks remediation/evidence affordances: %+v", row)
 	}
+	headBeforeInvalidDecision, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/drift-remediation/"+findingID+"/decision", tok,
+		"trace-invalid-drift-managed-id", map[string]any{"decision": "mark_managed", "managed_identity_id": "not-a-uuid"})
+	if status != http.StatusBadRequest {
+		t.Fatalf("invalid drift managed ID status %d, want 400: %s", status, body)
+	}
+	if headAfter, err := h.log.LastSequence(t.Context()); err != nil || headAfter != headBeforeInvalidDecision {
+		t.Fatalf("invalid drift managed ID appended an event: head %d -> %d, err %v", headBeforeInvalidDecision, headAfter, err)
+	}
 
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/drift-remediation/"+findingID+"/decision", tok, "trace-005-drift-decision", map[string]any{
 		"decision": "investigate",

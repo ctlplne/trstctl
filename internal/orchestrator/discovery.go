@@ -44,6 +44,8 @@ var ErrDiscoveryScheduleNotDue = errors.New("orchestrator: discovery schedule is
 // operator's retained pause/retirement decision.
 var ErrDiscoveryScheduleInactive = errors.New("orchestrator: discovery schedule is paused or retired")
 
+var ErrDiscoveryManagedIdentityIDInvalid = errors.New("orchestrator: managed identity ID must be a UUID")
+
 // ErrDiscoveryRelayUnavailable means relay-owned work has no enrolled agent that
 // can claim it. Keeping this as a typed admission error lets the API return a
 // truthful conflict instead of recording a queued run that cannot start.
@@ -960,6 +962,14 @@ func (o *Orchestrator) TriageDiscoveryFinding(ctx context.Context, tenantID, fin
 }
 
 func (o *Orchestrator) triageDiscoveryFinding(ctx context.Context, tenantID, findingID string, status discovery.TriageStatus, managedIdentityID *string, reason string, metadataPatch json.RawMessage) (store.DiscoveryFinding, error) {
+	if managedIdentityID != nil {
+		id, err := uuid.Parse(*managedIdentityID)
+		if err != nil {
+			return store.DiscoveryFinding{}, ErrDiscoveryManagedIdentityIDInvalid
+		}
+		canonical := id.String()
+		managedIdentityID = &canonical
+	}
 	current, err := o.store.GetDiscoveryFinding(ctx, tenantID, findingID)
 	if err != nil {
 		return store.DiscoveryFinding{}, err

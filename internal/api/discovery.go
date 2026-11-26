@@ -1505,6 +1505,9 @@ func (a *API) dismissDiscoveryFinding(w http.ResponseWriter, r *http.Request) {
 }
 
 func discoveryTriageError(err error) error {
+	if errors.Is(err, orchestrator.ErrDiscoveryManagedIdentityIDInvalid) {
+		return errStatus(http.StatusBadRequest, "managed_identity_id must be a UUID")
+	}
 	if errors.Is(err, discovery.ErrInvalidTriageTransition) {
 		return errStatusFrom(http.StatusConflict, err)
 	}

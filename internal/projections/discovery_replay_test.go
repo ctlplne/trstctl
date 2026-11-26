@@ -26,6 +26,39 @@ const (
 	aud101LaterSSH       = "00000000-0000-4000-8000-000000010102"
 )
 
+func TestDiscoveryTriageReplayKeepsDecisionWithoutMalformedManagedIdentity(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	log := openLog(t)
+	p := projections.New(s)
+	appendAUD96DiscoveryBase(t, log)
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	mustAppendDiscoveryFindingAUD96(t, log, aud96EarlierFinding, time.Now().UTC(), 50, `{}`)
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	badID := "not-a-uuid"
+	mustAppend(t, log, events.Event{
+		Type: projections.EventDiscoveryFindingTriageChanged, TenantID: tenantA,
+		Data: mustJSONAUD96(t, projections.DiscoveryFindingTriageChanged{
+			ID: aud96EarlierFinding, Status: string(discovery.TriageManaged),
+			ManagedIdentityID: &badID, Actor: "operator@example.test",
+		}),
+	})
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("historical malformed managed_identity_id stopped catch-up: %v", err)
+	}
+	got, err := s.GetDiscoveryFinding(ctx, tenantA, aud96EarlierFinding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TriageStatus != string(discovery.TriageManaged) || got.ManagedIdentityID != nil {
+		t.Fatalf("triage after replay = status %q managed ID %v, want managed with malformed link omitted", got.TriageStatus, got.ManagedIdentityID)
+	}
+}
+
 func TestDiscoveryFindingReplayCanonicalizesLegacyDuplicateAndPreservesTriageAUD96(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)

@@ -8165,6 +8165,14 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		// An older log may contain a non-UUID managed identity reference.
+		// Preserve the triage decision, but omit the link PostgreSQL cannot
+		// represent, so catch-up can advance past that historical event.
+		if pl.ManagedIdentityID != nil {
+			if _, err := uuid.Parse(*pl.ManagedIdentityID); err != nil {
+				pl.ManagedIdentityID = nil
+			}
+		}
 		if err := p.store.ApplyDiscoveryFindingTriageChangedTx(ctx, tx, store.DiscoveryFindingTriageChange{
 			TenantID: e.TenantID, FindingID: pl.ID, Status: pl.Status,
 			ManagedIdentityID: pl.ManagedIdentityID, Actor: pl.Actor, Reason: pl.Reason,

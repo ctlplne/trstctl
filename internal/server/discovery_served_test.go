@@ -823,6 +823,18 @@ func TestServedShadowUnmanagedNHIDetectionCAPNHI05EndToEnd(t *testing.T) {
 	if managedFindingID == "" {
 		t.Fatalf("could not find managed seed finding in %+v", findings.Items)
 	}
+	headBeforeInvalidClaim, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/findings/"+managedFindingID+"/claim", tok,
+		map[string]any{"managed_identity_id": "not-a-uuid", "reason": "invalid claim must not enter the event log"})
+	if status != http.StatusBadRequest {
+		t.Fatalf("invalid claim status %d, want 400: %s", status, body)
+	}
+	if headAfter, err := h.log.LastSequence(t.Context()); err != nil || headAfter != headBeforeInvalidClaim {
+		t.Fatalf("invalid claim appended an event: head %d -> %d, err %v", headBeforeInvalidClaim, headAfter, err)
+	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/findings/"+managedFindingID+"/claim", tok, map[string]any{
 		"managed_identity_id": "11111111-1111-4111-8111-111111111111",

@@ -1394,7 +1394,9 @@ event-sourced. `triage_status` starts as `unmanaged`; the state model also inclu
 `accepted_risk`. `POST
 /api/v1/discovery/findings/{id}/claim` marks a finding managed, and `POST
 /api/v1/discovery/findings/{id}/dismiss` dismisses it with a reason. Both are
-tenant-scoped, idempotent mutations guarded by `discovery:write`.
+tenant-scoped, idempotent mutations guarded by `discovery:write`. The optional
+`managed_identity_id` on a claim, and on a drift `mark_managed` decision, must
+be a UUID; malformed values return `400` before an event is appended.
 
 `POST /api/v1/discovery/findings/{id}/resolution` (A106, `discovery:write`)
 records a resolution with a `reason` and an `action`: `investigate` (an
