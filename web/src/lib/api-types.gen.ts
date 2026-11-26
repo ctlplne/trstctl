@@ -4511,12 +4511,14 @@ export interface DiscoveryFindingTriageRequest {
 
 export interface DiscoveryMonitoring {
   findings_path: string;
+  next_cursor: string;
   repository_path: string;
   runs_path: string;
   schedules_path: string;
   sources: DiscoveryMonitoringSource[];
   sources_path: string;
   summary: DiscoveryMonitoringSummary;
+  summary_scope: string;
 }
 
 export interface DiscoveryMonitoringSource {

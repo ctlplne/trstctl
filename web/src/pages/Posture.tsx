@@ -94,7 +94,7 @@ export function Posture() {
       const [sourceResult, runResult, monitoringResult] = await Promise.allSettled([
         api.discoverySources({ limit: 50 }),
         api.discoveryRuns({ limit: 50 }),
-        api.discoveryMonitoring(),
+        api.discoveryMonitoring({ limit: 100 }),
       ]);
       if (cancelled) return;
 

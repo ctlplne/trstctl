@@ -155,20 +155,22 @@ function readCodeSigningHealth(): Promise<{ total: number; failures: number } | 
     });
 }
 
-function readDiscoveryHealth(): Promise<{ sources: number; openFindings: number; failedRuns: number } | null> {
+function readDiscoveryHealth(): Promise<{ sources: string; openFindings: string; failedRuns: number; more: boolean } | null> {
   const client = api as typeof api & {
-    discoveryMonitoring?: () => Promise<{
+    discoveryMonitoring?: (options?: { limit?: number }) => Promise<{
       summary?: { source_count?: number; open_finding_count?: number; failed_run_count?: number };
+      next_cursor?: string;
     }>;
   };
   if (!client.discoveryMonitoring) return Promise.resolve(null);
-  return Promise.resolve(client.discoveryMonitoring())
+  return Promise.resolve(client.discoveryMonitoring({ limit: 100 }))
     .then((result) => {
       if (!result?.summary) return null;
       return {
-        sources: Number(result.summary.source_count ?? 0),
-        openFindings: Number(result.summary.open_finding_count ?? 0),
+        sources: `${Number(result.summary.source_count ?? 0)}${result.next_cursor ? "+" : ""}`,
+        openFindings: `${Number(result.summary.open_finding_count ?? 0)}${result.next_cursor ? "+" : ""}`,
         failedRuns: Number(result.summary.failed_run_count ?? 0),
+        more: Boolean(result.next_cursor),
       };
     })
     .catch((error: unknown) => {
@@ -567,11 +569,11 @@ export function Dashboard() {
                 : discoveryHealth.data === null
                   ? t("dashboard.workspaceHealth.unavailable")
                   : t("dashboard.workspaceHealth.discovery", {
-                      sources: String(discoveryHealth.data.sources),
-                      findings: String(discoveryHealth.data.openFindings),
+                      sources: discoveryHealth.data.sources,
+                      findings: discoveryHealth.data.openFindings,
                     })
             }
-            urgent={!discoveryHealth.loading && (discoveryHealth.data === null || discoveryHealth.data.failedRuns > 0)}
+            urgent={!discoveryHealth.loading && (discoveryHealth.data === null || discoveryHealth.data.failedRuns > 0 || discoveryHealth.data.more)}
           />
           <WorkspaceHealthLink
             to="/certificates"

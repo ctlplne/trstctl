@@ -137,26 +137,33 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 	if s.store == nil {
 		return nil, nil, nil, nil
 	}
-	monitoring, err := s.store.ListDiscoveryMonitoringSources(ctx, tenantID)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	sources := make([]api.ADCSInventorySource, 0)
-	for _, source := range monitoring {
-		if source.Kind != adcs.SourceKind {
-			continue
+	after := store.ZeroUUID
+	for {
+		monitoring, err := s.store.ListADCSDiscoveryMonitoringSourcesPage(ctx, tenantID, after, 100)
+		if err != nil {
+			return nil, nil, nil, err
 		}
-		status := source.LastRunStatus
-		if status == "" || status == "queued" {
-			status = "pending"
+		if len(sources)+len(monitoring) > 1000 {
+			return nil, nil, nil, fmt.Errorf("AD CS posture source limit exceeded")
 		}
-		sources = append(sources, api.ADCSInventorySource{
-			SourceID: source.SourceID, Name: source.Name,
-			ScheduleID: source.ScheduleID, ScheduleEnabled: source.ScheduleEnabled,
-			MonitoringIntervalSeconds: source.MonitoringIntervalSeconds,
-			LastRunID:                 source.LastRunID, LastRunStatus: status, LastRunError: source.LastRunError,
-			LastRunCreatedAt: source.LastRunCreatedAt, LastRunCompletedAt: source.LastRunCompletedAt,
-		})
+		for _, source := range monitoring {
+			status := source.LastRunStatus
+			if status == "" || status == "queued" {
+				status = "pending"
+			}
+			sources = append(sources, api.ADCSInventorySource{
+				SourceID: source.SourceID, Name: source.Name,
+				ScheduleID: source.ScheduleID, ScheduleEnabled: source.ScheduleEnabled,
+				MonitoringIntervalSeconds: source.MonitoringIntervalSeconds,
+				LastRunID:                 source.LastRunID, LastRunStatus: status, LastRunError: source.LastRunError,
+				LastRunCreatedAt: source.LastRunCreatedAt, LastRunCompletedAt: source.LastRunCompletedAt,
+			})
+		}
+		if len(monitoring) < 100 {
+			break
+		}
+		after = monitoring[len(monitoring)-1].SourceID
 	}
 	rows, err := s.store.ListADCSTemplatePosture(ctx, tenantID, 500)
 	if err != nil {

@@ -2567,7 +2567,7 @@ export interface Api {
   retryDiscoveryRun(id: string): Promise<DiscoveryRun>;
   /** AUD-O1: run the weak-key audit now, or the run already queued or running. */
   runWeakKeyAudit(): Promise<DiscoveryRun>;
-  discoveryMonitoring(): Promise<DiscoveryMonitoring>;
+  discoveryMonitoring(options?: { limit?: number; cursor?: string }): Promise<DiscoveryMonitoring>;
   /** F1: AD CS certificate template posture observed by an in-domain relay. */
   adcsPosture(): Promise<ADCSPosture>;
   adcsDrift(): Promise<ADCSDriftHistory>;
@@ -3611,7 +3611,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
   retryDiscoveryRun: (id) => mutate<DiscoveryRun>("POST", `/api/v1/discovery/runs/${encodeURIComponent(id)}/retry`),
   runWeakKeyAudit: () => mutate<DiscoveryRun>("POST", "/api/v1/discovery/weak-key-audit/runs"),
-  discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
+  discoveryMonitoring: (options) => req<DiscoveryMonitoring>(`/api/v1/discovery/monitoring${pageQueryString(options)}`),
   adcsPosture: () => req<ADCSPosture>("/api/v1/posture/adcs"),
   adcsDrift: () => req<ADCSDriftHistory>("/api/v1/posture/adcs/drift"),
   adcsIssuerHealth: () => req<ADCSIssuerHealthList>("/api/v1/adcs/issuers/health"),

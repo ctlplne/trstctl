@@ -52,6 +52,39 @@ func TestDiscoverySourceCreationIgnoresUnrelatedProjectionLag(t *testing.T) {
 	}
 }
 
+func TestDiscoverySourceQuotaRejectsBeforeEventAppend(t *testing.T) {
+	s, log, _ := recordingSpine(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		for i := range 1000 {
+			id := fmt.Sprintf("00000000-0000-4000-8000-%012d", 400000+i)
+			if err := s.ApplyDiscoverySourceUpsertedTx(ctx, tx, store.DiscoverySource{
+				ID: id, TenantID: tenantA, Kind: "manual", Name: "source-" + id,
+				Config: []byte(`{}`), CreatedAt: now, UpdatedAt: now,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = orchestrator.NewOrchestrator(log, s, nil).UpsertDiscoverySource(ctx, tenantA,
+		store.DiscoverySource{Kind: "manual", Name: "over-quota"})
+	if !errors.Is(err, orchestrator.ErrDiscoverySourceQuota) {
+		t.Fatalf("new source at quota = %v", err)
+	}
+	after, err := log.LastSequence(ctx)
+	if err != nil || after != before {
+		t.Fatalf("quota rejection appended an event: before=%d after=%d err=%v", before, after, err)
+	}
+}
+
 func TestDiscoverySourceMissingUnprojectedEventFailsClosed(t *testing.T) {
 	s, log, _ := recordingSpine(t)
 	ctx := t.Context()

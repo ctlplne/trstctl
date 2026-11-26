@@ -260,7 +260,7 @@ old failed run remains in the audit trail.
 
 ### Continuous monitoring rollup
 
-`GET /api/v1/discovery/monitoring` (CLI: `trstctl discovery monitoring`) is a single
+`GET /api/v1/discovery/monitoring` (CLI: `trstctl discovery monitoring`) is a paged
 read-side rollup over the tenant's discovery sources, enabled schedules, last runs,
 findings, and certificate inventory — it creates no new state and joins the same
 `discovery.*` and `certificate.recorded` projections other endpoints already read. Each
@@ -271,6 +271,12 @@ finding counts, and pointers to `/api/v1/certificates` and
 **Monitoring and exact scan evidence**. The credentials needing a decision appear
 first; operators can still expand the underlying CT, drift, coverage, source,
 schedule, run, and repository-path proof when they need to verify or troubleshoot it.
+The route accepts `limit` (1–100, default 20) and an opaque `cursor`, and returns
+`next_cursor`. `summary_scope: "page"` means each count covers only the returned
+sources. The console loads 100 at a time and sums the pages operators open; its
+dashboard shows a `+` after counts if more sources remain. New source declarations
+are limited to 64 KiB of config and 1,000 sources per tenant. Existing sources
+remain readable through bounded pages.
 
 ### Agent-based discovery (F3) — what each host can see from the inside
 

@@ -805,6 +805,16 @@ func (s *Store) GetDiscoverySourceByName(ctx context.Context, tenantID, name str
 	return out, err
 }
 
+// CountDiscoverySources is used under the tenant's source-creation fence before
+// appending a new declaration. It deliberately counts projected source rows only.
+func (s *Store) CountDiscoverySources(ctx context.Context, tenantID string) (int, error) {
+	var count int
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*)::integer FROM discovery_sources WHERE tenant_id = $1`, tenantID).Scan(&count)
+	})
+	return count, err
+}
+
 // ListDiscoverySourcesPage lists tenant sources by id keyset.
 func (s *Store) ListDiscoverySourcesPage(ctx context.Context, tenantID, afterID string, limit int) ([]DiscoverySource, error) {
 	var out []DiscoverySource
@@ -1119,14 +1129,35 @@ func (s *Store) ListCTFindingsBySerial(ctx context.Context, tenantID, serial, ex
 	return out, err
 }
 
-// ListDiscoveryMonitoringSources returns a tenant-scoped centralized monitoring
-// rollup. It reads only projected tables, so replaying the event log rebuilds the
-// data this query summarizes.
-func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID string) ([]DiscoveryMonitoringSource, error) {
+// ListDiscoveryMonitoringSourcesPage returns at most limit tenant sources. The
+// keyset predicate applies before the expensive per-source rollups and before
+// config is sent to the API for readiness preview.
+func (s *Store) ListDiscoveryMonitoringSourcesPage(ctx context.Context, tenantID, afterID string, limit int) ([]DiscoveryMonitoringSource, error) {
+	return s.listDiscoveryMonitoringSourcesPage(ctx, tenantID, "", afterID, limit, true)
+}
+
+// ListADCSDiscoveryMonitoringSourcesPage reads only AD CS source metadata for
+// posture. The caller has no use for configs, so the query does not detoast them.
+func (s *Store) ListADCSDiscoveryMonitoringSourcesPage(ctx context.Context, tenantID, afterID string, limit int) ([]DiscoveryMonitoringSource, error) {
+	return s.listDiscoveryMonitoringSourcesPage(ctx, tenantID, "adcs", afterID, limit, false)
+}
+
+func (s *Store) listDiscoveryMonitoringSourcesPage(ctx context.Context, tenantID, kind, afterID string, limit int, includeConfig bool) ([]DiscoveryMonitoringSource, error) {
+	if limit < 1 || limit > 100 {
+		return nil, fmt.Errorf("discovery monitoring page limit must be 1-100")
+	}
 	var out []DiscoveryMonitoringSource
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT s.id::text,
+			`WITH source_page AS MATERIALIZED (
+			    SELECT id, tenant_id, kind, name,
+			           CASE WHEN $5::boolean AND octet_length(config::text) <= 65536 THEN config ELSE NULL::jsonb END AS config,
+			           created_at, updated_at
+			      FROM discovery_sources
+			     WHERE tenant_id = $1 AND id > $2::uuid AND ($4::text = '' OR kind = $4)
+			     ORDER BY id LIMIT $3
+			)
+			SELECT s.id::text,
 			        s.tenant_id::text,
 			        s.kind,
 			        s.name,
@@ -1152,7 +1183,7 @@ func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID str
 			        finding_counts.finding_count,
 			        finding_counts.open_finding_count,
 			        cert_counts.certificate_inventory_count
-			   FROM discovery_sources s
+			   FROM source_page s
 		  LEFT JOIN LATERAL (
 			        SELECT ds.id::text, ds.enabled, ds.interval_seconds, ds.updated_at
 			          FROM discovery_schedules ds
@@ -1186,9 +1217,9 @@ func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID str
 			          FROM certificates c
 			         WHERE c.tenant_id = $1 AND c.source = 'discovery:' || s.kind
 		       ) cert_counts ON true
-			  WHERE s.tenant_id = $1
-			  ORDER BY s.kind, s.name, s.id`,
-			tenantID)
+			  ORDER BY s.id
+			  `,
+			tenantID, afterID, limit, kind, includeConfig)
 		if err != nil {
 			return err
 		}

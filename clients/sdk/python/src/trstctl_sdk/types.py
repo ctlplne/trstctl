@@ -6279,12 +6279,14 @@ DiscoveryMonitoring = TypedDict(
     'DiscoveryMonitoring',
     {
         'findings_path': str,
+        'next_cursor': str,
         'repository_path': str,
         'runs_path': str,
         'schedules_path': str,
         'sources': list[dict[str, Any]],
         'sources_path': str,
         'summary': dict[str, Any],
+        'summary_scope': str,
     },
     total=False,
 )

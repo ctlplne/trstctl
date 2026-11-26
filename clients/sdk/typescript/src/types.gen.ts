@@ -4915,7 +4915,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get continuous monitoring and centralized inventory posture */
+        /** Get a page of continuous monitoring and centralized inventory posture */
         get: operations["getDiscoveryMonitoring"];
         put?: never;
         post?: never;
@@ -18579,12 +18579,14 @@ export interface components {
         };
         DiscoveryMonitoring: {
             findings_path: string;
+            next_cursor: string;
             repository_path: string;
             runs_path: string;
             schedules_path: string;
             sources: components["schemas"]["DiscoveryMonitoringSource"][];
             sources_path: string;
             summary: components["schemas"]["DiscoveryMonitoringSummary"];
+            summary_scope: string;
         };
         DiscoveryMonitoringSource: {
             blocked_reasons?: string[];
@@ -44534,7 +44536,12 @@ export interface operations {
     };
     getDiscoveryMonitoring: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size (1-100; default 20) */
+                limit?: number;
+                /** @description Opaque next_cursor from the preceding page */
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -14824,6 +14824,11 @@ export const messages = {
     defaultMessage: "Continuous monitoring",
     description: "Heading for the discovery continuous monitoring posture panel.",
   },
+  "discovery.monitoring.pageScope": {
+    defaultMessage: "Counts cover loaded sources. Load more to include the next page.",
+    description: "Scope of the bounded monitoring rollup.",
+  },
+  "discovery.monitoring.loadMore": { defaultMessage: "Load more monitoring sources", description: "Read the next bounded monitoring page." },
   "discovery.monitoring.metricSources": {
     defaultMessage: "Sources",
     description: "Metric label for total discovery monitoring sources.",

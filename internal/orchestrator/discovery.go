@@ -56,6 +56,9 @@ var ErrDiscoveryRelayUnavailable = errors.New("orchestrator: no eligible network
 // existing source would turn old runs into evidence for a different collector.
 var ErrDiscoverySourceIdentityConflict = errors.New("orchestrator: discovery source identity is already bound")
 
+var ErrDiscoverySourceConfigTooLarge = errors.New("orchestrator: discovery source config exceeds 64 KiB")
+var ErrDiscoverySourceQuota = errors.New("orchestrator: tenant discovery source limit of 1000 reached")
+
 // ErrDiscoveryScheduleIdentityConflict means a tenant-local schedule name or
 // ID already belongs to another declaration. A second event would fail the
 // unique read-model projection and obstruct ordered replay.
@@ -154,6 +157,9 @@ func (o *Orchestrator) UpsertDiscoverySource(ctx context.Context, tenantID strin
 // and inline projection. A separate replica cannot accept a competing first
 // declaration while the winner has appended but not yet projected its event.
 func (o *Orchestrator) upsertDiscoverySourceFenced(ctx context.Context, tenantID string, in store.DiscoverySource) (store.DiscoverySource, error) {
+	if len(in.Config) > 64*1024 {
+		return store.DiscoverySource{}, ErrDiscoverySourceConfigTooLarge
+	}
 	name := strings.TrimSpace(in.Name)
 	id := in.ID
 	byName, nameErr := o.store.GetDiscoverySourceByName(ctx, tenantID, name)
@@ -170,6 +176,7 @@ func (o *Orchestrator) upsertDiscoverySourceFenced(ctx context.Context, tenantID
 			return store.DiscoverySource{}, ErrDiscoverySourceIdentityConflict
 		}
 	}
+	existingByID := false
 	if id == "" {
 		switch {
 		case nameErr == nil:
@@ -188,6 +195,16 @@ func (o *Orchestrator) upsertDiscoverySourceFenced(ctx context.Context, tenantID
 		}
 		if idErr == nil && byID.Kind != in.Kind {
 			return store.DiscoverySource{}, ErrDiscoverySourceIdentityConflict
+		}
+		existingByID = idErr == nil
+	}
+	if errors.Is(nameErr, pgx.ErrNoRows) && !existingByID {
+		count, err := o.store.CountDiscoverySources(ctx, tenantID)
+		if err != nil {
+			return store.DiscoverySource{}, err
+		}
+		if count >= 1000 {
+			return store.DiscoverySource{}, ErrDiscoverySourceQuota
 		}
 	}
 	cfg := in.Config

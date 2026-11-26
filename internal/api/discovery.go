@@ -618,6 +618,8 @@ type DiscoveryMonitoring struct {
 	RunsPath       string                      `json:"runs_path"`
 	Summary        DiscoveryMonitoringSummary  `json:"summary"`
 	Sources        []DiscoveryMonitoringSource `json:"sources"`
+	NextCursor     string                      `json:"next_cursor"`
+	SummaryScope   string                      `json:"summary_scope"`
 }
 
 type DiscoveryMonitoringSummary struct {
@@ -1029,6 +1031,12 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 			Kind: kind, Name: strings.TrimSpace(req.Name), Config: cfg,
 		})
 		if err != nil {
+			if errors.Is(err, orchestrator.ErrDiscoverySourceConfigTooLarge) {
+				return 0, nil, errStatusFrom(http.StatusRequestEntityTooLarge, err)
+			}
+			if errors.Is(err, orchestrator.ErrDiscoverySourceQuota) {
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
+			}
 			return 0, nil, err
 		}
 		return http.StatusCreated, toDiscoverySourceResponse(src), nil
@@ -1377,7 +1385,12 @@ func (a *API) listDiscoveryMonitoring(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	rows, err := a.store.ListDiscoveryMonitoringSources(r.Context(), tenantID)
+	limit, after, err := a.pageParams(r)
+	if err != nil {
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
+		return
+	}
+	rows, err := a.store.ListDiscoveryMonitoringSourcesPage(r.Context(), tenantID, after, limit)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -1389,13 +1402,16 @@ func (a *API) listDiscoveryMonitoring(w http.ResponseWriter, r *http.Request) {
 		SchedulesPath:  "/api/v1/discovery/schedules",
 		RunsPath:       "/api/v1/discovery/runs",
 		Sources:        make([]DiscoveryMonitoringSource, 0, len(rows)),
+		SummaryScope:   "page",
 	}
 	for _, row := range rows {
 		item := toDiscoveryMonitoringSource(row)
-		preview, previewErr := a.discoveryPlanPreview(r.Context(), tenantID, discoverySourceRequest{
+		if len(row.Config) == 0 {
+			item.ConnectionOrigin = "Legacy source configuration exceeds the 64 KiB admission limit"
+			item.BlockedReasons = []string{"Reduce this source configuration to 64 KiB or less before starting a run."}
+		} else if preview, previewErr := a.discoveryPlanPreview(r.Context(), tenantID, discoverySourceRequest{
 			Kind: row.Kind, Name: row.Name, Config: row.Config,
-		})
-		if previewErr != nil {
+		}); previewErr != nil {
 			item.ConnectionOrigin = "Source prerequisites could not be validated"
 			item.BlockedReasons = []string{"Open this source and review its exact configuration before starting a run."}
 		} else {
@@ -1417,6 +1433,9 @@ func (a *API) listDiscoveryMonitoring(w http.ResponseWriter, r *http.Request) {
 		out.Summary.FindingCount += item.FindingCount
 		out.Summary.OpenFindingCount += item.OpenFindingCount
 		out.Summary.CertificateInventoryCount += item.CertificateInventoryCount
+	}
+	if len(rows) == limit {
+		out.NextCursor = encodeCursor(rows[len(rows)-1].SourceID)
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }
@@ -1532,6 +1551,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	cfg := req.Config
 	if len(cfg) == 0 {
 		cfg = json.RawMessage(`{}`)
+	}
+	if len(cfg) > 64*1024 {
+		return nil, errStatus(http.StatusRequestEntityTooLarge, "discovery source config exceeds 64 KiB")
 	}
 	if err := sourcecatalog.ValidateControlFieldCase(cfg); err != nil {
 		return nil, errStatusFrom(http.StatusBadRequest, err)

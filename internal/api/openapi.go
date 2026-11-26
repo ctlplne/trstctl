@@ -2538,7 +2538,9 @@ func componentSchemas() map[string]*Schema {
 		"runs_path":       str(),
 		"summary":         ref("DiscoveryMonitoringSummary"),
 		"sources":         {Type: "array", Items: ref("DiscoveryMonitoringSource")},
-	}, "repository_path", "findings_path", "sources_path", "schedules_path", "runs_path", "summary", "sources")
+		"next_cursor":     str(),
+		"summary_scope":   str(),
+	}, "repository_path", "findings_path", "sources_path", "schedules_path", "runs_path", "summary", "sources", "next_cursor", "summary_scope")
 	discoveryCoverageClass := object(map[string]*Schema{
 		"class":            str(),
 		"status":           str(),

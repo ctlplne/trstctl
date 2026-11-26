@@ -1416,7 +1416,7 @@ not this file.
 | `internal/objectstore/s3.go:407` | page is at most listPageSize (CWE-190) |
 | `internal/objectstore/s3.go:489` | limit is at most listPageSize (CWE-190) |
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
-| `internal/orchestrator/discovery.go:369` | retained sequence was checked against MaxInt64 before conversion. |
+| `internal/orchestrator/discovery.go:386` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:75` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:448` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
 | `internal/orchestrator/operation_approvals.go:458` | a negative stored version is classified as drift before conversion (CWE-190). |

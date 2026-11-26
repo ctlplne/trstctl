@@ -662,6 +662,7 @@ export function Discovery() {
   const [runsLoadingMore, setRunsLoadingMore] = useState(false);
   const [findings, setFindings] = useState<DiscoveryFinding[]>([]);
   const [monitoring, setMonitoring] = useState<DiscoveryMonitoring | null>(null);
+  const [monitoringLoadingMore, setMonitoringLoadingMore] = useState(false);
   const [coverageReport, setCoverageReport] = useState<DiscoveryCoverage | null>(null);
   const [shadowPosture, setShadowPosture] = useState<NHIShadowPosture | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -726,7 +727,7 @@ export function Discovery() {
       api.discoverySources({ limit: 50 }),
       api.discoverySchedules({ limit: 50 }),
       api.discoveryRuns({ limit: 50, order: "recent" }),
-      api.discoveryMonitoring(),
+      api.discoveryMonitoring({ limit: 100 }),
       api.nhiShadowPosture(),
       api.discoveryFindings({
         limit: 50,
@@ -788,6 +789,37 @@ export function Discovery() {
       setRunsLoadingMore(false);
     }
   }, [runCursor, runsLoadingMore]);
+
+  const loadMoreMonitoring = useCallback(async () => {
+    if (!monitoring?.next_cursor || monitoringLoadingMore) return;
+    setMonitoringLoadingMore(true);
+    try {
+      const page = await api.discoveryMonitoring({ limit: 100, cursor: monitoring.next_cursor });
+      setMonitoring((current) => {
+        if (!current) return page;
+        const seen = new Set(current.sources.map((source) => source.source_id));
+        const fresh = page.sources.filter((source) => !seen.has(source.source_id));
+        const summary = { ...current.summary };
+        for (const source of fresh) {
+          summary.source_count++;
+          if (source.scheduled) summary.scheduled_source_count++;
+          if (source.scheduled && source.execution_ready && ["", "queued", "running", "succeeded", "partial"].includes(source.last_run_status))
+            summary.active_monitoring_count++;
+          summary.run_count += source.run_count;
+          summary.completed_run_count += source.completed_run_count;
+          summary.failed_run_count += source.failed_run_count;
+          summary.finding_count += source.finding_count;
+          summary.open_finding_count += source.open_finding_count;
+          summary.certificate_inventory_count += source.certificate_inventory_count;
+        }
+        return { ...current, sources: [...current.sources, ...fresh], summary, next_cursor: page.next_cursor };
+      });
+    } catch (err) {
+      setNotice(noticeForError(err, "Could not load more monitoring sources"));
+    } finally {
+      setMonitoringLoadingMore(false);
+    }
+  }, [monitoring, monitoringLoadingMore]);
 
   useEffect(() => {
     if (!scheduleSourceID && sources[0]) setScheduleSourceID(sources[0].id);
@@ -1175,7 +1207,7 @@ export function Discovery() {
             <div className="grid gap-6 border-t border-border p-4">
               <CTMonitoringPanel refreshToken={ctRefreshToken} onRunTerminal={load} />
               <DriftPanel findings={findings} sources={sources} />
-              <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
+              <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} onLoadMore={loadMoreMonitoring} loadingMore={monitoringLoadingMore} />
               <ShadowPosturePanel posture={shadowPosture} />
             </div>
           </details>
@@ -1956,7 +1988,17 @@ function topRecordEntries(value: unknown, limit: number): { key: string; value: 
     .slice(0, limit);
 }
 
-function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: DiscoveryMonitoring | null; onCreateSource: () => void }) {
+function MonitoringPanel({
+  monitoring,
+  onCreateSource,
+  onLoadMore,
+  loadingMore,
+}: {
+  monitoring: DiscoveryMonitoring | null;
+  onCreateSource: () => void;
+  onLoadMore: () => void;
+  loadingMore: boolean;
+}) {
   const { t } = useTranslation();
   if (!monitoring) return null;
   const columns: Array<DataGridColumn<DiscoveryMonitoring["sources"][number]>> = [
@@ -2033,6 +2075,7 @@ function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: Discovery
         <MonitoringMetric label={t("discovery.monitoring.metricFindings")} value={monitoring.summary.finding_count} />
         <MonitoringMetric label={t("discovery.monitoring.metricInventory")} value={monitoring.summary.certificate_inventory_count} />
       </div>
+      <p className="text-xs text-muted-foreground">{t("discovery.monitoring.pageScope")}</p>
       {monitoring.sources.length === 0 ? (
         <EmptyState
           icon={<Activity className="h-5 w-5" aria-hidden="true" />}
@@ -2051,6 +2094,11 @@ function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: Discovery
           viewStorageKey="discovery-monitoring"
           toolbar={gridControlsToolbar}
         />
+      )}
+      {monitoring.next_cursor && (
+        <button type="button" className="ui-button-secondary" onClick={onLoadMore} disabled={loadingMore}>
+          {t("discovery.monitoring.loadMore")}
+        </button>
       )}
     </section>
   );
