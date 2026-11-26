@@ -397,6 +397,12 @@ trstctl-cli graph blast-radius cert:payments-tls
 trstctl-cli graph query 'MATCH (w:workload)-[:OWNS]->(c)-[:DEPLOYED_TO]->(r) WHERE w.name = "payments-svc" RETURN c, r.name'
 ```
 
+The Cypher-style graph query accepts at most eight hops and 10,000
+intermediate bindings, with a 100,000-edge work budget. It rejects a query
+that exceeds a budget instead of returning a partial answer. Served queries
+also stop when the request is canceled or its three-second execution deadline
+expires.
+
 Those map to the served `/api/v1/graph*` routes. When `ai.enable_api` is on, grounded
 RCA (and `GET /api/v1/mcp/tools`) are served too:
 

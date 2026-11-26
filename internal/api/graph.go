@@ -5,8 +5,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
@@ -102,8 +104,14 @@ func (a *API) graphQuery(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	rows, err := g.Query(req.Query)
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	rows, err := g.QueryContext(ctx, req.Query)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			a.writeError(w, errStatusFrom(http.StatusRequestTimeout, err))
+			return
+		}
 		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}

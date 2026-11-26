@@ -3,10 +3,17 @@
 package graph
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
+)
+
+const (
+	maxCypherHops       = 8
+	maxCypherBindings   = 10_000
+	maxCypherEdgeVisits = 100_000
 )
 
 // Row is one result of a Cypher-style query: a mapping from each RETURN
@@ -27,11 +34,20 @@ type Row map[string]string
 // It is deliberately small — enough for reachability, ownership, and
 // blast-radius style questions — not a general Cypher engine.
 func (g *Graph) Query(q string) ([]Row, error) {
+	return g.QueryContext(context.Background(), q)
+}
+
+// QueryContext is Query with cancellation for served requests. The work and
+// output limits apply to both entry points.
+func (g *Graph) QueryContext(ctx context.Context, q string) ([]Row, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	cq, err := parseCypher(q)
 	if err != nil {
 		return nil, err
 	}
-	return g.execCypher(cq)
+	return g.execCypher(ctx, cq)
 }
 
 // nodePat is a parsed node pattern: a binding variable and an optional kind
@@ -112,6 +128,9 @@ func parseCypher(q string) (cypherQuery, error) {
 	cq.nodes = append(cq.nodes, nodePat{varName: m[1], kind: NodeKind(m[2])})
 	s = strings.TrimSpace(s[len(m[0]):])
 	for s != "" {
+		if len(cq.edges) >= maxCypherHops {
+			return cq, fmt.Errorf("graph: query exceeds the maximum %d hops", maxCypherHops)
+		}
 		em := reEdge.FindStringSubmatch(s)
 		if em == nil {
 			return cq, fmt.Errorf("graph: expected an edge -[:TYPE]-> at %q", s)
@@ -179,24 +198,45 @@ func splitAnd(where string) []string {
 
 // execCypher evaluates a parsed query by binding the path against the graph,
 // applying WHERE, and projecting the RETURN columns.
-func (g *Graph) execCypher(cq cypherQuery) ([]Row, error) {
+func (g *Graph) execCypher(ctx context.Context, cq cypherQuery) ([]Row, error) {
 	// A binding maps each variable to a node ID. Start by binding the first
 	// pattern to every node of the matching kind.
 	type binding map[string]string
 	var bindings []binding
-	for _, n := range g.Nodes() {
+	for i, n := range g.Nodes() {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if matchesKind(n, cq.nodes[0].kind) {
+			if len(bindings) >= maxCypherBindings {
+				return nil, fmt.Errorf("graph: query exceeds the maximum %d bindings", maxCypherBindings)
+			}
 			bindings = append(bindings, binding{cq.nodes[0].varName: n.ID})
 		}
 	}
 
 	// Extend along each edge in the path.
+	edgeVisits := 0
 	for i, et := range cq.edges {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		fromVar := cq.nodes[i].varName
 		toPat := cq.nodes[i+1]
 		var next []binding
 		for _, b := range bindings {
 			for _, e := range g.out[b[fromVar]] {
+				edgeVisits++
+				if edgeVisits > maxCypherEdgeVisits {
+					return nil, fmt.Errorf("graph: query exceeds the maximum %d edge visits", maxCypherEdgeVisits)
+				}
+				if edgeVisits%256 == 0 {
+					if err := ctx.Err(); err != nil {
+						return nil, err
+					}
+				}
 				if e.Type != et {
 					continue
 				}
@@ -209,6 +249,9 @@ func (g *Graph) execCypher(cq cypherQuery) ([]Row, error) {
 					nb[k] = v
 				}
 				nb[toPat.varName] = e.To
+				if len(next) >= maxCypherBindings {
+					return nil, fmt.Errorf("graph: query exceeds the maximum %d bindings", maxCypherBindings)
+				}
 				next = append(next, nb)
 			}
 		}
@@ -217,7 +260,12 @@ func (g *Graph) execCypher(cq cypherQuery) ([]Row, error) {
 
 	// Apply WHERE predicates.
 	var kept []binding
-	for _, b := range bindings {
+	for i, b := range bindings {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if g.satisfies(b, cq.where) {
 			kept = append(kept, b)
 		}
@@ -226,7 +274,12 @@ func (g *Graph) execCypher(cq cypherQuery) ([]Row, error) {
 	// Project RETURN columns, de-duplicating identical rows.
 	seen := map[string]bool{}
 	var rows []Row
-	for _, b := range kept {
+	for i, b := range kept {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		row := Row{}
 		key := make([]string, 0, len(cq.ret))
 		for _, rc := range cq.ret {
