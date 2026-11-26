@@ -5493,6 +5493,11 @@ registration; the control plane that issued its job retries or fails that job wh
 the lease expires. To recover one set aside by mistake, stop the agent, restore the
 previous settings, and move the file back to `pending-reports/pending.state`.
 
+The control plane validates the complete heartbeat report before recording it.
+An invalid executor census returns gRPC `InvalidArgument`; it does not update the
+agent's reported capabilities or enter the event log. Correct the agent report
+and retry the heartbeat.
+
 ## WASM plugins
 
 The WASM plugin surface is off by default. When enabled, the binary admits only signed

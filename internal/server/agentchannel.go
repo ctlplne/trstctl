@@ -889,6 +889,9 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 	if err := inputtext.ValidateJSONStrings(payload); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "heartbeat report contains unsafe text")
 	}
+	if err := projections.ValidateAgentHeartbeat(eventSchemaVersion, info.TenantID, beatPayload); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid heartbeat report: %v", err)
+	}
 	ev, err := a.log.Append(ctx, events.Event{
 		Type: projections.EventAgentHeartbeat, TenantID: info.TenantID,
 		SchemaVersion: eventSchemaVersion, Data: payload,

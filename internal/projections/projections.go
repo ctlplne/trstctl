@@ -2778,6 +2778,30 @@ func validateAgentHeartbeatRevocationCaches(schemaVersion int, tenantID string, 
 	return nil
 }
 
+// ValidateAgentHeartbeat applies the same event-shape checks before append
+// and during replay. A malformed agent report must never enter the shared log.
+func ValidateAgentHeartbeat(schemaVersion int, tenantID string, heartbeat AgentHeartbeat) error {
+	if err := validateAgentHeartbeatPluginCensus(schemaVersion, tenantID, heartbeat); err != nil {
+		return err
+	}
+	if err := validateAgentHeartbeatRevocationCaches(schemaVersion, tenantID, heartbeat); err != nil {
+		return err
+	}
+	if err := validateAgentHeartbeatSSHTrust(schemaVersion, heartbeat); err != nil {
+		return err
+	}
+	if err := validateAgentHeartbeatExecutors(schemaVersion, heartbeat); err != nil {
+		return err
+	}
+	if err := validateAgentHeartbeatSSHKRL(schemaVersion, tenantID, heartbeat); err != nil {
+		return err
+	}
+	if err := validateAgentHeartbeatClock(schemaVersion, heartbeat); err != nil {
+		return err
+	}
+	return validateAgentHeartbeatRelayEgress(schemaVersion, heartbeat)
+}
+
 // EnrollmentProxyReport is the durable, replayable topology/health evidence
 // carried by one agent. It authorizes nothing; the heartbeat's authenticated
 // tenant and agent identity remain envelope/transport facts.
@@ -7732,25 +7756,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if err := validateAgentHeartbeatPluginCensus(schemaVersionOf(e), e.TenantID, pl); err != nil {
-			return err
-		}
-		if err := validateAgentHeartbeatRevocationCaches(schemaVersionOf(e), e.TenantID, pl); err != nil {
-			return err
-		}
-		if err := validateAgentHeartbeatSSHTrust(schemaVersionOf(e), pl); err != nil {
-			return err
-		}
-		if err := validateAgentHeartbeatExecutors(schemaVersionOf(e), pl); err != nil {
-			return err
-		}
-		if err := validateAgentHeartbeatSSHKRL(schemaVersionOf(e), e.TenantID, pl); err != nil {
-			return err
-		}
-		if err := validateAgentHeartbeatClock(schemaVersionOf(e), pl); err != nil {
-			return err
-		}
-		if err := validateAgentHeartbeatRelayEgress(schemaVersionOf(e), pl); err != nil {
+		if err := ValidateAgentHeartbeat(schemaVersionOf(e), e.TenantID, pl); err != nil {
 			return err
 		}
 		lastSeen := e.Time
