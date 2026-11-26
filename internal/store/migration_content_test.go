@@ -1138,6 +1138,9 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	517: true, // TestMigrationDataContentBackfills/0517_ticket_intake_configurer_starts_unknown
+	516: true, // TestMigrationDataContentBackfills/0516_deployment_target_configurers_start_unknown
+	515: true, // TestMigrationDataContentBackfills/0515_held_external_ca_profile_starts_unknown
 	511: true, // TestMigrationDataContentBackfills/0511_legacy_attester_trust_requires_admin_review
 	509: true, // TestMigrationDataContentBackfills/0509_dns01_private_egress_starts_unadmitted
 	508: true, // TestMigrationDataContentBackfills/0508_provider_operator_revision_starts_unknown
@@ -2389,6 +2392,9 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0517_ticket_intake_configurer_starts_unknown", testMigration0517TicketIntakeConfigurerStartsUnknown)
+	t.Run("0516_deployment_target_configurers_start_unknown", testMigration0516DeploymentTargetConfigurersStartUnknown)
+	t.Run("0515_held_external_ca_profile_starts_unknown", testMigration0515HeldExternalCAProfileStartsUnknown)
 	t.Run("0511_legacy_attester_trust_requires_admin_review", testMigration0511LegacyAttesterTrustRequiresAdminReview)
 	t.Run("0509_dns01_private_egress_starts_unadmitted", testMigration0509DNS01PrivateEgressStartsUnadmitted)
 	t.Run("0508_provider_operator_revision_starts_unknown", testMigration0508ProviderOperatorRevisionStartsUnknown)
