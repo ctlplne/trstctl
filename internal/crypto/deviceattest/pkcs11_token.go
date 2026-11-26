@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 // A PKCS#11 token's own attestation of a key it holds (A175). Some tokens
@@ -83,7 +85,7 @@ func VerifyPKCS11TokenAttestation(chainDER [][]byte, rootsPEM [][]byte, csrDER [
 		return refuse("the chain does not verify to a pinned vendor root: %v", err)
 	}
 	csr, err := x509.ParseCertificateRequest(csrDER)
-	if err != nil || csr.CheckSignature() != nil {
+	if err != nil || boundarycrypto.ValidateUntrustedPublicKey(csr.PublicKey) != nil || csr.CheckSignature() != nil {
 		return refuse("the CSR cannot be read")
 	}
 	if !bytes.Equal(certs[0].RawSubjectPublicKeyInfo, csr.RawSubjectPublicKeyInfo) {

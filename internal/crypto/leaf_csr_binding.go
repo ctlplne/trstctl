@@ -22,6 +22,9 @@ func VerifyLeafBoundToCSR(certDER, csrDER []byte, issuedAt time.Time, ttl time.D
 	if err != nil {
 		return fmt.Errorf("crypto: parse approved CSR: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return fmt.Errorf("crypto: approved CSR signature: %w", err)
 	}

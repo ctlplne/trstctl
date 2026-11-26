@@ -173,6 +173,9 @@ func MintDelegatedEdgeCAFromCSR(parentCertDER []byte, parentSigner DigestSigner,
 	if err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse edge CA CSR: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: verify edge CA CSR signature: %w", err)
 	}

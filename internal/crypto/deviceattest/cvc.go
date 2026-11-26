@@ -20,6 +20,8 @@ import (
 	"math/big"
 	"strings"
 	"time"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 // Card-verifiable certificates (A175-L3). Some tokens attest a key they
@@ -515,7 +517,7 @@ func VerifySmartCardHSMKeyAttestation(ev SmartCardHSMAttestation, rootsPEM [][]b
 		return refuse("the request's key: %v", err)
 	}
 	csr, err := x509.ParseCertificateRequest(csrDER)
-	if err != nil || csr.CheckSignature() != nil {
+	if err != nil || boundarycrypto.ValidateUntrustedPublicKey(csr.PublicKey) != nil || csr.CheckSignature() != nil {
 		return refuse("the CSR cannot be read")
 	}
 	if !samePublicKey(attested, csr.PublicKey) {

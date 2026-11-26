@@ -271,6 +271,9 @@ func VerifyDigest(pub PublicKey, digest, signature []byte, opts SignOptions) err
 	if err != nil {
 		return fmt.Errorf("parse public key: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(parsed); err != nil {
+		return err
+	}
 	switch k := parsed.(type) {
 	case *rsa.PublicKey:
 		ch, err := cryptoHash(opts.Hash)

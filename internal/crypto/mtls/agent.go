@@ -280,6 +280,9 @@ func (c *CA) SignClientCSR(csrDER []byte, ttl time.Duration) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mtls: parse csr: %w", err)
 	}
+	if err := boundary.ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return nil, err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("mtls: csr signature: %w", err)
 	}
@@ -352,6 +355,9 @@ func (c *CA) SignClientCSRWithTenant(
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
 		return nil, fmt.Errorf("mtls: parse csr: %w", err)
+	}
+	if err := boundary.ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return nil, err
 	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("mtls: csr signature: %w", err)
@@ -768,6 +774,9 @@ func CSRMatchesAllowedIdentity(csrDER []byte, allowedIdentity string) (bool, err
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
 		return false, fmt.Errorf("mtls: parse csr: %w", err)
+	}
+	if err := boundary.ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return false, err
 	}
 	if err := csr.CheckSignature(); err != nil {
 		return false, fmt.Errorf("mtls: csr signature: %w", err)

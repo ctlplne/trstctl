@@ -262,6 +262,9 @@ func checkLeafRequest(caCert *x509.Certificate, csrDER []byte, ttl time.Duration
 	if err != nil {
 		return nil, 0, fmt.Errorf("crypto: parse CSR: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return nil, 0, err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, 0, fmt.Errorf("crypto: CSR signature: %w", err)
 	}
@@ -421,6 +424,9 @@ func SignTimestampingCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse TSA CSR: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return nil, err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("crypto: TSA CSR signature: %w", err)
 	}
@@ -496,6 +502,9 @@ func SignServerCertFromCSRWithURIs(caCertDER []byte, caSigner DigestSigner, csrD
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse server CSR: %w", err)
+	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return nil, err
 	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("crypto: server CSR signature: %w", err)
@@ -594,6 +603,9 @@ func SignAgentClientCSR(
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse agent CSR: %w", err)
+	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return nil, err
 	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("crypto: agent CSR signature: %w", err)

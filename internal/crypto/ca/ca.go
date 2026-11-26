@@ -101,6 +101,9 @@ func (a *Authority) IssueFromCSR(csrDER []byte, ttl time.Duration) (Issued, erro
 	if err != nil {
 		return Issued{}, fmt.Errorf("ca: parse csr: %w", err)
 	}
+	if err := boundarycrypto.ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return Issued{}, err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return Issued{}, fmt.Errorf("ca: csr signature: %w", err)
 	}

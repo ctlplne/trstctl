@@ -463,13 +463,13 @@ func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, is
 }
 
 // routes mounts the HTTP-served protocols (ACME/EST/SCEP/CMP/SSH) on mux, each on the
-// API bulkhead pool. The EST/SCEP/CMP handlers carry their bound tenant into the
+// protocol HTTP bulkhead pool. The EST/SCEP/CMP handlers carry their bound tenant into the
 // serving context so their protocol audit events are tenant-attributed (AN-1/AN-2);
 // the actual mint is already tenant-correct via the Enroller. SPIFFE is not mounted
 // here (a gRPC UDS service).
 func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 	wrap := func(h http.Handler) http.Handler {
-		return bulkheadHandler(bulk, bulkhead.SubsystemAPI, protocolActivationHandler(sp.activation, h))
+		return bulkheadHandler(bulk, bulkhead.SubsystemProtocolHTTP, protocolActivationHandler(sp.activation, h))
 	}
 	if sp.acme != nil {
 		for _, pattern := range protocolHTTPMountPatterns("acme") {

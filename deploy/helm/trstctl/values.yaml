@@ -151,6 +151,9 @@ bulkheads:
   protocols:
     workers: 8
     queue: 256
+  protocol_http:
+    workers: 8
+    queue: 64
   agent:
     workers: 16
     queue: 1024

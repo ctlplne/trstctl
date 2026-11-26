@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3664 annotated sites across 35 rules. Each row is
+3662 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -216,11 +216,11 @@ not this file.
 | `internal/api/secrets_posture.go:1174` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1322` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:50` | public MAC domain label, not a credential |
-| `internal/api/secrets_scanning.go:751` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:775` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:849` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:859` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:869` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:765` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:789` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:863` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:873` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:883` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/audit/audit_test.go:208` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/audit/audit_test.go:240` | deliberately toxic fixture proves retained-prefix redaction (CWE-798). |
 | `internal/auth/oidc_client_secret.go:15` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -255,8 +255,8 @@ not this file.
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
-| `internal/config/config.go:3846` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4697` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3850` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4703` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -643,23 +643,23 @@ not this file.
 | `internal/server/discovery_served_test.go:646` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:648` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:767` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:984` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:1085` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:1091` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:1130` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:1143` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:1169` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:1363` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:996` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:1097` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:1103` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:1142` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:1155` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:1181` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:1375` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:2097` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:2230` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:2239` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:2404` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:2543` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:2565` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:2740` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:1387` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:2109` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:2242` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:2251` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:2416` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:2555` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:2577` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:2752` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_served_test.go:2763` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:2764` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_served_test.go:2775` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/dynamic_secret_access_cloud_served_test.go:39` | fabricated fixture credential; the stand-in needs the shape, no value is real (CWE-798) |
 | `internal/server/dynamic_secret_api_connect_served_test.go:42` | fabricated stand-in token (CWE-798) |
 | `internal/server/dynamic_secret_atlas_served_test.go:44` | fabricated stand-in service account (CWE-798) |
@@ -898,14 +898,14 @@ not this file.
 | `internal/server/secret_sync_hosted_targets_served_test.go:2451` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/secret_sync_hosted_targets_served_test.go:2503` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/secret_sync_hosted_targets_served_test.go:2555` | fabricated fixture credentials; no value is real (CWE-798) |
-| `internal/server/secret_third_party_scan_retention_served_test.go:73` | fabricated fixture (CWE-798) |
+| `internal/server/secret_third_party_scan_retention_served_test.go:94` | fabricated fixture (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secret_third_party_scan_signature_served_test.go:29` | fabricated fixture (CWE-798) |
+| `internal/server/secret_third_party_scan_signature_served_test.go:30` | fabricated fixture (CWE-798) |
 | `internal/server/secret_validity_providers_served_test.go:105` | a key file for a key generated at run time for the stand-in, not a credential (CWE-798) |
 | `internal/server/secret_validity_served_test.go:88` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:260` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_served_test.go:566` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:2553` | fabricated STS exchange fixture; no real credential (CWE-798) |
+| `internal/server/secrets_served_test.go:2582` | fabricated STS exchange fixture; no real credential (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:579` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:591` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:602` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1299,7 +1299,7 @@ not this file.
 | `internal/crypto/ctlog/sct.go:263` | RFC 6962 16-bit fields; callers bound v (CWE-190) |
 | `internal/crypto/ctlog/sct.go:267` | byte extraction from a fixed-width value (CWE-190) |
 | `internal/crypto/ctlog/sct.go:277` | bounded to 24 bits above (CWE-190) |
-| `internal/crypto/deviceattest/cvc.go:211` | oidLen is checked to be 1..127 above (CWE-190) |
+| `internal/crypto/deviceattest/cvc.go:213` | oidLen is checked to be 1..127 above (CWE-190) |
 | `internal/crypto/deviceattesttest/smartcardhsm.go:167` | each value is one decimal digit (CWE-190) |
 | `internal/crypto/deviceattesttest/smartcardhsm.go:173` | a CV tag is at most two bytes (CWE-190) |
 | `internal/crypto/deviceattesttest/smartcardhsm.go:175` | a one-byte tag (CWE-190) |
@@ -1416,7 +1416,7 @@ not this file.
 | `internal/objectstore/s3.go:407` | page is at most listPageSize (CWE-190) |
 | `internal/objectstore/s3.go:489` | limit is at most listPageSize (CWE-190) |
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
-| `internal/orchestrator/discovery.go:367` | retained sequence was checked against MaxInt64 before conversion. |
+| `internal/orchestrator/discovery.go:369` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:75` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:448` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
 | `internal/orchestrator/operation_approvals.go:458` | a negative stored version is classified as drift before conversion (CWE-190). |
@@ -1434,10 +1434,10 @@ not this file.
 | `internal/projections/certificate_sct.go:105` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:637` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:8042` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8059` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:8072` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8107` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:8054` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8071` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:8084` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8119` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:46` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1630,10 +1630,10 @@ not this file.
 | `internal/store/ownership_readiness.go:254` | persisted event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:312` | database constraint/event writer keeps sequence non-negative |
 | `internal/store/pam.go:141` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:740` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:820` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1166` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1180` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:752` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:832` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1178` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1192` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:205` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:261` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:290` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1665,7 +1665,7 @@ not this file.
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
 | `internal/store/ssh_certificate_revocation.go:28` | bounded by MaxInt64 above. |
-| `internal/store/switching_imports.go:118` | bounded above (CWE-190) |
+| `internal/store/switching_imports.go:120` | bounded above (CWE-190) |
 | `internal/store/tenant.go:63` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:91` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_custom_role.go:41` | event sequences fit int64 (CWE-190) |
@@ -1802,7 +1802,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `internal/events/privacy_erasure_test.go:1555` | test goroutine lifecycle is managed by the test (CWE-664) |
-| `internal/server/agenthttprenewal.go:71` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
+| `internal/server/agenthttprenewal.go:72` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 | `internal/server/estmtls.go:183` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 
 ### G122 — CWE-367 Time-of-check time-of-use race (walk callback) (27 sites)
@@ -1817,9 +1817,9 @@ not this file.
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:945` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:1011` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4767` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:946` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:1012` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4768` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:61` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/mcpconfig.go:136` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -2125,7 +2125,7 @@ not this file.
 | `internal/rpverify/verifier_test.go:369` | fixed argv, no user input (CWE-78) |
 | `internal/secretscan/gitdiff.go:169` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/gitdiff_test.go:93` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/secretscan/gitleaks.go:282` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
+| `internal/secretscan/gitleaks.go:343` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/installer_retry_test.go:96` | the test's own script, against its own server (CWE-78) |
 | `internal/secretscan/installer_retry_test.go:192` | the shipped wrapper around the test's own stand-in (CWE-78) |
 | `internal/secretscan/move.go:147` | the pinned gitleaks binary over the operator's own checkout (CWE-78) |
@@ -2442,9 +2442,9 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:745` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:759` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/secret_third_party_scan_served_test.go:172` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2582` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3302` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:3307` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -2533,7 +2533,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (854 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (852 sites)
 
 | Location | Reason |
 |---|---|
@@ -2691,9 +2691,9 @@ not this file.
 | `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:945` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:1011` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4767` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:946` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:1012` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4768` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `docs/sdk_registry_claims_test.go:44` | a page in this checkout (CWE-22) |
@@ -2939,9 +2939,9 @@ not this file.
 | `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3941` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:5355` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5374` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3945` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:5361` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5380` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:340` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -2962,7 +2962,7 @@ not this file.
 | `internal/crypto/mtls/agent.go:233` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/server.go:240` | operator-selected public certificate path, validated as a regular file (CWE-22) |
 | `internal/crypto/mtls/server.go:336` | operator-selected internal TLS state path, validated as a private regular file (CWE-22) |
-| `internal/crypto/mtls/server.go:382` | operator-configured certificate/key path from deployment config (CWE-22) |
+| `internal/crypto/mtls/server.go:385` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/server_test.go:37` | test-owned path under t.TempDir (CWE-22) |
 | `internal/crypto/mtls/server_test.go:65` | test-owned path under t.TempDir (CWE-22) |
 | `internal/crypto/mtls/server_test.go:93` | test-owned path under t.TempDir (CWE-22) |
@@ -3074,10 +3074,10 @@ not this file.
 | `internal/reconcile/vaultsource.go:411` | operator-configured token file from the reviewed config (CWE-22) |
 | `internal/reportarchive/archive.go:250` | fixed reports path under operator archive root; both path IDs and digest are validated UUID/SHA-256 components. |
 | `internal/reportarchive/archive.go:269` | directory is constructed under the operator archive root and checked as a private real directory. |
-| `internal/safefile/regular.go:102` | agent-owned path; the opened descriptor is regular/size checked before reading |
+| `internal/safefile/regular.go:146` | agent-owned path; the opened descriptor is regular/size checked before reading |
 | `internal/scancollect/scancollect.go:206` | a path inside the collection directory, checked by w.path (CWE-22) |
 | `internal/scancollect/scancollect_test.go:27` | the test's own temp directory (CWE-22) |
-| `internal/secretscan/gitleaks.go:294` | reads the report file this process asked gitleaks to write in its own tempdir (CWE-22) |
+| `internal/secretscan/gitleaks.go:355` | reads the report file this process asked gitleaks to write in its own tempdir (CWE-22) |
 | `internal/secretscan/gitleaks_options_test.go:221` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/secretscan/installer_retry_test.go:107` | the test's own temporary file (CWE-22) |
 | `internal/secretscan/installer_retry_test.go:203` | the test's own temporary file (CWE-22) |
@@ -3087,9 +3087,7 @@ not this file.
 | `internal/secretscan/repository_credential_test.go:148` | the test's own clone (CWE-22) |
 | `internal/secretscan/repository_credential_test.go:151` | the test's own clone (CWE-22) |
 | `internal/secretscan/secretscan_test.go:125` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/secretscan/thirdparty.go:110` | operator-owned artifact path from the reviewed source config, bounded by size above (CWE-22) |
-| `internal/secretscan/thirdparty.go:114` | operator-owned signature path from the reviewed source config (CWE-22) |
-| `internal/secretscan/thirdparty_signature_test.go:47` | test-owned temp path |
+| `internal/secretscan/thirdparty_signature_test.go:49` | test-owned temp path |
 | `internal/secretscan/trstctl_rules_test.go:140` | the report this test asked gitleaks to write (CWE-22) |
 | `internal/secretscan/validity/validity.go:239` | confined to the scan's own temporary tree above (CWE-22) |
 | `internal/server/agent_roles_served_test.go:535` | path is a t.TempDir fixture (CWE-22). |
@@ -3230,14 +3228,14 @@ not this file.
 | `internal/server/secret_render_served_test.go:382` | the test's own temp file (CWE-22) |
 | `internal/server/secret_repository_private_clone_served_test.go:101` | the server's own temporary clone (CWE-22) |
 | `internal/server/secret_scan_hooks_gitlab_bitbucket_served_test.go:42` | the server's own temporary clone (CWE-22) |
-| `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
+| `internal/server/secret_third_party_scan_signature_served_test.go:36` | test reads its own tempdir path (CWE-22) |
 | `internal/server/secret_validity_providers_served_test.go:36` | test fixture under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/server.go:1796` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:3229` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:3306` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:3234` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:3311` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:62` | the repository's own SOAR pack (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:72` | a playbook the repository's own pack names (CWE-22) |
 | `internal/server/spiffe_ca.go:40` | path derives from operator CA file and canonical tenant UUID |
@@ -3512,7 +3510,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:586` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3312` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:3317` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_certificate_lease_served_test.go:76` | public CA/KRL fixture in a test tempdir (CWE-276) |
@@ -3548,9 +3546,9 @@ not this file.
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:430` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
-| `internal/crypto/deviceattest/cvc.go:370` | verifying a CV signature that names SHA-1 (CWE-327) |
+| `internal/crypto/deviceattest/cvc.go:372` | verifying a CV signature that names SHA-1 (CWE-327) |
 | `internal/crypto/jks/jceks.go:68` | the JCEKS integrity digest is SHA-1 by definition; verification only (CWE-328) |
-| `internal/crypto/leafca.go:814` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/leafca.go:826` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/mysql_native_verifier.go:22` | MariaDB mysql_native_password's specified account verifier, not a general hash (CWE-328) |
 | `internal/crypto/mysql_native_verifier.go:24` | same MariaDB protocol verifier (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:409` | mysql_native_password, when the server demands it (CWE-327) |
@@ -3811,8 +3809,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/cli/pcas_succession_approval_test.go:58` | test writes under t.TempDir |
 | `internal/cli/pcas_succession_approval_test.go:129` | test writes under t.TempDir |
-| `internal/config/config.go:5355` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5374` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5361` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5380` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
@@ -3840,10 +3838,10 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/scep/sscep_client_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/reconcile/kmipsource_pykmip_test.go:67` | test-named files in the test's temp dir, readable by the container's server user (CWE-22, CWE-276) |
-| `internal/secretscan/gitleaks.go:475` | locates the pinned gitleaks binary in known tool dirs (CWE-22) |
-| `internal/secretscan/gitleaks.go:659` | the scan target's own config file, under an allowed root (CWE-22) |
+| `internal/secretscan/gitleaks.go:536` | locates the pinned gitleaks binary in known tool dirs (CWE-22) |
+| `internal/secretscan/gitleaks.go:720` | the scan target's own config file, under an allowed root (CWE-22) |
 | `internal/secretscan/move_test.go:38` | locates the pinned gitleaks binary in known tool dirs (CWE-22) |
-| `internal/secretscan/thirdparty_signature_test.go:49` | test-owned temp path |
+| `internal/secretscan/thirdparty_signature_test.go:51` | test-owned temp path |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:187` | the test's own archive under its t.TempDir (CWE-22) |
@@ -3904,8 +3902,8 @@ not this file.
 | `internal/server/secret_render_served_test.go:222` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_render_served_test.go:227` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_render_served_test.go:234` | the test's own temp file or the lab directory the runner created (CWE-22) |
-| `internal/server/secret_third_party_scan_signature_served_test.go:44` | test-owned temp path |
-| `internal/server/secret_third_party_scan_signature_served_test.go:50` | test-owned temp path |
+| `internal/server/secret_third_party_scan_signature_served_test.go:45` | test-owned temp path |
+| `internal/server/secret_third_party_scan_signature_served_test.go:51` | test-owned temp path |
 | `internal/server/secrets_scan_served_test.go:324` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/spire_jwt_authorities_container_test.go:314` | test writes into its own temp directory (CWE-22) |

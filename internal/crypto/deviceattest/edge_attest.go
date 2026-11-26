@@ -52,7 +52,7 @@ func buildTPMCredential(challenge, csrDER, objectPublicDER, aikPublicDER, aikCha
 		return nil, fmt.Errorf("crypto: edge CSR or attestation certificate chain has invalid size")
 	}
 	csr, err := x509.ParseCertificateRequest(csrDER)
-	if err != nil || csr.CheckSignature() != nil {
+	if err != nil || trstcrypto.ValidateUntrustedPublicKey(csr.PublicKey) != nil || csr.CheckSignature() != nil {
 		return nil, fmt.Errorf("crypto: edge CSR is invalid or unsigned")
 	}
 	csrPublicDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)

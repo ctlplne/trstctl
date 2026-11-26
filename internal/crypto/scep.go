@@ -83,6 +83,11 @@ func ParseSCEPRequestWithVerifier(pkiMessageDER, raCertDER, raKeyPKCS8 []byte, v
 	if err != nil {
 		return nil, fmt.Errorf("scep: parse pkiMessage: %w", err)
 	}
+	for _, cert := range p7.Certificates {
+		if err := ValidateUntrustedPublicKey(cert.PublicKey); err != nil {
+			return nil, fmt.Errorf("scep: signer certificate: %w", err)
+		}
+	}
 	if err := p7.Verify(); err != nil {
 		return nil, fmt.Errorf("scep: verify pkiMessage signature: %w", err)
 	}

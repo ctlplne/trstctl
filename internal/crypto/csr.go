@@ -127,6 +127,9 @@ func VerifyCertificateRequest(der []byte) error {
 	if err != nil {
 		return err
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return err
+	}
 	return csr.CheckSignature()
 }
 
@@ -398,6 +401,9 @@ func CSRRequestedKeyUsage(der []byte) (CSRKeyUsageRequest, error) {
 func InspectCSR(der []byte) (CSRInfo, error) {
 	csr, err := x509.ParseCertificateRequest(der)
 	if err != nil {
+		return CSRInfo{}, err
+	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
 		return CSRInfo{}, err
 	}
 	if err := csr.CheckSignature(); err != nil {

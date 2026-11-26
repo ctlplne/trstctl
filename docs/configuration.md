@@ -5628,6 +5628,12 @@ Fleet-size guidance:
 `bulkheads.<subsystem>.queue` values, so CI/CD can diff the resolved runtime limits
 before a rollout.
 
+`bulkheads.protocol_http` bounds public ACME, EST, SCEP, CMP, SSH, and timestamp
+HTTP request parsing and authentication separately from REST API workers. The
+`bulkheads.protocols` lane handles enrollment work after parsing. Both pools
+must have positive worker and queue limits; `TRSTCTL_BULKHEAD_PROTOCOL_HTTP_WORKERS`
+and `TRSTCTL_BULKHEAD_PROTOCOL_HTTP_QUEUE` override the HTTP lane.
+
 Every outbox family owns a separate queue and worker set even when all limits are
 inherited from `bulkheads.outbox`. In plain terms, a connector endpoint that stops
 answering can fill only the connector lane; it cannot occupy the workers that issue

@@ -375,6 +375,9 @@ func edgeDeviceCSRPublicKey(csrDER []byte, commonName string) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse device CSR: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return nil, err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("crypto: device CSR signature does not verify: %w", err)
 	}

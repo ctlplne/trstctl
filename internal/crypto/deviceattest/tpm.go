@@ -23,6 +23,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/google/go-tpm/tpm2"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 const maxDeviceAttestationBytes = 1 << 20
@@ -234,6 +236,9 @@ func CSRPublicKeySHA256(csrDER []byte) ([]byte, error) {
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse CSR for key binding: %w", err)
+	}
+	if err := boundarycrypto.ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return nil, err
 	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("crypto: verify CSR for key binding: %w", err)

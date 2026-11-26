@@ -297,8 +297,8 @@ func ParseCMPRequestWithTrustInspector(der []byte, verifyCSR func([]byte) error,
 	if err != nil {
 		return nil, fmt.Errorf("%w: parse extraCert: %v", ErrCMPProtectionRejected, err)
 	}
-	if err := verifyProtection(msg.Header, msg.Body, msg.Protection, signerCert); err != nil {
-		return nil, fmt.Errorf("%w: verify protection: %v", ErrCMPProtectionRejected, err)
+	if err := ValidateUntrustedPublicKey(signerCert.PublicKey); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCMPProtectionRejected, err)
 	}
 	identityVerified := false
 	var verifiedChain []*x509.Certificate
@@ -308,6 +308,9 @@ func ParseCMPRequestWithTrustInspector(der []byte, verifyCSR func([]byte) error,
 			return nil, err
 		}
 		identityVerified = true
+	}
+	if err := verifyProtection(msg.Header, msg.Body, msg.Protection, signerCert); err != nil {
+		return nil, fmt.Errorf("%w: verify protection: %v", ErrCMPProtectionRejected, err)
 	}
 	csrDER := msg.Body.Bytes
 	if err := verifyCSR(csrDER); err != nil {
@@ -548,6 +551,9 @@ func verifyCMPProtectionIdentity(signerCert *x509.Certificate, extra []asn1.RawV
 	intermediates := x509.NewCertPool()
 	for _, raw := range extra {
 		if cert, err := x509.ParseCertificate(raw.FullBytes); err == nil {
+			if err := ValidateUntrustedPublicKey(cert.PublicKey); err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrCMPProtectionRejected, err)
+			}
 			intermediates.AddCert(cert)
 		}
 	}

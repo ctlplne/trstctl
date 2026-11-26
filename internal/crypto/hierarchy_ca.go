@@ -123,6 +123,9 @@ func SignIntermediateHierarchyCAFromCSR(parentCertDER []byte, parentSigner Diges
 	if err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse intermediate CSR: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: verify intermediate CSR signature: %w", err)
 	}

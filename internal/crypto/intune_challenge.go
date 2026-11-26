@@ -164,6 +164,9 @@ func verifyIntuneJWSSignature(alg string, signingInput, signature []byte, trust 
 			if !ok {
 				continue
 			}
+			if err := ValidateUntrustedPublicKey(pub); err != nil {
+				return err
+			}
 			if err := rsa.VerifyPKCS1v15(pub, stdcrypto.SHA256, digest[:], signature); err == nil {
 				return nil
 			}
@@ -230,6 +233,9 @@ func intuneClaimMatchesCSR(claim IntuneChallengeClaim, csrDER []byte) error {
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
 		return fmt.Errorf("%w: parse CSR: %v", ErrIntuneChallengeCSRSubject, err)
+	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return fmt.Errorf("%w: %v", ErrIntuneChallengeCSRSubject, err)
 	}
 	if err := csr.CheckSignature(); err != nil {
 		return fmt.Errorf("%w: CSR signature: %v", ErrIntuneChallengeCSRSubject, err)

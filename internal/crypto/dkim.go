@@ -32,6 +32,9 @@ func VerifyDKIM(keyType string, key, headerHash, signature []byte) error {
 		if pub == nil {
 			return errors.New("crypto: the DKIM rsa key does not parse")
 		}
+		if err := ValidateUntrustedPublicKey(pub); err != nil {
+			return err
+		}
 		if pub.N.BitLen() < 1024 {
 			return fmt.Errorf("crypto: a %d-bit DKIM rsa key is too small", pub.N.BitLen())
 		}

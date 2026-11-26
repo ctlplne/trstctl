@@ -60,6 +60,9 @@ func VerifyESTChannelBinding(csrDER, servedCertDER []byte, required bool) error 
 	if err != nil {
 		return fmt.Errorf("crypto: parse EST CSR for channel binding: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return fmt.Errorf("crypto: verify EST CSR before channel binding: %w", err)
 	}

@@ -349,6 +349,9 @@ func loadSelfSignedServerState(stateFile string) (*ServerCert, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mtls: parse persistent internal TLS certificate: %w", err)
 	}
+	if err := boundarycrypto.ValidateUntrustedPublicKey(leaf.PublicKey); err != nil {
+		return nil, err
+	}
 	if err := leaf.CheckSignature(leaf.SignatureAlgorithm, leaf.RawTBSCertificate, leaf.Signature); err != nil {
 		return nil, fmt.Errorf("mtls: persistent internal TLS certificate is not self-signed: %w", err)
 	}

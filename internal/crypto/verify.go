@@ -89,6 +89,9 @@ func ValidatePublicKeyDER(der []byte) error {
 	if err != nil {
 		return fmt.Errorf("crypto: parse public key: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(pub); err != nil {
+		return err
+	}
 	switch pub.(type) {
 	case *rsa.PublicKey, *ecdsa.PublicKey, ed25519.PublicKey:
 		return nil
@@ -115,6 +118,9 @@ func VerifyMessage(pubDER, msg, sig []byte) error {
 	pub, err := x509.ParsePKIXPublicKey(pubDER)
 	if err != nil {
 		return fmt.Errorf("crypto: parse public key: %w", err)
+	}
+	if err := ValidateUntrustedPublicKey(pub); err != nil {
+		return err
 	}
 	digest := sha256.Sum256(msg)
 	switch k := pub.(type) {

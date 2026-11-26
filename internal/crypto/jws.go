@@ -360,6 +360,9 @@ func verifyJOSE(alg string, pub any, signingInput, sig []byte) error {
 		if !ok {
 			return fmt.Errorf("crypto: RSA key required for %s", alg)
 		}
+		if err := ValidateUntrustedPublicKey(rp); err != nil {
+			return err
+		}
 		h, ch := rsHash(alg)
 		digest := hashBytes(h, signingInput)
 		if err := rsa.VerifyPKCS1v15(rp, ch, digest, sig); err != nil {

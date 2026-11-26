@@ -16,6 +16,9 @@ func LeafMatchesCSR(csrDER, certificate []byte) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("certinfo: parse CSR: %w", err)
 	}
+	if err := ValidateUntrustedPublicKey(csr.PublicKey); err != nil {
+		return false, err
+	}
 	if err := csr.CheckSignature(); err != nil {
 		return false, fmt.Errorf("certinfo: verify CSR signature: %w", err)
 	}
