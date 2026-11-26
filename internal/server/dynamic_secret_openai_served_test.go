@@ -218,7 +218,7 @@ func TestServedOpenAIServiceAccountKeysLeaseAndRotateA240(t *testing.T) {
 	}
 	first := await(rotate("openai-rotate-1", map[string]any{"old_ref": "none"}), terminal)
 	if first.Phase != store.SecretStaticRotationCompleted || first.RotationPhase != "two_phase" || first.VerifyMode != "authenticated" ||
-		!strings.HasPrefix(first.NewRef, "proj_orders/svc_acct_") {
+		!hostedIssuedRefHasPrefix(first.NewRef, "proj_orders/svc_acct_") {
 		t.Fatalf("the first rotation: %+v", first)
 	}
 	predecessor := stored()

@@ -248,7 +248,7 @@ func TestServedDatadogKeysLeaseAndRotateInTwoPhasesA240(t *testing.T) {
 	}
 	first := await(rotate("datadog/ingest", "dd-rotate-1", map[string]any{"old_ref": "none"}), terminal)
 	if first.Phase != store.SecretStaticRotationCompleted || first.RotationPhase != "two_phase" || first.VerifyMode != "authenticated" ||
-		!first.CredentialValid || !strings.HasPrefix(first.NewRef, "api_key/") {
+		!first.CredentialValid || !hostedIssuedRefHasPrefix(first.NewRef, "api_key/") {
 		t.Fatalf("the first rotation: %+v", first)
 	}
 	predecessor := storedAPIKey()
@@ -279,7 +279,7 @@ func TestServedDatadogKeysLeaseAndRotateInTwoPhasesA240(t *testing.T) {
 	}
 	scoped := await(rotate("datadog/metrics", "dd-rotate-app-1", map[string]any{"old_ref": "none"}), terminal)
 	if scoped.Phase != store.SecretStaticRotationCompleted || scoped.VerifyMode != "not_available" ||
-		!strings.HasPrefix(scoped.NewRef, "3f1e7e1a-1111-4222-8333-444455556666/") {
+		!hostedIssuedRefHasPrefix(scoped.NewRef, "3f1e7e1a-1111-4222-8333-444455556666/") {
 		t.Fatalf("the application-key rotation: %+v", scoped)
 	}
 	if scopes := strings.Join(site.applicationKeyScopes(), ","); scopes != "metrics_read,timeseries_query" {

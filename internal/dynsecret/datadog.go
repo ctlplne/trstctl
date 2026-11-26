@@ -192,17 +192,24 @@ func (b *DatadogBackend) CreateCredential(ctx context.Context, req GenerateReque
 // reference binds the key ID to the site and the administrator credential
 // that issued it. A new site or account must not report a missing key revoked.
 func (b *DatadogBackend) reference(kind DatadogKind, id string) string {
-	if kind.ServiceAccount == "" {
-		return boundOpaqueRef("datadog", b.prefix, "api_key/"+id, b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
+	bound := false
+	for _, configured := range b.kinds {
+		bound = bound || configured.ServiceAccount == kind.ServiceAccount
 	}
-	return boundOpaqueRef("datadog", b.prefix, kind.ServiceAccount+"/"+id, b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
+	if !bound {
+		return ""
+	}
+	if kind.ServiceAccount == "" {
+		return boundIssuedOpaqueRef("datadog", b.prefix, "api_key/"+id, b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
+	}
+	return boundIssuedOpaqueRef("datadog", b.prefix, kind.ServiceAccount+"/"+id, b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
 }
 
 // Revoke implements Backend: the key is deleted after its name is checked, so
 // a reference to a key someone else created is refused; a key already gone
 // counts as revoked.
 func (b *DatadogBackend) Revoke(ctx context.Context, ref string) error {
-	raw, issuedPrefix, err := opaqueFromBoundRef(ref, "datadog", b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
+	raw, issuedPrefix, issuedRef, err := issuedOpaqueFromBoundRef(ref, "datadog", b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
 	if err != nil {
 		return err
 	}
@@ -212,14 +219,22 @@ func (b *DatadogBackend) Revoke(ctx context.Context, ref string) error {
 	}
 	kind := DatadogKind{}
 	if owner != "api_key" {
+		// The original account is carried by the target-bound reference;
+		// a later role rebind must not strand its still-live key. Validate the
+		// account shape before using it in a vendor API path.
+		if !datadogServiceAccount.MatchString(owner) {
+			return fmt.Errorf("dynsecret datadog: refusing %q, which names no service account this provider uses", ref)
+		}
+		kind.ServiceAccount = owner
+	}
+	if !issuedRef {
 		bound := false
 		for _, configured := range b.kinds {
-			bound = bound || configured.ServiceAccount == owner
+			bound = bound || configured.ServiceAccount == kind.ServiceAccount
 		}
 		if !bound {
 			return fmt.Errorf("dynsecret datadog: refusing %q, which names no service account this provider uses", ref)
 		}
-		kind.ServiceAccount = owner
 	}
 	status, response, err := b.call(ctx, http.MethodGet, kind.collection()+"/"+url.PathEscape(id), nil)
 	if err != nil {

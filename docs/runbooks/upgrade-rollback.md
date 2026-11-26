@@ -157,6 +157,26 @@ metadata. LiteLLM references use the role binding and a SHA-256 management handl
 New lease revocation intents carry the tenant registration, lease, provider and
 attempt identity. The worker loads the issued credential reference from that
 exact lease. A failed retry remains tied to its own attempt.
+New version 3 hosted references bind the management endpoint and administrator
+identity to the original client, project, account, role binding or app, the
+issuing name prefix and the exact vendor key ID. A later role or prefix edit
+does not change which issued key the worker removes. Earlier bare and version
+2 references do not bind all those fields. They keep their conservative
+current-binding check; do not rewrite their event references or infer that a
+missing key at a new target means the original key was revoked.
+
+Before changing a provider with active older leases or rotations, inventory
+their references and wait for retirement where practical. For an already
+stranded revocation, identify the exact old vendor account and key from the
+issued lease/rotation event, historical provider configuration and vendor
+inventory. Have the vendor administrator remove that exact key, then verify a
+fresh client request with the old key fails. Preserve the trstctl failed
+revocation status and an external reconciliation/audit record; never mark
+provider removal completed from a database status change alone. After the
+original binding is restored on a safe isolated configuration, the supported
+revoke retry with a fresh `Idempotency-Key` can finish the recorded outbox
+attempt. If the original target cannot be proved, keep it failed for manual
+investigation rather than deleting a similarly named key elsewhere.
 If a competing revocation write is still being recorded, retry with the same
 `Idempotency-Key`. trstctl recovers the recorded attempt before choosing another.
 

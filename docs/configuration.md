@@ -3271,6 +3271,17 @@ allowed role to what its keys are created under. All issue leases, and with
 Supabase key names must start with a letter, so a `supabase` provider's
 `username_prefix` must too.
 
+New hosted-key references retain the issuing management target, role binding,
+prefix and exact vendor key ID. Changing `role_bindings` or `username_prefix`
+therefore does not redirect or strand revocation of a newly issued key. A
+different management endpoint or administrator identity still refuses the
+reference. OpenRouter, Fireworks and Cloudflare/R2 lease creation requests a
+vendor expiry at the lease TTL; Cloudflare also keeps an earlier expiry on its
+template token. Datadog API and application keys have no native expiry, so
+their provider deletion must complete. Other vendors' native expiry is not
+assumed from the trstctl lease deadline. Check `revocation_status` and the
+vendor key after a revoke; `state: revoked` alone means the request was queued.
+
 Two client secret rotators (A240) rotate an existing client's secret and issue no
 leases, so both require `allow_static_rotation: true`. An `okta` provider sets
 `endpoint` to the Okta org, `api_key_ref` to an API token (SSWS) allowed to manage the
@@ -3281,6 +3292,11 @@ it. A `databricks` provider sets `endpoint` to the account console
 (`https://accounts.cloud.databricks.com`), `client_id` and `client_secret_ref` to an
 account admin service principal's application ID and OAuth secret, and binds each role to
 `<account-id> <service-principal-id>`.
+New Okta and Databricks rotation references also retain the original client,
+administrator identity and secret ID. Retirement follows that issued client
+after a role rebind. Historical bare or target-only references still need the
+original binding for automatic retirement; see the hosted-reference upgrade
+runbook before changing a live provider configuration.
 
 A `windows` provider (A240) takes the same fields for a Windows host serving OpenSSH:
 `admin_user` is a local account in Administrators whose public key is in

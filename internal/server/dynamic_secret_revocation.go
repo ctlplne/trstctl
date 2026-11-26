@@ -333,6 +333,12 @@ func (d *secretIntegrationOutboxDispatcher) dynamicSecretRevokeReference(
 		issued.IdempotencyKey != record.IdempotencyKey || issued.RequestBinding != record.RequestBinding {
 		return "", recovery
 	}
+	if strings.HasPrefix(record.BackendRef, "v3:") && kind != "" && attestedKind == kind {
+		// The exact immutable issue event and lease row agree. The backend
+		// validates the target/issued-key digest before remote deletion;
+		// today's role binding is only authority for new issuance.
+		return dynsecret.NormalizeStoredHostedReference(provider, record.BackendRef)
+	}
 	reference, err := dynsecret.NormalizeHostedReference(provider, record.Role, record.BackendRef)
 	if err != nil {
 		return "", recovery
@@ -369,7 +375,7 @@ func (d *secretIntegrationOutboxDispatcher) dynamicSecretRevokeReference(
 		}
 		return reference, nil
 	}
-	if err := dynsecret.ValidateIssuedHostedReference(provider, record.Role, reference, locked.Bytes()); err != nil {
+	if err := dynsecret.ValidateImportedHostedReference(provider, record.Role, reference, locked.Bytes()); err != nil {
 		return "", recovery
 	}
 	return reference, nil

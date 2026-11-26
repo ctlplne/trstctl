@@ -33,6 +33,14 @@ type hostedKeyProof struct {
 	firstOldRef string
 }
 
+func hostedIssuedRefHasPrefix(ref, prefix string) bool {
+	if strings.HasPrefix(ref, "v3:") {
+		parts := strings.SplitN(ref, ":", 4)
+		return len(parts) == 4 && strings.HasPrefix(parts[3], prefix)
+	}
+	return strings.HasPrefix(ref, prefix)
+}
+
 // run proves, through the served API: a lease's key authenticates until
 // revocation deletes it (when the vendor issues leases); and a static
 // rotation is two-phase, both keys authenticating between verification and
@@ -137,7 +145,7 @@ func (p hostedKeyProof) run(t *testing.T) {
 	}
 	first := await(rotate(providerID+"-rotate-1", map[string]any{"old_ref": firstOldRef}), terminal)
 	if first.Phase != store.SecretStaticRotationCompleted || first.RotationPhase != "two_phase" || first.VerifyMode != p.wantVerifyMode ||
-		!strings.HasPrefix(first.NewRef, p.newRefPrefix) {
+		!hostedIssuedRefHasPrefix(first.NewRef, p.newRefPrefix) {
 		t.Fatalf("the first rotation: %+v", first)
 	}
 	predecessor := stored()

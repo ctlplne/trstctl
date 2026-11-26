@@ -52,7 +52,8 @@ func TestClientSecretRotatorKeepsToItsBoundClientsA240(t *testing.T) {
 		t.Fatalf("a lease: %v", err)
 	}
 	ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "portal", Static: true, LeaseID: "cmd-1", PrincipalSuffix: testPrincipalSuffix("cmd-1")})
-	if err != nil || !strings.HasPrefix(ref, "0oa1b2c3d4e5f6g7h8i9/") {
+	raw, _, issued, decodeErr := issuedOpaqueFromBoundRef(ref, b.provider, b.api.endpoint, b.adminIdentity, b.adminClientID)
+	if err != nil || decodeErr != nil || !issued || !strings.HasPrefix(raw, "0oa1b2c3d4e5f6g7h8i9/") {
 		t.Fatalf("a rotation: %q %v", ref, err)
 	}
 	for _, refused := range []string{"0oaother000000000000/theirs", "original", "/original", "0oa1b2c3d4e5f6g7h8i9/a b"} {

@@ -97,7 +97,11 @@ func TestAPIConnectLeaseIsAnAppCredentialA239(t *testing.T) {
 		ClientSecret string `json:"client_secret"`
 		App          string
 	}
-	name := strings.TrimPrefix(ref, apiConnectLabApp+"/")
+	rawRef, _, issued, refErr := issuedOpaqueFromBoundRef(ref, "ibm-api-connect", b.endpoint, b.adminIdentity)
+	if refErr != nil || !issued || !strings.HasPrefix(rawRef, apiConnectLabApp+"/") {
+		t.Fatalf("issued app reference %q: %v", ref, refErr)
+	}
+	name := strings.TrimPrefix(rawRef, apiConnectLabApp+"/")
 	if err := json.Unmarshal(credential, &got); err != nil || got.App != apiConnectLabApp || lab.credentials[name] != [2]string{got.ClientID, got.ClientSecret} {
 		t.Fatalf("credential %+v (%v), stored %v", got, err, lab.credentials)
 	}

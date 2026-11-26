@@ -863,6 +863,14 @@ bytea encoding. Workload PostgreSQL clients must support SCRAM-SHA-256.
   the token or session accordingly. `revoked_at`
   records when the control plane queued the request. Older immutable operation
   receipts may omit these additional fields; GET returns current durable evidence.
+  Hosted keys issued with a version 3 reference can be removed after a later
+  role-binding or name-prefix change: the worker uses the original vendor target
+  and key ID stored at issuance, and marks removal `completed` only after the
+  vendor delete call succeeds. OpenRouter, Fireworks and Cloudflare/R2 leases
+  also request the vendor's native expiry at their TTL. A historical reference
+  without an issued target/key binding remains subject to its older safety
+  checks; reconcile failed removals with the original vendor administrator as
+  described in the [upgrade runbook](../runbooks/upgrade-rollback.md#hosted-credential-references).
   If provider creation finishes after `expires_at`, `issued_at` records the real
   late completion time, the API withholds the expired credential, and the expiry
   worker queues native revocation. A retry that starts after `expires_at` fails

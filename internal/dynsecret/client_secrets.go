@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strings"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/hostedkey"
 )
@@ -60,11 +61,13 @@ type ClientSecretConfig struct {
 
 // ClientSecretBackend rotates one vendor's client secrets.
 type ClientSecretBackend struct {
-	provider string
-	vendor   clientSecretVendor
-	api      hostedAPI
-	admin    *secret.Buffer
-	bindings map[string]string
+	provider      string
+	vendor        clientSecretVendor
+	api           hostedAPI
+	admin         *secret.Buffer
+	bindings      map[string]string
+	adminIdentity string
+	adminClientID string
 }
 
 // NewClientSecretBackend validates cfg for provider.
@@ -80,7 +83,8 @@ func NewClientSecretBackend(provider string, cfg ClientSecretConfig) (*ClientSec
 	if len(cfg.AdminKey) == 0 {
 		return nil, fmt.Errorf("dynsecret %s: the administrator's credential is required", provider)
 	}
-	b := &ClientSecretBackend{provider: provider, api: api, bindings: map[string]string{}}
+	b := &ClientSecretBackend{provider: provider, api: api, bindings: map[string]string{},
+		adminIdentity: crypto.SHA256Hex(cfg.AdminKey), adminClientID: cfg.AdminClientID}
 	for role, binding := range cfg.RoleBindings {
 		canonical, err := hostedkey.ParseBinding(provider, binding)
 		if err != nil {
@@ -121,20 +125,29 @@ func (b *ClientSecretBackend) CreateCredential(ctx context.Context, req Generate
 		secret.Wipe(credential)
 		return "", nil, fmt.Errorf("dynsecret %s: the vendor returned an unusable secret ID", b.provider)
 	}
-	return binding + "/" + id, credential, nil
+	return boundIssuedOpaqueRef(b.provider, defaultDynsecretPrefix, binding+"/"+id,
+		b.api.endpoint, b.adminIdentity, b.adminClientID), credential, nil
 }
 
 // Revoke implements Backend: a secret of a bound client is removed; one
 // already gone counts as revoked, and a reference to anything else is
 // refused.
 func (b *ClientSecretBackend) Revoke(ctx context.Context, ref string) error {
+	issued := false
+	if strings.HasPrefix(ref, "v3:") {
+		var err error
+		ref, _, issued, err = issuedOpaqueFromBoundRef(ref, b.provider, b.api.endpoint, b.adminIdentity, b.adminClientID)
+		if err != nil {
+			return err
+		}
+	}
 	cut := strings.LastIndex(ref, "/")
 	refused := fmt.Errorf("dynsecret %s: reference does not name a secret of a bound client", b.provider)
 	if cut <= 0 {
 		return refused
 	}
 	binding, id := ref[:cut], ref[cut+1:]
-	if !validVendorManagementID(b.provider, []byte(id)) || !b.bound(binding) {
+	if !validVendorManagementID(b.provider, []byte(id)) || (!issued && !b.bound(binding)) {
 		return refused
 	}
 	present, err := b.vendor.present(ctx, b.api, binding, id)

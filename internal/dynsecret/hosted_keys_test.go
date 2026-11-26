@@ -83,7 +83,7 @@ func TestHostedKeyRetryReplacesTheEarlierAttemptsKeyA240(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rawFirst, _, err := opaqueFromBoundRef(first, "openrouter", b.api.endpoint, b.adminIdentity)
+	rawFirst, _, _, err := issuedOpaqueFromBoundRef(first, "openrouter", b.api.endpoint, b.adminIdentity)
 	if err != nil || first == second || !strings.HasSuffix(second, ":limit-25/key-2") || len(vendor.keys["limit-25"]) != 1 || vendor.removed[0] != rawFirst {
 		t.Fatalf("first=%s second=%s keys=%v removed=%v", first, second, vendor.keys, vendor.removed)
 	}

@@ -184,7 +184,7 @@ func (b *HostedKeyBackend) CreateCredential(ctx context.Context, req GenerateReq
 	}
 	ref := binding + "/" + id
 	if b.targetBound() {
-		ref = boundOpaqueRef(b.provider, b.prefix, ref, b.api.endpoint, b.adminIdentity)
+		ref = boundIssuedOpaqueRef(b.provider, b.prefix, ref, b.api.endpoint, b.adminIdentity)
 	}
 	return ref, credential, nil
 }
@@ -198,9 +198,10 @@ func (b *HostedKeyBackend) targetBound() bool {
 // counts as revoked.
 func (b *HostedKeyBackend) Revoke(ctx context.Context, ref string) error {
 	issuedPrefix := b.prefix
+	issuedRef := false
 	if b.targetBound() {
 		var err error
-		ref, issuedPrefix, err = opaqueFromBoundRef(ref, b.provider, b.api.endpoint, b.adminIdentity)
+		ref, issuedPrefix, issuedRef, err = issuedOpaqueFromBoundRef(ref, b.provider, b.api.endpoint, b.adminIdentity)
 		if err != nil {
 			return err
 		}
@@ -211,7 +212,10 @@ func (b *HostedKeyBackend) Revoke(ctx context.Context, ref string) error {
 		return refused
 	}
 	binding, id := ref[:cut], ref[cut+1:]
-	if !b.bound(binding) {
+	// A target-bound issued reference retains the original binding and
+	// issuing prefix. Today's role map governs new keys, not deletion of a
+	// predecessor still live at the same management target.
+	if !issuedRef && !b.bound(binding) {
 		return refused
 	}
 	if b.provider == "litellm" {

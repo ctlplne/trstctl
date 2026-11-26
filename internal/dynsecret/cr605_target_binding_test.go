@@ -80,7 +80,7 @@ func TestCR605OpenRouterRevokeRefusesAnotherAccountAtSameEndpoint(t *testing.T) 
 	if len(accountA.keys["limit-25"]) != 1 {
 		t.Fatal("wrong-account revoke changed the original key")
 	}
-	raw, _, err := opaqueFromBoundRef(ref, "openrouter", "https://openrouter.ai/api/v1", open("account-a-management", accountA).adminIdentity)
+	raw, _, _, err := issuedOpaqueFromBoundRef(ref, "openrouter", "https://openrouter.ai/api/v1", open("account-a-management", accountA).adminIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}

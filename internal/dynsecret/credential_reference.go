@@ -131,7 +131,7 @@ func HostedReferenceProviderType(provider Provider) string {
 
 func hostedTargetBoundKind(kind string) bool {
 	switch kind {
-	case "openrouter", "cloudflare", "cloudflare-r2":
+	case "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2", "okta", "databricks":
 		return true
 	default:
 		return false
@@ -175,8 +175,12 @@ func NormalizeHostedReference(provider Provider, role, reference string) (string
 	}
 	bound, ok := provider.(interface{ DynamicSecretBindsRole(string, string) bool })
 	raw := reference
-	if hostedTargetBoundKind(kind) && strings.HasPrefix(reference, "v2:") {
-		_, _, parsed, err := opaqueBoundRefShape(reference)
+	if hostedTargetBoundKind(kind) && (strings.HasPrefix(reference, "v2:") || strings.HasPrefix(reference, "v3:")) {
+		version := "v2"
+		if strings.HasPrefix(reference, "v3:") {
+			version = "v3"
+		}
+		_, _, parsed, err := opaqueBoundRefShapeVersion(reference, version)
 		if err != nil {
 			return "", err
 		}
@@ -198,7 +202,33 @@ func NormalizeHostedReference(provider Provider, role, reference string) (string
 	if err != nil {
 		return "", err
 	}
+	if strings.HasPrefix(reference, "v3:") {
+		if canonical != string(id) {
+			return "", errors.New("dynsecret litellm: issued reference has a noncanonical identifier")
+		}
+		return reference, nil
+	}
 	return raw[:cut] + "/" + canonical, nil
+}
+
+// NormalizeStoredHostedReference checks the shape of a version 3 reference
+// retained by an authenticated issue or rotation event. A later role edit is
+// not an input to this check. The backend still verifies the target digest,
+// issuing name and vendor ID before it makes a delete call.
+func NormalizeStoredHostedReference(provider Provider, reference string) (string, error) {
+	kind := HostedReferenceProviderType(provider)
+	if kind == "" {
+		return reference, nil
+	}
+	_, _, raw, err := opaqueBoundRefShapeVersion(reference, "v3")
+	if err != nil {
+		return "", err
+	}
+	cut := strings.LastIndexByte(raw, '/')
+	if cut <= 0 || !validVendorManagementID(kind, []byte(raw[cut+1:])) {
+		return "", errors.New("dynsecret: stored hosted reference has no usable vendor key ID")
+	}
+	return reference, nil
 }
 
 type hostedCredentialDocument struct {
@@ -247,11 +277,23 @@ func (d *hostedCredentialDocument) fields(kind string) (material, id []byte) {
 // boundary. The adapter checks source-only fields before constructing this
 // document.
 func ValidateIssuedHostedReference(provider Provider, role, reference string, credential []byte) error {
+	return validateHostedReferenceProof(provider, role, reference, credential, true)
+}
+
+// ValidateImportedHostedReference verifies a predecessor already present at
+// the bound client before this provider issued a version 3 reference. It keeps
+// the current role-binding check and requires the public ID to match the
+// sealed credential document.
+func ValidateImportedHostedReference(provider Provider, role, reference string, credential []byte) error {
+	return validateHostedReferenceProof(provider, role, reference, credential, false)
+}
+
+func validateHostedReferenceProof(provider Provider, role, reference string, credential []byte, newlyIssued bool) error {
 	kind := HostedReferenceProviderType(provider)
 	if kind == "" {
 		return nil
 	}
-	if hostedTargetBoundKind(kind) && !strings.HasPrefix(reference, "v2:") {
+	if newlyIssued && hostedTargetBoundKind(kind) && !strings.HasPrefix(reference, "v3:") {
 		return errors.New("dynsecret: newly issued hosted key lacks its target binding")
 	}
 	canonical, err := NormalizeHostedReference(provider, role, reference)

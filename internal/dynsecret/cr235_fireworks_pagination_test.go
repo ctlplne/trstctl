@@ -47,7 +47,8 @@ func TestCR235FireworksRevokeFindsKeyOnSecondPage(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	}))
-	if err := b.Revoke(context.Background(), "acme:ci-bot/issued-2"); err != nil {
+	ref := boundIssuedOpaqueRef("fireworks", b.prefix, "acme:ci-bot/issued-2", b.api.endpoint, b.adminIdentity)
+	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatal(err)
 	}
 	if !deleted.Load() {
@@ -67,7 +68,8 @@ func TestCR235FireworksIncompleteListCannotProveAbsence(t *testing.T) {
 			b := cr235Backend(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"apiKeys": []map[string]string{{"keyId": "foreign-1", "displayName": "other"}}, "nextPageToken": tc.token, "totalSize": tc.total})
 			}))
-			if err := b.Revoke(context.Background(), "acme:ci-bot/issued-2"); err == nil {
+			ref := boundIssuedOpaqueRef("fireworks", b.prefix, "acme:ci-bot/issued-2", b.api.endpoint, b.adminIdentity)
+			if err := b.Revoke(context.Background(), ref); err == nil {
 				t.Fatal("incomplete key list was treated as proof of absence")
 			}
 		})

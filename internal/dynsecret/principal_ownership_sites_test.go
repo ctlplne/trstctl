@@ -450,7 +450,7 @@ func hostedKeysOwnershipSite() ownershipSite {
 			}
 		},
 		nameOf: func(ref string) string {
-			_, _, raw, err := opaqueBoundRefShape(ref)
+			_, _, raw, err := opaqueBoundRefShapeVersion(ref, "v3")
 			if err != nil {
 				return ""
 			}

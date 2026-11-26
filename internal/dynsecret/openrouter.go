@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -27,7 +28,17 @@ type openRouterVendor struct {
 }
 
 func (o openRouterVendor) mint(ctx context.Context, api hostedAPI, binding, name string) (string, []byte, error) {
+	return o.mintWithTTL(ctx, api, binding, name, 0)
+}
+
+func (o openRouterVendor) mintWithTTL(ctx context.Context, api hostedAPI, binding, name string, ttl time.Duration) (string, []byte, error) {
+	if ttl < 0 {
+		return "", nil, errors.New("dynsecret openrouter: TTL cannot be negative")
+	}
 	request := map[string]any{"name": name}
+	if ttl > 0 {
+		request["expires_at"] = time.Now().Add(ttl).UTC().Format(time.RFC3339Nano)
+	}
 	if amount, ok := strings.CutPrefix(binding, "limit-"); ok {
 		limit, err := strconv.ParseFloat(amount, 64)
 		if err != nil {

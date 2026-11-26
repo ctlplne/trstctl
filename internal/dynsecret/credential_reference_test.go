@@ -47,7 +47,7 @@ func TestCR605HostedIssuedReferenceRetainsTargetBindingAtPublication(t *testing.
 	if err := ValidateIssuedHostedReference(provider, "inference", ref, []byte(document)); err != nil {
 		t.Fatalf("target-bound issued key refused at publication: %v", err)
 	}
-	raw, _, err := opaqueFromBoundRef(ref, "openrouter", backend.api.endpoint, backend.adminIdentity)
+	raw, _, _, err := issuedOpaqueFromBoundRef(ref, "openrouter", backend.api.endpoint, backend.adminIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}

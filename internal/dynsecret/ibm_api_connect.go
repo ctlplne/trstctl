@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 )
@@ -56,13 +57,14 @@ type APIConnectConfig struct {
 
 // APIConnectBackend issues API Connect app credentials.
 type APIConnectBackend struct {
-	endpoint     string
-	clientID     string
-	clientSecret *secret.Buffer
-	apiKey       *secret.Buffer
-	apps         map[string]string
-	prefix       string
-	client       *http.Client
+	endpoint      string
+	clientID      string
+	clientSecret  *secret.Buffer
+	apiKey        *secret.Buffer
+	apps          map[string]string
+	prefix        string
+	client        *http.Client
+	adminIdentity string
 }
 
 // NewAPIConnectBackend validates cfg.
@@ -74,7 +76,8 @@ func NewAPIConnectBackend(cfg APIConnectConfig) (*APIConnectBackend, error) {
 		return nil, errors.New("dynsecret ibm-api-connect: the platform client ID and secret, an API key and an HTTP client are required")
 	}
 	b := &APIConnectBackend{endpoint: strings.TrimRight(cfg.Endpoint, "/"), clientID: cfg.ClientID, apps: map[string]string{},
-		prefix: cfg.UsernamePrefix, client: cfg.HTTPClient}
+		prefix: cfg.UsernamePrefix, client: cfg.HTTPClient,
+		adminIdentity: boundTargetDigest("ibm-api-connect-admin", cfg.ClientID, crypto.SHA256Hex(cfg.ClientSecret), crypto.SHA256Hex(cfg.APIKey))}
 	for role, binding := range cfg.RoleBindings {
 		app, err := ParseAPIConnectApp(binding)
 		if err != nil {
@@ -157,23 +160,33 @@ func (b *APIConnectBackend) CreateCredential(ctx context.Context, req GenerateRe
 	if err != nil {
 		return "", nil, err
 	}
-	return app + "/" + name, credential, nil
+	return boundIssuedOpaqueRef("ibm-api-connect", b.prefix, app+"/"+name, b.endpoint, b.adminIdentity), credential, nil
 }
 
 // Revoke implements Backend: the credential is deleted, and the gateway refuses
 // its client ID. Only credentials this provider names, on apps its roles are
 // bound to, are deleted; one already gone counts as revoked.
 func (b *APIConnectBackend) Revoke(ctx context.Context, ref string) error {
+	issuedPrefix := b.prefix
+	issued := false
+	if strings.HasPrefix(ref, "v3:") {
+		var err error
+		ref, issuedPrefix, issued, err = issuedOpaqueFromBoundRef(ref, "ibm-api-connect", b.endpoint, b.adminIdentity)
+		if err != nil {
+			return err
+		}
+	}
 	cut := strings.LastIndex(ref, "/")
 	if cut < 0 {
 		return fmt.Errorf("dynsecret ibm-api-connect: refusing to delete %q, which this provider did not create", ref)
 	}
 	app, name := ref[:cut], ref[cut+1:]
+	canonicalApp, parseErr := ParseAPIConnectApp(app)
 	bound := false
 	for _, configured := range b.apps {
 		bound = bound || configured == app
 	}
-	if !bound || !apiConnectName.MatchString(name) || !issuedPrincipalNameWith(b.prefix, name, '-') {
+	if parseErr != nil || canonicalApp != app || (!issued && !bound) || !apiConnectName.MatchString(name) || !issuedPrincipalNameWith(issuedPrefix, name, '-') {
 		return fmt.Errorf("dynsecret ibm-api-connect: refusing to delete %q, which this provider did not create", ref)
 	}
 	token, err := b.accessToken(ctx)

@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -75,10 +76,18 @@ func (token cloudflareTokenIdentity) wipe() {
 }
 
 func (c cloudflareVendor) mint(ctx context.Context, api hostedAPI, binding, name string) (string, []byte, error) {
+	return c.mintWithTTL(ctx, api, binding, name, 0)
+}
+
+func (c cloudflareVendor) mintWithTTL(ctx context.Context, api hostedAPI, binding, name string, ttl time.Duration) (string, []byte, error) {
+	if ttl < 0 {
+		return "", nil, errors.New("dynsecret cloudflare: TTL cannot be negative")
+	}
 	path, template, account := cloudflareTarget(binding)
 	var current cloudflareEnvelope[struct {
 		Policies  []cloudflarePolicy `json:"policies"`
 		Condition json.RawMessage    `json:"condition"`
+		ExpiresOn string             `json:"expires_on"`
 	}]
 	if _, err := hostedJSON(ctx, api, http.MethodGet, path+"/"+template, nil, bearerFrom(c.admin), &current); err != nil {
 		return "", nil, fmt.Errorf("dynsecret %s: read the template token: %w", api.name, err)
@@ -105,6 +114,23 @@ func (c cloudflareVendor) mint(ctx context.Context, api hostedAPI, binding, name
 		policies = append(policies, map[string]any{"effect": policy.Effect, "permission_groups": groups, "resources": policy.Resources})
 	}
 	request := map[string]any{"name": name, "policies": policies}
+	expires := time.Time{}
+	if current.Result.ExpiresOn != "" {
+		var err error
+		expires, err = time.Parse(time.RFC3339Nano, current.Result.ExpiresOn)
+		if err != nil || !expires.After(time.Now()) {
+			return "", nil, fmt.Errorf("dynsecret %s: template token has invalid or elapsed expiry", api.name)
+		}
+	}
+	if ttl > 0 {
+		leaseExpiry := time.Now().Add(ttl)
+		if expires.IsZero() || leaseExpiry.Before(expires) {
+			expires = leaseExpiry
+		}
+	}
+	if !expires.IsZero() {
+		request["expires_on"] = expires.UTC().Format(time.RFC3339Nano)
+	}
 	if len(current.Result.Condition) > 0 && string(current.Result.Condition) != "null" {
 		request["condition"] = current.Result.Condition
 	}

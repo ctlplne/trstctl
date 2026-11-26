@@ -7136,6 +7136,7 @@ export interface MachineAuthMethod {
   scopes?: string[];
   scopes_by_principal?: Record<string, unknown>;
   scopes_claim?: string;
+  server_id?: string;
   source: string;
   subject_claim?: string;
   tenant_claim?: string;
@@ -7411,6 +7412,7 @@ export interface Member {
   offboarded_at?: string;
   offboarded_by?: string;
   roles: string[];
+  scim_identity?: { external_id?: string; subject_attribute: "userName" | "externalId"; user_name: string };
   source: string;
   status: "active" | "offboarded";
   subject: string;
@@ -7427,6 +7429,7 @@ export interface MemberRequest {
   display_name?: string;
   email?: string;
   roles: string[];
+  scim_identity?: { external_id?: string; subject_attribute: "userName" | "externalId"; user_name: string };
   source?: string;
 }
 

@@ -131,7 +131,7 @@ func (b *OpenAIBackend) CreateCredential(ctx context.Context, req GenerateReques
 	if err != nil {
 		return "", nil, err
 	}
-	return boundOpaqueRef("openai", b.prefix, project+"/"+created.ID, b.api.endpoint, b.adminIdentity), credential, nil
+	return boundIssuedOpaqueRef("openai", b.prefix, project+"/"+created.ID, b.api.endpoint, b.adminIdentity), credential, nil
 }
 
 // Revoke implements Backend: the service account is deleted after its name is
@@ -139,13 +139,14 @@ func (b *OpenAIBackend) CreateCredential(ctx context.Context, req GenerateReques
 // gone counts as revoked.
 func (b *OpenAIBackend) Revoke(ctx context.Context, ref string) error {
 	var issuedPrefix string
+	var issued bool
 	var err error
-	ref, issuedPrefix, err = opaqueFromBoundRef(ref, "openai", b.api.endpoint, b.adminIdentity)
+	ref, issuedPrefix, issued, err = issuedOpaqueFromBoundRef(ref, "openai", b.api.endpoint, b.adminIdentity)
 	if err != nil {
 		return err
 	}
 	project, id, ok := strings.Cut(ref, "/")
-	if !ok || !openAIServiceAccount.MatchString(id) || !b.boundProject(project) {
+	if !ok || !openAIProject.MatchString(project) || !openAIServiceAccount.MatchString(id) || (!issued && !b.boundProject(project)) {
 		return fmt.Errorf("dynsecret openai: refusing %q, which names no service account of a bound project", ref)
 	}
 	status, response, err := b.api.call(ctx, http.MethodGet, openAIServiceAccounts(project)+"/"+url.PathEscape(id), nil, bearerFrom(b.adminKey))

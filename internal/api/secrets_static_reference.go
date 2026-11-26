@@ -138,7 +138,13 @@ func staticRotationProviderKeepsReferenceAuthority(cmd store.SecretStaticRotatio
 	}
 	for _, reference := range []string{cmd.OldRef, cmd.NewRef} {
 		if reference != "" && reference != staticRotationNoPredecessor {
-			if _, err := dynsecret.NormalizeHostedReference(provider, cmd.Key, reference); err != nil {
+			var err error
+			if strings.HasPrefix(reference, "v3:") {
+				_, err = dynsecret.NormalizeStoredHostedReference(provider, reference)
+			} else {
+				_, err = dynsecret.NormalizeHostedReference(provider, cmd.Key, reference)
+			}
+			if err != nil {
 				return false
 			}
 		}
@@ -212,7 +218,8 @@ func (a *API) liveStaticRotationPredecessorForSecret(
 	if queueKind != kind || !staticRotationProviderKeepsReferenceAuthority(command, provider, kind, queueKind, bound != nil) {
 		return "", nil
 	}
-	if bound != nil && bound.ProviderAuthority != staticRotationAuthority(provider, current.Name) {
+	if bound != nil && bound.ProviderAuthority != staticRotationAuthority(provider, current.Name) &&
+		(kind == store.SecretRotationScheduleNativeReference || !strings.HasPrefix(reference, "v3:")) {
 		return "", nil
 	}
 	if receiverAuthority != "" && (bound == nil || bound.ReceiverAuthority != receiverAuthority) {
@@ -272,10 +279,18 @@ func (a *API) staticRotationReferenceView(ctx context.Context, cmd store.SecretS
 		if provider, _, err := a.staticRotationProvider(cmd.TenantID, cmd.Provider, cmd.Key); err == nil &&
 			dynsecret.HostedReferenceProviderType(provider) == cmd.ProviderType {
 			if view.OldRef == "" {
-				view.OldRef, _ = dynsecret.NormalizeHostedReference(provider, cmd.Key, cmd.OldRef)
+				if strings.HasPrefix(cmd.OldRef, "v3:") {
+					view.OldRef, _ = dynsecret.NormalizeStoredHostedReference(provider, cmd.OldRef)
+				} else {
+					view.OldRef, _ = dynsecret.NormalizeHostedReference(provider, cmd.Key, cmd.OldRef)
+				}
 			}
 			if view.NewRef == "" {
-				view.NewRef, _ = dynsecret.NormalizeHostedReference(provider, cmd.Key, cmd.NewRef)
+				if strings.HasPrefix(cmd.NewRef, "v3:") {
+					view.NewRef, _ = dynsecret.NormalizeStoredHostedReference(provider, cmd.NewRef)
+				} else {
+					view.NewRef, _ = dynsecret.NormalizeHostedReference(provider, cmd.Key, cmd.NewRef)
+				}
 			}
 		}
 	}
@@ -407,7 +422,12 @@ func (a *API) previewStaticRotationReference(tenantID string, req secretRotation
 	case "":
 		return req.OldRef
 	case "litellm":
-		reference, _ := dynsecret.NormalizeHostedReference(provider, req.Key, req.OldRef)
+		var reference string
+		if strings.HasPrefix(req.OldRef, "v3:") {
+			reference, _ = dynsecret.NormalizeStoredHostedReference(provider, req.OldRef)
+		} else {
+			reference, _ = dynsecret.NormalizeHostedReference(provider, req.Key, req.OldRef)
+		}
 		return reference
 	default:
 		return ""
@@ -429,7 +449,13 @@ func (a *API) admitStaticRotationPredecessor(
 		return reference, nil
 	}
 	refused := errStatus(http.StatusConflict, staticReferenceReviewDetail)
-	canonical, err := dynsecret.NormalizeHostedReference(provider, current.Name, reference)
+	var canonical string
+	var err error
+	if strings.HasPrefix(reference, "v3:") {
+		canonical, err = dynsecret.NormalizeStoredHostedReference(provider, reference)
+	} else {
+		canonical, err = dynsecret.NormalizeHostedReference(provider, current.Name, reference)
+	}
 	if err != nil {
 		return "", refused
 	}
@@ -453,7 +479,7 @@ func (a *API) admitStaticRotationPredecessor(
 	}
 	opened, err := a.secrets.open(ctx, tenantID, current.Sealed, sealAAD(tenantID, current.Name))
 	defer secret.Wipe(opened)
-	if err != nil || dynsecret.ValidateIssuedHostedReference(provider, current.Name, canonical, opened) != nil {
+	if err != nil || dynsecret.ValidateImportedHostedReference(provider, current.Name, canonical, opened) != nil {
 		return "", refused
 	}
 	return canonical, nil
@@ -613,7 +639,13 @@ func (a *API) authorizeStaticRotationReference(
 	if command.ProviderType != "" && command.ProviderType != kind {
 		return "", errors.New(staticReferenceReviewDetail)
 	}
-	canonical, err := dynsecret.NormalizeHostedReference(provider, command.Key, reference)
+	var canonical string
+	var err error
+	if strings.HasPrefix(reference, "v3:") {
+		canonical, err = dynsecret.NormalizeStoredHostedReference(provider, reference)
+	} else {
+		canonical, err = dynsecret.NormalizeHostedReference(provider, command.Key, reference)
+	}
 	if err != nil {
 		return "", errors.New(staticReferenceReviewDetail)
 	}

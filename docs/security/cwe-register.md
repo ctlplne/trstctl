@@ -1743,8 +1743,8 @@ not this file.
 | `internal/dynsecret/aws_sts.go:242` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/cassandra.go:179` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/clickhouse.go:131` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/client_secrets.go:180` | the new secret is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
-| `internal/dynsecret/cloudflare.go:144` | the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/client_secrets.go:193` | the new secret is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/cloudflare.go:170` | the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/convex.go:55` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/couchbase.go:145` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/datadog.go:183` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
@@ -1754,8 +1754,8 @@ not this file.
 | `internal/dynsecret/fireworks.go:117` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/github_app.go:228` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/hana.go:187` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/ibm_api_connect.go:152` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/ibm_api_connect.go:202` | the platform credentials go to the token endpoint over the guarded client and are not kept (CWE-200) |
+| `internal/dynsecret/ibm_api_connect.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/ibm_api_connect.go:215` | the platform credentials go to the token endpoint over the guarded client and are not kept (CWE-200) |
 | `internal/dynsecret/idp_admin.go:172` | the rotated administrator credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/kafka.go:340` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/ldap.go:359` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
@@ -1771,7 +1771,7 @@ not this file.
 | `internal/dynsecret/network_device.go:125` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:311` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/openai.go:128` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
-| `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/openrouter.go:78` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:233` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/providers_real.go:1809` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
@@ -3970,7 +3970,7 @@ not this file.
 | `internal/dynsecret/esxi.go:160` | the operator's configured host through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/github_app.go:327` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/hosted_api.go:66` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/ibm_api_connect.go:239` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/ibm_api_connect.go:252` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/milvus.go:184` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/mongodb_atlas.go:237` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/mongodb_atlas.go:264` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
