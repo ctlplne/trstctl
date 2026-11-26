@@ -11,6 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/inputtext"
 	"trstctl.com/trstctl/internal/mcpserver"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -61,6 +62,10 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		// A producer that bypasses the shared request decoder still receives a
 		// client refusal when the final event-log admission rejects unsafe text.
 		a.writeProblem(w, problem.New(http.StatusBadRequest, "request contains unsafe text"))
+	case errors.Is(err, events.ErrEventPayloadTooLarge), errors.Is(err, events.ErrEventWireTooLarge),
+		errors.Is(err, store.ErrMemberCommandPayloadTooLarge):
+		a.writeProblem(w, problem.New(http.StatusRequestEntityTooLarge,
+			"event is too large for the configured broker; reduce the request size"))
 	case a.writeExternalCAHeldError(w, err):
 	case a.writeExternalCAError(w, err):
 	case a.writeCAHierarchyError(w, err):

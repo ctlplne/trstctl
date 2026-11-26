@@ -5543,6 +5543,15 @@ hash loads within two seconds without a restart, and a rewrite that cannot be
 used keeps the last good token. The writeback bearer is still read only at
 startup.
 
+Member mutations limit the subject and display name to 1024 bytes, email to
+320 bytes, role lists to 128 entries, and offboard reasons to 2048 bytes. The
+orchestrator also checks the complete encoded event against the broker's
+negotiated payload limit before recording a pending command. An oversized
+pending command left by an older binary is marked `event_payload_too_large`:
+startup recovery skips that exact command and continues with other tenants.
+Its access fence stays in force until an operator retries the same member with
+a bounded request; the rejected event was never appended.
+
 Directory writeback (A73) is served when a token also names the directory's
 own SCIM 2.0 endpoint (`auth.scim.tokens[].writeback_endpoint` and
 `writeback_token_file`; the bearer stays in locked memory). A change an

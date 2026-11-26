@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -38,7 +39,7 @@ func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, c
 		return err
 	}
 	defer release()
-	superseded := false
+	superseded, sizeBlocked := false, false
 	err = o.store.WithPrivacyRecoveryBarrier(fenced, command.TenantID,
 		"member upsert recovery privacy barrier", func(barrierCtx context.Context) error {
 			return o.store.WithTenant(barrierCtx, command.TenantID, func(tx pgx.Tx) error {
@@ -109,8 +110,19 @@ func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, c
 						superseded = true
 						return nil
 					}
+					if err := o.log.PreflightAppendCapacity(current.Event); err != nil {
+						if !deterministicMemberSizeError(err) {
+							return err
+						}
+						sizeBlocked = true
+						return o.store.BlockOversizedTenantMemberUpsertCommandTx(barrierCtx, tx, current)
+					}
 					retained, err = o.log.Append(barrierCtx, current.Event)
 					if err != nil {
+						if deterministicMemberSizeError(err) {
+							sizeBlocked = true
+							return o.store.BlockOversizedTenantMemberUpsertCommandTx(barrierCtx, tx, current)
+						}
 						return err
 					}
 				}
@@ -131,7 +143,14 @@ func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, c
 	if superseded {
 		return store.ErrTenantMemberOffboarded
 	}
+	if sizeBlocked {
+		return store.ErrMemberCommandPayloadTooLarge
+	}
 	return nil
+}
+
+func deterministicMemberSizeError(err error) bool {
+	return errors.Is(err, events.ErrEventPayloadTooLarge) || errors.Is(err, events.ErrEventWireTooLarge)
 }
 
 // ReconcilePendingTenantMemberUpserts is bounded per tenant and replays the
@@ -152,10 +171,15 @@ func (o *Orchestrator) ReconcilePendingTenantMemberUpserts(ctx context.Context) 
 				break
 			}
 			for _, command := range pending {
-				if err := o.reconcileTenantMemberUpsertCommand(ctx, command); err != nil && !errors.Is(err, store.ErrTenantMemberOffboarded) {
-					return healed, fmt.Errorf("orchestrator: reconcile member upsert %s: %w", command.Event.ID, err)
+				reconcileErr := o.reconcileTenantMemberUpsertCommand(ctx, command)
+				if reconcileErr != nil &&
+					!errors.Is(reconcileErr, store.ErrTenantMemberOffboarded) &&
+					!errors.Is(reconcileErr, store.ErrMemberCommandPayloadTooLarge) {
+					return healed, fmt.Errorf("orchestrator: reconcile member upsert %s: %w", command.Event.ID, reconcileErr)
 				}
-				healed++
+				if !errors.Is(reconcileErr, store.ErrMemberCommandPayloadTooLarge) {
+					healed++
+				}
 			}
 		}
 	}

@@ -23,22 +23,29 @@ import (
 // source. A pending command removes cookie grants while its exact event waits
 // for projection. A later offboard may supersede an unappended command.
 type TenantMemberUpsertCommand struct {
-	TenantID          string
-	SubjectRef        string
-	OffboardEventID   *string
-	PrivacyEventID    *string
-	Event             events.Event
-	LastEventSequence int64
-	Status            string
+	TenantID              string
+	SubjectRef            string
+	OffboardEventID       *string
+	PrivacyEventID        *string
+	Event                 events.Event
+	LastEventSequence     int64
+	Status                string
+	RecoveryBlockedReason string
 }
 
 const tenantMemberUpsertCommandColumns = `tenant_id::text, subject_ref, event_id::text,
     event_time, event_schema_version, offboard_event_id::text, privacy_erasure_event_id, event_actor,
-    event_payload, payload_sha256, last_event_sequence, status`
+    event_payload, payload_sha256, last_event_sequence, status, recovery_blocked_reason`
 
 // ErrSCIMMemberOutOfScope means a provisioning token tried to claim a subject
 // already owned by a local member or by an API-token holder/minter.
 var ErrSCIMMemberOutOfScope = errors.New("store: subject is outside SCIM provisioning scope")
+
+// The member command is held before append. Keep its original JSON small
+// enough for even a protected, base64-encoded broker envelope.
+const maxMemberCommandDataBytes = 128 << 10
+
+var ErrMemberCommandPayloadTooLarge = errors.New("store: member command payload exceeds 128 KiB")
 
 func scanTenantMemberUpsertCommand(row pgx.Row) (TenantMemberUpsertCommand, error) {
 	var c TenantMemberUpsertCommand
@@ -46,7 +53,7 @@ func scanTenantMemberUpsertCommand(row pgx.Row) (TenantMemberUpsertCommand, erro
 	var digest *string
 	if err := row.Scan(&c.TenantID, &c.SubjectRef, &c.Event.ID, &c.Event.Time,
 		&c.Event.SchemaVersion, &c.OffboardEventID, &c.PrivacyEventID, &actor, &payload, &digest,
-		&c.LastEventSequence, &c.Status); err != nil {
+		&c.LastEventSequence, &c.Status, &c.RecoveryBlockedReason); err != nil {
 		return c, err
 	}
 	c.Event.TenantID = c.TenantID
@@ -100,6 +107,9 @@ func (s *Store) claimTenantMemberUpsertCommand(ctx context.Context, tenantID, su
 		ev.Time.IsZero() || !ev.Time.Equal(ev.Time.UTC().Truncate(time.Microsecond)) {
 		return canonical, false, errors.New("store: incomplete member upsert command")
 	}
+	if len(ev.Data) > maxMemberCommandDataBytes {
+		return canonical, false, ErrMemberCommandPayloadTooLarge
+	}
 	var payload struct {
 		Subject string `json:"subject"`
 	}
@@ -152,7 +162,7 @@ func (s *Store) claimTenantMemberUpsertCommand(ctx context.Context, tenantID, su
 			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return err
 			}
-			if err == nil && canonical.Status == "pending" {
+			if err == nil && canonical.Status == "pending" && canonical.RecoveryBlockedReason == "" {
 				if canonical.Event.SchemaVersion != ev.SchemaVersion ||
 					!bytes.Equal(canonical.Event.Data, ev.Data) ||
 					!reflect.DeepEqual(canonical.Event.Actor, ev.Actor) {
@@ -181,7 +191,8 @@ func (s *Store) claimTenantMemberUpsertCommand(ctx context.Context, tenantID, su
 				 SET event_id = $3, event_time = $4, event_schema_version = $5,
 				     offboard_event_id = $6, privacy_erasure_event_id = $7,
 				     event_actor = $8, event_payload = $9,
-				     payload_sha256 = $10, last_event_sequence = 0, status = 'pending', updated_at = now()
+					     payload_sha256 = $10, last_event_sequence = 0, status = 'pending',
+					     recovery_blocked_reason = '', updated_at = now()
 				 WHERE tenant_id = $1 AND subject_ref = $2`, tenantID, ref, ev.ID, ev.Time,
 					ev.SchemaVersion, offboardEventID, privacyEventID, actor, ev.Data, crypto.SHA256Hex(ev.Data))
 			} else {
@@ -274,6 +285,22 @@ func (s *Store) SupersedeTenantMemberUpsertCommandTx(ctx context.Context, tx pgx
 	return nil
 }
 
+// BlockOversizedTenantMemberUpsertCommandTx retains the pending denial but
+// removes a deterministic broker-size failure from startup recovery scans.
+func (s *Store) BlockOversizedTenantMemberUpsertCommandTx(ctx context.Context, tx pgx.Tx, c TenantMemberUpsertCommand) error {
+	tag, err := tx.Exec(ctx, `UPDATE tenant_member_upsert_commands
+	 SET recovery_blocked_reason='event_payload_too_large', updated_at=now()
+	 WHERE tenant_id=$1 AND subject_ref=$2 AND event_id=$3 AND status='pending'`,
+		c.TenantID, c.SubjectRef, c.Event.ID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("store: oversized member upsert lost its first writer")
+	}
+	return nil
+}
+
 // CompleteTenantMemberUpsertCommandTx scrubs pending personal data in the
 // projection transaction. Legacy source events have no command and still replay.
 func (s *Store) CompleteTenantMemberUpsertCommandTx(ctx context.Context, tx pgx.Tx, tenantID, subject string, event events.Event) error {
@@ -322,7 +349,8 @@ func (s *Store) ListPendingTenantMemberUpsertCommands(ctx context.Context, tenan
 	var out []TenantMemberUpsertCommand
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT `+tenantMemberUpsertCommandColumns+` FROM tenant_member_upsert_commands
-		 WHERE tenant_id = $1 AND status = 'pending' ORDER BY updated_at, subject_ref LIMIT $2`, tenantID, limit)
+		 WHERE tenant_id = $1 AND status = 'pending' AND recovery_blocked_reason = ''
+		 ORDER BY updated_at, subject_ref LIMIT $2`, tenantID, limit)
 		if err != nil {
 			return err
 		}

@@ -35,7 +35,8 @@ func (o *Orchestrator) reconcileTenantMemberOffboardCommand(ctx context.Context,
 		return err
 	}
 	defer release()
-	return o.store.WithPrivacyRecoveryBarrier(fenced, command.TenantID,
+	sizeBlocked := false
+	err = o.store.WithPrivacyRecoveryBarrier(fenced, command.TenantID,
 		"member offboard recovery privacy barrier", func(barrierCtx context.Context) error {
 			return o.store.WithTenant(barrierCtx, command.TenantID, func(tx pgx.Tx) error {
 				if err := o.store.LockTenantMemberSubjectRefTx(barrierCtx, tx, command.TenantID, command.SubjectRef); err != nil {
@@ -69,8 +70,19 @@ func (o *Orchestrator) reconcileTenantMemberOffboardCommand(ctx context.Context,
 						return errors.New("orchestrator: retained member offboard event conflicts with first command")
 					}
 				} else {
+					if err := o.log.PreflightAppendCapacity(current.Event); err != nil {
+						if !deterministicMemberSizeError(err) {
+							return err
+						}
+						sizeBlocked = true
+						return o.store.BlockOversizedTenantMemberOffboardCommandTx(barrierCtx, tx, current)
+					}
 					retained, err = o.log.Append(barrierCtx, current.Event)
 					if err != nil {
+						if deterministicMemberSizeError(err) {
+							sizeBlocked = true
+							return o.store.BlockOversizedTenantMemberOffboardCommandTx(barrierCtx, tx, current)
+						}
 						return err
 					}
 				}
@@ -83,6 +95,13 @@ func (o *Orchestrator) reconcileTenantMemberOffboardCommand(ctx context.Context,
 				return o.proj.ApplyTx(barrierCtx, tx, retained)
 			})
 		})
+	if err != nil {
+		return err
+	}
+	if sizeBlocked {
+		return store.ErrMemberCommandPayloadTooLarge
+	}
+	return nil
 }
 
 // ReconcilePendingTenantMemberOffboards is bounded per tenant and safe after a
@@ -103,10 +122,13 @@ func (o *Orchestrator) ReconcilePendingTenantMemberOffboards(ctx context.Context
 				break
 			}
 			for _, command := range pending {
-				if err := o.reconcileTenantMemberOffboardCommand(ctx, command, false); err != nil {
-					return healed, fmt.Errorf("orchestrator: reconcile member offboard %s: %w", command.Event.ID, err)
+				reconcileErr := o.reconcileTenantMemberOffboardCommand(ctx, command, false)
+				if reconcileErr != nil && !errors.Is(reconcileErr, store.ErrMemberCommandPayloadTooLarge) {
+					return healed, fmt.Errorf("orchestrator: reconcile member offboard %s: %w", command.Event.ID, reconcileErr)
 				}
-				healed++
+				if !errors.Is(reconcileErr, store.ErrMemberCommandPayloadTooLarge) {
+					healed++
+				}
 			}
 		}
 	}

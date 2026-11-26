@@ -23,18 +23,19 @@ import (
 // preserve one exact source event; completed rows retain only an opaque subject
 // reference and sequence so late replay cannot revive a pre-offboard bearer.
 type TenantMemberOffboardCommand struct {
-	TenantID          string
-	SubjectRef        string
-	Event             events.Event
-	LastEventSequence int64
-	Status            string
+	TenantID              string
+	SubjectRef            string
+	Event                 events.Event
+	LastEventSequence     int64
+	Status                string
+	RecoveryBlockedReason string
 }
 
 var ErrTenantMemberOffboarded = errors.New("store: tenant member is offboarded")
 
 const tenantMemberOffboardCommandColumns = `tenant_id::text, subject_ref, event_id::text,
     event_time, event_schema_version, event_actor, event_payload, payload_sha256,
-    last_event_sequence, status`
+    last_event_sequence, status, recovery_blocked_reason`
 
 func scanTenantMemberOffboardCommand(row pgx.Row) (TenantMemberOffboardCommand, error) {
 	var c TenantMemberOffboardCommand
@@ -42,7 +43,7 @@ func scanTenantMemberOffboardCommand(row pgx.Row) (TenantMemberOffboardCommand, 
 	var digest *string
 	var sequence int64
 	if err := row.Scan(&c.TenantID, &c.SubjectRef, &c.Event.ID, &c.Event.Time,
-		&c.Event.SchemaVersion, &actor, &payload, &digest, &sequence, &c.Status); err != nil {
+		&c.Event.SchemaVersion, &actor, &payload, &digest, &sequence, &c.Status, &c.RecoveryBlockedReason); err != nil {
 		return c, err
 	}
 	c.Event.TenantID = c.TenantID
@@ -196,7 +197,7 @@ func (s *Store) claimTenantMemberOffboardCommand(ctx context.Context, tenantID, 
 				return err
 			}
 			if err == nil {
-				if canonical.Status == "pending" {
+				if canonical.Status == "pending" && canonical.RecoveryBlockedReason == "" {
 					return nil
 				}
 				var active, pendingRehire bool
@@ -225,6 +226,9 @@ func (s *Store) claimTenantMemberOffboardCommand(ctx context.Context, tenantID, 
 			if err != nil {
 				return err
 			}
+			if len(ev.Data) > maxMemberCommandDataBytes {
+				return ErrMemberCommandPayloadTooLarge
+			}
 			if ev.ID == "" || ev.TenantID != tenantID || ev.Type != "tenant.member.offboarded" ||
 				ev.Time.IsZero() || len(ev.Data) == 0 || ev.SchemaVersion < 1 ||
 				!ev.Time.Equal(ev.Time.UTC().Truncate(time.Microsecond)) {
@@ -237,10 +241,11 @@ func (s *Store) claimTenantMemberOffboardCommand(ctx context.Context, tenantID, 
 					return err
 				}
 			}
-			if canonical.Status == "completed" {
+			if canonical.Status != "" {
 				_, err = tx.Exec(barrierCtx, `UPDATE tenant_member_offboard_commands
 				 SET event_id = $3, event_time = $4, event_schema_version = $5, event_actor = $6,
-				     event_payload = $7, payload_sha256 = $8, status = 'pending', updated_at = now()
+				     event_payload = $7, payload_sha256 = $8, status = 'pending',
+				     recovery_blocked_reason = '', updated_at = now()
 				 WHERE tenant_id = $1 AND subject_ref = $2`, tenantID, ref, ev.ID, ev.Time,
 					ev.SchemaVersion, actor, ev.Data, crypto.SHA256Hex(ev.Data))
 			} else {
@@ -321,6 +326,22 @@ func (s *Store) LockTenantMemberOffboardCommandTx(ctx context.Context, tx pgx.Tx
 		 WHERE tenant_id = $1 AND subject_ref = $2 FOR UPDATE`, tenantID, subjectRef))
 }
 
+// BlockOversizedTenantMemberOffboardCommandTx keeps the offboard denial while
+// letting unrelated startup recovery continue.
+func (s *Store) BlockOversizedTenantMemberOffboardCommandTx(ctx context.Context, tx pgx.Tx, c TenantMemberOffboardCommand) error {
+	tag, err := tx.Exec(ctx, `UPDATE tenant_member_offboard_commands
+	 SET recovery_blocked_reason='event_payload_too_large', updated_at=now()
+	 WHERE tenant_id=$1 AND subject_ref=$2 AND event_id=$3 AND status='pending'`,
+		c.TenantID, c.SubjectRef, c.Event.ID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("store: oversized member offboard lost its first writer")
+	}
+	return nil
+}
+
 func (s *Store) ListPendingTenantMemberOffboardCommands(ctx context.Context, tenantID string, limit int) ([]TenantMemberOffboardCommand, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 100
@@ -328,7 +349,8 @@ func (s *Store) ListPendingTenantMemberOffboardCommands(ctx context.Context, ten
 	var out []TenantMemberOffboardCommand
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT `+tenantMemberOffboardCommandColumns+` FROM tenant_member_offboard_commands
-		 WHERE tenant_id = $1 AND status = 'pending' ORDER BY updated_at, subject_ref LIMIT $2`, tenantID, limit)
+		 WHERE tenant_id = $1 AND status = 'pending' AND recovery_blocked_reason = ''
+		 ORDER BY updated_at, subject_ref LIMIT $2`, tenantID, limit)
 		if err != nil {
 			return err
 		}

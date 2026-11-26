@@ -2449,6 +2449,9 @@ func (o *Orchestrator) upsertTenantMember(ctx context.Context, tenantID string, 
 	event := events.Event{ID: uuid.NewString(), Type: projections.EventTenantMemberUpserted,
 		TenantID: tenantID, SchemaVersion: version, Time: time.Now().UTC().Truncate(time.Microsecond),
 		Data: payload, Actor: actor}
+	if err := o.log.PreflightAppendCapacity(event); err != nil {
+		return store.TenantMember{}, err
+	}
 	requireActive, _ := ctx.Value(requireActiveMemberUpsertKey{}).(bool)
 	var command store.TenantMemberUpsertCommand
 	if scimOnly {
@@ -2512,9 +2515,13 @@ func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subje
 		if err != nil {
 			return events.Event{}, err
 		}
-		return events.Event{ID: uuid.NewString(), Type: projections.EventTenantMemberOffboarded,
+		event := events.Event{ID: uuid.NewString(), Type: projections.EventTenantMemberOffboarded,
 			TenantID: tenantID, SchemaVersion: version, Time: time.Now().UTC().Truncate(time.Microsecond),
-			Data: payload, Actor: eventActor}, nil
+			Data: payload, Actor: eventActor}
+		if err := o.log.PreflightAppendCapacity(event); err != nil {
+			return events.Event{}, err
+		}
+		return event, nil
 	}
 	var command store.TenantMemberOffboardCommand
 	var revokedCount int

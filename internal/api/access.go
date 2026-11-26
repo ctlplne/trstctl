@@ -242,6 +242,10 @@ func (a *API) upsertMember(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
+		if len(subject) > 1024 || len(req.DisplayName) > 1024 || len(req.Email) > 320 || len(req.Roles) > 128 {
+			return 0, nil, errStatus(http.StatusBadRequest,
+				"member subject/display_name is limited to 1024 bytes, email to 320 bytes, and roles to 128 entries")
+		}
 		// Member upsert replaces the entire record. A missing/null roles array
 		// would erase a restricted role set without role-assignment authorization
 		// and can restore broader OIDC sign-in defaults. OpenAPI requires roles;
@@ -374,6 +378,10 @@ func (a *API) offboardMember(w http.ResponseWriter, r *http.Request) {
 		var req offboardMemberRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if len(subject) > 1024 || len(req.Reason) > 2048 {
+			return 0, nil, errStatus(http.StatusBadRequest,
+				"member subject is limited to 1024 bytes and offboard reason to 2048 bytes")
 		}
 		member, revoked, err := a.orch.OffboardTenantMember(ctx, tenantID, subject, req.Reason)
 		if err != nil {

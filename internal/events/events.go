@@ -44,6 +44,8 @@ const MaxEventDataBytes = 1 << 20
 
 var ErrEventPayloadTooLarge = errors.New("events: event payload exceeds 1 MiB")
 
+var ErrEventWireTooLarge = errors.New("events: encoded event exceeds the broker payload limit")
+
 // ErrConflictingEventIdentity means retained source history contains one event
 // ID with more than one immutable envelope. Recovery must fail closed because no
 // caller can safely choose which command the producer identity means.
@@ -754,6 +756,9 @@ func (l *Log) publishPreparedEvent(ctx context.Context, e Event) (Event, error) 
 	if err != nil {
 		return Event{}, err
 	}
+	if l.nc == nil || l.nc.MaxPayload() <= 0 || int64(len(payload)) > l.nc.MaxPayload() {
+		return Event{}, ErrEventWireTooLarge
+	}
 	subject, err := tenancy.EventSubject(ctx, e.TenantID, subjectPrefix, e.Type)
 	if err != nil {
 		return Event{}, err
@@ -830,6 +835,29 @@ func (l *Log) publishPreparedEvent(ctx context.Context, e Event) (Event, error) 
 		}
 	}
 	return e, nil
+}
+
+// PreflightAppendCapacity is a conservative producer check before a command
+// commits its pending row. Sensitive events may be encrypted and encoded once
+// more before publication, so reserve three raw-envelope lengths plus 8 KiB
+// for the protected wrapper. The exact wire check still runs before ingress
+// staging in publishPreparedEvent.
+func (l *Log) PreflightAppendCapacity(e Event) error {
+	if l == nil || l.nc == nil || l.nc.MaxPayload() <= 0 {
+		return ErrEventWireTooLarge
+	}
+	stored, err := storedForEvent(e)
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(stored)
+	if err != nil {
+		return err
+	}
+	if int64(len(payload))*3+(8<<10) > l.nc.MaxPayload() {
+		return ErrEventWireTooLarge
+	}
+	return nil
 }
 
 func (l *Log) acknowledgedCanonicalRaw(ctx context.Context, streamName string,
