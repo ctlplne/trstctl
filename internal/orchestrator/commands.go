@@ -936,28 +936,32 @@ func (o *Orchestrator) EnsureOwner(ctx context.Context, tenantID, id string, kin
 // (mapped to 404) when the owner does not exist, without emitting an event — so
 // a no-op never produces a spurious event.
 func (o *Orchestrator) UpdateOwner(ctx context.Context, tenantID, id, kind, name, email string) error {
-	if _, err := o.store.GetOwner(ctx, tenantID, id); err != nil {
+	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		if _, err := o.store.GetOwner(lockCtx, tenantID, id); err != nil {
+			return err
+		}
+		payload, err := json.Marshal(projections.OwnerUpdated{ID: id, Kind: kind, Name: name, Email: email})
+		if err != nil {
+			return err
+		}
+		_, err = o.emit(lockCtx, projections.EventOwnerUpdated, tenantID, payload)
 		return err
-	}
-	payload, err := json.Marshal(projections.OwnerUpdated{ID: id, Kind: kind, Name: name, Email: email})
-	if err != nil {
-		return err
-	}
-	_, err = o.emit(ctx, projections.EventOwnerUpdated, tenantID, payload)
-	return err
+	})
 }
 
 // DeleteOwner records an owner.deleted event (404 if absent, no event emitted).
 func (o *Orchestrator) DeleteOwner(ctx context.Context, tenantID, id string) error {
-	if _, err := o.store.GetOwner(ctx, tenantID, id); err != nil {
+	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		if _, err := o.store.GetOwner(lockCtx, tenantID, id); err != nil {
+			return err
+		}
+		payload, err := json.Marshal(projections.OwnerDeleted{ID: id})
+		if err != nil {
+			return err
+		}
+		_, err = o.emit(lockCtx, projections.EventOwnerDeleted, tenantID, payload)
 		return err
-	}
-	payload, err := json.Marshal(projections.OwnerDeleted{ID: id})
-	if err != nil {
-		return err
-	}
-	_, err = o.emit(ctx, projections.EventOwnerDeleted, tenantID, payload)
-	return err
+	})
 }
 
 // ErasePrivacySubject is the one-shot internal form retained for callers that do

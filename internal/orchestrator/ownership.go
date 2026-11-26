@@ -422,14 +422,16 @@ func (o *Orchestrator) reconcileOwnership(ctx context.Context, tenantID, eventID
 	if err != nil {
 		return err
 	}
-	if eventID == "" {
-		_, err = o.emit(ctx, projections.EventOwnershipReconciled, tenantID, payload)
-	} else {
-		_, err = o.emitPrepared(ctx, events.Event{
-			ID: eventID, Type: projections.EventOwnershipReconciled, TenantID: tenantID, Data: payload,
-		})
-	}
-	return err
+	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		if eventID == "" {
+			_, err = o.emit(lockCtx, projections.EventOwnershipReconciled, tenantID, payload)
+		} else {
+			_, err = o.emitPrepared(lockCtx, events.Event{
+				ID: eventID, Type: projections.EventOwnershipReconciled, TenantID: tenantID, Data: payload,
+			})
+		}
+		return err
+	})
 }
 
 // ConfigureCMDBSchedule records a tenant's standing instruction to re-read its

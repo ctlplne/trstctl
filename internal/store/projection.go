@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -88,7 +89,8 @@ func (s *Store) ApplyOwnerUpdatedLegacyTx(ctx context.Context, tx pgx.Tx, o Owne
 }
 
 // ApplyOwnershipAttestedTx verifies the digest against the projection state at
-// this exact log position before granting deployment authority.
+// this exact log position before granting deployment authority. A stale event
+// is a no-op: it cannot grant authority or block replay of the shared log.
 func (s *Store) ApplyOwnershipAttestedTx(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -100,14 +102,20 @@ func (s *Store) ApplyOwnershipAttestedTx(
 		`SELECT coalesce(application_id, ''), coalesce(environment, '')
 		   FROM owners WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, ownerID).
 		Scan(&owner.ApplicationID, &owner.Environment); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
 		return err
 	}
 	want, err := OwnerModelDigest(owner)
 	if err != nil {
 		return err
 	}
-	if modelDigest != want || strings.TrimSpace(attestedBy) == "" {
+	if strings.TrimSpace(attestedBy) == "" {
 		return fmt.Errorf("store: ownership attestation does not match the current owner model")
+	}
+	if modelDigest != want {
+		return nil
 	}
 	_, err = tx.Exec(ctx,
 		`UPDATE owners
