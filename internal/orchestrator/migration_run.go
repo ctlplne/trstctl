@@ -226,6 +226,9 @@ func (o *Orchestrator) UpdateMigrationRun(
 		if err := migration.ValidateActions(next, actions); err != nil {
 			return err
 		}
+		if err := o.store.ValidateMigrationRestoreTx(ctx, tx, tenantID, next); err != nil {
+			return err
+		}
 		for _, action := range actions {
 			if _, err := migrationActionEntry(tenantID, next, action); err != nil {
 				return err

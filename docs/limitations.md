@@ -5351,7 +5351,13 @@ than sending an operator looking for a credential that was never there.
   consumed approval on it (`approval` in the run). A competing start is refused
   before its event is appended; a duplicate left by an older binary isolates
   that tenant for operator review while other tenants continue replaying.
-  Incident fleet reissuance
+  A host renewal's listener fingerprint must match the certificate that the
+  control plane issued for that exact job. Late receipts cannot replace a
+  retained successor fingerprint. Rollback receipts are checked against the
+  immutable successor binding and certificate inventory before an event is
+  appended; a verified host restore that inventory cannot reconcile halts the
+  run with an operator-visible reason. Historical unprojectable restore events
+  isolate their tenant during catch-up and rebuild. Incident fleet reissuance
   still refuses such members; it has no start approval of its own yet.
 - Trust in the graph (H1): trust-store anchors agents collect are promoted from
   flat discovery findings into relationships — a `trust-store` node kind, `TRUSTS`

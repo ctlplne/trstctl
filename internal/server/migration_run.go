@@ -38,7 +38,7 @@ func (s *Server) recordMigrationResult(
 	tenantID, agentID, destination, idempotencyKey string,
 	attempt int,
 	payload []byte,
-	outcome, report, evidenceDigest string,
+	outcome, report, evidenceDigest, credentialFingerprint string,
 ) (bool, error) {
 	claim, handled, err := decodeMigrationReceiptClaim(destination, payload)
 	if err != nil || !handled {
@@ -52,7 +52,7 @@ func (s *Server) recordMigrationResult(
 		Verdict: migration.VerdictFailed, At: time.Now().UTC(),
 	}
 	if outcome != transport.JobOutcomeFailed && outcome != transport.JobOutcomeVerifyFailed {
-		if err := validateVerifiedMigrationReport(claim, outcome, report, evidenceDigest, &obs); err != nil {
+		if err := validateVerifiedMigrationReport(claim, outcome, report, evidenceDigest, credentialFingerprint, &obs); err != nil {
 			return true, err
 		}
 		obs.Verdict = migration.VerdictVerified
@@ -64,8 +64,8 @@ func (s *Server) recordMigrationResult(
 		receipt += fmt.Sprintf(":attempt:%d", attempt)
 	}
 	eventID := orchestrator.MigrationEventID(tenantID, claim.runID, receipt)
-	updated, err := s.orch.UpdateMigrationRun(ctx, tenantID, claim.runID, eventID,
-		func(current migration.Run) (migration.Run, []migration.Action, error) {
+	applyObservation := func(observation migration.Observation) func(migration.Run) (migration.Run, []migration.Action, error) {
+		return func(current migration.Run) (migration.Run, []migration.Action, error) {
 			member, ok := migration.Member(current, claim.waveID, claim.identityID)
 			if !ok {
 				return current, nil, errors.New("server: migration receipt names no current run member")
@@ -73,8 +73,41 @@ func (s *Server) recordMigrationResult(
 			if err := validateMigrationClaimBinding(member.Binding, agentID, claim); err != nil {
 				return current, nil, err
 			}
-			return migration.Observe(current, obs)
-		})
+			return migration.Observe(current, observation)
+		}
+	}
+	updated, err := s.orch.UpdateMigrationRun(ctx, tenantID, claim.runID, eventID, applyObservation(obs))
+	if errors.Is(err, store.ErrMigrationRestoreInconsistent) &&
+		obs.Stage == migration.StageRollbackSuccessor && obs.Verdict == migration.VerdictVerified {
+		// The host proved the predecessor is served, but the inventory cannot
+		// identify a safe certificate to reactivate. Record an operator-visible
+		// halted inverse under this receipt ID instead of appending a record
+		// that the projector can never apply.
+		failed := obs
+		failed.Verdict = migration.VerdictFailed
+		failed.SuccessorFingerprint = ""
+		updated, err = s.orch.UpdateMigrationRun(ctx, tenantID, claim.runID, eventID,
+			func(current migration.Run) (migration.Run, []migration.Action, error) {
+				member, found := migration.Member(current, claim.waveID, claim.identityID)
+				if !found {
+					return current, nil, errors.New("server: migration receipt names no current run member")
+				}
+				if err := validateMigrationClaimBinding(member.Binding, agentID, claim); err != nil {
+					return current, nil, err
+				}
+				next, actions, err := migration.Observe(current, failed)
+				if err != nil {
+					return current, nil, err
+				}
+				next.HaltReason = "rollback halted: certificate inventory does not match the verified restoration"
+				for i := range next.Waves {
+					if next.Waves[i].ID == claim.waveID {
+						next.Waves[i].HaltReason = next.HaltReason
+					}
+				}
+				return next, actions, nil
+			})
+	}
 	if err != nil {
 		return true, err
 	}
@@ -158,7 +191,7 @@ func decodeMigrationReceiptClaim(destination string, payload []byte) (migrationR
 
 func validateVerifiedMigrationReport(
 	claim migrationReceiptClaim,
-	outcome, report, evidenceDigest string,
+	outcome, report, evidenceDigest, credentialFingerprint string,
 	obs *migration.Observation,
 ) error {
 	switch claim.stage {
@@ -194,7 +227,9 @@ func validateVerifiedMigrationReport(
 			targetID, issuedFingerprint := "", ""
 			switch {
 			case claim.renew != nil:
-				targetID = claim.renew.TargetID
+				// The signed job receipt's credential fingerprint was checked
+				// against the certificate inventory and this exact renewal job.
+				targetID, issuedFingerprint = claim.renew.TargetID, credentialFingerprint
 			case claim.appliance != nil:
 				// The relay installed exactly the leaf the control plane
 				// sealed for it; the listener must now serve that leaf.
@@ -202,7 +237,7 @@ func validateVerifiedMigrationReport(
 			}
 			if targetID == "" || result.EndpointID != targetID ||
 				cleanFingerprint(result.Transcript.ExpectedFingerprint) != cleanFingerprint(result.Transcript.ObservedFingerprint) ||
-				(issuedFingerprint != "" && cleanFingerprint(result.Transcript.ObservedFingerprint) != cleanFingerprint(issuedFingerprint)) {
+				(issuedFingerprint == "" || cleanFingerprint(result.Transcript.ObservedFingerprint) != cleanFingerprint(issuedFingerprint)) {
 				return errors.New("server: successor listener result does not match the renewal target")
 			}
 			obs.SuccessorFingerprint = cleanFingerprint(result.Transcript.ObservedFingerprint)
@@ -275,8 +310,7 @@ func validateMigrationClaimBinding(binding migration.MemberBinding, agentID stri
 		if intent.RequiredAgentID != binding.RequiredAgentID || intent.TargetID != binding.TargetID ||
 			intent.Connector != binding.Connector || intent.Target != binding.Target ||
 			cleanFingerprint(intent.PredecessorFingerprint) != cleanFingerprint(binding.PredecessorFingerprint) ||
-			(strings.TrimSpace(intent.SuccessorFingerprint) != "" &&
-				cleanFingerprint(intent.SuccessorFingerprint) != cleanFingerprint(binding.SuccessorFingerprint)) ||
+			cleanFingerprint(intent.SuccessorFingerprint) != cleanFingerprint(binding.SuccessorFingerprint) ||
 			!sameMigrationJSON(intent.TargetConfig, binding.TargetConfig) {
 			return errors.New("server: rollback claim drifted from the migration member binding")
 		}

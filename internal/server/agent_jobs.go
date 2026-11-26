@@ -944,7 +944,8 @@ func (a *agentService) ingestExecutedReport(
 		}
 	} else {
 		_, ingestErr = a.recordMigrationResult(ctx, info.TenantID, agentID, claim.Destination,
-			claim.IdempotencyKey, req.Attempt, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest)
+			claim.IdempotencyKey, req.Attempt, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest,
+			req.CredentialFingerprint)
 	}
 	if ingestErr != nil {
 		return ingestErr
@@ -1290,7 +1291,8 @@ func (a *agentService) recordFailedJobOutcome(ctx context.Context, info mtls.Pee
 		}
 	} else {
 		migrationHandled, err = a.recordMigrationResult(ctx, info.TenantID, agentID, claim.Destination,
-			claim.IdempotencyKey, req.Attempt, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest)
+			claim.IdempotencyKey, req.Attempt, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest,
+			req.CredentialFingerprint)
 		if err != nil {
 			return false, "", status.Errorf(codes.Internal, "ingest signed failed migration result: %v", err)
 		}

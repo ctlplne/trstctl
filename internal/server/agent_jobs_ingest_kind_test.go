@@ -20,7 +20,7 @@ import (
 // a kind added to the allowlist without an ingest step would have closed its
 // job with the result unrecorded.
 func TestIngestExecutedReportNamesEveryClaimableKind(t *testing.T) {
-	a := &agentService{recordMigrationResult: func(context.Context, string, string, string, string, int, []byte, string, string, string) (bool, error) {
+	a := &agentService{recordMigrationResult: func(context.Context, string, string, string, string, int, []byte, string, string, string, string) (bool, error) {
 		return false, nil
 	}}
 	info := mtls.PeerCertInfo{TenantID: "11111111-1111-1111-1111-111111111111", CommonName: "relay-a"}

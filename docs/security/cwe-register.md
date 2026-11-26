@@ -1616,10 +1616,10 @@ not this file.
 | `internal/store/key_vault_disables.go:44` | bounded above (CWE-190) |
 | `internal/store/listener_sessions.go:45` | bounded by MaxInt64 above. |
 | `internal/store/mdm_check_ins.go:45` | bounded above (CWE-190) |
-| `internal/store/migration_run.go:52` | JetStream/PostgreSQL event sequence is bounded by bigint (CWE-190) |
-| `internal/store/migration_run.go:221` | positive bigint constrained by migration (CWE-190) |
-| `internal/store/migration_run.go:245` | positive bigint constrained by migration (CWE-190) |
-| `internal/store/migration_run.go:278` | positive bigint constrained by migration (CWE-190) |
+| `internal/store/migration_run.go:120` | JetStream/PostgreSQL event sequence is bounded by bigint (CWE-190) |
+| `internal/store/migration_run.go:289` | positive bigint constrained by migration (CWE-190) |
+| `internal/store/migration_run.go:313` | positive bigint constrained by migration (CWE-190) |
+| `internal/store/migration_run.go:346` | positive bigint constrained by migration (CWE-190) |
 | `internal/store/offboard_test.go:46` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/operation_approvals.go:300` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/outbox_reconciliation_checkpoint.go:34` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |

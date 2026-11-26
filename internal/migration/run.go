@@ -151,8 +151,7 @@ func RecordSuccessorIssued(in Run, waveID, identityID, fingerprint string) (Run,
 	if waveIndex < 0 || !out.Waves[waveIndex].Started || out.Waves[waveIndex].Phase != PhaseVerifyingLive {
 		return in, errors.New("migration: issued successor does not name the active published leaf gate")
 	}
-	if out.Status != RunRunning && out.Status != RunPaused && out.Status != RunRollingBack &&
-		(out.Status != RunHalted || out.RollbackWaveID == "") {
+	if out.Status != RunRunning && out.Status != RunPaused {
 		return in, fmt.Errorf("migration: issued successor is not licensed in run %s", out.Status)
 	}
 	member := &out.Waves[waveIndex].Members[memberIndex]
@@ -448,10 +447,17 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 	// gives the rollback projection the most exact inventory identity available.
 	if (out.Status == RunRollingBack || (out.Status == RunHalted && out.RollbackWaveID != "")) &&
 		(obs.Stage == StageTrust || obs.Stage == StageSuccessor) && out.Waves[waveIndex].Started {
-		*verdict = obs.Verdict
-		if obs.Stage == StageSuccessor && strings.TrimSpace(obs.SuccessorFingerprint) != "" {
-			member.Binding.SuccessorFingerprint = strings.TrimSpace(obs.SuccessorFingerprint)
+		if obs.Stage == StageSuccessor && obs.Verdict == VerdictVerified {
+			fingerprint := strings.TrimSpace(obs.SuccessorFingerprint)
+			if member.Binding.SuccessorFingerprint != "" && fingerprint != "" &&
+				member.Binding.SuccessorFingerprint != fingerprint {
+				return in, nil, errors.New("migration: successor fingerprint conflicts with retained evidence")
+			}
+			if fingerprint != "" {
+				member.Binding.SuccessorFingerprint = fingerprint
+			}
 		}
+		*verdict = obs.Verdict
 		return out, nil, nil
 	}
 	if err := requireObservationPhase(out, waveIndex, obs.Stage); err != nil {

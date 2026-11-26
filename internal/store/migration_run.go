@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,6 +22,73 @@ type MigrationRun struct {
 	LastEventSequence uint64
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+}
+
+var ErrMigrationRestoreInconsistent = errors.New("store: migration rollback certificate cannot be restored")
+
+// ValidateMigrationRestoreTx checks every verified inverse before an event is
+// appended or any read-model row changes. A missing or mismatched certificate
+// is a deterministic tenant-state conflict; transport and SQL errors are not.
+func (s *Store) ValidateMigrationRestoreTx(ctx context.Context, tx pgx.Tx, tenantID string, run migration.Run) error {
+	for _, wave := range run.Waves {
+		for _, member := range wave.Members {
+			if member.RollbackSuccessorVerdict != migration.VerdictVerified {
+				continue
+			}
+			if err := s.validateMigrationCertificateRestoreTx(ctx, tx, tenantID, member.Binding); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Store) validateMigrationCertificateRestoreTx(ctx context.Context, tx pgx.Tx, tenantID string, binding migration.MemberBinding) error {
+	successorFingerprint := strings.TrimSpace(binding.SuccessorFingerprint)
+	if successorFingerprint != "" {
+		var replacesID string
+		err := tx.QueryRow(ctx,
+			`SELECT COALESCE(replaces_id::text, '') FROM certificates
+			 WHERE tenant_id=$1 AND fingerprint=$2 FOR UPDATE`, tenantID, successorFingerprint).Scan(&replacesID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%w: successor certificate absent", ErrMigrationRestoreInconsistent)
+		}
+		if err != nil {
+			return err
+		}
+		if replacesID != binding.PredecessorCertificateID {
+			return fmt.Errorf("%w: successor does not replace predecessor", ErrMigrationRestoreInconsistent)
+		}
+	}
+	var newerActive bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM certificates
+		 WHERE tenant_id=$1 AND replaces_id=$2::uuid
+		   AND fingerprint<>$3 AND status='active')`,
+		tenantID, binding.PredecessorCertificateID, successorFingerprint).Scan(&newerActive); err != nil {
+		return err
+	}
+	if newerActive {
+		return nil
+	}
+	var predecessorStatus string
+	err := tx.QueryRow(ctx,
+		`SELECT status FROM certificates
+		 WHERE tenant_id=$1 AND id=$2::uuid AND fingerprint=$3 FOR UPDATE`,
+		tenantID, binding.PredecessorCertificateID, binding.PredecessorFingerprint).Scan(&predecessorStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: predecessor certificate absent", ErrMigrationRestoreInconsistent)
+	}
+	if err != nil {
+		return err
+	}
+	if successorFingerprint == "" && predecessorStatus != "active" {
+		return fmt.Errorf("%w: predecessor is not active without an exact successor", ErrMigrationRestoreInconsistent)
+	}
+	if predecessorStatus != "active" && predecessorStatus != "superseded" {
+		return fmt.Errorf("%w: predecessor status cannot be restored", ErrMigrationRestoreInconsistent)
+	}
+	return nil
 }
 
 // ApplyMigrationRunRecordedTx is the projector-only writer. A stale replay is

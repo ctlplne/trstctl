@@ -8423,6 +8423,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := migration.ValidateActions(pl.Run, pl.Actions); err != nil {
 			return fmt.Errorf("projections: validate migration actions: %w", err)
 		}
+		if err := p.store.ValidateMigrationRestoreTx(ctx, tx, e.TenantID, pl.Run); err != nil {
+			if errors.Is(err, store.ErrMigrationRestoreInconsistent) {
+				return p.store.RecordProjectionTenantQuarantineTx(ctx, tx, e.TenantID,
+					e.Sequence, "migration_restore_inconsistent")
+			}
+			return err
+		}
 		if pl.Run.Approval != nil && e.ID == MigrationEventID(e.TenantID, pl.Run.ID, "start") {
 			// A40: the exact start approval is consumed with the run's START
 			// record, so it can never authorize a second start. Every later

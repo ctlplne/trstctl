@@ -181,6 +181,46 @@ func TestIssuedSuccessorIsBoundBeforeLiveVerdictAndSurvivesAutomaticRollbackAUD4
 	}
 }
 
+func TestN0008LateSuccessorCannotOverwriteIssuedFingerprint(t *testing.T) {
+	run, _, err := migration.StartRun(migration.Run{ID: "run", Waves: []migration.RunWave{{
+		ID: "canary", Ordinal: 1,
+		Members: []migration.RunMember{{IdentityID: "leaf-a"}, {IdentityID: "leaf-b"}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"leaf-a", "leaf-b"} {
+		run, _, err = migration.Observe(run, migration.Observation{
+			WaveID: "canary", IdentityID: id, Stage: migration.StageTrust, Verdict: migration.VerdictVerified,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	run, err = migration.RecordSuccessorIssued(run, "canary", "leaf-b", "issued-fingerprint")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, _, err = migration.Observe(run, migration.Observation{
+		WaveID: "canary", IdentityID: "leaf-a", Stage: migration.StageSuccessor, Verdict: migration.VerdictFailed,
+	})
+	if err != nil || run.Status != migration.RunRollingBack {
+		t.Fatalf("begin rollback: run=%+v err=%v", run, err)
+	}
+	if _, _, err := migration.Observe(run, migration.Observation{
+		WaveID: "canary", IdentityID: "leaf-b", Stage: migration.StageSuccessor,
+		Verdict: migration.VerdictVerified, SuccessorFingerprint: "agent-forged-fingerprint",
+	}); err == nil {
+		t.Fatal("late receipt overwrote the certificate the issuer actually minted")
+	}
+	if run.Waves[0].Members[1].Binding.SuccessorFingerprint != "issued-fingerprint" {
+		t.Fatal("refused receipt changed retained issued fingerprint")
+	}
+	if _, err := migration.RecordSuccessorIssued(run, "canary", "leaf-a", "issued-after-rollback"); err == nil {
+		t.Fatal("CSR issuance bound a new successor after rollback actions were published")
+	}
+}
+
 func TestRunRejectsDuplicateStaleAndOutOfPhaseObservationsAUD40(t *testing.T) {
 	run, _, err := migration.StartRun(migration.Run{ID: "run", Waves: []migration.RunWave{{
 		ID: "wave", Ordinal: 1, Members: []migration.RunMember{{IdentityID: "leaf"}},
