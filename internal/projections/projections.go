@@ -6625,6 +6625,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		// Older logs may already contain an invalid ID from the served route.
+		// PostgreSQL cannot cast it to uuid. Absorb that historical no-op so one
+		// tenant's bad event cannot stop the shared projection tail on replay.
+		if _, err := uuid.Parse(pl.AgentID); err != nil {
+			return nil
+		}
 		return p.store.ApplyAgentUpgradeRingAssignedTx(ctx, tx, e.TenantID, pl.AgentID, pl.Ring)
 	case EventSCIMWritebackRecorded, EventLDAPWritebackRecorded:
 		// Audit evidence only (A73/A83): the member row is the directory's and

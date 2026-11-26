@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	googleuuid "github.com/google/uuid"
+
 	"errors"
 	"fmt"
 	fleet "trstctl.com/trstctl/internal/agentupgrade"
@@ -192,10 +194,13 @@ func (a *API) assignAgentRing(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &body); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if strings.TrimSpace(body.AgentID) == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "agent_id is required")
+		if _, err := googleuuid.Parse(body.AgentID); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "agent_id must be a UUID")
 		}
 		if err := a.orch.AssignAgentUpgradeRing(ctx, tenantID, body.AgentID, strings.TrimSpace(body.Ring)); err != nil {
+			if errors.Is(err, orchestrator.ErrAgentUpgradeRingUnknownAgent) {
+				return 0, nil, errStatus(http.StatusNotFound, "agent not found")
+			}
 			return 0, nil, err
 		}
 		return http.StatusOK, map[string]string{"agent_id": body.AgentID, "ring": body.Ring}, nil

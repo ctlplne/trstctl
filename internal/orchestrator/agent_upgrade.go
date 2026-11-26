@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -164,6 +165,8 @@ func (o *Orchestrator) DispatchAgentUpgradeRing(
 // ClaimAgentJobs — by exactly the agent each row names.
 const agentUpgradeDestination = "agent.upgrade"
 
+var ErrAgentUpgradeRingUnknownAgent = errors.New("orchestrator: agent not found for upgrade ring")
+
 // AdvanceAgentUpgradeCampaign records a campaign state change.
 //
 // The decision itself is fleet.Advance's; this only persists it. Keeping the
@@ -183,6 +186,9 @@ func (o *Orchestrator) AdvanceAgentUpgradeCampaign(ctx context.Context, tenantID
 
 // AssignAgentUpgradeRing places an agent in a rollout ring.
 func (o *Orchestrator) AssignAgentUpgradeRing(ctx context.Context, tenantID, agentID, ring string) error {
+	if _, err := uuid.Parse(agentID); err != nil {
+		return fmt.Errorf("orchestrator: agent ID must be a UUID: %w", err)
+	}
 	switch fleet.Ring(ring) {
 	case fleet.RingCanary, fleet.RingEarly, fleet.RingBroad:
 	default:
@@ -190,6 +196,18 @@ func (o *Orchestrator) AssignAgentUpgradeRing(ctx context.Context, tenantID, age
 			return fmt.Errorf("orchestrator: %q is not a rollout ring; use canary, early, broad, or empty to unassign", ring)
 		}
 	}
+	if _, err := o.store.GetAgent(ctx, tenantID, agentID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrAgentUpgradeRingUnknownAgent
+		}
+		return err
+	}
+	return o.emitAgentUpgradeRing(ctx, tenantID, agentID, ring)
+}
+
+// Auto-assignment already loaded its candidate agents in one tenant-scoped
+// query; emitting them directly avoids a second full agent read per member.
+func (o *Orchestrator) emitAgentUpgradeRing(ctx context.Context, tenantID, agentID, ring string) error {
 	payload, err := json.Marshal(projections.AgentUpgradeRingAssigned{AgentID: agentID, Ring: ring})
 	if err != nil {
 		return err
@@ -223,7 +241,7 @@ func (o *Orchestrator) AutoAssignAgentUpgradeRings(ctx context.Context, tenantID
 	}
 	for ring, members := range map[fleet.Ring][]fleet.RingCandidate{fleet.RingCanary: plan.Canary, fleet.RingEarly: plan.Early, fleet.RingBroad: plan.Broad} {
 		for _, member := range members {
-			if err := o.AssignAgentUpgradeRing(ctx, tenantID, member.AgentID, string(ring)); err != nil {
+			if err := o.emitAgentUpgradeRing(ctx, tenantID, member.AgentID, string(ring)); err != nil {
 				return fleet.AutoAssignment{}, fmt.Errorf("orchestrator: place %s in %s: %w", member.Name, ring, err)
 			}
 		}

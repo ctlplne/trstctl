@@ -4699,7 +4699,9 @@ than sending an operator looking for a credential that was never there.
   digest is the only integrity control, which is the default. Ring assignment is
   by hand per agent (`POST /api/v1/agents/upgrade-ring`) or by one deterministic
   placement (`POST /api/v1/agents/upgrade-rings/auto-assign`, `trstctl agents
-  upgrade-rings auto`): unassigned in-service agents only, heartbeating ones
+  upgrade-rings auto`). Manual assignment requires an existing agent's UUID;
+  malformed IDs return `400` and unknown agents return `404` before an event is
+  appended. Automatic placement considers unassigned in-service agents only, heartbeating ones
   first, then longest enrolled, then by name; the first `canary_count` (default
   one) become the canary, the next `early_percent` (default ten) the early ring,
   the rest broad; every ring keeps at least one agent, an operator's own

@@ -61,6 +61,34 @@ func seedAgent(t *testing.T, h *servedHarness, name, version string) store.Agent
 	return a
 }
 
+func TestInvalidUpgradeRingAgentIDNeverEntersEventLog(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "agents:read", "agents:write")
+	head, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"not-a-uuid", uuid.NewString()} {
+		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/upgrade-ring", tok,
+			"invalid-ring-"+id, map[string]any{"agent_id": id, "ring": "canary"})
+		want := http.StatusBadRequest
+		if id != "not-a-uuid" {
+			want = http.StatusNotFound
+		}
+		if status != want {
+			t.Fatalf("agent_id %q: status %d, want %d: %s", id, status, want, body)
+		}
+		if after, err := h.log.LastSequence(t.Context()); err != nil || after != head {
+			t.Fatalf("rejected agent_id %q appended event: head %d -> %d, err %v", id, head, after, err)
+		}
+	}
+	agent := seedAgent(t, h, "valid-ring-agent", "1.0.0")
+	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/upgrade-ring", tok,
+		"valid-ring-"+agent.ID, map[string]any{"agent_id": agent.ID, "ring": "canary"}); status != http.StatusOK {
+		t.Fatalf("valid assignment status %d: %s", status, body)
+	}
+}
+
 func TestServedStagedUpgradeHaltsOnCanaryFailureAndResumesThere(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "agents:read", "agents:write")
