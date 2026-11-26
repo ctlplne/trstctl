@@ -6682,9 +6682,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		configuredBy := ""
+		if e.Actor != nil {
+			configuredBy = e.Actor.Subject
+		}
 		schedule := store.TicketIntakeSchedule{
 			Name: pl.Name, OwnerField: pl.OwnerField,
-			ConfiguredBy: e.Actor.Subject, ConfigRevision: e.ID,
+			ConfiguredBy: configuredBy, ConfigRevision: e.ID,
 			System: pl.System, InstanceURL: pl.InstanceURL, TokenRef: pl.TokenRef,
 			SNTable: pl.SNTable, JiraProject: pl.JiraProject, Query: pl.Query,
 			SubjectField: pl.SubjectField, ProfileField: pl.ProfileField,
@@ -8879,9 +8883,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		configuredBy := ""
+		if e.Actor != nil {
+			configuredBy = e.Actor.Subject
+		}
 		configuredByRef := ""
-		if e.Actor.Subject != "" {
-			configuredByRef = privacyref.SubjectRef(e.TenantID, e.Actor.Subject)
+		if configuredBy != "" {
+			configuredByRef = privacyref.SubjectRef(e.TenantID, configuredBy)
 		}
 		return p.store.ApplyNotificationChannelUpsertedTx(ctx, tx, store.NotificationChannel{
 			TenantID:        e.TenantID,
@@ -8890,7 +8898,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Label:           pl.Label,
 			EndpointURL:     pl.EndpointURL,
 			CredentialRef:   pl.CredentialRef,
-			ConfiguredBy:    e.Actor.Subject,
+			ConfiguredBy:    configuredBy,
 			ConfiguredByRef: configuredByRef,
 			Enabled:         pl.Enabled,
 			CreatedAt:       e.Time,
@@ -9083,13 +9091,17 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.Enabled != nil {
 			enabled = *pl.Enabled
 		}
+		configuredBy := ""
+		if e.Actor != nil {
+			configuredBy = e.Actor.Subject
+		}
 		configuredByRef := ""
-		if e.Actor.Subject != "" {
-			configuredByRef = privacyref.SubjectRef(e.TenantID, e.Actor.Subject)
+		if configuredBy != "" {
+			configuredByRef = privacyref.SubjectRef(e.TenantID, configuredBy)
 		}
 		return p.store.ApplyDeploymentTargetUpsertedTx(ctx, tx, store.DeploymentTarget{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Type: pl.Connector, Config: pl.Config,
-			Enabled: enabled, EnabledSet: true, ConfiguredBy: e.Actor.Subject, ConfiguredByRef: configuredByRef,
+			Enabled: enabled, EnabledSet: true, ConfiguredBy: configuredBy, ConfiguredByRef: configuredByRef,
 		}, e.ID, e.Time)
 	case EventDeploymentTargetDeleted:
 		var pl DeploymentTargetDeleted

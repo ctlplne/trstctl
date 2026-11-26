@@ -224,6 +224,9 @@ func TestDeploymentTargetReadinessReplaysLegacyEnabled(t *testing.T) {
 	if !got.Enabled {
 		t.Fatalf("legacy deployment target replayed disabled: %+v", got)
 	}
+	if got.ConfiguredBy != "" || got.ConfiguredByRef != "" {
+		t.Fatalf("actorless legacy target acquired a configurer: %+v", got)
+	}
 
 	disabled := false
 	payload, err := json.Marshal(projections.DeploymentTargetUpserted{
