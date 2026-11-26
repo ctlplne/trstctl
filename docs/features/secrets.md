@@ -1231,6 +1231,12 @@ sign-in read by its error code); a proof is never retried, so a wrong password c
 lockout attempt. Google has no such check, so its verification reports not available.
 The served proof runs against stand-ins of all three with a lockout counter, which never
 reaches its threshold.
+Retirement also asks the identity provider to end access opened before the password
+change: Okta clears user sessions and OAuth tokens, Entra invalidates sign-in sessions
+and refresh tokens, and Google signs the user out and deletes listed third-party OAuth
+grants. A refused call keeps the rotation pending rather than reporting completion.
+Active access tokens and application-owned sessions have vendor-specific limits, so
+check the [identity provider limitations](../limitations.md#break-glass-identity-provider-accounts-a272--built-against-stand-ins).
 
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports

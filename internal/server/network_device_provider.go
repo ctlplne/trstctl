@@ -14,6 +14,29 @@ import (
 // predecessor back on the device and proves it signs in again.
 type configuredNetworkDeviceProvider struct{ *configuredDynamicProvider }
 
+// IdP accounts rotate in place, so the static command has no predecessor
+// account to revoke. This narrow wrapper exposes a separate session-retirement
+// step only for identity providers, after the successor was verified.
+type configuredIdPAdminProvider struct {
+	*configuredNetworkDeviceProvider
+}
+
+func (p *configuredIdPAdminProvider) RetireStaticRotationSessions(ctx context.Context, role, successorRef string) error {
+	if !p.AllowsStaticRotation(role) {
+		return errors.New("server: identity provider session retirement role is not allowed")
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeBackend()
+	retirer, ok := backend.(dynsecret.StaticRotationSessionRetirer)
+	if !ok {
+		return errors.New("server: identity provider session retirement is unavailable")
+	}
+	return retirer.RetireStaticRotationSessions(ctx, role, successorRef)
+}
+
 func (p *configuredNetworkDeviceProvider) RestoreStaticCredential(ctx context.Context, role, ref string, credential []byte) error {
 	if !p.AllowsStaticRotation(role) {
 		return errors.New("server: network device restore role is not allowed")

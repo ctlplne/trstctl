@@ -37,6 +37,7 @@ import (
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -49,6 +50,8 @@ type idpUser struct {
 	mfa      bool
 	failed   int
 	locked   bool
+	sessions int
+	grants   map[string]bool
 }
 
 // IdP is a running identity provider stand-in.
@@ -59,6 +62,7 @@ type IdP struct {
 	mu       sync.Mutex
 	users    map[string]*idpUser
 	drop     int
+	failEnd  int
 	pending  map[string]bool
 	token    string // the administration credential it accepts
 	clientID string
@@ -128,7 +132,56 @@ func (p *IdP) ServiceAccountKeyPEM() []byte {
 func (p *IdP) AddUser(name, password string, mfa bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.users[strings.ToLower(name)] = &idpUser{password: []byte(password), mfa: mfa}
+	p.users[strings.ToLower(name)] = &idpUser{password: []byte(password), mfa: mfa, grants: map[string]bool{}}
+}
+
+// OpenUserSession models a session opened with a released administrator password.
+func (p *IdP) OpenUserSession(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.users[strings.ToLower(name)].sessions++
+}
+
+// GrantUserToken models a user OAuth token held independently of the password.
+func (p *IdP) GrantUserToken(name, clientID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.users[strings.ToLower(name)].grants[clientID] = true
+}
+
+// ActiveUserAccess is the sessions and user OAuth grants still usable.
+func (p *IdP) ActiveUserAccess(name string) (sessions, grants int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if u := p.users[strings.ToLower(name)]; u != nil {
+		return u.sessions, len(u.grants)
+	}
+	return 0, 0
+}
+
+// RefuseNextSessionEnds makes the next n provider revocation calls fail.
+func (p *IdP) RefuseNextSessionEnds(n int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.failEnd = n
+}
+
+func (p *IdP) endUserAccess(name string, grants bool) (found, refused bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	u := p.users[strings.ToLower(name)]
+	if u == nil {
+		return false, false
+	}
+	if p.failEnd > 0 {
+		p.failEnd--
+		return true, true
+	}
+	u.sessions = 0
+	if grants {
+		clear(u.grants)
+	}
+	return true, false
 }
 
 // Password is an account's current password.
@@ -280,6 +333,21 @@ func (p *IdP) okta(w http.ResponseWriter, r *http.Request) {
 		delete(p.pending, body.StateToken)
 		p.mu.Unlock()
 		writeIdPJSON(w, http.StatusOK, map[string]string{"status": "UNAUTHENTICATED"})
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/users/") && strings.HasSuffix(r.URL.Path, "/sessions"):
+		if r.Header.Get("Authorization") != "SSWS "+p.token || r.URL.Query().Get("oauthTokens") != "true" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		login := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v1/users/"), "/sessions")
+		found, refused := p.endUserAccess(login, true)
+		switch {
+		case !found:
+			w.WriteHeader(http.StatusNotFound)
+		case refused:
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			w.WriteHeader(http.StatusNoContent)
+		}
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/users/"):
 		if r.Header.Get("Authorization") != "SSWS "+p.token {
 			writeIdPJSON(w, http.StatusUnauthorized, map[string]string{"errorCode": "E0000011"})
@@ -336,6 +404,21 @@ func (p *IdP) entra(w http.ResponseWriter, r *http.Request) {
 		default:
 			writeIdPJSON(w, http.StatusBadRequest, map[string]any{"error": "unsupported_grant_type"})
 		}
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/v1.0/users/") && strings.HasSuffix(r.URL.Path, "/revokeSignInSessions"):
+		if !p.bearerOK(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		login := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v1.0/users/"), "/revokeSignInSessions")
+		found, refused := p.endUserAccess(login, true)
+		switch {
+		case !found:
+			w.WriteHeader(http.StatusNotFound)
+		case refused:
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			writeIdPJSON(w, http.StatusOK, map[string]bool{"value": true})
+		}
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/v1.0/users/"):
 		if !p.bearerOK(r) {
 			writeIdPJSON(w, http.StatusUnauthorized, map[string]any{"error": map[string]string{"code": "InvalidAuthenticationToken"}})
@@ -376,6 +459,59 @@ func (p *IdP) google(w http.ResponseWriter, r *http.Request) {
 		p.tokens[token] = true
 		p.mu.Unlock()
 		writeIdPJSON(w, http.StatusOK, map[string]any{"access_token": token, "token_type": "Bearer", "expires_in": 3600})
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/admin/directory/v1/users/") && strings.HasSuffix(r.URL.Path, "/signOut"):
+		if !p.bearerOK(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		login := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/admin/directory/v1/users/"), "/signOut")
+		found, refused := p.endUserAccess(login, false)
+		switch {
+		case !found:
+			w.WriteHeader(http.StatusNotFound)
+		case refused:
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			w.WriteHeader(http.StatusNoContent)
+		}
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/admin/directory/v1/users/") && strings.HasSuffix(r.URL.Path, "/tokens"):
+		if !p.bearerOK(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		login := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/admin/directory/v1/users/"), "/tokens")
+		p.mu.Lock()
+		u := p.users[strings.ToLower(login)]
+		var items []map[string]string
+		if u != nil {
+			for clientID := range u.grants {
+				items = append(items, map[string]string{"clientId": clientID})
+			}
+		}
+		p.mu.Unlock()
+		if u == nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		writeIdPJSON(w, http.StatusOK, map[string]any{"items": items})
+	case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/admin/directory/v1/users/") && strings.Contains(r.URL.Path, "/tokens/"):
+		if !p.bearerOK(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/admin/directory/v1/users/")
+		login, clientID, ok := strings.Cut(path, "/tokens/")
+		p.mu.Lock()
+		u := p.users[strings.ToLower(login)]
+		if u != nil && ok {
+			delete(u.grants, clientID)
+		}
+		p.mu.Unlock()
+		if u == nil || !ok || clientID == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/admin/directory/v1/users/"):
 		if !p.bearerOK(r) {
 			writeIdPJSON(w, http.StatusUnauthorized, map[string]any{"error": map[string]any{"code": 401}})
@@ -427,6 +563,8 @@ func (p *IdP) assertionOK(assertion string) bool {
 		// A service account signing for itself (P14-L1).
 		return claims.Iss == p.saEmail && (claims.Sub == "" || claims.Sub == p.saEmail) && claims.Aud == p.srv.URL+"/token" && claims.Scope != ""
 	}
+	scopes := strings.Fields(claims.Scope)
 	return claims.Iss == p.saEmail && claims.Sub == p.subject && claims.Aud == p.srv.URL+"/token" &&
-		strings.Contains(claims.Scope, "https://www.googleapis.com/auth/admin.directory.user")
+		slices.Contains(scopes, "https://www.googleapis.com/auth/admin.directory.user") &&
+		slices.Contains(scopes, "https://www.googleapis.com/auth/admin.directory.user.security")
 }

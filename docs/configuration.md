@@ -3350,19 +3350,23 @@ names one SSO user without its domain, never the administrator.
 `okta-user`, `entra-user` and `google-workspace-user` providers (A272) set an identity
 provider administrator's password (a break-glass super administrator). `okta-user` takes
 `endpoint` (the org) and `api_key_ref` (an SSWS token of an administrator allowed to set
-the account's password). `entra-user` takes `endpoint` (Microsoft Graph),
+the account's password and clear its sessions and OAuth tokens). `entra-user` takes `endpoint` (Microsoft Graph),
 `authority_host` (the identity platform), `azure_tenant_id`, `client_id` and
 `client_secret_ref` (an application with User-PasswordProfile.ReadWrite.All and the
-Privileged Authentication Administrator role). `google-workspace-user` takes `endpoint`
+Privileged Authentication Administrator role, plus User.RevokeSessions.All for
+`revokeSignInSessions`). `google-workspace-user` takes `endpoint`
 (the Admin SDK), `authority_host` (the token endpoint), `service_account` and
 `private_key_ref` (a service account with domain-wide delegation for
-`admin.directory.user`) and `admin_user` (the super administrator it impersonates, never
+`admin.directory.user` and `admin.directory.user.security`) and `admin_user` (the super administrator it impersonates, never
 a rotated account). Each needs `allow_static_rotation: true`; each allowed role names
 one account as `user@domain`, rotated in place. For a break-glass account, `totp_providers`
 maps its role to a `totp` provider in the same tenant that allows the same role (its
 `seed_ref` holds the account's MFA seed; an emergency release carries the current code,
 never the seed), and `hardware_key_holders` maps the role to who holds its hardware
 security keys (one to ten one-line entries; the keys stay with them).
+The rotation reaches `completed` only after the provider accepts session and token
+retirement. A refusal leaves it `retire_pending` for an operator to retry; it must not
+be treated as a safe end to an emergency release.
 
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,

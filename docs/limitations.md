@@ -10502,6 +10502,22 @@ holders, checks it in, and records another approver's post-incident review. Proo
 stand-ins built from Okta's, Microsoft's and Google's API references; no live tenant has
 run them.
 
+CR-196 retirement now asks Okta to clear user sessions and OAuth access/refresh tokens,
+Microsoft Graph to revoke sign-in sessions, and Google Admin SDK to sign out the user
+and delete each third-party OAuth grant returned by its token list. A refused call leaves
+the verified successor in `retire_pending`, not `completed`. These calls are not an
+instant global logout: Okta's user-session API does not clear sessions owned by every
+web/native application; Microsoft says session/token revocation can take minutes and
+already-issued access tokens may remain valid; Google's token list covers third-party
+applications, while `signOut` addresses web/device sessions and cookies. Operators must
+account for those vendor limits when setting an emergency release TTL and must confirm
+native behavior in their own tenants. The local stand-ins prove the requested API effects
+and pending-on-refusal behavior, not a real tenant's enforcement latency.
+See the vendor contracts for [Okta user sessions](https://developer.okta.com/docs/api/openapi/okta-management/management/tag/UserSessions/),
+[Microsoft Graph session revocation](https://learn.microsoft.com/graph/api/user-revokesigninsessions?view=graph-rest-1.0),
+and [Google sign-out](https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/signOut)
+and [token deletion](https://developers.google.com/workspace/admin/directory/reference/rest/v1/tokens/delete).
+
 What comes next:
 - Live tenant runs (Track B: Okta, Entra ID, Google Workspace).
 

@@ -202,6 +202,11 @@ func TestServedBreakGlassEmergencyCheckoutA272(t *testing.T) {
 		if status, _ := secretsReqKey(t, sh, http.MethodPost, "/api/v1/access/emergency-checkouts", responder, "a272-bg-again-"+a.target, againBody); status == http.StatusCreated {
 			t.Fatalf("%s: a second release of the same check-out was allowed", a.target)
 		}
+		// The responder used the released password before check-in. Those
+		// sessions and grants survive a password change unless retirement ends
+		// them through the identity provider's administration API.
+		a.idp.OpenUserSession("breakglass@corp.example")
+		a.idp.GrantUserToken("breakglass@corp.example", "incident-console")
 		status, body = secretsReqKey(t, sh, http.MethodPost, "/api/v1/access/checkouts/"+id+"/checkin", responder, "a272-bg-checkin-"+a.target, nil)
 		var checkedIn struct {
 			Status            string `json:"status"`
@@ -228,6 +233,9 @@ func TestServedBreakGlassEmergencyCheckoutA272(t *testing.T) {
 		}
 		if view.Phase != "completed" || string(a.idp.Password("breakglass@corp.example")) == "initial-password-1!" {
 			t.Fatalf("%s: the released password was not retired: %+v", a.target, view)
+		}
+		if sessions, grants := a.idp.ActiveUserAccess("breakglass@corp.example"); sessions != 0 || grants != 0 {
+			t.Fatalf("%s: completed check-in left %d sessions and %d OAuth grants", a.target, sessions, grants)
 		}
 		if a.idp.Locked("breakglass@corp.example") {
 			t.Fatalf("%s: the account locked out", a.target)

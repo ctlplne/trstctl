@@ -851,6 +851,11 @@ func (a *API) retireStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 			return fmt.Errorf("api: static rotation retire: %w", err)
 		}
 	}
+	if sessionRetirer, ok := provider.(dynsecret.StaticRotationSessionRetirer); ok {
+		if err := sessionRetirer.RetireStaticRotationSessions(ctx, cmd.Key, cmd.NewRef); err != nil {
+			return fmt.Errorf("api: static rotation retire sessions: %w", err)
+		}
+	}
 	return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationCompleted})
 }
 

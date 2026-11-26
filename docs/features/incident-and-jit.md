@@ -1797,7 +1797,12 @@ provider, the current TOTP code and when it stops being valid — never the seed
 lists who holds the account's hardware security keys, which stay with those people. The
 same release is never shown again. Checking it in (`trstctl access checkouts checkin`), or
 its deadline, rotates the password at the identity provider, and the grant waits for a
-post-incident review by someone else (`trstctl access emergency review`).
+post-incident review by someone else (`trstctl access emergency review`). The rotation
+reports `completed` only after Okta, Entra ID or Google Workspace accepts a request to
+end the account's sessions and supported OAuth grants. If that call fails, the rotation
+stays `retire_pending`: retry its retirement and treat the released session as live.
+Provider APIs have propagation and application-session limits; see
+[Break-glass identity provider limitations](../limitations.md#break-glass-identity-provider-accounts-a272--built-against-stand-ins).
 
 In the console, register one under the access targets (type **Break-glass identity provider
 administrator**: its provider and account secret, no gateway). The **Break-glass accounts**

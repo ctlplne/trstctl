@@ -100,6 +100,13 @@ type StaticRotationCredentialRevoker interface {
 	RevokeStaticRotationCredential(ctx context.Context, role, reference string) error
 }
 
+// StaticRotationSessionRetirer ends access opened with an in-place account's
+// predecessor password. The account itself must stay active for its verified
+// successor, so ordinary credential revocation cannot be used here.
+type StaticRotationSessionRetirer interface {
+	RetireStaticRotationSessions(ctx context.Context, role, successorRef string) error
+}
+
 // StaticCredentialRestorer is an explicit native inverse for an in-place
 // rotation. Success means the exact predecessor authenticates upstream again;
 // the outbox worker may only then publish it as recovered vault state.

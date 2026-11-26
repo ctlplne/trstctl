@@ -324,7 +324,9 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 		return &configuredSSHCertificateProvider{configuredDynamicProvider: provider}
 	}
 	switch cfg.Type {
-	case "iosxe", "junos", "eos", "fortigate", "bigip", "redfish", "esxi", "vcenter-sso", "okta-user", "entra-user", "google-workspace-user":
+	case "okta-user", "entra-user", "google-workspace-user":
+		return &configuredIdPAdminProvider{configuredNetworkDeviceProvider: &configuredNetworkDeviceProvider{configuredDynamicProvider: provider}}
+	case "iosxe", "junos", "eos", "fortigate", "bigip", "redfish", "esxi", "vcenter-sso":
 		return &configuredNetworkDeviceProvider{configuredDynamicProvider: provider}
 	}
 	return provider

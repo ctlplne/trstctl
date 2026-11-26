@@ -201,7 +201,8 @@ func (b *IdPAdminBackend) accessToken(ctx context.Context) ([]byte, error) {
 		case "google-workspace-user":
 			now := b.now().UTC()
 			assertion, err := crypto.SignJWTWithPEMKeyBytes(credential, "", map[string]any{"iss": b.saEmail, "sub": b.subject,
-				"scope": "https://www.googleapis.com/auth/admin.directory.user", "aud": b.authority.endpoint, "iat": now.Unix(), "exp": now.Add(time.Hour).Unix()})
+				"scope": "https://www.googleapis.com/auth/admin.directory.user https://www.googleapis.com/auth/admin.directory.user.security",
+				"aud":   b.authority.endpoint, "iat": now.Unix(), "exp": now.Add(time.Hour).Unix()})
 			if err != nil {
 				return err
 			}
@@ -395,19 +396,113 @@ func (b *IdPAdminBackend) RestoreStaticCredential(ctx context.Context, role, _ s
 	if err := b.VerifyCredential(ctx, credential); err != nil && !errors.Is(err, ErrNoSelfProof) {
 		return err
 	}
-	return nil
+	return b.endAccountAccess(ctx, account)
 }
 
-// Revoke implements Backend: the predecessor stopped working when the next
-// password was set.
-func (b *IdPAdminBackend) Revoke(_ context.Context, ref string) error {
+// Revoke implements Backend: a password change does not end sessions or OAuth
+// grants opened with the old password, so retirement must ask the IdP to end
+// them. An error keeps the static rotation in retirement-pending for retry.
+func (b *IdPAdminBackend) Revoke(ctx context.Context, ref string) error {
 	account, _, _ := strings.Cut(ref, "/")
 	for _, bound := range b.accounts {
 		if strings.EqualFold(account, bound) {
-			return nil
+			return b.endAccountAccess(ctx, bound)
 		}
 	}
 	return fmt.Errorf("dynsecret %s: refusing %q, which names no account this provider rotates", b.vendor, ref)
+}
+
+// RetireStaticRotationSessions uses the verified successor's reference: an
+// in-place IdP rotation has no distinct predecessor account to revoke.
+func (b *IdPAdminBackend) RetireStaticRotationSessions(ctx context.Context, role, successorRef string) error {
+	bound, ok := b.accounts[role]
+	account, lease, hasLease := strings.Cut(successorRef, "/")
+	if !ok || !hasLease || lease == "" || !strings.EqualFold(account, bound) {
+		return fmt.Errorf("dynsecret %s: the successor is not the bound administrator account", b.vendor)
+	}
+	return b.endAccountAccess(ctx, bound)
+}
+
+func (b *IdPAdminBackend) endAccountAccess(ctx context.Context, account string) error {
+	path := url.PathEscape(account)
+	if b.vendor == "okta-user" {
+		var status int
+		var raw []byte
+		err := b.credential.Use(func(token []byte) error {
+			var callErr error
+			status, raw, callErr = b.api.call(ctx, http.MethodDelete, "/api/v1/users/"+path+"/sessions?oauthTokens=true", nil,
+				func(h http.Header) error { h.Set("Authorization", "SSWS "+string(token)); return nil })
+			return callErr
+		})
+		secret.Wipe(raw)
+		if err != nil {
+			return err
+		}
+		if status != http.StatusNoContent {
+			return fmt.Errorf("dynsecret okta-user: the identity provider refused session and OAuth token revocation (HTTP %d)", status)
+		}
+		return nil
+	}
+	token, err := b.accessToken(ctx)
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(token)
+	authenticate := bearerHeader(token)
+	if b.vendor == "entra-user" {
+		status, raw, err := b.api.call(ctx, http.MethodPost, "/v1.0/users/"+path+"/revokeSignInSessions", nil, authenticate)
+		if err != nil {
+			return err
+		}
+		defer secret.Wipe(raw)
+		var answer struct {
+			Value bool `json:"value"`
+		}
+		if status != http.StatusOK || json.Unmarshal(raw, &answer) != nil || !answer.Value {
+			return fmt.Errorf("dynsecret entra-user: the identity provider did not confirm session revocation (HTTP %d)", status)
+		}
+		return nil
+	}
+	if b.vendor != "google-workspace-user" {
+		return fmt.Errorf("dynsecret: unknown identity provider %q", b.vendor)
+	}
+	base := "/admin/directory/v1/users/" + path
+	status, raw, err := b.api.call(ctx, http.MethodPost, base+"/signOut", nil, authenticate)
+	secret.Wipe(raw)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK && status != http.StatusNoContent {
+		return fmt.Errorf("dynsecret google-workspace-user: the identity provider refused session sign-out (HTTP %d)", status)
+	}
+	status, raw, err = b.api.call(ctx, http.MethodGet, base+"/tokens", nil, authenticate)
+	if err != nil {
+		return err
+	}
+	var listed struct {
+		Items []struct {
+			ClientID string `json:"clientId"`
+		} `json:"items"`
+	}
+	decodeErr := json.Unmarshal(raw, &listed)
+	secret.Wipe(raw)
+	if status != http.StatusOK || decodeErr != nil {
+		return fmt.Errorf("dynsecret google-workspace-user: could not list the administrator's OAuth grants (HTTP %d)", status)
+	}
+	for _, item := range listed.Items {
+		if item.ClientID == "" || len(item.ClientID) > 255 || item.ClientID == "." || item.ClientID == ".." {
+			return errors.New("dynsecret google-workspace-user: the administrator has an invalid OAuth client ID")
+		}
+		status, raw, err = b.api.call(ctx, http.MethodDelete, base+"/tokens/"+url.PathEscape(item.ClientID), nil, authenticate)
+		secret.Wipe(raw)
+		if err != nil {
+			return err
+		}
+		if status != http.StatusNoContent && status != http.StatusOK {
+			return fmt.Errorf("dynsecret google-workspace-user: the identity provider refused OAuth token revocation (HTTP %d)", status)
+		}
+	}
+	return nil
 }
 
 // Close wipes the administration credential.
