@@ -5,6 +5,7 @@ package delegation_test
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 
@@ -83,5 +84,34 @@ func TestDurableDelegationTenantAndFirstWriterFences(t *testing.T) {
 	}
 	if _, err := restarted.CheckAndBind(tenantA, "app", 3); err != nil {
 		t.Fatalf("compliant epoch after restart: %v", err)
+	}
+}
+
+func TestDelegationRejectsUnprojectableFloorBeforeSigning(t *testing.T) {
+	store := delegation.NewDurableScopeStore(t.TempDir())
+	called := false
+	_, err := store.Apply(delegation.Command{
+		TenantID: "11111111-1111-1111-1111-111111111111", OperationID: "overflow",
+		Kind: "scope", ScopeID: "root", EpochFloor: uint64(math.MaxInt64) + 1,
+	}, func(string, []byte) ([]byte, []byte, error) {
+		called = true
+		return nil, nil, nil
+	})
+	if err == nil || called {
+		t.Fatalf("unprojectable floor reached signing: err=%v signed=%v", err, called)
+	}
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := store.Apply(delegation.Command{
+		TenantID: "11111111-1111-1111-1111-111111111111", OperationID: "maximum",
+		Kind: "scope", ScopeID: "root", EpochFloor: uint64(math.MaxInt64),
+	}, func(_ string, body []byte) ([]byte, []byte, error) {
+		sig, err := key.Sign(body, crypto.SignOptions{Hash: crypto.SHA256})
+		return key.Public().DER, sig, err
+	})
+	if err != nil || receipt.AppliedFloor != uint64(math.MaxInt64) {
+		t.Fatalf("projectable boundary floor refused: receipt=%+v err=%v", receipt, err)
 	}
 }

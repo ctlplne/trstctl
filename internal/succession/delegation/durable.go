@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +17,10 @@ import (
 )
 
 const durableScopesFile = "pcas-delegation-scopes-v2.json"
+
+// MaxEpochFloor is the largest value the PostgreSQL bigint projection can
+// replay. Refuse a larger command before the isolated signer seals its ratchet.
+const MaxEpochFloor = uint64(math.MaxInt64)
 
 // Command is the public, tenant-bound instruction sent to the isolated signer.
 // OperationID is the outbox request ID. Exact retries return the original receipt.
@@ -87,6 +92,9 @@ func scopeKey(tenantID, id string) string { return tenantID + "\x00" + id }
 // callback must journal a signature by operation ID, so a crash between signing
 // and the scope-file rename replays byte-identical evidence.
 func (s *DurableScopeStore) Apply(cmd Command, sign func(string, []byte) ([]byte, []byte, error)) (Receipt, error) {
+	if cmd.EpochFloor > MaxEpochFloor {
+		return Receipt{}, errors.New("delegation: epoch floor exceeds the projectable maximum")
+	}
 	if cmd.TenantID == "" || cmd.OperationID == "" || cmd.ScopeID == "" ||
 		(cmd.Kind != "scope" && cmd.Kind != "floor") || cmd.ScopeID == cmd.ParentScopeID {
 		return Receipt{}, errors.New("delegation: invalid tenant, operation, kind or scope")

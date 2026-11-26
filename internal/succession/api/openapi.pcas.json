@@ -121,7 +121,8 @@
         "type": "object",
         "properties": {
           "epoch_floor": {
-            "type": "integer"
+            "type": "integer",
+            "maximum": 9223372036854775807
           },
           "scope_id": {
             "type": "string"
@@ -257,7 +258,8 @@
         "type": "object",
         "properties": {
           "epoch_floor": {
-            "type": "integer"
+            "type": "integer",
+            "maximum": 9223372036854775807
           },
           "parent_scope_id": {
             "type": "string"

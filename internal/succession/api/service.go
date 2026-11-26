@@ -313,6 +313,9 @@ func (s *service) RaiseDelegationFloor(ctx context.Context, tenantID string, req
 }
 
 func (s *service) enqueueDelegation(ctx context.Context, tenantID, destination string, cmd pcasdelegation.Command) (DelegationScopeResponse, error) {
+	if cmd.EpochFloor > pcasdelegation.MaxEpochFloor {
+		return DelegationScopeResponse{}, api.ErrStatus(http.StatusBadRequest, "epoch_floor exceeds the supported maximum")
+	}
 	if s.store == nil || s.outbox == nil || s.kem == nil {
 		return DelegationScopeResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "isolated PCAS signer outbox is unavailable")
 	}

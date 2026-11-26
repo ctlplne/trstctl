@@ -56,12 +56,18 @@ func (w *DelegationWorker) Deliver(ctx context.Context, m coreorch.Message) erro
 		(m.Destination == DelegationFloorDestination && p.Command.Kind != "floor") {
 		return errors.New("pcas delegation: command does not bind outbox tenant, destination and operation")
 	}
+	if p.Command.EpochFloor > delegation.MaxEpochFloor {
+		return errors.New("pcas delegation: queued epoch floor exceeds the projectable maximum")
+	}
 	receipt, err := w.custody.ApplyDelegation(ctx, p.Command)
 	if err != nil {
 		return fmt.Errorf("pcas delegation: signer apply: %w", err)
 	}
 	if receipt.Command != p.Command || receipt.AppliedFloor != p.Command.EpochFloor {
 		return errors.New("pcas delegation: signer receipt does not match queued command")
+	}
+	if receipt.AppliedFloor > delegation.MaxEpochFloor {
+		return errors.New("pcas delegation: signer receipt floor exceeds the projectable maximum")
 	}
 	if err := receipt.Verify(); err != nil {
 		return fmt.Errorf("pcas delegation: signer receipt verification: %w", err)

@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/succession"
+	pcasdelegation "trstctl.com/trstctl/internal/succession/delegation"
 )
 
 // plannableCredentialTypes is the PCAS-claim-9 identity/credential genus the API accepts,
@@ -845,6 +847,9 @@ func delegationScopeHandler(a *api.API, svc Service) http.HandlerFunc {
 		if req.ScopeID == "" {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "scope_id is required")
 		}
+		if req.EpochFloor > pcasdelegation.MaxEpochFloor {
+			return 0, nil, api.ErrStatus(http.StatusBadRequest, "epoch_floor exceeds the supported maximum")
+		}
 		resp, err := svc.ConfigureDelegationScope(ctx, tenantID, req)
 		return http.StatusAccepted, resp, err
 	})
@@ -874,6 +879,9 @@ func delegationFloorHandler(a *api.API, svc Service) http.HandlerFunc {
 		}
 		if req.ScopeID == "" {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "scope_id is required")
+		}
+		if req.EpochFloor > pcasdelegation.MaxEpochFloor {
+			return 0, nil, api.ErrStatus(http.StatusBadRequest, "epoch_floor exceeds the supported maximum")
 		}
 		resp, err := svc.RaiseDelegationFloor(ctx, tenantID, req)
 		return http.StatusAccepted, resp, err
@@ -1454,11 +1462,11 @@ func schemas() map[string]*api.Schema {
 		"PCASDelegationScopeRequest": api.ObjectSchema(map[string]*api.Schema{
 			"scope_id":        api.StringSchema(),
 			"parent_scope_id": api.StringSchema(),
-			"epoch_floor":     api.IntegerSchema(),
+			"epoch_floor":     {Type: "integer", Maximum: math.MaxInt64},
 		}, "scope_id"),
 		"PCASDelegationFloorRequest": api.ObjectSchema(map[string]*api.Schema{
 			"scope_id":    api.StringSchema(),
-			"epoch_floor": api.IntegerSchema(),
+			"epoch_floor": {Type: "integer", Maximum: math.MaxInt64},
 		}, "scope_id", "epoch_floor"),
 		"PCASDelegationScope": api.ObjectSchema(map[string]*api.Schema{
 			"request_id":      api.StringSchema(),

@@ -44,6 +44,14 @@ func TestOpenAPI_Golden(t *testing.T) {
 		t.Fatalf("openapi version = %v, want 3.1.0", doc["openapi"])
 	}
 	paths, _ := doc["paths"].(map[string]any)
+	schemas, _ := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	for _, name := range []string{"PCASDelegationScopeRequest", "PCASDelegationFloorRequest"} {
+		props := schemas[name].(map[string]any)["properties"].(map[string]any)
+		floor := props["epoch_floor"].(map[string]any)
+		if floor["maximum"] != float64(9223372036854775807) {
+			t.Fatalf("%s epoch_floor maximum = %v", name, floor["maximum"])
+		}
+	}
 	for _, p := range []string{"/api/v1/pcas/successions", "/api/v1/pcas/chain", "/api/v1/pcas/acks"} {
 		if _, ok := paths[p]; !ok {
 			t.Fatalf("path %q missing from the PCAS OpenAPI document", p)
@@ -55,7 +63,6 @@ func TestOpenAPI_Golden(t *testing.T) {
 	if got := content["schema"].(map[string]any)["$ref"]; got != "#/components/schemas/PCASCheckpoint" {
 		t.Fatalf("checkpoint response schema = %v", got)
 	}
-	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
 	federation := schemas["PCASFederationImportRequest"].(map[string]any)["properties"].(map[string]any)
 	if got := federation["foreign_genesis"].(map[string]any)["type"]; got != "object" {
 		t.Fatalf("federation genesis schema type = %v, want object record", got)

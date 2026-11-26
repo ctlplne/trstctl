@@ -426,6 +426,25 @@ func newAPI(t *testing.T, svc succapi.Service) *api.API {
 	return api.New(cs, idem, nil, opts...)
 }
 
+func TestDelegationFloorOverflowRejectedAtBothMutationRoutes(t *testing.T) {
+	a := newAPI(t, &fakeService{})
+	for _, route := range []string{"/api/v1/pcas/delegation/scopes", "/api/v1/pcas/delegation/floors"} {
+		r := httptest.NewRequest(http.MethodPost, route, bytes.NewBufferString(`{"scope_id":"root","epoch_floor":9223372036854775808}`))
+		r.Header.Set("Idempotency-Key", "overflow-"+route)
+		rr := httptest.NewRecorder()
+		a.ServeHTTP(rr, r)
+		if rr.Code != http.StatusBadRequest || !bytes.Contains(rr.Body.Bytes(), []byte("epoch_floor")) {
+			t.Fatalf("%s accepted out-of-range floor: HTTP %d: %s", route, rr.Code, rr.Body.String())
+		}
+	}
+	svc := succapi.NewService(nil, nil, nil)
+	if _, err := svc.ConfigureDelegationScope(context.Background(), tenantA, succapi.DelegationScopeRequest{
+		ScopeID: "root", EpochFloor: uint64(math.MaxInt64) + 1,
+	}); err == nil || !bytes.Contains([]byte(err.Error()), []byte("epoch_floor")) {
+		t.Fatalf("direct service call did not reject overflow before outbox admission: %v", err)
+	}
+}
+
 func TestFederationImportRejectsStringEncodedRecords(t *testing.T) {
 	a := newAPI(t, &fakeService{})
 	for _, tc := range []struct {

@@ -120,6 +120,7 @@ type Schema struct {
 	MaxLength   int                `json:"maxLength,omitempty"`
 	MinItems    int                `json:"minItems,omitempty"`
 	MaxItems    int                `json:"maxItems,omitempty"`
+	Maximum     int64              `json:"maximum,omitempty"`
 	// AdditionalProperties types free-key maps (e.g. principal -> scopes).
 	AdditionalProperties *Schema `json:"additionalProperties,omitempty"`
 }

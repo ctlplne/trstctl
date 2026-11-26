@@ -14,12 +14,15 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/inputtext"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/succession"
+	"trstctl.com/trstctl/internal/succession/delegation"
 )
 
 // tenantPoisonQuarantine caches positive durable lookups during an ordered
 // replay. A healthy answer is checked again on the next event, because a peer
 // projector may quarantine that tenant between events. Only known,
-// deterministic text or workload-target uniqueness failures are quarantined;
+// deterministic text, workload-target uniqueness, or signed PCAS floor range
+// failures are quarantined;
 // transport, custody, and unknown projection errors still stop replay.
 type tenantPoisonQuarantine struct {
 	store *store.Store
@@ -86,6 +89,26 @@ func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.
 			if err != nil || skip {
 				return skip, err
 			}
+		}
+		if e.Type == succession.TypeDelegationApplied {
+			if e.SchemaVersion > succession.DelegationAppliedSchemaV1 {
+				return false, nil // a future envelope belongs to its versioned projector
+			}
+			var payload succession.DelegationAppliedV1
+			if err := json.Unmarshal(e.Data, &payload); err == nil && payload.TenantID == e.TenantID {
+				var receipt delegation.Receipt
+				if json.Unmarshal(payload.ReceiptJSON, &receipt) == nil && receipt.TenantID == e.TenantID &&
+					receipt.OperationID != "" && receipt.ScopeID != "" && receipt.ScopeID != receipt.ParentScopeID &&
+					(receipt.Kind == "scope" || receipt.Kind == "floor") &&
+					receipt.AppliedFloor == receipt.EpochFloor && receipt.AppliedFloor > delegation.MaxEpochFloor && receipt.Verify() == nil {
+					if err := q.record(ctx, tx, e.TenantID, e.Sequence, "pcas_delegation_floor_out_of_range"); err != nil {
+						return false, err
+					}
+					q.known[e.TenantID] = true
+					return true, nil
+				}
+			}
+			return false, nil
 		}
 		if e.Type != EventSecretSyncWorkloadIdentityUpserted {
 			return false, nil

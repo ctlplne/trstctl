@@ -147,6 +147,13 @@ must have its persistent keystore mounted; the control plane does not write the
 signer's scope file. A scope belongs to one tenant. Its parent cannot change,
 and its floor can only rise. Create a root before its children. Use `certs:write`
 for commands and `certs:read` for readback.
+`epoch_floor` must be an integer from 0 through 9,223,372,036,854,775,807:
+the upper bound is the largest value the event projection's PostgreSQL `bigint`
+can store. The API, outbox worker, and isolated signer reject a larger value
+before it can become signer state or an event. If a signed event from an older
+version already exceeds this bound, replay quarantines that tenant and keeps
+other tenants moving; treat that tenant's signer state and read model as needing
+operator recovery, since a sealed floor cannot be lowered.
 
 ```bash
 cat > /secure/pcas-root-scope.json <<'JSON'

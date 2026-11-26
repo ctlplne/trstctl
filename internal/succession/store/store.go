@@ -379,6 +379,9 @@ func ApplyDelegationReceiptTx(ctx context.Context, tx pgx.Tx, tenantID string, s
 	if receipt.TenantID != tenantID || receipt.AppliedFloor != receipt.EpochFloor {
 		return errors.New("succession store: delegation receipt tenant or floor mismatch")
 	}
+	if receipt.AppliedFloor > delegation.MaxEpochFloor {
+		return errors.New("succession store: delegation floor exceeds PostgreSQL bigint maximum")
+	}
 	if sequence == 0 || sequence > math.MaxInt64 {
 		return errors.New("succession store: delegation event sequence is invalid")
 	}

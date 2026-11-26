@@ -209,7 +209,7 @@ not this file.
 | `internal/api/notifications.go:910` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications.go:1292` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/openapi.go:291` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/openapi.go:292` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secret_reference_scope_test.go:27` | fabricated invalid reference fixture, no credential value (CWE-798) |
 | `internal/api/secret_scan_hooks_od3_test.go:26` | fabricated fixture signing token (CWE-798) |
 | `internal/api/secret_scan_known_decoy_test.go:18` | fabricated decoy fixture; no value is real (CWE-798) |
@@ -3270,7 +3270,7 @@ not this file.
 | `internal/store/store_isolation_test.go:447` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:495` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/succession/agent/approval_results.go:77` | agent-owned state directory, random filename |
-| `internal/succession/delegation/durable.go:253` | signer-owned keystore directory selected at signer startup; fsync makes the scope rename durable (CWE-22) |
+| `internal/succession/delegation/durable.go:261` | signer-owned keystore directory selected at signer startup; fsync makes the scope rename durable (CWE-22) |
 | `internal/succession/minter/spentstore.go:70` | signer-owned custody directory selected at signer startup (CWE-22). |
 | `internal/succession/minter/spentstore.go:113` | claim path is signer-owned custody dir plus a fixed SHA-256 hex nonce digest (CWE-22). |
 | `internal/supportbundle/supportbundle.go:438` | operator-invoked support bundle collecting its configured files (CWE-22) |

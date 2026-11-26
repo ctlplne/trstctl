@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	corestore "trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/succession"
+	"trstctl.com/trstctl/internal/succession/delegation"
 
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
@@ -96,6 +97,40 @@ func rec(identity string, epoch uint64) pcasstore.Record {
 		IdentityID: identity, Epoch: epoch, PredecessorEpoch: epoch - 1,
 		PredecessorAlg: "ECDSA-P256", SuccessorAlg: "Ed25519",
 		SuccessorPub: []byte{byte(epoch & 0xFF)}, Encoded: []byte{0xAB, byte(epoch & 0xFF)},
+	}
+}
+
+func TestDelegationProjectionRejectsOutOfRangeFloorBeforeSQL(t *testing.T) {
+	repo := newRepo(t)
+	receipt := delegation.Receipt{Command: delegation.Command{
+		TenantID: tenantA, OperationID: "overflow", Kind: "scope", ScopeID: "root",
+		EpochFloor: uint64(math.MaxInt64) + 1,
+	}, AppliedFloor: uint64(math.MaxInt64) + 1}
+	err := repo.ApplyDelegationReceipt(context.Background(), tenantA, 1, receipt)
+	if err == nil || !strings.Contains(err.Error(), "bigint maximum") {
+		t.Fatalf("out-of-range signed floor reached SQL or signature check: %v", err)
+	}
+	receipt.EpochFloor = uint64(math.MaxInt64)
+	receipt.AppliedFloor = uint64(math.MaxInt64)
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := receipt.SignedBody()
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt.PublicKeyDER = key.Public().DER
+	receipt.Signature, err = key.Sign(body, crypto.SignOptions{Hash: crypto.SHA256})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ApplyDelegationReceipt(context.Background(), tenantA, 1, receipt); err != nil {
+		t.Fatalf("maximum projectable signed floor was rejected: %v", err)
+	}
+	rows, err := repo.ListDelegationScopes(context.Background(), tenantA)
+	if err != nil || len(rows) != 1 || rows[0].EpochFloor != uint64(math.MaxInt64) {
+		t.Fatalf("projected maximum floor = %+v, err=%v", rows, err)
 	}
 }
 
