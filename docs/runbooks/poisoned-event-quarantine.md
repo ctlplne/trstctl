@@ -1,7 +1,8 @@
 # Runbook: a historical event cannot be projected
 
-New event appends reject NUL and invalid UTF-8 in text before publishing to
-JetStream. Workload identity source creation and retargeting also refuse an
+New event appends reject NUL, invalid UTF-8, unpaired Unicode surrogate
+escapes, and JSON numbers outside PostgreSQL `jsonb`'s range before publishing
+to JetStream. Workload identity source creation and retargeting also refuse an
 occupied provider/target before publishing. An older release may already have
 stored either kind of event. The event is still the source of truth; the control
 plane does not edit or discard it.
@@ -22,8 +23,8 @@ SELECT tenant_id, first_failed_seq, reason_code, recorded_at
  ORDER BY recorded_at, tenant_id;
 ```
 
-`reason_code` is `nul_text`, `invalid_utf8`, or
-`workload_source_target_conflict`. The sequence is an event-log
+`reason_code` is `nul_text`, `invalid_utf8`, `json_unicode_escape`,
+`json_number_range`, or `workload_source_target_conflict`. The sequence is an event-log
 coordinate, not proof that the event was applied. A green global `/readyz` and
 an advanced checkpoint mean the healthy tenants can progress; they do not mean
 the quarantined tenant's inventory is complete.

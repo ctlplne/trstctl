@@ -121,6 +121,10 @@ func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.
 		reasonCode = "nul_text"
 	case errors.Is(textErr, inputtext.ErrInvalidUTF8):
 		reasonCode = "invalid_utf8"
+	case errors.Is(textErr, inputtext.ErrInvalidUnicodeEscape):
+		reasonCode = "json_unicode_escape"
+	case errors.Is(textErr, inputtext.ErrJSONNumberRange):
+		reasonCode = "json_number_range"
 	default:
 		return false, textErr
 	}

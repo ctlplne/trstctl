@@ -16,6 +16,8 @@ import (
 
 var ErrNUL = errors.New("text contains NUL")
 var ErrInvalidUTF8 = errors.New("text is not valid UTF-8")
+var ErrInvalidUnicodeEscape = errors.New("JSON string contains an unpaired Unicode surrogate")
+var ErrJSONNumberRange = errors.New("JSON number exceeds PostgreSQL jsonb numeric range")
 
 // ValidateString checks one decoded field, including object keys and path values.
 func ValidateString(s string) error {
@@ -38,6 +40,9 @@ func ValidateJSONStrings(raw []byte) error {
 			return ErrInvalidUTF8
 		}
 		return nil
+	}
+	if err := validateJSONBShape(raw); err != nil && json.Valid(raw) {
+		return err
 	}
 	if bytes.IndexByte(raw, 0) < 0 && !bytes.Contains(raw, []byte(`\u0000`)) {
 		return nil
