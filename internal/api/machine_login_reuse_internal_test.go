@@ -8,12 +8,11 @@ import (
 )
 
 // M4-L1: the machine-login preview says whether a credential logs in once.
-// OIDC, JWT, Kubernetes, GCP and Azure logins pass the replay guard (A238-L8
-// added the last three), so their tokens are single-use; a machine token and
-// an AWS IAM request log in again until they expire.
+// OIDC, JWT, Kubernetes, GCP, Azure and AWS IAM logins pass the replay guard,
+// so their credentials are single-use; a machine token remains reusable.
 func TestMachineLoginPreviewSaysWhetherTheCredentialIsSingleUse(t *testing.T) {
 	for typ, want := range map[string]bool{
-		"oidc": true, "jwt": true, "token": false, "kubernetes": true, "gcp": true, "azure": true, "aws-iam": false,
+		"oidc": true, "jwt": true, "token": false, "kubernetes": true, "gcp": true, "azure": true, "aws-iam": true,
 	} {
 		single, reuse := machineLoginCredentialReuse(machineAuthMethodInfo{Name: typ, Type: typ})
 		if single != want || reuse == "" {

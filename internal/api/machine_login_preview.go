@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -113,7 +114,7 @@ func machineLoginCredentialFormat(method machineAuthMethodInfo) string {
 	case "kubernetes":
 		return "A projected Kubernetes ServiceAccount JWT for an allowed namespace and service account."
 	case "aws-iam":
-		return "A Vault-style signed STS GetCallerIdentity request; never an AWS secret access key."
+		return "A signed STS GetCallerIdentity request with " + authmethod.AWSIAMServerIDHeader + " set to " + method.ServerID + " among its SigV4 signed headers; never an AWS secret access key."
 	case "gcp":
 		return "A signed Google workload identity token for an allowed project and audience."
 	case "azure":
@@ -126,13 +127,15 @@ func machineLoginCredentialFormat(method machineAuthMethodInfo) string {
 }
 
 // machineLoginCredentialReuse says whether a method's credential logs in once
-// (M4-L1). OIDC and JWT logins pass the durable replay guard: the same token,
-// by issuer and jti or by its digest, is refused a second time until it
-// expires. The other methods' credentials log in again until they expire.
+// (M4-L1). OIDC, JWT, AWS IAM and default platform-token logins pass the
+// durable replay guard. The machine token and explicitly reusable platform
+// tokens may log in again until expiry.
 func machineLoginCredentialReuse(method machineAuthMethodInfo) (bool, string) {
 	switch method.Type {
 	case "oidc", "jwt":
 		return true, "Single-use: each token logs in once. The same token is refused a second time, so mint a fresh one for every login."
+	case "aws-iam":
+		return true, "Single-use: each STS signature logs in once. Sign a fresh GetCallerIdentity request with this method's trstctl server ID for every login."
 	case "kubernetes", "gcp", "azure":
 		if method.AllowTokenReuse {
 			return false, "Reusable: this method allows token reuse (allow_token_reuse), so the same token logs in again until it expires — for clients such as the CSI secrets driver that present a platform-managed token more than once."
@@ -150,8 +153,8 @@ func machineLoginVerificationReady(method machineAuthMethodInfo) (bool, string, 
 	case "oidc", "jwt", "kubernetes", "gcp", "azure":
 		return method.JWKSConfigured, "Public verification keys are loaded for this JWT-family method.", "Configure a trusted JWKS and restart or reload the control plane, then preview again."
 	case "aws-iam":
-		ready := len(method.AllowedAccounts) > 0 || len(method.AllowedARNs) > 0
-		return ready, "AWS STS verification has an explicit account or ARN allowlist.", "Configure at least one allowed AWS account or ARN, then preview again."
+		ready := method.ServerID != "" && (len(method.AllowedAccounts) > 0 || len(method.AllowedARNs) > 0)
+		return ready, "AWS STS verification has an explicit account or ARN allowlist and a signed trstctl server ID.", "Configure server_id and at least one allowed AWS account or ARN, then preview again."
 	default:
 		return true, "The method's local verification authority is configured.", "Restore the method verification authority, then preview again."
 	}

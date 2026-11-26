@@ -34995,6 +34995,9 @@
           "scopes_claim": {
             "type": "string"
           },
+          "server_id": {
+            "type": "string"
+          },
           "source": {
             "type": "string"
           },
@@ -35161,7 +35164,7 @@
             "type": "integer"
           },
           "single_use": {
-            "description": "The credential logs in once: OIDC and JWT tokens are replay-guarded (M4-L1).",
+            "description": "The credential logs in once: OIDC, JWT, Kubernetes, GCP, Azure and AWS IAM proofs are replay-guarded.",
             "type": "boolean"
           },
           "tenant_binding": {

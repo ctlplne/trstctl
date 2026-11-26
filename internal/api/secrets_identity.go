@@ -718,6 +718,7 @@ type machineAuthMethodInfo struct {
 	Source                 string              `json:"source"`
 	Issuer                 string              `json:"issuer,omitempty"`
 	Audience               string              `json:"audience,omitempty"`
+	ServerID               string              `json:"server_id,omitempty"`
 	TenantClaim            string              `json:"tenant_claim,omitempty"`
 	SubjectClaim           string              `json:"subject_claim,omitempty"`
 	ScopesClaim            string              `json:"scopes_claim,omitempty"`
@@ -856,6 +857,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.AllowTokenReuse = v.AllowTokenReuse
 	case authmethod.AWSIAMMethod:
 		info.Type = "aws-iam"
+		info.ServerID = v.ServerID
 		info.AllowedAccounts = sortedBoolKeys(v.AllowedAccounts)
 		info.AllowedARNs = sortedBoolKeys(v.AllowedARNs)
 		info.Scopes = append([]string(nil), v.Scopes...)

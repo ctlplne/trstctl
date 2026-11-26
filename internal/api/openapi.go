@@ -8565,7 +8565,7 @@ func componentSchemas() map[string]*Schema {
 		"execute_writes": {Type: "array", Items: str()}, "execute_external_effects": {Type: "array", Items: str()},
 		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
 		"cli_argv": {Type: "array", Items: str()}, "secret_data_handling": str(),
-		"single_use":       {Type: "boolean", Description: "The credential logs in once: OIDC and JWT tokens are replay-guarded (M4-L1)."},
+		"single_use":       {Type: "boolean", Description: "The credential logs in once: OIDC, JWT, Kubernetes, GCP, Azure and AWS IAM proofs are replay-guarded."},
 		"credential_reuse": {Type: "string", Description: "Whether the same credential logs in again, in plain words."},
 	}, "capability", "operation", "ready", "effect_free", "method", "tenant_binding", "credential_format", "single_use", "credential_reuse",
 		"session_ttl_seconds", "required_permission", "request_fingerprint", "prerequisites", "blockers", "preview_reads",
@@ -9925,7 +9925,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretAccessExplain":             secretAccessExplain,
 		"MachineAuthMethod": object(map[string]*Schema{
 			"name": str(), "type": str(), "source": str(),
-			"issuer": str(), "audience": str(), "tenant_claim": str(), "subject_claim": str(),
+			"issuer": str(), "audience": str(), "server_id": str(), "tenant_claim": str(), "subject_claim": str(),
 			"scopes_claim": str(), "principal_prefix": str(),
 			"scopes":                   {Type: "array", Items: str()},
 			"scopes_by_principal":      {Type: "object", AdditionalProperties: &Schema{Type: "array", Items: str()}},

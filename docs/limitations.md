@@ -5756,7 +5756,9 @@ when off, requiring a KEK when on):
   generic JWT and receives a scoped, tenant-scoped session (distinct from the
   human OIDC SSO bridge). Token credentials MAC-bind tenant, audience,
   principal, and expiry; JWT methods require a tenant claim or tenant-pinned
-  config; AWS IAM is tenant-pinned through allowed account/ARN config.
+  config; AWS IAM is tenant-pinned through allowed account/ARN config, requires
+  a deployment-specific signed server-ID header, and records each STS signature
+  as one-use until it expires.
   `X-Tenant-ID` is only a lookup hint — mismatched tenant headers are rejected.
 - Application secrets SDK (F64) backs the secret store
   `POST/GET/PUT/DELETE /api/v1/secrets/store/...` (create, read, rotate,

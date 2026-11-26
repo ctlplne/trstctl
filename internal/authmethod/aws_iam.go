@@ -12,10 +12,17 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/netsec"
 )
+
+// AWSIAMServerIDHeader is signed into every trstctl IAM login proof. An EKS
+// token or a signed request made for another relying party cannot carry it.
+const AWSIAMServerIDHeader = "X-Trstctl-AWS-IAM-Server-ID"
 
 // AWSIdentity is the non-secret identity returned by STS GetCallerIdentity.
 type AWSIdentity struct {
@@ -36,6 +43,9 @@ type STSCallerIdentityClient interface {
 type AWSIAMMethod struct {
 	TenantID        string
 	Client          STSCallerIdentityClient
+	ServerID        string
+	Guard           ReplayGuard
+	Now             func() time.Time
 	AllowedAccounts map[string]bool
 	AllowedARNs     map[string]bool
 	Scopes          []string
@@ -48,6 +58,17 @@ func (AWSIAMMethod) Name() string { return "aws-iam" }
 func (a AWSIAMMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
 	if a.Client == nil {
 		return "", nil, fmt.Errorf("aws-iam: STS client is not configured")
+	}
+	if a.Guard == nil {
+		return "", nil, fmt.Errorf("aws-iam: durable single-use guard is not configured")
+	}
+	now := time.Now()
+	if a.Now != nil {
+		now = a.Now()
+	}
+	proof, err := validateAWSIAMProof(credential, a.ServerID, now)
+	if err != nil {
+		return "", nil, fmt.Errorf("aws-iam: %w", err)
 	}
 	id, err := a.Client.GetCallerIdentity(ctx, credential)
 	if err != nil {
@@ -62,6 +83,13 @@ func (a AWSIAMMethod) Authenticate(ctx context.Context, credential []byte) (stri
 	if len(a.AllowedARNs) > 0 && !a.AllowedARNs[id.ARN] {
 		return "", nil, fmt.Errorf("aws-iam: ARN is not allowed")
 	}
+	first, err := a.Guard.FirstUse(ctx, a.Name(), "sig:"+crypto.SHA256Hex([]byte(proof.signature)), proof.expires)
+	if err != nil {
+		return "", nil, fmt.Errorf("aws-iam: record single use: %w", err)
+	}
+	if !first {
+		return "", nil, fmt.Errorf("aws-iam: %w", ErrCredentialReplayed)
+	}
 	return id.ARN, append([]string(nil), a.Scopes...), nil
 }
 
@@ -73,6 +101,110 @@ type AWSSignedGetCallerIdentityRequest struct {
 	URL     string              `json:"url"`
 	Headers map[string][]string `json:"headers,omitempty"`
 	Body    string              `json:"body,omitempty"`
+}
+
+type awsIAMProof struct {
+	signature string
+	expires   time.Time
+}
+
+// validateAWSIAMProof checks the locally knowable parts before STS gets a
+// request. STS still verifies the signature; only after that succeeds does the
+// caller commit the signature digest to the durable one-use guard.
+func validateAWSIAMProof(raw []byte, serverID string, now time.Time) (awsIAMProof, error) {
+	if serverID == "" || strings.TrimSpace(serverID) != serverID {
+		return awsIAMProof{}, fmt.Errorf("server ID is not configured")
+	}
+	var signed AWSSignedGetCallerIdentityRequest
+	if err := json.Unmarshal(raw, &signed); err != nil {
+		return awsIAMProof{}, fmt.Errorf("parse signed STS request: %w", err)
+	}
+	boundID, ok := singleAWSHeader(signed.Headers, AWSIAMServerIDHeader)
+	if !ok || boundID != serverID {
+		return awsIAMProof{}, fmt.Errorf("signed trstctl server ID is missing or differs")
+	}
+	u, err := url.Parse(strings.TrimSpace(signed.URL))
+	if err != nil {
+		return awsIAMProof{}, fmt.Errorf("parse signed STS URL: %w", err)
+	}
+	q := u.Query()
+	var signature, signedHeaders, date string
+	window := 15 * time.Minute
+	if _, presigned := q["X-Amz-Signature"]; presigned {
+		if _, hasAuth := singleAWSHeader(signed.Headers, "Authorization"); hasAuth {
+			return awsIAMProof{}, fmt.Errorf("mixed STS signature forms are refused")
+		}
+		if len(q["X-Amz-Signature"]) != 1 || len(q["X-Amz-SignedHeaders"]) != 1 ||
+			len(q["X-Amz-Date"]) != 1 || len(q["X-Amz-Expires"]) != 1 {
+			return awsIAMProof{}, fmt.Errorf("presigned STS proof is incomplete or repeated")
+		}
+		signature, signedHeaders, date = q.Get("X-Amz-Signature"), q.Get("X-Amz-SignedHeaders"), q.Get("X-Amz-Date")
+		seconds, err := strconv.Atoi(q.Get("X-Amz-Expires"))
+		if err != nil || seconds < 1 || seconds > 900 {
+			return awsIAMProof{}, fmt.Errorf("presigned STS expiry must be between 1 and 900 seconds")
+		}
+		window = time.Duration(seconds) * time.Second
+	} else {
+		auth, ok := singleAWSHeader(signed.Headers, "Authorization")
+		if !ok || !strings.HasPrefix(auth, "AWS4-HMAC-SHA256 ") {
+			return awsIAMProof{}, fmt.Errorf("STS authorization header is missing")
+		}
+		signatureFields, signedHeaderFields := 0, 0
+		for _, part := range strings.Split(strings.TrimPrefix(auth, "AWS4-HMAC-SHA256 "), ",") {
+			name, value, found := strings.Cut(strings.TrimSpace(part), "=")
+			if !found {
+				continue
+			}
+			switch name {
+			case "SignedHeaders":
+				signedHeaderFields++
+				signedHeaders = value
+			case "Signature":
+				signatureFields++
+				signature = value
+			}
+		}
+		if signatureFields != 1 || signedHeaderFields != 1 {
+			return awsIAMProof{}, fmt.Errorf("STS authorization signature fields are missing or repeated")
+		}
+		date, ok = singleAWSHeader(signed.Headers, "X-Amz-Date")
+		if !ok || !awsSignedHeader(signedHeaders, "x-amz-date") {
+			return awsIAMProof{}, fmt.Errorf("signed STS request date is missing")
+		}
+	}
+	if !awsSignedHeader(signedHeaders, strings.ToLower(AWSIAMServerIDHeader)) ||
+		!stsQueryParameters["X-Amz-Signature"].MatchString(signature) {
+		return awsIAMProof{}, fmt.Errorf("trstctl server ID or signature is not among the signed STS fields")
+	}
+	issued, err := time.Parse("20060102T150405Z", date)
+	if err != nil || now.Before(issued.Add(-5*time.Minute)) || now.After(issued.Add(window)) {
+		return awsIAMProof{}, fmt.Errorf("signed STS request is outside its validity window")
+	}
+	return awsIAMProof{signature: signature, expires: issued.Add(window)}, nil
+}
+
+func singleAWSHeader(headers map[string][]string, want string) (string, bool) {
+	var value string
+	found := false
+	for name, values := range headers {
+		if !strings.EqualFold(name, want) {
+			continue
+		}
+		if found || len(values) != 1 || values[0] == "" {
+			return "", false
+		}
+		value, found = values[0], true
+	}
+	return value, found
+}
+
+func awsSignedHeader(list, want string) bool {
+	for _, name := range strings.Split(list, ";") {
+		if name == want {
+			return true
+		}
+	}
+	return false
 }
 
 // HTTPSignedSTSClient verifies signed STS requests over HTTP. Endpoint defaults to

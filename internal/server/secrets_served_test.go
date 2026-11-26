@@ -2495,7 +2495,7 @@ func TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM(t *testing.T) {
 		},
 	}
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.MachineAuthMethods = func(tenantID string) []authmethod.Method {
+		methods := func(tenantID string) []authmethod.Method {
 			allowedAWSAccounts := map[string]bool{"210987654321": true}
 			if tenantID == servedTestTenant {
 				allowedAWSAccounts = map[string]bool{"123456789012": true}
@@ -2517,11 +2517,13 @@ func TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM(t *testing.T) {
 				authmethod.AWSIAMMethod{
 					TenantID:        tenantID,
 					Client:          fakeSTS,
+					ServerID:        "trstctl.served.example.test",
 					AllowedAccounts: allowedAWSAccounts,
 					Scopes:          []string{"secrets:read"},
 				},
 			}
 		}
+		d.MachineAuthMethods = withMachineCredentialReplayGuard(methods, d.Store)
 	})
 
 	registerServedTenantID(t, h, tenantB, "Other machine-attestation tenant")
@@ -2549,7 +2551,8 @@ func TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM(t *testing.T) {
 	}
 
 	// #nosec G101 -- fabricated STS exchange fixture; no real credential (CWE-798)
-	awsCredential := `{"method":"POST","url":"https://sts.amazonaws.com/","body":"Action=GetCallerIdentity&Version=2011-06-15"}`
+	awsCredential := fmt.Sprintf(`{"method":"POST","url":"https://sts.amazonaws.com/","headers":{"Authorization":["AWS4-HMAC-SHA256 Credential=AKIATEST/20261126/us-east-1/sts/aws4_request,SignedHeaders=host;x-amz-date;x-trstctl-aws-iam-server-id,Signature=%s"],"X-Amz-Date":["%s"],"X-Trstctl-AWS-IAM-Server-ID":["trstctl.served.example.test"]},"body":"Action=GetCallerIdentity&Version=2011-06-15"}`,
+		strings.Repeat("a", 64), time.Now().UTC().Format("20060102T150405Z"))
 	status, body = servedMachineLogin(t, h, servedTestTenant, "aws-iam", awsCredential)
 	if status != http.StatusOK {
 		t.Fatalf("aws iam login: status %d body %s", status, body)

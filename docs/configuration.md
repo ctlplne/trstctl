@@ -4384,8 +4384,16 @@ file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,
 `aws-iam`, `gcp`, `azure`, `oidc`, or `jwt`. JWT-family methods require
 `audience` plus `jwks_file` or `jwks_json`, and must set either `tenant_claim`
 (credential-bound tenancy) or `tenant_id` (tenant-pinned config). AWS IAM must set
-`tenant_id` and `allowed_accounts` or `allowed_arns` because STS does not carry a
-trstctl tenant claim. Every method must also choose exactly one permission source:
+`tenant_id`, `server_id`, and `allowed_accounts` or `allowed_arns` because STS does not carry a
+trstctl tenant claim. Choose a different `server_id` for each tenant method, such as
+its stable DNS name plus tenant ID; duplicate values across tenants fail startup.
+An AWS workload sets `X-Trstctl-AWS-IAM-Server-ID` to that
+exact value **before** signing its STS `GetCallerIdentity` request and includes
+the header in SigV4 `SignedHeaders`. A request signed for EKS, Vault, or another
+trstctl deployment cannot log in. Each signed proof logs in once, including
+across replicas and restarts; sign a fresh request for another login. The
+`X-Amz-Date` and, for presigned requests, `X-Amz-Expires` must be current.
+Every method must also choose exactly one permission source:
 non-empty static `scopes`, or—for OIDC/generic JWT only—one signed
 `scopes_claim`. Static scopes cannot be widened by a credential's generic `scope`
 or `scopes` claim. Empty, duplicate, missing, or ambiguous scope configuration
@@ -4405,7 +4413,8 @@ entries with the same name are valid only when both have different fixed
 `tenant_id` values. A tenant-claim entry applies across tenants and cannot
 share its method name with another entry, so the login preview and exchange
 always use the same verifier and permission source.
-An `oidc`, `jwt`, `kubernetes`, `gcp` or `azure` login token is single-use: trstctl
+An `oidc`, `jwt`, `kubernetes`, `gcp` or `azure` login token, and an AWS IAM signed
+request, is single-use: trstctl
 records each accepted token (a digest of its issuer and `jti`, or of the whole token
 when it has no `jti`, never the token) until it expires, and refuses the same token
 again on any replica or after a restart. The record is taken only after every other

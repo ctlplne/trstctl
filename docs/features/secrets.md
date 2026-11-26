@@ -2261,6 +2261,11 @@ or OIDC/generic JWT may name one signed `scopes_claim`; setting both or neither
 fails startup. A token's ordinary `scope`/`scopes` claim never overrides static
 operator policy. AWS IAM uses the Vault-style signed `sts:GetCallerIdentity`
 request, verifying the caller via STS without ever receiving the AWS secret access key.
+Configure a deployment-specific `server_id`; the workload must set
+`X-Trstctl-AWS-IAM-Server-ID` to that exact value **before** SigV4 signing, so
+the header appears in `SignedHeaders`. The signed request's local date must be
+current, a presigned request may live at most 900 seconds, and trstctl records
+one use of the verified signature until expiry. Sign a new request for each login.
 The request trstctl sends to STS is rebuilt from the configured endpoint, the root path
 and the signed STS parameters alone (`Action`, `Version` and the SigV4 `X-Amz-*` query
 parameters, each in the shape AWS signs); a submitted request with any other parameter,
@@ -2290,6 +2295,7 @@ secrets:
       scopes: ["secrets:read"]
     - name: aws-iam
       tenant_id: 11111111-1111-1111-1111-111111111111
+      server_id: trstctl.example.internal
       allowed_accounts: ["123456789012"]
       scopes: ["secrets:read"]
 ```
@@ -2306,8 +2312,8 @@ review-first journey:
    name. It reads configuration and returns the exact tenant binding, credential
    shape, whether the credential is single-use (`single_use`, with `credential_reuse`
    in plain words: OIDC, JWT, Kubernetes, GCP and Azure tokens log in once unless the
-   method sets `allow_token_reuse`; a machine token or an AWS IAM request logs in again
-   until it expires), session lifetime, prerequisites, blockers, writes, outside
+   method sets `allow_token_reuse`; an AWS IAM signature logs in once, while a
+   machine token can log in again until expiry), session lifetime, prerequisites, blockers, writes, outside
    calls, recovery steps, verification steps, and CLI command. It does not receive a credential,
    call the verifier, create a session/event/idempotency row, or contact AWS STS.
 3. **Test reviewed login.** Only a ready plan reveals the password-style credential

@@ -34,7 +34,7 @@ func TestMachineAuthExchangeUsesIsBoundedM4L4(t *testing.T) {
 		}
 	}
 	aws := MachineAuthMethod{Name: "aws-iam", TenantID: "11111111-1111-1111-1111-111111111111", AllowedAccounts: []string{"111122223333"},
-		Scopes: []string{"secrets:read"}, ExchangeUses: 2}
+		Scopes: []string{"secrets:read"}, ServerID: "trstctl.example.test", ExchangeUses: 2}
 	if errs := validateSecretsMachineAuth([]MachineAuthMethod{aws}); !mentions(errs) {
 		t.Fatal("exchange_uses on aws-iam was accepted")
 	}

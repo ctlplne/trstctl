@@ -9888,6 +9888,7 @@ MachineAuthMethod = TypedDict(
         'scopes': list[str],
         'scopes_by_principal': dict[str, Any],
         'scopes_claim': str,
+        'server_id': str,
         'source': str,
         'subject_claim': str,
         'tenant_claim': str,

@@ -3388,6 +3388,9 @@ type MachineAuthMethod struct {
 	AllowedProjects        []string `json:"allowed_projects,omitempty"`
 	AllowedAzureTenants    []string `json:"allowed_azure_tenants,omitempty"`
 	STSEndpoint            string   `json:"sts_endpoint,omitempty"`
+	// ServerID is the exact trstctl relying-party value signed into AWS IAM
+	// GetCallerIdentity proofs through X-Trstctl-AWS-IAM-Server-ID.
+	ServerID string `json:"server_id,omitempty"`
 	// AllowTokenReuse (kubernetes, gcp and azure only, A238-L8) lets the same
 	// token log in again until it expires. Off by default: like an oidc or jwt
 	// token, each one logs in once. Turn it on only for a method whose clients
@@ -6187,6 +6190,9 @@ func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
 			if strings.TrimSpace(prior.Name) != name {
 				continue
 			}
+			if name == "aws-iam" && m.ServerID != "" && m.ServerID == prior.ServerID {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].server_id must be unique across aws-iam tenant methods; it matches secrets.machine_auth[%d]", i, j))
+			}
 			priorTenant := strings.TrimSpace(prior.TenantID)
 			currentTenant := strings.TrimSpace(m.TenantID)
 			if priorTenant == "" || currentTenant == "" || priorTenant == currentTenant {
@@ -6230,7 +6236,13 @@ func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
 		case m.ExchangeUses > 1 && name == "aws-iam":
 			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].exchange_uses does not apply to aws-iam: the token exchange takes a JWT subject token", i))
 		}
+		if name != "aws-iam" && m.ServerID != "" {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].server_id applies only to aws-iam", i))
+		}
 		if name == "aws-iam" {
+			if m.ServerID == "" || strings.TrimSpace(m.ServerID) != m.ServerID || len(m.ServerID) > 255 || strings.ContainsAny(m.ServerID, "\r\n\x00") {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].server_id is required for aws-iam and must be one non-empty HTTP header value", i))
+			}
 			if strings.TrimSpace(m.TenantID) == "" {
 				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].tenant_id is required for aws-iam because STS has no trstctl tenant claim", i))
 			}

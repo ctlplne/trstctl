@@ -74,6 +74,7 @@ today (see [Current limitations](../limitations.md) and
          scopes: ["secrets:read"]
        - name: aws-iam
          tenant_id: 11111111-1111-1111-1111-111111111111
+         server_id: trstctl.example.internal
          allowed_accounts: ["123456789012"]
          scopes: ["secrets:read"]
    ```

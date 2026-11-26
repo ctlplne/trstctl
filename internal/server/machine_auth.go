@@ -15,8 +15,8 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// withMachineCredentialReplayGuard makes every oidc, jwt, kubernetes, gcp and
-// azure machine login token single-use: its use is recorded durably until it
+// withMachineCredentialReplayGuard makes every oidc, jwt, kubernetes, gcp,
+// azure and aws-iam machine login proof single-use: its use is recorded durably until it
 // expires, so presenting it again — on any replica, after a restart — is
 // refused (A238-L8 added kubernetes, gcp and azure, which the token exchange
 // already treated so). A kubernetes, gcp or azure method whose operator set
@@ -59,6 +59,9 @@ func withMachineCredentialReplayGuardLimit(methods func(string) []authmethod.Met
 				if !method.AllowTokenReuse {
 					method.Guard = guard
 				}
+				out[i] = method
+			case authmethod.AWSIAMMethod:
+				method.Guard = guard
 				out[i] = method
 			}
 		}
@@ -151,6 +154,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 		return authmethod.AWSIAMMethod{
 			TenantID:        tenantID,
 			Client:          authmethod.HTTPSignedSTSClient{Endpoint: c.STSEndpoint},
+			ServerID:        c.ServerID,
 			AllowedAccounts: boolMap(c.AllowedAccounts),
 			AllowedARNs:     boolMap(c.AllowedARNs),
 			Scopes:          append([]string(nil), c.Scopes...),

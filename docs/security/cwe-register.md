@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3659 annotated sites across 35 rules. Each row is
+3664 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (929 sites)
+### G101 — CWE-798 Use of hardcoded credentials (931 sites)
 
 | Location | Reason |
 |---|---|
@@ -255,8 +255,8 @@ not this file.
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
-| `internal/config/config.go:3843` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4694` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3846` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4697` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -905,7 +905,7 @@ not this file.
 | `internal/server/secret_validity_served_test.go:88` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:260` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_served_test.go:566` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:2551` | fabricated STS exchange fixture; no real credential (CWE-798) |
+| `internal/server/secrets_served_test.go:2553` | fabricated STS exchange fixture; no real credential (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:579` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:591` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:602` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -952,6 +952,8 @@ not this file.
 | `internal/server/unvaulted_secret_posture_served_test.go:150` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:151` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:152` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/v2nd25_aws_iam_audience_replay_served_test.go:34` | fabricated local SigV4 test signing input, never a live AWS credential (CWE-798) |
+| `internal/server/v2nd25_aws_iam_audience_replay_served_test.go:35` | fabricated local session-token fixture, never a live AWS credential (CWE-798) |
 | `internal/server/v3_li4_l3_revocation_served_test.go:60` | fabricated lab client secret (CWE-798) |
 | `internal/server/vendor_dcv_sectigo_served_test.go:101` | secret reference, no credential value (CWE-798) |
 | `internal/server/vendor_dcv_served_test.go:95` | secret reference, no credential value (CWE-798) |
@@ -2937,9 +2939,9 @@ not this file.
 | `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3938` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:5352` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5371` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3941` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:5355` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5374` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:340` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -3809,8 +3811,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/cli/pcas_succession_approval_test.go:58` | test writes under t.TempDir |
 | `internal/cli/pcas_succession_approval_test.go:129` | test writes under t.TempDir |
-| `internal/config/config.go:5352` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5371` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5355` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5374` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
@@ -3946,7 +3948,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (54 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (55 sites)
 
 | Location | Reason |
 |---|---|
@@ -4001,11 +4003,12 @@ not this file.
 | `internal/server/secrets_served_test.go:265` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
 | `internal/server/secrets_served_test.go:278` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |
+| `internal/server/v2nd25_aws_iam_audience_replay_served_test.go:99` | test-only re-signing inside a local httptest handler; this request is never sent (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:175` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1900` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
-### G705 — CWE-79 Cross-site scripting (taint) (39 sites)
+### G705 — CWE-79 Cross-site scripting (taint) (41 sites)
 
 | Location | Reason |
 |---|---|
@@ -4048,6 +4051,8 @@ not this file.
 | `internal/server/sts_deny_cutoff_served_test.go:93` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/server/sts_deny_cutoff_served_test.go:97` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/server/sts_role_chaining_served_test.go:81` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/v2nd25_aws_iam_audience_replay_served_test.go:149` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/v2nd25_aws_iam_audience_replay_served_test.go:154` | test writes fixture bytes to its own local server (CWE-79) |
 
 ### G709 — CWE-502 Deserialization of untrusted data (taint) (1 sites)
 

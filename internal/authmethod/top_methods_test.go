@@ -5,6 +5,7 @@ package authmethod
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -107,6 +108,8 @@ func TestTopMachineAuthMethodsAuthenticate(t *testing.T) {
 
 	aws := AWSIAMMethod{
 		TenantID: "tenant-a",
+		ServerID: "trstctl.unit.example.test",
+		Guard:    &memoryReplayGuard{seen: map[string]time.Time{}},
 		Client: fakeSTSClient{identity: AWSIdentity{
 			Account: "123456789012",
 			ARN:     "arn:aws:sts::123456789012:assumed-role/web/i-1",
@@ -115,7 +118,9 @@ func TestTopMachineAuthMethodsAuthenticate(t *testing.T) {
 		AllowedAccounts: map[string]bool{"123456789012": true},
 		Scopes:          []string{"secrets:read"},
 	}
-	principal, scopes, err := aws.Authenticate(context.Background(), []byte(`{"signed":true}`))
+	awsCredential := fmt.Sprintf(`{"method":"POST","url":"https://sts.amazonaws.com/","headers":{"Authorization":["AWS4-HMAC-SHA256 Credential=AKIATEST/20261126/us-east-1/sts/aws4_request,SignedHeaders=host;x-amz-date;x-trstctl-aws-iam-server-id,Signature=%s"],"X-Amz-Date":["%s"],"X-Trstctl-AWS-IAM-Server-ID":["trstctl.unit.example.test"]},"body":"Action=GetCallerIdentity&Version=2011-06-15"}`,
+		strings.Repeat("a", 64), time.Now().UTC().Format("20060102T150405Z"))
+	principal, scopes, err := aws.Authenticate(context.Background(), []byte(awsCredential))
 	if err != nil {
 		t.Fatalf("aws authenticate: %v", err)
 	}

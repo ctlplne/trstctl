@@ -21916,6 +21916,7 @@ export interface components {
                 [key: string]: string[];
             };
             scopes_claim?: string;
+            server_id?: string;
             source: string;
             subject_claim?: string;
             tenant_claim?: string;
@@ -21957,7 +21958,7 @@ export interface components {
             required_permission: string;
             secret_data_handling: string;
             session_ttl_seconds: number;
-            /** @description The credential logs in once: OIDC and JWT tokens are replay-guarded (M4-L1). */
+            /** @description The credential logs in once: OIDC, JWT, Kubernetes, GCP, Azure and AWS IAM proofs are replay-guarded. */
             single_use: boolean;
             tenant_binding: string;
             verification_steps: string[];

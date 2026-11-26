@@ -16,7 +16,7 @@ func TestSecretsMachineAuthValidation(t *testing.T) {
 		},
 		{
 			Name: "aws-iam", TenantID: "11111111-1111-1111-1111-111111111111",
-			AllowedAccounts: []string{"123456789012"}, Scopes: []string{"secrets:read"},
+			AllowedAccounts: []string{"123456789012"}, Scopes: []string{"secrets:read"}, ServerID: "trstctl.example.test",
 		},
 	}
 	if err := c.Validate(); err != nil {
@@ -33,6 +33,15 @@ func TestSecretsMachineAuthValidation(t *testing.T) {
 	badAWS.Secrets.MachineAuth = []MachineAuthMethod{{Name: "aws-iam", AllowedAccounts: []string{"123456789012"}}}
 	if err := badAWS.Validate(); err == nil || !strings.Contains(err.Error(), "tenant_id is required for aws-iam") {
 		t.Fatalf("tenantless aws config error = %v, want tenant_id rejection", err)
+	}
+
+	missingServerID := Default()
+	missingServerID.Secrets.MachineAuth = []MachineAuthMethod{{
+		Name: "aws-iam", TenantID: "11111111-1111-1111-1111-111111111111",
+		AllowedAccounts: []string{"123456789012"}, Scopes: []string{"secrets:read"},
+	}}
+	if err := missingServerID.Validate(); err == nil || !strings.Contains(err.Error(), "server_id is required for aws-iam") {
+		t.Fatalf("server-id-less aws config error = %v, want audience binding rejection", err)
 	}
 
 	unscoped := Default()
@@ -52,6 +61,20 @@ func TestSecretsMachineAuthValidation(t *testing.T) {
 	}}
 	if err := ambiguous.Validate(); err == nil || !strings.Contains(err.Error(), "must not set both scopes and scopes_claim") {
 		t.Fatalf("ambiguous jwt authority error = %v, want one scope source: %v", err, err)
+	}
+}
+
+func TestCR214AWSIAMServerIDIsUniqueAcrossTenants(t *testing.T) {
+	const serverID = "trstctl.example.test"
+	c := Default()
+	c.Secrets.MachineAuth = []MachineAuthMethod{
+		{Name: "aws-iam", TenantID: "11111111-1111-1111-1111-111111111111", ServerID: serverID,
+			AllowedAccounts: []string{"123456789012"}, Scopes: []string{"secrets:read"}},
+		{Name: "aws-iam", TenantID: "22222222-2222-2222-2222-222222222222", ServerID: serverID,
+			AllowedAccounts: []string{"123456789012"}, Scopes: []string{"secrets:read"}},
+	}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "server_id must be unique") {
+		t.Fatalf("shared AWS server ID across tenants = %v, want replay-boundary rejection", err)
 	}
 }
 
