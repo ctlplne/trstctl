@@ -58,7 +58,7 @@ func TestServedExternalObserverA180(t *testing.T) {
 
 	operator := seedScopedToken(t, h.store, h.tenant,
 		"owners:write", "identities:read", "identities:write", "certs:read", "certs:issue",
-		"connectors:read", "lifecycle:read", "notifications:read", "notifications:write", "secrets:write", "discovery:read")
+		"connectors:read", "lifecycle:read", "notifications:read", "notifications:write", "secrets:read", "secrets:write", "discovery:read")
 	const hmacKey = "a180-observer-hmac-key" // #nosec G101 -- fabricated fixture credential (CWE-798)
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", operator, map[string]any{"name": "observers/lab/hmac", "value": hmacKey}); status != http.StatusCreated {
 		t.Fatalf("store observer credential: %d %s", status, body)

@@ -2597,7 +2597,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	}
 	if d.Store != nil {
 		credentials := integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}
-		s.observerEvents = newObserverEventDelivery(d.Store, credentials.resolve)
+		s.observerEvents = newObserverEventDelivery(d.Store, credentials.ResolveConfiguredTenantCredential)
 		s.reportExpiry = &complianceReportExpiry{store: d.Store, orch: orch, archive: s.reportArchive}
 		s.archiveHolds = &archiveLegalHoldDelivery{orch: orch, objects: d.ArchiveObjectStore}
 	}

@@ -24,10 +24,14 @@ type ExternalObserver struct {
 	// CredentialRef names the tenant secret whose value signs each event
 	// (HMAC-SHA256); empty sends events unsigned.
 	CredentialRef string
-	Enabled       bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	EventSequence uint64
+	// ConfiguredBy is the event actor who authorized this reference. A blank
+	// value on a pre-migration row cannot authorize another redemption.
+	ConfiguredBy    string
+	ConfiguredByRef string
+	Enabled         bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	EventSequence   uint64
 }
 
 // ExternalObservation is one report of what an observer saw at an endpoint,
@@ -84,13 +88,14 @@ func (s *Store) ApplyExternalObserverUpsertedTx(ctx context.Context, tx pgx.Tx, 
 		return err
 	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO external_observers (tenant_id, id, name, events_url, credential_ref, enabled, created_at, updated_at, event_sequence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
+		`INSERT INTO external_observers (tenant_id, id, name, events_url, credential_ref, configured_by, configured_by_ref, enabled, created_at, updated_at, event_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $10)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = EXCLUDED.name, events_url = EXCLUDED.events_url, credential_ref = EXCLUDED.credential_ref,
+		        configured_by = EXCLUDED.configured_by, configured_by_ref = EXCLUDED.configured_by_ref,
 		        enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at, event_sequence = EXCLUDED.event_sequence
 		  WHERE external_observers.event_sequence < EXCLUDED.event_sequence`,
-		o.TenantID, o.ID, o.Name, o.EventsURL, o.CredentialRef, o.Enabled, o.UpdatedAt, int64(o.EventSequence)) // #nosec G115 -- event sequences fit int64 (CWE-190)
+		o.TenantID, o.ID, o.Name, o.EventsURL, o.CredentialRef, o.ConfiguredBy, o.ConfiguredByRef, o.Enabled, o.UpdatedAt, int64(o.EventSequence)) // #nosec G115 -- event sequences fit int64 (CWE-190)
 	return err
 }
 
@@ -112,11 +117,11 @@ func (s *Store) ApplyExternalObservationRecordedTx(ctx context.Context, tx pgx.T
 	return err
 }
 
-const externalObserverColumns = `id::text, tenant_id::text, name, events_url, credential_ref, enabled, created_at, updated_at, event_sequence`
+const externalObserverColumns = `id::text, tenant_id::text, name, events_url, credential_ref, configured_by, configured_by_ref, enabled, created_at, updated_at, event_sequence`
 
 func scanExternalObserver(row pgx.Row, o *ExternalObserver) error {
 	var seq int64
-	if err := row.Scan(&o.ID, &o.TenantID, &o.Name, &o.EventsURL, &o.CredentialRef, &o.Enabled, &o.CreatedAt, &o.UpdatedAt, &seq); err != nil {
+	if err := row.Scan(&o.ID, &o.TenantID, &o.Name, &o.EventsURL, &o.CredentialRef, &o.ConfiguredBy, &o.ConfiguredByRef, &o.Enabled, &o.CreatedAt, &o.UpdatedAt, &seq); err != nil {
 		return err
 	}
 	o.EventSequence = uint64(seq) // #nosec G115 -- non-negative by constraint (CWE-190)

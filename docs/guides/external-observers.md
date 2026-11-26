@@ -28,6 +28,12 @@ without receiving events. `credential_ref` names a tenant secret
 (`POST /api/v1/secrets/store`) whose value signs every event; leave it out to
 receive unsigned events. `PUT /api/v1/observers/{id}` replaces the configuration
 and `GET /api/v1/observers` lists it. CLI: `trstctl observers register|update|list`.
+The configuring operator needs `secrets:read` on that exact secret, including
+membership in its restricted project if applicable. Before each signed delivery,
+trstctl checks that operator's current read authority again. If it was revoked,
+delivery stops and the outbox reports that the observer must be re-saved by an
+authorized operator. Observer configurations created before this authority
+record existed also need an authorized re-save before signed delivery resumes.
 
 ## Report an observation
 

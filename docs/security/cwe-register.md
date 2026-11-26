@@ -818,7 +818,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:35` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_integrations.go:1762` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1768` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:150` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:166` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -1599,10 +1599,10 @@ not this file.
 | `internal/store/enrollment_diagnostics.go:372` | constrained positive bigint written from a JetStream sequence (CWE-190) |
 | `internal/store/event_ingress_journal.go:185` | sequence was bounded to MaxInt64 before the transaction |
 | `internal/store/external_ca_held.go:62` | bounded above (CWE-190) |
-| `internal/store/external_observation.go:93` | event sequences fit int64 (CWE-190) |
-| `internal/store/external_observation.go:111` | event sequences fit int64 (CWE-190) |
-| `internal/store/external_observation.go:122` | non-negative by constraint (CWE-190) |
-| `internal/store/external_observation.go:169` | non-negative by constraint (CWE-190) |
+| `internal/store/external_observation.go:98` | event sequences fit int64 (CWE-190) |
+| `internal/store/external_observation.go:116` | event sequences fit int64 (CWE-190) |
+| `internal/store/external_observation.go:127` | non-negative by constraint (CWE-190) |
+| `internal/store/external_observation.go:174` | non-negative by constraint (CWE-190) |
 | `internal/store/factory_batches.go:66` | bounded above (CWE-190) |
 | `internal/store/federation.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/incident_closures.go:39` | bounded above (CWE-190) |
@@ -1892,7 +1892,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4557` | closed test table list above |
+| `internal/store/migration_content_test.go:4559` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 

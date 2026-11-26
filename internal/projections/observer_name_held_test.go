@@ -30,7 +30,8 @@ func TestObserverUnderAHeldNameAppliesAsTheNoOpItWasLiveLS1L1(t *testing.T) {
 	)
 	observer := func(typ, tenant, id, name, eventsURL string) {
 		t.Helper()
-		data, err := json.Marshal(projections.ObserverRegistered{ID: id, Name: name, EventsURL: eventsURL, Enabled: true})
+		data, err := json.Marshal(projections.ObserverRegistered{ID: id, Name: name, EventsURL: eventsURL,
+			CredentialRef: "secret://observers/legacy", Enabled: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +47,8 @@ func TestObserverUnderAHeldNameAppliesAsTheNoOpItWasLiveLS1L1(t *testing.T) {
 	check := func(stage string) {
 		t.Helper()
 		got, err := s.GetExternalObserver(ctx, tenantA, first)
-		if err != nil || got.Name != "edge-probe" || got.EventsURL != "https://observer-a2.example.test/events" {
+		if err != nil || got.Name != "edge-probe" || got.EventsURL != "https://observer-a2.example.test/events" ||
+			got.CredentialRef != "secret://observers/legacy" || got.ConfiguredBy != "" {
 			t.Fatalf("%s: the first observer = %+v %v, want it updated", stage, got, err)
 		}
 		if dup, err := s.GetExternalObserver(ctx, tenantA, duplicate); err == nil {

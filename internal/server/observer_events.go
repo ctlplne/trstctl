@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
@@ -36,14 +37,14 @@ type observerEventEnvelope struct {
 // credential is redeemed per attempt and wiped after it.
 type observerEventDelivery struct {
 	store       *store.Store
-	credentials func(ctx context.Context, tenantID, ref string) (*secret.Buffer, error)
+	credentials func(ctx context.Context, tenantID, ref, configuredBy string) (*secret.Buffer, error)
 	client      notify.HTTPDoer
 	// skipEndpointValidation is set only when a test injects a client that
 	// reaches a loopback stand-in observer.
 	skipEndpointValidation bool
 }
 
-func newObserverEventDelivery(st *store.Store, credentials func(ctx context.Context, tenantID, ref string) (*secret.Buffer, error)) *observerEventDelivery {
+func newObserverEventDelivery(st *store.Store, credentials func(ctx context.Context, tenantID, ref, configuredBy string) (*secret.Buffer, error)) *observerEventDelivery {
 	return &observerEventDelivery{store: st, credentials: credentials, client: netsec.SafeClient(10 * time.Second)}
 }
 
@@ -80,8 +81,11 @@ func (d *observerEventDelivery) Deliver(ctx context.Context, m orchestrator.Mess
 		if d.credentials == nil {
 			return errors.New("server: observer credential references need the tenant secret store")
 		}
-		credential, err := d.credentials(ctx, m.TenantID, observer.CredentialRef)
+		credential, err := d.credentials(ctx, m.TenantID, observer.CredentialRef, observer.ConfiguredBy)
 		if err != nil {
+			if errors.Is(err, credref.ErrReadAuthorityRevoked) {
+				return orchestrator.DefiniteNoEffect(errors.New("server: observer credential configurer no longer has read access; re-save the observer as an authorized principal"))
+			}
 			return errors.New("server: the observer's credential could not be resolved from the tenant secret store")
 		}
 		sig := hex.EncodeToString(crypto.HMACSHA256(credential.Bytes(), body))

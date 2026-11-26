@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/privacyref"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -122,8 +123,14 @@ func (p *Projector) applyExternalObservationTx(ctx context.Context, tx pgx.Tx, e
 		if err := ValidateObserverRegistered(pl); err != nil {
 			return true, fmt.Errorf("projections: %s: %w", e.Type, err)
 		}
+		configuredBy, configuredByRef := "", ""
+		if e.Actor != nil && e.Actor.Subject != "" {
+			configuredBy = e.Actor.Subject
+			configuredByRef = privacyref.SubjectRef(e.TenantID, configuredBy)
+		}
 		return true, p.store.ApplyExternalObserverUpsertedTx(ctx, tx, store.ExternalObserver{
 			TenantID: e.TenantID, ID: pl.ID, Name: pl.Name, EventsURL: pl.EventsURL, CredentialRef: pl.CredentialRef,
+			ConfiguredBy: configuredBy, ConfiguredByRef: configuredByRef,
 			Enabled: pl.Enabled, UpdatedAt: e.Time, EventSequence: e.Sequence,
 		})
 	case EventObservationRecorded:
