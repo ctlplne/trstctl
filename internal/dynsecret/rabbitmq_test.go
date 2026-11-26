@@ -16,6 +16,7 @@ import (
 
 type rabbitmqLab struct {
 	mu          sync.Mutex
+	calls       []string
 	users       map[string]string            // user -> password
 	permissions map[string]map[string]string // vhost/user -> configure/write/read
 	connections []map[string]string
@@ -37,6 +38,7 @@ func newRabbitMQLab(t *testing.T) (*rabbitmqLab, *httptest.Server) {
 		}
 		lab.mu.Lock()
 		defer lab.mu.Unlock()
+		lab.calls = append(lab.calls, r.Method+" "+r.URL.EscapedPath())
 		body, _ := io.ReadAll(r.Body)
 		path := r.URL.EscapedPath()
 		switch {
@@ -111,7 +113,7 @@ func TestRabbitMQLeaseIsAUserWithItsVHostPermissionsA239(t *testing.T) {
 	lab, srv := newRabbitMQLab(t)
 	b := newLabRabbitMQ(t, srv)
 	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
-	user, credential, err := b.CreateCredential(context.Background(), req)
+	ref, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,32 +122,74 @@ func TestRabbitMQLeaseIsAUserWithItsVHostPermissionsA239(t *testing.T) {
 		Password string `json:"password"`
 		VHost    string `json:"vhost"`
 	}
-	if err := json.Unmarshal(credential, &got); err != nil || got.Username != user || got.VHost != "/" || lab.users[user] != got.Password || len(got.Password) != 48 {
+	if err := json.Unmarshal(credential, &got); err != nil || got.Username == "" || got.VHost != "/" || lab.users[got.Username] != got.Password || len(got.Password) != 48 {
 		t.Fatalf("credential %+v (%v)", got, err)
 	}
-	perms := lab.permissions["%2F/"+user]
+	if !strings.HasPrefix(ref, "v1:") {
+		t.Fatalf("lease reference is not target-bound: %q", ref)
+	}
+	perms := lab.permissions["%2F/"+got.Username]
 	if perms["configure"] != "^$" || perms["write"] != "^$" || perms["read"] != `^(orders|orders\.dlq)$` {
 		t.Fatalf("permissions %v", perms)
 	}
 	// A retry of the same lease replaces the same user's password.
 	again, _, err := b.CreateCredential(context.Background(), req)
-	if err != nil || again != user || len(lab.users) != 1 {
+	if err != nil || again != ref || len(lab.users) != 1 {
 		t.Fatalf("retry created %q (%v); users %d", again, err, len(lab.users))
 	}
-	lab.connections = []map[string]string{{"name": "127.0.0.1:5000 -> 127.0.0.1:5672", "user": user}, {"name": "other", "user": "app"}}
-	if err := b.Revoke(context.Background(), user); err != nil {
+	lab.connections = []map[string]string{{"name": "127.0.0.1:5000 -> 127.0.0.1:5672", "user": got.Username}, {"name": "other", "user": "app"}}
+	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := lab.users[user]; ok || len(lab.closed) != 1 || lab.closed[0] != "127.0.0.1:5000%20-%3E%20127.0.0.1:5672" {
+	if _, ok := lab.users[got.Username]; ok || len(lab.closed) != 1 || lab.closed[0] != "127.0.0.1:5000%20-%3E%20127.0.0.1:5672" {
 		t.Fatalf("revoke left the user (%v) or closed %v", ok, lab.closed)
 	}
-	if err := b.Revoke(context.Background(), user); err != nil {
+	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatalf("a second revocation of a deleted user: %v", err)
 	}
 	for _, foreign := range []string{"guest", "lab_admin", "trstctl/x", "app_reader_1"} {
 		if err := b.Revoke(context.Background(), foreign); err == nil {
 			t.Errorf("deleted %q, a user this provider did not create", foreign)
 		}
+	}
+}
+
+func TestCR597RabbitMQRevokesAfterPrefixEditOnlyAtIssuingBroker(t *testing.T) {
+	lab, srv := newRabbitMQLab(t)
+	issued := newLabRabbitMQ(t, srv)
+	issued.prefix = "earlier"
+	ref, credential, err := issued.CreateCredential(context.Background(), GenerateRequest{
+		Role: "reader", LeaseID: "cr597-rabbitmq", PrincipalSuffix: testPrincipalSuffix("cr597-rabbitmq"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var proof struct{ Username string }
+	if err := json.Unmarshal(credential, &proof); err != nil || proof.Username == "" {
+		t.Fatalf("issued credential: %v", err)
+	}
+	if _, live := lab.users[proof.Username]; !live {
+		t.Fatal("issued account absent before revoke")
+	}
+	otherLab, other := newRabbitMQLab(t)
+	elsewhere := newLabRabbitMQ(t, other)
+	elsewhere.prefix = "newer"
+	if err := elsewhere.Revoke(context.Background(), ref); err == nil || len(otherLab.calls) != 0 {
+		t.Fatal("different broker was contacted or reported the old lease revoked")
+	}
+	if err := elsewhere.Revoke(context.Background(), proof.Username); err == nil || len(otherLab.calls) != 0 {
+		t.Fatal("historical target-unbound reference was accepted")
+	}
+	if _, live := lab.users[proof.Username]; !live {
+		t.Fatal("different broker removed the issuing account")
+	}
+	current := newLabRabbitMQ(t, srv)
+	current.prefix = "newer"
+	if err := current.Revoke(context.Background(), ref); err != nil {
+		t.Fatalf("revoke after prefix edit: %v", err)
+	}
+	if _, live := lab.users[proof.Username]; live {
+		t.Fatal("old account survived a reported revoke")
 	}
 }
 
@@ -182,7 +226,11 @@ func TestRabbitMQRevokeListsOnlyTheUsersConnectionsA239L9(t *testing.T) {
 		lab, srv := newRabbitMQLab(t)
 		lab.noPerUser = !perUser
 		b := newLabRabbitMQ(t, srv)
-		user, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-l9", PrincipalSuffix: testPrincipalSuffix("lease-l9")})
+		ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-l9", PrincipalSuffix: testPrincipalSuffix("lease-l9")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		user, err := principalFromBoundRef(ref, "rabbitmq", b.endpoint)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +239,7 @@ func TestRabbitMQRevokeListsOnlyTheUsersConnectionsA239L9(t *testing.T) {
 			{"name": "10.0.0.3:6000 -> 10.0.0.2:5672", "user": "app"},
 			{"name": "10.0.0.4:7000 -> 10.0.0.2:5672", "user": user},
 		}
-		if err := b.Revoke(context.Background(), user); err != nil {
+		if err := b.Revoke(context.Background(), ref); err != nil {
 			t.Fatal(err)
 		}
 		wantAll := 0

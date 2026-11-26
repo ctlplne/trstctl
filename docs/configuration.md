@@ -3891,6 +3891,11 @@ to `"<permissions> on <queues or exchanges> in <vhost>"` per allowed role, where
 permissions are any of configure, write and read and the names match exactly. Each
 lease is a user (named from `username_prefix`, default `trstctl`) with only those
 permissions; revocation deletes it and closes its connections.
+New lease references retain the issuing `username_prefix` and management
+endpoint. A prefix edit still allows revocation; an endpoint change refuses it
+before contacting another broker. Historical bare-user references cannot prove
+their original broker: find and delete the user there, close its connections,
+and verify new and held connections fail before reconciling the lease.
 
 For Tailscale (A239, `tailscale`), set `bearer_token_ref` to an API access token
 allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own) and

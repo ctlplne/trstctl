@@ -171,7 +171,7 @@ func (b *RabbitMQBackend) CreateCredential(ctx context.Context, req GenerateRequ
 		err = fmt.Errorf("HTTP %d", status)
 	}
 	if err != nil {
-		_ = b.Revoke(ctx, user)
+		_ = b.Revoke(ctx, b.leaseRef(user))
 		return "", nil, fmt.Errorf("dynsecret rabbitmq: set permissions: %w", err)
 	}
 	credential, err := json.Marshal(struct { // #nosec G117 -- the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200)
@@ -182,24 +182,32 @@ func (b *RabbitMQBackend) CreateCredential(ctx context.Context, req GenerateRequ
 	if err != nil {
 		return "", nil, err
 	}
-	return user, credential, nil
+	return b.leaseRef(user), credential, nil
+}
+
+func (b *RabbitMQBackend) leaseRef(user string) string {
+	return boundPrincipalRef("rabbitmq", b.prefix, user, b.endpoint)
 }
 
 // Revoke implements Backend: the user is deleted, so RabbitMQ refuses its next
 // connection, and its open connections are closed. Only users this provider
 // names are ever deleted; a user already gone counts as deleted.
 func (b *RabbitMQBackend) Revoke(ctx context.Context, ref string) error {
-	if !rabbitmqUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
+	user, err := principalFromBoundRef(ref, "rabbitmq", b.endpoint)
+	if err != nil {
+		return err
+	}
+	if !rabbitmqUser.MatchString(user) {
 		return fmt.Errorf("dynsecret rabbitmq: refusing to delete %q, which this provider did not create", ref)
 	}
-	status, err := b.call(ctx, http.MethodDelete, "/api/users/"+url.PathEscape(ref), nil)
+	status, err := b.call(ctx, http.MethodDelete, "/api/users/"+url.PathEscape(user), nil)
 	if err != nil {
 		return err
 	}
 	if status != http.StatusNoContent && status != http.StatusNotFound {
 		return fmt.Errorf("dynsecret rabbitmq: delete user: HTTP %d", status)
 	}
-	return b.closeConnections(ctx, ref)
+	return b.closeConnections(ctx, user)
 }
 
 // closeConnections closes the user's open connections: deleting a RabbitMQ

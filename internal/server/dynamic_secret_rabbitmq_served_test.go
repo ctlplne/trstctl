@@ -126,6 +126,17 @@ func TestServedDynamicRabbitMQUserIsDeletedAtRevocationA239(t *testing.T) {
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases/"+lease.ID+"/renew", tok, map[string]any{"extend_seconds": 600}); status != http.StatusOK {
 		t.Fatalf("renew within the maximum lifetime: %d %s", status, body)
 	}
+	// CR-597: the outbox opens the provider from current configuration. An
+	// already-issued account must still be deleted after a prefix edit.
+	providers := registry.ForTenant(h.tenant)
+	if len(providers) != 1 {
+		t.Fatalf("RabbitMQ provider count = %d, want 1", len(providers))
+	}
+	configured, ok := providers[0].(*configuredDynamicProvider)
+	if !ok {
+		t.Fatal("fixture did not use the configured RabbitMQ provider")
+	}
+	configured.cfg.UsernamePrefix = "newer"
 	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases/"+lease.ID+"/revoke", tok, map[string]any{}); status != http.StatusOK && status != http.StatusAccepted {
 		t.Fatalf("revoke: %d %s", status, body)
 	}
