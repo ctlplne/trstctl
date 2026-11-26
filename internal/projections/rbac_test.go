@@ -17,7 +17,7 @@ func newRBACServer(t *testing.T, custom ...authz.Role) *httptest.Server {
 	s := newStore(t)
 	log := openLog(t)
 	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)),
-		api.WithRoles(custom...), api.WithInsecureHeaderResolver())
+		api.WithRoles(custom...), api.WithInsecureHeaderResolver(), api.WithSecrets(api.SecretsBackend{}))
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
 	return srv
@@ -60,27 +60,30 @@ func TestRBACUnauthenticatedDenied(t *testing.T) {
 }
 
 // TestRBACScopeEnforced: a project-scoped operator is allowed only within its
-// project.
+// project. The project's slug is a validated target; X-Project cannot turn a
+// tenant-wide owner mutation into a project-scoped action.
 func TestRBACScopeEnforced(t *testing.T) {
 	srv := newRBACServer(t)
 
-	// operator granted in project "alpha", operating on project "alpha".
-	if st, _, body := do(t, srv, "POST", "/api/v1/owners", reqOpts{
-		tenant: tenantA, roles: "operator", roleProject: "alpha", project: "alpha", idem: "s1", body: ownerBody(),
+	// A project-scoped operator creates only the project named by the body.
+	if st, _, body := do(t, srv, "POST", "/api/v1/secrets/projects", reqOpts{
+		tenant: tenantA, roles: "operator", roleProject: "alpha", project: "beta", idem: "s1",
+		body: map[string]any{"slug": "alpha", "environments": []map[string]string{{"slug": "dev"}}},
 	}); st != http.StatusCreated {
 		t.Fatalf("operator in-scope POST = %d, want 201: %s", st, body)
 	}
-	// Same operator targeting project "beta" — out of scope.
-	st, hdr, body := do(t, srv, "POST", "/api/v1/owners", reqOpts{
-		tenant: tenantA, roles: "operator", roleProject: "alpha", project: "beta", idem: "s2", body: ownerBody(),
+	// Header "alpha" cannot authorize a different target slug.
+	st, hdr, body := do(t, srv, "POST", "/api/v1/secrets/projects", reqOpts{
+		tenant: tenantA, roles: "operator", roleProject: "alpha", project: "alpha", idem: "s2",
+		body: map[string]any{"slug": "beta", "environments": []map[string]string{{"slug": "dev"}}},
 	})
 	if st != http.StatusForbidden {
 		t.Fatalf("operator out-of-scope POST = %d, want 403: %s", st, body)
 	}
 	assertProblem(t, hdr, body, http.StatusForbidden)
-	// And a tenant-wide target is not covered by a project-scoped grant.
+	// A tenant-wide owner target is not covered by a project-scoped grant.
 	if st, _, _ := do(t, srv, "POST", "/api/v1/owners", reqOpts{
-		tenant: tenantA, roles: "operator", roleProject: "alpha", idem: "s3", body: ownerBody(),
+		tenant: tenantA, roles: "operator", roleProject: "alpha", project: "alpha", idem: "s3", body: ownerBody(),
 	}); st != http.StatusForbidden {
 		t.Fatalf("operator tenant-wide target = %d, want 403", st)
 	}

@@ -179,10 +179,20 @@ func TestOperationApprovalRebuildRetainsRecordedPrincipalForms(t *testing.T) {
 	if err := projector.Rebuild(ctx, log); err != nil {
 		t.Fatalf("cold rebuild refused retained approval: %v", err)
 	}
+	// Rebuild must retain the historical decision exactly. Current read paths
+	// separately compute usable quorum using today's principal-equivalence rule:
+	// this reviewer is the requester and cannot authorize a new operation.
+	var recordedStatus string
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status FROM operation_approval_requests WHERE tenant_id = $1 AND id = $2`,
+			tenantA, requestID).Scan(&recordedStatus)
+	}); err != nil || recordedStatus != store.ApprovalStatusApproved {
+		t.Fatalf("rebuilt historical status = %q, err=%v; want approved", recordedStatus, err)
+	}
 	got, err := s.GetOperationApproval(ctx, tenantA, requestID)
 	if err != nil || got.Requester != "bundle-run:review-origin" ||
-		got.Status != store.ApprovalStatusApproved || got.ApprovalCount != 1 {
-		t.Fatalf("rebuilt historical approval = %+v, err=%v", got, err)
+		got.Status != store.ApprovalStatusPending || got.ApprovalCount != 0 {
+		t.Fatalf("historical self-review remained usable = %+v, err=%v", got, err)
 	}
 	var reviewer string
 	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {

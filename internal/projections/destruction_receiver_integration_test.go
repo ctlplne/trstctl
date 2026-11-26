@@ -193,7 +193,10 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 			t.Fatal(err)
 		}
 	}
-	requested, err := eventprivacy.NewRequested(tenantA, registration.ID, 3*time.Second)
+	// The deadline is part of the immutable request. Setup includes real SQL,
+	// JetStream, and key custody work; three seconds can elapse before the
+	// first pre-deadline assertion on a busy CI host.
+	requested, err := eventprivacy.NewRequested(tenantA, registration.ID, 15*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
