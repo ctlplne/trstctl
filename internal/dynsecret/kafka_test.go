@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -89,14 +90,15 @@ func TestKafkaLeaseIsASCRAMUserWithOnlyItsRoleACLsA239(t *testing.T) {
 	fake := &fakeKafka{scram: map[string]string{}, acls: map[kafkaACLKey]bool{}}
 	b := newFakeKafkaBackend(t, fake)
 	req := GenerateRequest{Role: "consumer", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
-	user, credential, err := b.CreateCredential(context.Background(), req)
+	ref, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var got struct{ Username, Password, Mechanism string }
-	if err := json.Unmarshal(credential, &got); err != nil || got.Username != user || len(got.Password) != 48 || got.Mechanism != "SCRAM-SHA-512" {
+	if err := json.Unmarshal(credential, &got); err != nil || !strings.HasSuffix(ref, ":"+got.Username) || len(got.Password) != 48 || got.Mechanism != "SCRAM-SHA-512" {
 		t.Fatalf("credential %+v (%v)", got, err)
 	}
+	user := got.Username
 	principal := "User:" + user
 	want := map[kafkaACLKey]bool{
 		{principal, "read", "topic", "orders", false}: true, {principal, "describe", "topic", "orders", false}: true,
@@ -109,15 +111,17 @@ func TestKafkaLeaseIsASCRAMUserWithOnlyItsRoleACLsA239(t *testing.T) {
 	again, credential2, err := b.CreateCredential(context.Background(), req)
 	var got2 struct{ Password string }
 	_ = json.Unmarshal(credential2, &got2)
-	if err != nil || again != user || len(fake.scram) != 1 || fake.scram[user] != got2.Password || got2.Password == got.Password || !mapsEqual(fake.acls, want) {
+	if err != nil || again != ref || len(fake.scram) != 1 || fake.scram[user] != got2.Password || got2.Password == got.Password || !mapsEqual(fake.acls, want) {
 		t.Fatalf("retry: %q (%v); scram %v, acls %v", again, err, fake.scram, fake.acls)
 	}
-	logs, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "logs", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")})
-	if err != nil || !fake.acls[kafkaACLKey{"User:" + logs, "write", "topic", "logs-", true}] || fake.acls[kafkaACLKey{"User:" + logs, "write", "topic", "logs-", false}] {
+	logs, logsCredential, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "logs", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")})
+	var logsUser struct{ Username string }
+	_ = json.Unmarshal(logsCredential, &logsUser)
+	if err != nil || !strings.HasSuffix(logs, ":"+logsUser.Username) || !fake.acls[kafkaACLKey{"User:" + logsUser.Username, "write", "topic", "logs-", true}] || fake.acls[kafkaACLKey{"User:" + logsUser.Username, "write", "topic", "logs-", false}] {
 		t.Fatalf("prefixed grant: %v, acls %v", err, fake.acls)
 	}
 	fake.calls = nil
-	if err := b.Revoke(context.Background(), user); err != nil {
+	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatal(err)
 	}
 	// The ACLs go first: an open connection is refused from its next request.
@@ -129,7 +133,7 @@ func TestKafkaLeaseIsASCRAMUserWithOnlyItsRoleACLsA239(t *testing.T) {
 			t.Fatalf("ACL left after revocation: %+v", key)
 		}
 	}
-	if err := b.Revoke(context.Background(), user); err != nil {
+	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatalf("a second revocation of a removed user: %v", err)
 	}
 	for _, foreign := range []string{"admin", "lab_admin", "app_reader_1", "trstctl/../x", "User:trstctl_x"} {

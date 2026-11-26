@@ -17,6 +17,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secrettext"
@@ -344,7 +345,11 @@ func (b *KafkaBackend) CreateCredential(ctx context.Context, req GenerateRequest
 	if err != nil {
 		return "", nil, err
 	}
-	return user, credential, nil
+	return b.boundRef(user), credential, nil
+}
+
+func (b *KafkaBackend) boundRef(user string) string {
+	return boundPrincipalRef("kafka", b.prefix, user, b.addr, fmt.Sprint(b.tls), b.serverName, crypto.SHA256Hex(b.caPEM))
 }
 
 // grantKafkaACLs allows the user each clause's operations on its resources:
@@ -374,15 +379,19 @@ func grantKafkaACLs(ctx context.Context, admin kafkaAdmin, user string, clauses 
 // fails). Only users this provider names are touched; a user already gone
 // counts as revoked.
 func (b *KafkaBackend) Revoke(ctx context.Context, ref string) error {
-	if !kafkaUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
-		return fmt.Errorf("dynsecret kafka: refusing to revoke %q, which this provider did not create", ref)
+	user, err := principalFromBoundRef(ref, "kafka", b.addr, fmt.Sprint(b.tls), b.serverName, crypto.SHA256Hex(b.caPEM))
+	if err != nil {
+		return err
+	}
+	if !kafkaUser.MatchString(user) {
+		return fmt.Errorf("dynsecret kafka: refusing to revoke an invalid user name")
 	}
 	admin, err := b.connect(ctx)
 	if err != nil {
 		return err
 	}
 	defer admin.Close()
-	return removeKafkaUser(ctx, admin, ref)
+	return removeKafkaUser(ctx, admin, user)
 }
 
 func removeKafkaUser(ctx context.Context, admin kafkaAdmin, user string) error {

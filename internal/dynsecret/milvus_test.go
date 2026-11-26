@@ -84,14 +84,15 @@ func TestMilvusLeaseIsAUserMilvusDropsA239(t *testing.T) {
 	lab, srv := newMilvusStandIn(t)
 	b := newLabMilvus(t, srv, map[string]string{"reader": "orders_reader, audit", "broken": "no_such_role"})
 	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
-	user, credential, err := b.CreateCredential(context.Background(), req)
+	ref, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var got struct{ Username, Password string }
-	if err := json.Unmarshal(credential, &got); err != nil || got.Username != user || len(got.Password) != 48 || len(user) > 32 {
+	if err := json.Unmarshal(credential, &got); err != nil || !strings.HasSuffix(ref, ":"+got.Username) || len(got.Password) != 48 || len(got.Username) > 32 {
 		t.Fatalf("credential %+v (%v)", got, err)
 	}
+	user := got.Username
 	if lab.users[user] != got.Password || !slices.Equal(lab.roles[user], []string{"orders_reader", "audit"}) {
 		t.Fatalf("Milvus user %q roles %v", lab.users[user], lab.roles[user])
 	}
@@ -100,17 +101,17 @@ func TestMilvusLeaseIsAUserMilvusDropsA239(t *testing.T) {
 	again, credential2, err := b.CreateCredential(context.Background(), req)
 	var got2 struct{ Password string }
 	_ = json.Unmarshal(credential2, &got2)
-	if err != nil || again != user || len(lab.users) != 1 || lab.users[user] != got2.Password || got2.Password == got.Password ||
+	if err != nil || again != ref || len(lab.users) != 1 || lab.users[user] != got2.Password || got2.Password == got.Password ||
 		!slices.Equal(lab.roles[user], []string{"orders_reader", "audit"}) {
 		t.Fatalf("retry: %q (%v); users %v roles %v", again, err, lab.users, lab.roles)
 	}
 	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "broken", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")}); err == nil || len(lab.users) != 1 {
 		t.Fatalf("a failed grant: %v, users %v", err, lab.users)
 	}
-	if err := b.Revoke(context.Background(), user); err != nil || len(lab.users) != 0 {
+	if err := b.Revoke(context.Background(), ref); err != nil || len(lab.users) != 0 {
 		t.Fatalf("revoke: %v, users %v", err, lab.users)
 	}
-	if err := b.Revoke(context.Background(), user); err != nil {
+	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatalf("a second revocation of a dropped user: %v", err)
 	}
 	for _, foreign := range []string{"root", "admin_1", "trstctl/../x", "trstctl"} {

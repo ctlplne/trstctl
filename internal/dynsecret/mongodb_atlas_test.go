@@ -93,7 +93,7 @@ func TestMongoDBAtlasLeaseIsADatabaseUserAtlasDeletesA239(t *testing.T) {
 	lab, srv := newAtlasStandIn(t)
 	b := newLabAtlas(t, srv, now)
 	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
-	user, credential, err := b.CreateCredential(context.Background(), req)
+	ref, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,9 +102,10 @@ func TestMongoDBAtlasLeaseIsADatabaseUserAtlasDeletesA239(t *testing.T) {
 		Password        string    `json:"password"`
 		DeleteAfterDate time.Time `json:"delete_after_date"`
 	}
-	if err := json.Unmarshal(credential, &got); err != nil || got.Username != user || len(got.Password) != 48 || !got.DeleteAfterDate.Equal(now.Add(time.Hour)) {
+	if err := json.Unmarshal(credential, &got); err != nil || !strings.HasSuffix(ref, ":"+got.Username) || len(got.Password) != 48 || !got.DeleteAfterDate.Equal(now.Add(time.Hour)) {
 		t.Fatalf("credential %+v (%v)", got, err)
 	}
+	user := got.Username
 	stored := lab.users[user]
 	roles, _ := json.Marshal(stored["roles"])
 	if stored["password"] != got.Password || stored["databaseName"] != "admin" || stored["deleteAfterDate"] != "2026-11-02T16:00:00Z" ||
@@ -113,7 +114,7 @@ func TestMongoDBAtlasLeaseIsADatabaseUserAtlasDeletesA239(t *testing.T) {
 	}
 	// A retry finds the user (409) and updates it instead of adding one.
 	again, credential2, err := b.CreateCredential(context.Background(), req)
-	if err != nil || again != user || len(lab.users) != 1 {
+	if err != nil || again != ref || len(lab.users) != 1 {
 		t.Fatalf("retry: %q (%v), users %d", again, err, len(lab.users))
 	}
 	var got2 struct {
@@ -123,10 +124,10 @@ func TestMongoDBAtlasLeaseIsADatabaseUserAtlasDeletesA239(t *testing.T) {
 	if lab.users[user]["password"] != got2.Password {
 		t.Fatal("the retry's password is not the stored one")
 	}
-	if err := b.Revoke(context.Background(), user); err != nil || len(lab.users) != 0 {
+	if err := b.Revoke(context.Background(), ref); err != nil || len(lab.users) != 0 {
 		t.Fatalf("revoke: %v, users %d", err, len(lab.users))
 	}
-	if err := b.Revoke(context.Background(), user); err != nil {
+	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatalf("a second revocation of a deleted user: %v", err)
 	}
 	for _, foreign := range []string{"admin", "app_reader_1", "trstctl/../x"} {

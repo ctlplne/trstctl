@@ -189,22 +189,26 @@ func (b *MongoDBAtlasBackend) CreateCredential(ctx context.Context, req Generate
 	if err != nil {
 		return "", nil, err
 	}
-	return user, credential, nil
+	return boundPrincipalRef("mongodb-atlas", b.prefix, user, b.endpoint, b.groupID), credential, nil
 }
 
 // Revoke implements Backend: the user is deleted, so Atlas refuses its next
 // login. Only users this provider names are deleted; one already gone (or
 // already removed by its deleteAfterDate) counts as deleted.
 func (b *MongoDBAtlasBackend) Revoke(ctx context.Context, ref string) error {
-	if !atlasUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
-		return fmt.Errorf("dynsecret mongodb-atlas: refusing to delete %q, which this provider did not create", ref)
+	user, err := principalFromBoundRef(ref, "mongodb-atlas", b.endpoint, b.groupID)
+	if err != nil {
+		return err
+	}
+	if !atlasUser.MatchString(user) {
+		return fmt.Errorf("dynsecret mongodb-atlas: refusing to delete an invalid user name")
 	}
 	token, err := b.accessToken(ctx)
 	if err != nil {
 		return err
 	}
 	defer secret.Wipe(token)
-	status, err := b.call(ctx, token, http.MethodDelete, "/api/atlas/v2/groups/"+b.groupID+"/databaseUsers/admin/"+url.PathEscape(ref), nil)
+	status, err := b.call(ctx, token, http.MethodDelete, "/api/atlas/v2/groups/"+b.groupID+"/databaseUsers/admin/"+url.PathEscape(user), nil)
 	if err != nil {
 		return err
 	}

@@ -734,6 +734,15 @@ retry after an uncertain attempt replaces the user instead of adding one. If a g
 fails, the new user is dropped again. Revocation drops the user with its grants, and
 Milvus refuses its next request.
 
+Kafka, Milvus, and MongoDB Atlas lease references record the issuing target
+identity (Kafka bootstrap address and TLS settings, Milvus endpoint, or Atlas
+endpoint and project) together with the issued principal and prefix. A revoke
+against a changed target fails before calling that target; the lease's
+revocation cannot complete and can be retried after restoring the original target.
+An older bare-principal reference cannot prove its issuing target and requires
+manual revocation on the original target. Changing `username_prefix` alone does
+not break revocation of a new target-bound reference.
+
 The GitHub App backend mints one installation access token per lease, narrowed to the
 role's permissions and the repositories it names; the token request is authenticated
 with a short RS256 JWT signed with the app's private key inside the crypto boundary.

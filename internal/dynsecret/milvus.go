@@ -142,17 +142,21 @@ func (b *MilvusBackend) CreateCredential(ctx context.Context, req GenerateReques
 	if err != nil {
 		return "", nil, err
 	}
-	return user, credential, nil
+	return boundPrincipalRef("milvus", b.prefix, user, b.endpoint), credential, nil
 }
 
 // Revoke implements Backend: the user is dropped, with its role grants, and
 // Milvus refuses its next request. Only users this provider names are dropped;
 // Milvus answers success for a user already gone.
 func (b *MilvusBackend) Revoke(ctx context.Context, ref string) error {
-	if !milvusUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
-		return fmt.Errorf("dynsecret milvus: refusing to drop %q, which this provider did not create", ref)
+	user, err := principalFromBoundRef(ref, "milvus", b.endpoint)
+	if err != nil {
+		return err
 	}
-	if err := b.call(ctx, "/v2/vectordb/users/drop", map[string]string{"userName": ref}); err != nil {
+	if !milvusUser.MatchString(user) {
+		return fmt.Errorf("dynsecret milvus: refusing to drop an invalid user name")
+	}
+	if err := b.call(ctx, "/v2/vectordb/users/drop", map[string]string{"userName": user}); err != nil {
 		return fmt.Errorf("dynsecret milvus: drop user: %w", err)
 	}
 	return nil
