@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -260,13 +261,16 @@ func (s *Store) ApplyIssuanceRequestOpenedTx(ctx context.Context, tx pgx.Tx, r I
 // failure this guards.
 func (s *Store) ApplyIssuanceRequestDecidedTx(ctx context.Context, tx pgx.Tx, tenantID, id, status, decidedBy, reason, identityID string, at time.Time) error {
 	var identity any
-	if identityID != "" {
-		identity = identityID
+	if status == "approved" || status == "issued" {
+		if parsed, err := uuid.Parse(identityID); err == nil {
+			identity = parsed.String()
+		}
 	}
 	_, err := tx.Exec(ctx,
 		`UPDATE issuance_requests
 		    SET status = $3, decided_by = $4, decision_reason = $5,
-		        identity_id = coalesce($6::uuid, identity_id),
+		        identity_id = coalesce((SELECT i.id FROM identities i
+		                                  WHERE i.tenant_id = $1 AND i.id = $6::uuid), identity_id),
 		        decided_at = $7, updated_at = now()
 		  WHERE tenant_id = $1 AND id = $2
 		    AND status IN ('requested', 'approved')`,

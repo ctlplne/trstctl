@@ -38,6 +38,10 @@ var ErrIssuanceRequestNotReady = errors.New("orchestrator: issuance request is n
 // server fault. The API maps it to 403 while retaining the request unchanged.
 var ErrIssuanceRequestWrongRequester = errors.New("orchestrator: only the requester may withdraw their own issuance request")
 
+// ErrIssuanceDecisionIdentityInvalid is returned before an invalid link can
+// become an immutable event or reach the read model.
+var ErrIssuanceDecisionIdentityInvalid = errors.New("orchestrator: identity_id must name an existing identity in this tenant and is only allowed on approval or issuance")
+
 // IssuanceRequestIssueIdempotencyKey is the stable mint identity shared by the
 // preparation response, browser client, certificate record, and completion
 // verifier. Retrying the same approved request can never mint under a new key.
@@ -147,6 +151,23 @@ func (o *Orchestrator) DecideIssuanceRequest(ctx context.Context, tenantID, id, 
 	// Canceling is the requester's own right, and only theirs.
 	if to == issuancerequest.StateCancelled && decidedBy != current.Requester {
 		return store.IssuanceRequest{}, ErrIssuanceRequestWrongRequester
+	}
+	identityID = strings.TrimSpace(identityID)
+	if identityID != "" {
+		if to != issuancerequest.StateApproved && to != issuancerequest.StateIssued {
+			return store.IssuanceRequest{}, ErrIssuanceDecisionIdentityInvalid
+		}
+		parsed, err := uuid.Parse(identityID)
+		if err != nil {
+			return store.IssuanceRequest{}, ErrIssuanceDecisionIdentityInvalid
+		}
+		identityID = parsed.String()
+		if _, err := o.store.GetIdentity(ctx, tenantID, identityID); err != nil {
+			if store.IsNotFound(err) {
+				return store.IssuanceRequest{}, ErrIssuanceDecisionIdentityInvalid
+			}
+			return store.IssuanceRequest{}, err
+		}
 	}
 	at := time.Now().UTC()
 	payload, err := json.Marshal(projections.IssuanceRequestDecided{

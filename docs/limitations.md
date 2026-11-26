@@ -4230,7 +4230,9 @@ than sending an operator looking for a credential that was never there.
   withdraw their own request and can never decide it — self-approval would leave
   an approval record that looks legitimate while nobody independent looked — and
   only the requester may cancel, so anyone else closing it is a denial and is
-  recorded as one. A ticket's requester is recorded as the ticket system names
+  recorded as one. A decision body may link an `identity_id` only on approval,
+  and it must name an identity in the same tenant. Denial and cancellation
+  reject that field before recording an event. A ticket's requester is recorded as the ticket system names
   them (Jira's reporter by the email Jira shares, else the display name; the
   ServiceNow field's display value), so the check also refuses a decider whose
   member record holds that email or display name, ignoring case, and refuses a
