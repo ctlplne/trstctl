@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/switchkit"
 )
 
 // Switching imports (A265): another certificate-management product's export,
@@ -148,7 +150,16 @@ func (s *Store) ApplySwitchingImportRowsRecordedTx(ctx context.Context, tx pgx.T
 	if err != nil {
 		return err
 	}
-	batch, err := json.Marshal(rows)
+	// Old log entries may contain a year-0000 expiry. Keep the immutable event
+	// and its reason, but never let one unprojectable date stop the global tail.
+	projectable := make([]SwitchingImportRow, len(rows))
+	copy(projectable, rows)
+	for i := range projectable {
+		if projectable[i].NotAfter != nil && !switchkit.ValidNotAfter(*projectable[i].NotAfter) {
+			projectable[i].NotAfter = nil
+		}
+	}
+	batch, err := json.Marshal(projectable)
 	if err != nil {
 		return err
 	}

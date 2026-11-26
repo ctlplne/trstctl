@@ -449,10 +449,21 @@ func splitList(s string) []string {
 func parseTime(s string) (time.Time, error) {
 	for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
 		if t, err := time.Parse(layout, strings.TrimSpace(s)); err == nil {
-			return t.UTC(), nil
+			t = t.UTC()
+			if !ValidNotAfter(t) {
+				return time.Time{}, fmt.Errorf("not_after %q is outside the supported UTC years 0001-9999", s)
+			}
+			return t, nil
 		}
 	}
 	return time.Time{}, fmt.Errorf("not_after %q is not a date", s)
+}
+
+// ValidNotAfter is the window both JSON event encoding and PostgreSQL can
+// project. Convert to UTC first: a timezone offset can cross a year boundary.
+func ValidNotAfter(t time.Time) bool {
+	year := t.UTC().Year()
+	return year >= 1 && year <= 9999
 }
 
 // normalizeFolder turns "a\b / c" into "a/b/c".
@@ -649,6 +660,11 @@ func mapRow(row Row, now time.Time) Mapped {
 		} else {
 			m.Gaps = append(m.Gaps, "no expiry")
 		}
+	}
+	if !m.NotAfter.IsZero() && !ValidNotAfter(m.NotAfter) {
+		m.Outcome, m.Reason = OutcomeUnparseable, "not_after is outside the supported UTC years 0001-9999"
+		m.NotAfter = time.Time{}
+		return m
 	}
 	if !m.NotAfter.IsZero() && !m.NotAfter.After(now) {
 		m.Outcome, m.Reason = OutcomeExpired, "expired "+m.NotAfter.Format(time.RFC3339)

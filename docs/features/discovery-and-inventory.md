@@ -1787,6 +1787,8 @@ export as data: CSV with a header row, or JSON (an array, or an object with a
 `key_algorithm` and `endpoints` (`host:port`, comma-separated). A column map
 renames the export's own column names, so nothing about the other product is
 ever needed: `{"Thumbprint": "fingerprint_sha256", "Valid To": "not_after"}`.
+An expiry outside UTC years 0001-9999 is marked `unparseable` in preview and
+is not stored as a database timestamp.
 
 **Preview changes nothing.** Every row gets exactly one outcome — `mapped`,
 `mapped_with_gaps` (each gap named: no owner, no application, no folder policy,
