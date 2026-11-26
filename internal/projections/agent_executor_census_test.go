@@ -43,4 +43,13 @@ func TestAgentHeartbeatExecutorCensusIsVersionBoundAndBounded(t *testing.T) {
 	if err := validateAgentHeartbeatExecutors(AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeat{Executors: oversized}); err == nil {
 		t.Error("an oversized connector name was accepted")
 	}
+	for _, invalid := range []*AgentExecutorCensus{
+		{Version: "1.0", HostProfileError: strings.Repeat("x", 513)},
+		{Version: "1.0", PendingReportError: strings.Repeat("x", 513)},
+		{Version: "1.0", RelayCABundle: &AgentRelayCABundle{Error: strings.Repeat("x", 513)}},
+	} {
+		if err := validateAgentHeartbeatExecutors(AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeat{Executors: invalid}); err == nil {
+			t.Errorf("oversized executor diagnostic was accepted: %+v", invalid)
+		}
+	}
 }

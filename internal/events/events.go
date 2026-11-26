@@ -38,6 +38,12 @@ const (
 	importMissingField = "events: import requires source event id and time"
 )
 
+// MaxEventDataBytes bounds one original producer payload before it reaches
+// JetStream. A larger event must be split into bounded records by its producer.
+const MaxEventDataBytes = 1 << 20
+
+var ErrEventPayloadTooLarge = errors.New("events: event payload exceeds 1 MiB")
+
 // ErrConflictingEventIdentity means retained source history contains one event
 // ID with more than one immutable envelope. Recovery must fail closed because no
 // caller can safely choose which command the producer identity means.
@@ -642,6 +648,11 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	}
 	if e.TenantID == "" {
 		return Event{}, errors.New("events: tenant_id is required (AN-1)")
+	}
+	// An exact retained-history import may need to preserve an older event
+	// that predates this limit. Only live producer appends are admission-limited.
+	if !requireSourceEnvelope && len(e.Data) > MaxEventDataBytes {
+		return Event{}, ErrEventPayloadTooLarge
 	}
 	if requireSourceEnvelope && (e.ID == "" || e.Time.IsZero()) {
 		return Event{}, errors.New(importMissingField)

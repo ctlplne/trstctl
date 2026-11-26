@@ -308,6 +308,17 @@ An agent name is one SPIFFE path segment: it cannot be empty, padded, or contain
 400 before its bootstrap token is spent; correct the name and retry with that
 token. The channel also refuses a previously issued certificate with such a name;
 enroll that agent again under a valid name.
+The agent channel accepts a 32-request burst per certificate and refills at
+four RPCs per second. Heartbeat events are limited to 128 KiB. Each agent certificate has an
+eight-request burst that refills at the configured heartbeat interval (30 seconds
+by default); the stable
+agent identity also has a 128 MiB event-byte bucket that refills over 24 hours.
+The channel returns `ResourceExhausted` with a retry hint when either bucket
+is empty. It rejects an oversized or malformed heartbeat before appending an
+event. Repeated identical role refusals and rejected job receipts produce one
+audit event per minute, while a separate 16-event burst, refilling one event
+every 15 seconds, limits distinct refusals from one certificate. The event log rejects any producer payload over
+1 MiB before publication; exact historical imports retain their original size.
 `POST /api/v1/agents/{id}/cert-revocations` takes the exact client-certificate
 serial, SHA-256 fingerprint, or both. The control plane commits an independent
 tenant-scoped denial before publishing either removal event, so an already-open

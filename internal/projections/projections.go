@@ -2652,6 +2652,10 @@ func validateAgentHeartbeatExecutors(schemaVersion int, heartbeat AgentHeartbeat
 	if len(report.Version) > maxAgentExecutorName || len(report.Kinds) > maxAgentExecutorKinds {
 		return errors.New("projections: agent executor census exceeds its bounds")
 	}
+	if len(report.HostProfileError) > 512 || len(report.PendingReportError) > 512 ||
+		(report.RelayCABundle != nil && (len(report.RelayCABundle.SHA256) > 64 || len(report.RelayCABundle.Error) > 512)) {
+		return errors.New("projections: agent executor census diagnostics exceed their bounds")
+	}
 	seen := make(map[string]bool, len(report.Kinds))
 	for _, kind := range report.Kinds {
 		if strings.TrimSpace(kind.Kind) == "" || len(kind.Kind) > maxAgentExecutorName || seen[kind.Kind] {

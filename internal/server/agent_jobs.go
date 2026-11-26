@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
@@ -1869,6 +1870,47 @@ func (a *agentService) recordAgentJobEvent(ctx context.Context, tenantID, eventT
 	body, err := json.Marshal(data)
 	if err != nil {
 		return
+	}
+	if (eventType == "agent.jobs.role_refused" || eventType == "agent.job.receipt.rejected") && a.store != nil {
+		info, peerErr := peerInfo(ctx)
+		if peerErr == nil {
+			// A malformed receipt can carry a large attacker-chosen outcome. Keep
+			// one bounded audit signal without retaining its untrusted contents.
+			if len(body) > 4<<10 {
+				var summary map[string]any
+				if eventType == "agent.job.receipt.rejected" {
+					// Job ID and reason are the closed, bounded fields an operator
+					// needs to locate a refused receipt. Omit the agent-chosen outcome.
+					summary = map[string]any{
+						"agent": info.CommonName, "job_id": data["job_id"],
+						"outcome": "[oversized omitted]", "reason": data["reason"],
+						"agent_fingerprint": info.FingerprintSHA256,
+					}
+				} else {
+					summary = map[string]any{
+						"agent": info.CommonName, "roles": []string{"[omitted]"},
+						"refused_kinds": []string{"[oversized omitted]"},
+					}
+				}
+				body, err = json.Marshal(summary)
+				if err != nil {
+					return
+				}
+			}
+			// One identical refusal per minute remains evidence; the second
+			// bucket bounds novel refusals from one enrolled certificate too.
+			digest := crypto.SHA256Hex(append(append([]byte(eventType), 0), body...))
+			allowed, _, rateErr := a.store.RateLimitTake(ctx, tenantID,
+				"agent:audit:repeat:"+info.FingerprintSHA256+":"+digest, 1, 1.0/60.0)
+			if rateErr != nil || !allowed {
+				return
+			}
+			allowed, _, rateErr = a.store.RateLimitTake(ctx, tenantID,
+				"agent:audit:total:"+info.FingerprintSHA256, 16, 1.0/15.0)
+			if rateErr != nil || !allowed {
+				return
+			}
+		}
 	}
 	// The identity, time and actor are fixed before the first attempt (A65), so a
 	// retry after an unacknowledged publish is the same JetStream message and the

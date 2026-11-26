@@ -101,6 +101,12 @@ const agentMaxConcurrentStreams uint32 = 256
 
 const agentMaxInventoryFindings = 1000
 
+const (
+	agentMaxHeartbeatEventBytes = 128 << 10
+	agentHeartbeatBurst         = 8
+	agentHeartbeatDailyBytes    = 128 << 20
+)
+
 // agentTrustStoreFindingKind is the stable on-wire kind for a certificate that
 // was observed as an installed trust anchor. Agents before AUD-43 sent the source
 // kind correctly but left each finding as x509_certificate, so the receiver keeps
@@ -624,6 +630,16 @@ func (a *agentService) beginPeerOperation(ctx context.Context, check func(contex
 		release()
 		return ctx, mtls.PeerCertInfo{}, nil, err
 	}
+	allowed, retry, err := a.store.RateLimitTake(work, info.TenantID,
+		"agent:rpc:"+info.FingerprintSHA256, 32, 4)
+	if err != nil {
+		release()
+		return ctx, mtls.PeerCertInfo{}, nil, status.Error(codes.Unavailable, "agent channel rate limit is unavailable; retry later")
+	}
+	if !allowed {
+		release()
+		return ctx, mtls.PeerCertInfo{}, nil, status.Errorf(codes.ResourceExhausted, "agent channel rate limit reached; retry after %s", retry.Round(time.Second))
+	}
 	return work, info, release, nil
 }
 
@@ -700,6 +716,21 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 		return nil, err
 	}
 	defer release()
+	beatInterval := a.beatInterval
+	if beatInterval <= 0 {
+		beatInterval = 30 * time.Second
+	}
+	if beatInterval < 250*time.Millisecond {
+		beatInterval = 250 * time.Millisecond // The general channel budget is four RPCs/second.
+	}
+	allowed, retry, err := a.store.RateLimitTake(ctx, info.TenantID,
+		"agent:heartbeat:"+info.FingerprintSHA256, agentHeartbeatBurst, 1/beatInterval.Seconds())
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "agent heartbeat rate limit is unavailable; retry later")
+	}
+	if !allowed {
+		return nil, status.Errorf(codes.ResourceExhausted, "agent heartbeat rate limit reached; retry after %s", retry.Round(time.Second))
+	}
 	agentID := agentRowID(info.TenantID, info.CommonName)
 	if _, err := a.store.GetAgent(ctx, info.TenantID, agentID); err == nil {
 		// A lowered quota must never strand an already enrolled host. This is a
@@ -886,11 +917,23 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
 	}
+	if len(payload) > agentMaxHeartbeatEventBytes {
+		return nil, status.Errorf(codes.InvalidArgument, "heartbeat event exceeds %d bytes", agentMaxHeartbeatEventBytes)
+	}
 	if err := inputtext.ValidateJSONStrings(payload); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "heartbeat report contains unsafe text")
 	}
 	if err := projections.ValidateAgentHeartbeat(eventSchemaVersion, info.TenantID, beatPayload); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid heartbeat report: %v", err)
+	}
+	allowed, retry, err := a.store.RateLimitTakeCost(ctx, info.TenantID,
+		"agent:heartbeat-bytes:"+agentRowID(info.TenantID, info.CommonName),
+		agentHeartbeatDailyBytes, float64(agentHeartbeatDailyBytes)/float64((24*time.Hour).Seconds()), float64(len(payload)))
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "agent heartbeat byte budget is unavailable; retry later")
+	}
+	if !allowed {
+		return nil, status.Errorf(codes.ResourceExhausted, "agent heartbeat byte budget reached; retry after %s", retry.Round(time.Second))
 	}
 	ev, err := a.log.Append(ctx, events.Event{
 		Type: projections.EventAgentHeartbeat, TenantID: info.TenantID,

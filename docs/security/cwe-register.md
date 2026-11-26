@@ -1434,10 +1434,10 @@ not this file.
 | `internal/projections/certificate_sct.go:105` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:637` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:8054` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8071` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:8084` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8119` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:8058` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8075` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:8088` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8123` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:46` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -3093,7 +3093,7 @@ not this file.
 | `internal/server/agent_roles_served_test.go:535` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:539` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
-| `internal/server/agentchannel.go:150` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
+| `internal/server/agentchannel.go:156` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:181` | the test's own archive (CWE-22) |
 | `internal/server/audit_feed_index_template_lab_test.go:50` | the repository's own shipped content (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |

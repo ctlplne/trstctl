@@ -27,7 +27,7 @@ import (
 func TestServedAgentAuditEventsRetryThroughTheOutboxAfterAnUnacknowledgedPublish(t *testing.T) {
 	ctx := context.Background()
 	const eventType = "agent.jobs.role_refused"
-	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleNetwork}, []string{"endpoint.contain"}, func(*Deps) {})
+	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleNetwork}, []string{"endpoint.contain", "trust.distribute"}, func(*Deps) {})
 	svc, ok := h.srv.agentServiceForTest()
 	if !ok {
 		t.Fatal("agent service is not assembled")
@@ -100,9 +100,9 @@ func TestServedAgentAuditEventsRetryThroughTheOutboxAfterAnUnacknowledgedPublish
 	// A network relay reaching for host work is refused and the reach recorded.
 	// (endpoint.contain stays host-only; endpoint.renew also carries appliance
 	// renewals a relay runs, A122.)
-	reach := func() {
+	reach := func(kinds ...string) {
 		t.Helper()
-		if _, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{"endpoint.contain"}, Limit: 1, LeaseSeconds: 60}); err != nil {
+		if _, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: kinds, Limit: 1, LeaseSeconds: 60}); err != nil {
 			t.Fatalf("claim: %v", err)
 		}
 	}
@@ -110,7 +110,7 @@ func TestServedAgentAuditEventsRetryThroughTheOutboxAfterAnUnacknowledgedPublish
 	// 1. The bus does not acknowledge the first publish: nothing is in the log,
 	// one control-plane retry row carries the event under its fixed identity.
 	failNext(fmt.Errorf("nats: timeout: %w", events.ErrPublish))
-	reach()
+	reach("endpoint.contain")
 	if got := recorded(); len(got) != 0 {
 		t.Fatalf("events after an unacknowledged publish = %d, want none yet", len(got))
 	}
@@ -153,7 +153,7 @@ func TestServedAgentAuditEventsRetryThroughTheOutboxAfterAnUnacknowledgedPublish
 	// 4. A deterministic refusal (the log rejecting the envelope) is not
 	// retried: no new row, no new event.
 	failNext(errors.New("events: tenant_id is required (AN-1)"))
-	reach()
+	reach("trust.distribute")
 	if rows := retryRows(); len(rows) != 1 {
 		t.Fatalf("retry rows after a deterministic refusal = %d, want still one", len(rows))
 	}
@@ -162,7 +162,7 @@ func TestServedAgentAuditEventsRetryThroughTheOutboxAfterAnUnacknowledgedPublish
 	}
 
 	// 5. An acknowledged publish needs no row.
-	reach()
+	reach("endpoint.contain", "trust.distribute")
 	if got := recorded(); len(got) != 2 {
 		t.Fatalf("events after a clean publish = %d, want two", len(got))
 	}

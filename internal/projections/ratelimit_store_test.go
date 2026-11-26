@@ -4,6 +4,8 @@ package projections_test
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -51,5 +53,52 @@ func TestRateLimitTakeShedsLoad(t *testing.T) {
 	}
 	if !ok {
 		t.Error("a different tenant must not be limited by another tenant's usage (AN-1)")
+	}
+}
+
+func TestRateLimitTakeCostBoundsBytesAcrossCalls(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	const tenant = "33333333-3333-4333-8333-333333333333"
+	for _, cost := range []float64{4, 4, 2} {
+		allowed, _, err := st.RateLimitTakeCost(ctx, tenant, "agent:heartbeat-bytes:test", 10, 0, cost)
+		if err != nil || !allowed {
+			t.Fatalf("cost %.0f admitted=%v err=%v", cost, allowed, err)
+		}
+	}
+	if allowed, _, err := st.RateLimitTakeCost(ctx, tenant, "agent:heartbeat-bytes:test", 10, 0, 1); err != nil || allowed {
+		t.Fatalf("bytes beyond budget admitted=%v err=%v", allowed, err)
+	}
+}
+
+func TestRateLimitFirstUseSerializesConcurrentAgents(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	const tenant = "44444444-4444-4444-8444-444444444444"
+	start := make(chan struct{})
+	var admitted atomic.Int32
+	var wg sync.WaitGroup
+	errors := make(chan error, 24)
+	for i := 0; i < 24; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			allowed, _, err := st.RateLimitTakeCost(ctx, tenant, "agent:first-use", 3, 0, 1)
+			if err != nil {
+				errors <- err
+			} else if allowed {
+				admitted.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errors)
+	for err := range errors {
+		t.Fatalf("concurrent first-use take: %v", err)
+	}
+	if got := admitted.Load(); got != 3 {
+		t.Fatalf("concurrent first-use bucket admitted %d, want 3", got)
 	}
 }
