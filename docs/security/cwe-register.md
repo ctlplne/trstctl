@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3654 annotated sites across 35 rules. Each row is
+3656 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (925 sites)
+### G101 — CWE-798 Use of hardcoded credentials (926 sites)
 
 | Location | Reason |
 |---|---|
@@ -621,6 +621,7 @@ not this file.
 | `internal/server/cr408_scan_reference_shape_served_test.go:27` | fabricated invalid reference fixture, no credential value (CWE-798) |
 | `internal/server/cr409_oauth_source_kind_served_test.go:26` | fabricated secret reference fixture, no credential value (CWE-798) |
 | `internal/server/cr409_oauth_source_kind_served_test.go:97` | fabricated invalid reference fixture, no credential value (CWE-798) |
+| `internal/server/cr597_redis_native_test.go:29` | fabricated test administrator credential (CWE-798) |
 | `internal/server/decoy_secret_scan_served_test.go:28` | fabricated decoy fixture; no value is real (CWE-798) |
 | `internal/server/decoy_secret_scan_served_test.go:29` | fabricated fixture; no value is real (CWE-798) |
 | `internal/server/decoy_secret_scan_served_test.go:57` | a decoy's path and label, no credential value (CWE-798) |
@@ -1382,8 +1383,8 @@ not this file.
 | `internal/dynsecret/cr596_password_logging_test.go:127` | port is returned by a TCP listener and bounded to 16 bits (CWE-190) |
 | `internal/dynsecret/drivers.go:397` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/drivers.go:405` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/providers_real.go:1988` | a string length is never negative (CWE-190) |
-| `internal/dynsecret/providers_real_test.go:734` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/dynsecret/providers_real.go:2005` | a string length is never negative (CWE-190) |
+| `internal/dynsecret/providers_real_test.go:742` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp.go:161` | s is checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp_verify_test.go:37` | a positive clock step in a test (CWE-190) |
@@ -1767,7 +1768,7 @@ not this file.
 | `internal/dynsecret/openai.go:128` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:233` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1792` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1809` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
@@ -1909,7 +1910,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (471 sites)
+### G204 — CWE-78 OS command injection (472 sites)
 
 | Location | Reason |
 |---|---|
@@ -2167,6 +2168,7 @@ not this file.
 | `internal/server/compliance_report_retention_versions_served_test.go:28` | fixed local Docker tool and approved fixture image (CWE-78) |
 | `internal/server/compose_e2e_tls_test.go:245` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
 | `internal/server/cr039_redis_gateway_tls_served_test.go:21` | fixed pinned fixture image (CWE-78) |
+| `internal/server/cr597_redis_native_test.go:25` | reads exact pinned fixture image only (CWE-78) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:44` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:116` | the lab's own container name (CWE-78) |
 | `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:148` | kind and kubectl with the lab's own arguments (CWE-78) |
@@ -2408,9 +2410,9 @@ not this file.
 | `internal/api/vault_compat_contract_test.go:246` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:173` | non-secret fixture directory in t.TempDir (CWE-22, CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:103` | deliberately loose fixture dir; secretfile must refuse it (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:722` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:725` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:728` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:730` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:733` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:736` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:33` | the container's D-Bus runtime directory (CWE-276) |
 | `internal/projections/golden_events_test.go:107` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/sshdiscovery_store_test.go:92` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -3969,7 +3971,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:264` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:436` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/providers_real.go:1913` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/providers_real.go:1930` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:248` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:292` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |

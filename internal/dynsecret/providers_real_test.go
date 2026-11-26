@@ -349,7 +349,11 @@ func TestRedisWriterUsesExplicitNamespaceAndNeverAdministrativeCommands(t *testi
 	if err := backend.Revoke(context.Background(), ref); err != nil {
 		t.Fatal(err)
 	}
-	server.require(t, "ACL DELUSER "+ref)
+	user, err := backend.principalFromLeaseRef(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.require(t, "ACL DELUSER "+user)
 }
 
 func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
@@ -411,14 +415,18 @@ func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
 			}
 		}},
 		{"redis", redisBackend, func(ref string) {
-			redisSrv.require(t, "ACL SETUSER "+ref)
+			user, err := redisBackend.principalFromLeaseRef(ref)
+			if err != nil {
+				t.Fatal(err)
+			}
+			redisSrv.require(t, "ACL SETUSER "+user)
 			redisSrv.require(t, "reset on")
 			redisSrv.require(t, "~trstctl:dod:* +get +ping")
 			redisSrv.reject(t, "+select")
 			redisSrv.reject(t, "+@connection")
 			redisSrv.reject(t, "+@all")
 			redisSrv.require(t, "ACL SAVE")
-			redisSrv.require(t, "ACL DELUSER "+ref)
+			redisSrv.require(t, "ACL DELUSER "+user)
 		}},
 		{"kubernetes", k8sBackend, func(ref string) {
 			var owned kubernetesProviderRef

@@ -879,7 +879,7 @@ func (b *RedisBackend) CreateCredential(ctx context.Context, req GenerateRequest
 		return "", nil, err
 	}
 	if req.LeaseID != "" {
-		if err := b.Revoke(ctx, user); err != nil {
+		if err := b.revokeIssuedUser(ctx, user); err != nil {
 			return "", nil, fmt.Errorf("dynsecret redis: clean interrupted user: %w", err)
 		}
 	}
@@ -907,10 +907,20 @@ func (b *RedisBackend) CreateCredential(ctx context.Context, req GenerateRequest
 	// ACL users are otherwise only in Redis memory, even when AOF is enabled.
 	// A lease is not active until its exact authority survives a Redis restart.
 	if err := b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("SAVE")}); err != nil {
-		_ = b.Revoke(ctx, user)
+		_ = b.revokeIssuedUser(ctx, user)
 		return "", nil, fmt.Errorf("dynsecret redis: persist user ACL: %w", err)
 	}
-	return user, redisCredential(b.addr, b.db, user, password, !b.allowPlaintext), nil
+	return b.leaseRef(user), redisCredential(b.addr, b.db, user, password, !b.allowPlaintext), nil
+}
+
+func (b *RedisBackend) leaseRef(user string) string {
+	return boundPrincipalRef("redis", b.usernamePrefix, user,
+		b.addr, b.tlsServerName, crypto.SHA256Hex(b.tlsCA), strconv.FormatBool(b.allowPlaintext))
+}
+
+func (b *RedisBackend) principalFromLeaseRef(ref string) (string, error) {
+	return principalFromBoundRef(ref, "redis",
+		b.addr, b.tlsServerName, crypto.SHA256Hex(b.tlsCA), strconv.FormatBool(b.allowPlaintext))
 }
 
 func (b *RedisBackend) Close() {
@@ -925,10 +935,17 @@ func (b *RedisBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
 	}
-	if !issuedPrincipalName(b.usernamePrefix, ref) {
-		return fmt.Errorf("dynsecret redis: refusing to delete %q, which this provider did not create", ref)
+	user, err := b.principalFromLeaseRef(ref)
+	if err != nil {
+		return fmt.Errorf("dynsecret redis: refusing to delete a lease which this provider did not create or cannot target-bind: %w", err)
 	}
-	if err := b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("DELUSER"), []byte(ref)}); err != nil {
+	return b.revokeIssuedUser(ctx, user)
+}
+
+// revokeIssuedUser is used only after validating a bound lease ref, or with a
+// fresh username this backend generated while cleaning an interrupted issue.
+func (b *RedisBackend) revokeIssuedUser(ctx context.Context, user string) error {
+	if err := b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("DELUSER"), []byte(user)}); err != nil {
 		return err
 	}
 	if err := b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("SAVE")}); err != nil {

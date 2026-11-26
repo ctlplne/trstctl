@@ -143,12 +143,15 @@ func aclBackend(t *testing.T, addr string) *RedisBackend {
 // is a missing login.
 func TestRedisLeaseAccessReadsTheUsersACLG2L2(t *testing.T) {
 	ctx := context.Background()
+	const leaseUser = "trstctl_reader_0123456789abcdef"
+	const absentUser = "trstctl_gone_fedcba9876543210"
 	const hash = "2d9c75aa3fbb0c7b1d8f6a1e0b4f5c3a2d9c75aa3fbb0c7b1d8f6a1e0b4f5c3a"
 	reply := "*12\r\n$5\r\nflags\r\n*1\r\n$2\r\non\r\n$9\r\npasswords\r\n*1\r\n$64\r\n" + hash + "\r\n" +
 		"$8\r\ncommands\r\n$16\r\n-@all +get +ping\r\n$4\r\nkeys\r\n$14\r\n~trstctl:dod:*\r\n$8\r\nchannels\r\n$0\r\n\r\n$9\r\nselectors\r\n*0\r\n"
 	addr := aclServer(t, reply)
-	access, err := aclBackend(t, addr).ResolveAccess(ctx, "trstctl_r1")
-	if err != nil || access.TargetKind != AccessTargetRedisServer || access.TargetRef != "redis://"+addr || access.Login != "trstctl_r1" {
+	backend := aclBackend(t, addr)
+	access, err := backend.ResolveAccess(ctx, backend.leaseRef(leaseUser))
+	if err != nil || access.TargetKind != AccessTargetRedisServer || access.TargetRef != "redis://"+addr || access.Login != leaseUser {
 		t.Fatalf("Redis access = %+v, %v", access, err)
 	}
 	want := []string{"commands -@all +get +ping", "flags on", "keys ~trstctl:dod:*"}
@@ -160,10 +163,12 @@ func TestRedisLeaseAccessReadsTheUsersACLG2L2(t *testing.T) {
 			t.Fatalf("a password hash reached the grants: %q", access.Grants)
 		}
 	}
-	if _, err := aclBackend(t, aclServer(t, "*-1\r\n")).ResolveAccess(ctx, "trstctl_gone"); !errors.Is(err, ErrAccessLoginMissing) {
+	missing := aclBackend(t, aclServer(t, "*-1\r\n"))
+	if _, err := missing.ResolveAccess(ctx, missing.leaseRef(absentUser)); !errors.Is(err, ErrAccessLoginMissing) {
 		t.Fatalf("a user Redis does not have = %v, want login missing", err)
 	}
-	if _, err := aclBackend(t, aclServer(t, "-NOPERM this user has no permissions to run the 'acl|getuser' command\r\n")).ResolveAccess(ctx, "trstctl_r1"); !errors.Is(err, ErrAccessDenied) {
+	denied := aclBackend(t, aclServer(t, "-NOPERM this user has no permissions to run the 'acl|getuser' command\r\n"))
+	if _, err := denied.ResolveAccess(ctx, denied.leaseRef(leaseUser)); !errors.Is(err, ErrAccessDenied) {
 		t.Fatalf("an admin without ACL permission = %v, want denied", err)
 	}
 }

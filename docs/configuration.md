@@ -3745,6 +3745,13 @@ revoke before reporting provider completion, so an ordinary Redis restart
 cannot resurrect a revoked user or discard a still-active lease. The
 administrator password belongs in a mode-0600 `file:` reference or tenant
 `secret://` reference; never inline it in JSON.
+New Redis lease references retain the issuing `username_prefix`, server address,
+TLS server name, CA digest and plaintext/TLS choice. Changing only the prefix
+does not block revocation; repointing the provider or changing its TLS trust
+causes revocation and access readback to fail closed before an ACL command.
+Restore the original target settings to retry. Older bare-username leases have
+no proof of their issuing server and need manual revocation there, followed by
+an independent `ACL GETUSER` or login check.
 `allow_plaintext_redis: true` is an explicit local-lab exception for a literal
 loopback or private IP address. It cannot be combined with TLS settings and
 returns a `redis://` lease for direct use. It cannot back an access gateway

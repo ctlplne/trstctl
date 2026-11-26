@@ -204,10 +204,15 @@ func mongoAccessError(err error) error {
 // GETUSER): its flags, commands, key patterns and channels. The password
 // hashes Redis returns beside them are never kept.
 func (b *RedisBackend) ResolveAccess(ctx context.Context, backendRef string) (Access, error) {
-	access := Access{TargetKind: AccessTargetRedisServer, TargetRef: "redis://" + b.addr, Login: strings.TrimSpace(backendRef)}
-	if access.Login == "" {
+	access := Access{TargetKind: AccessTargetRedisServer, TargetRef: "redis://" + b.addr}
+	if strings.TrimSpace(backendRef) == "" {
 		return access, fmt.Errorf("%w: the lease names no login", ErrAccessLoginMissing)
 	}
+	login, err := b.principalFromLeaseRef(backendRef)
+	if err != nil {
+		return access, fmt.Errorf("%w: the lease reference does not match this Redis server", ErrAccessLoginMissing)
+	}
+	access.Login = login
 	reply, err := b.redisQuery(ctx, [][]byte{[]byte("ACL"), []byte("GETUSER"), []byte(access.Login)})
 	if err != nil {
 		return access, err
