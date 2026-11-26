@@ -4090,6 +4090,12 @@ allowed role. The Community Edition grants data access only through
 `bucket_full_access`; the Enterprise Edition's finer roles (`data_reader`,
 `query_select`, ...) and `bucket:scope:collection` keyspaces work the same way. Each
 lease is a local user with exactly those roles; revocation deletes it.
+New lease references retain the issuing `username_prefix` and management endpoint.
+Changing the prefix does not strand those leases; changing the endpoint refuses
+revocation against a different cluster. Leases issued before this binding used a
+bare user name and cannot prove their original target. Revoke those at their
+original cluster and reconcile the lease; a new cluster's missing-user response
+does not prove the old account was deleted.
 
 ```json
 {

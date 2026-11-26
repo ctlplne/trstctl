@@ -3958,7 +3958,7 @@ not this file.
 | `internal/crypto/windependents/rotation_native_windows_test.go:136` | fixed validated loopback origin, bounded client and all redirects refused (CWE-918) |
 | `internal/discovery/cloudcert/httpfetch.go:49` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `internal/dynsecret/clickhouse.go:167` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/couchbase.go:184` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/couchbase.go:188` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/elasticsearch.go:239` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/esxi.go:160` | the operator's configured host through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/github_app.go:327` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |

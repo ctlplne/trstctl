@@ -77,15 +77,18 @@ func TestCouchbaseLeaseIsALocalUserCouchbaseDeletesA239(t *testing.T) {
 	lab, srv := newCouchbaseStandIn(t)
 	b := newLabCouchbase(t, srv)
 	req := GenerateRequest{Role: "orders", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
-	user, credential, err := b.CreateCredential(context.Background(), req)
+	ref, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var got struct{ Username, Password string }
-	if err := json.Unmarshal(credential, &got); err != nil || got.Username != user || len(got.Password) != 48 {
+	if err := json.Unmarshal(credential, &got); err != nil || got.Username == "" || len(got.Password) != 48 {
 		t.Fatalf("credential %+v (%v)", got, err)
 	}
-	stored := lab.users[user]
+	if !strings.HasPrefix(ref, "v1:") || strings.Contains(ref, got.Password) {
+		t.Fatalf("lease reference is not target-bound: %q", ref)
+	}
+	stored := lab.users[got.Username]
 	if stored.Get("password") != got.Password || stored.Get("roles") != "bucket_full_access[orders]" {
 		t.Fatalf("stored user %v", stored)
 	}
@@ -93,13 +96,13 @@ func TestCouchbaseLeaseIsALocalUserCouchbaseDeletesA239(t *testing.T) {
 	again, credential2, err := b.CreateCredential(context.Background(), req)
 	var got2 struct{ Password string }
 	_ = json.Unmarshal(credential2, &got2)
-	if err != nil || again != user || len(lab.users) != 1 || lab.users[user].Get("password") != got2.Password || got2.Password == got.Password {
+	if err != nil || again != ref || len(lab.users) != 1 || lab.users[got.Username].Get("password") != got2.Password || got2.Password == got.Password {
 		t.Fatalf("retry: %q (%v), users %v", again, err, lab.users)
 	}
-	if err := b.Revoke(context.Background(), user); err != nil || len(lab.users) != 0 {
+	if err := b.Revoke(context.Background(), ref); err != nil || len(lab.users) != 0 {
 		t.Fatalf("revoke: %v, users %v", err, lab.users)
 	}
-	if err := b.Revoke(context.Background(), user); err != nil {
+	if err := b.Revoke(context.Background(), ref); err != nil {
 		t.Fatalf("a second revocation of a deleted user: %v", err)
 	}
 	for _, foreign := range []string{"admin", "lab_admin", "app_reader_1", "trstctl/../x"} {
@@ -109,6 +112,48 @@ func TestCouchbaseLeaseIsALocalUserCouchbaseDeletesA239(t *testing.T) {
 	}
 	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "admin", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")}); err == nil {
 		t.Fatal("issued an unbound role")
+	}
+}
+
+func TestCR597CouchbaseRevokesAfterPrefixEditOnlyAtIssuingTarget(t *testing.T) {
+	lab, srv := newCouchbaseStandIn(t)
+	issued := newLabCouchbase(t, srv)
+	issued.prefix = "earlier"
+	ref, credential, err := issued.CreateCredential(context.Background(), GenerateRequest{
+		Role: "orders", LeaseID: "cr597-couchbase", PrincipalSuffix: testPrincipalSuffix("cr597-couchbase"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var proof struct{ Username string }
+	if err := json.Unmarshal(credential, &proof); err != nil || proof.Username == "" {
+		t.Fatalf("issued credential: %v", err)
+	}
+	if _, live := lab.users[proof.Username]; !live {
+		t.Fatal("issued account absent before revoke")
+	}
+	otherLab, other := newCouchbaseStandIn(t)
+	elsewhere := newLabCouchbase(t, other)
+	elsewhere.prefix = "newer"
+	if err := elsewhere.Revoke(context.Background(), ref); err == nil {
+		t.Fatal("different target reported the old lease revoked")
+	}
+	if len(otherLab.calls) != 0 {
+		t.Fatal("different target was contacted before the reference check")
+	}
+	if _, live := lab.users[proof.Username]; !live {
+		t.Fatal("different target removed the issuing account")
+	}
+	if err := elsewhere.Revoke(context.Background(), proof.Username); err == nil || len(otherLab.calls) != 0 {
+		t.Fatal("historical target-unbound reference was treated as proof of revocation")
+	}
+	current := newLabCouchbase(t, srv)
+	current.prefix = "newer"
+	if err := current.Revoke(context.Background(), ref); err != nil {
+		t.Fatalf("revoke after prefix edit: %v", err)
+	}
+	if _, live := lab.users[proof.Username]; live {
+		t.Fatal("old account survived a reported revoke")
 	}
 }
 

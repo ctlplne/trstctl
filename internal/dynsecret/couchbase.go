@@ -149,17 +149,21 @@ func (b *CouchbaseBackend) CreateCredential(ctx context.Context, req GenerateReq
 	if err != nil {
 		return "", nil, err
 	}
-	return user, credential, nil
+	return boundPrincipalRef("couchbase", b.prefix, user, b.endpoint), credential, nil
 }
 
 // Revoke implements Backend: the user is deleted, and Couchbase refuses its
 // next request. Only users this provider names are deleted; a user already gone
 // counts as deleted.
 func (b *CouchbaseBackend) Revoke(ctx context.Context, ref string) error {
-	if !couchbaseUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
+	user, err := principalFromBoundRef(ref, "couchbase", b.endpoint)
+	if err != nil {
+		return err
+	}
+	if !couchbaseUser.MatchString(user) {
 		return fmt.Errorf("dynsecret couchbase: refusing to delete %q, which this provider did not create", ref)
 	}
-	status, err := b.call(ctx, http.MethodDelete, "/settings/rbac/users/local/"+url.PathEscape(ref), nil)
+	status, err := b.call(ctx, http.MethodDelete, "/settings/rbac/users/local/"+url.PathEscape(user), nil)
 	if err != nil {
 		return err
 	}
