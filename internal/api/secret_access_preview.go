@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -132,6 +133,7 @@ func (a *API) secretAccessPreviewFingerprint(tenantID, principal string, req sec
 func secretAccessPreviewBlocker(err error, direct bool) (string, bool) {
 	var cycle secretReferenceCycleError
 	var depth secretReferenceDepthError
+	var budget secretReferenceBudgetError
 	var statusErr *apiError
 	switch {
 	case errors.Is(err, store.ErrSecretNotFound) && direct:
@@ -142,6 +144,10 @@ func secretAccessPreviewBlocker(err error, direct bool) (string, bool) {
 		return "Reference resolution found a cycle. Fix the references before running this access test.", true
 	case errors.As(err, &depth):
 		return "Reference resolution exceeded the safe depth limit. Shorten the reference chain before retrying.", true
+	case errors.As(err, &budget):
+		return "Reference resolution exceeds the safe size or reference count. Shorten the value before retrying.", true
+	case errors.Is(err, context.DeadlineExceeded):
+		return "Reference resolution timed out. Check the referenced secrets and retry.", true
 	case errors.As(err, &statusErr) && statusErr.status >= 400 && statusErr.status < 500:
 		return statusErr.detail, true
 	default:

@@ -1820,7 +1820,7 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 }
 
 func serveRuntime(ctx context.Context, cfg *config.Config, srv *Server, logger *slog.Logger, stopBackground func(), runtimeFailure <-chan error) error {
-	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second, MaxHeaderBytes: 64 << 10}
 	ln, err := net.Listen("tcp", cfg.Server.Addr)
 	if err != nil {
 		stopBackground()

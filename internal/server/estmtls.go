@@ -179,7 +179,7 @@ func (s *Server) serveESTMTLS(ctx context.Context, ln net.Listener, sc *mtls.Ser
 		return est.WithTenant(ctx, s.protocols.estTenant)
 	})
 	handler = bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, protocolActivationHandler(s.protocols.activation, handler))
-	httpSrv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	httpSrv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, MaxHeaderBytes: 64 << 10}
 	go func() { // #nosec G118 -- shutdown grace period must outlive the already-canceled parent context (CWE-664)
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

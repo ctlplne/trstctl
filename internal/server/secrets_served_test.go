@@ -622,6 +622,35 @@ func TestServedSecretStoreReferencesAndImport(t *testing.T) {
 	}
 }
 
+func TestServedSecretReferenceExpansionHasPerRequestBudget(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "secret reference budget tenant")
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+	for _, seed := range []struct{ name, value string }{
+		{"budget/leaf", strings.Repeat("x", 64<<10)},
+		{"budget/tiny", "x"},
+		{"budget/too-large", strings.Repeat("${secret.budget/leaf}", 17)},
+		{"budget/too-many", strings.Repeat("${secret.budget/tiny}", 257)},
+		{"budget/normal", "prefix-${secret.budget/leaf}-suffix"},
+	} {
+		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+			map[string]any{"name": seed.name, "value": seed.value})
+		if status != http.StatusCreated {
+			t.Fatalf("create %s: status %d body %s", seed.name, status, body)
+		}
+	}
+	for _, name := range []string{"budget/too-large", "budget/too-many"} {
+		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/"+name+"?resolve=true", tok, nil)
+		if status != http.StatusRequestEntityTooLarge || !strings.Contains(string(body), "secret reference") {
+			t.Fatalf("resolve %s: status %d body %s", name, status, body)
+		}
+	}
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/budget/normal?resolve=true", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), "prefix-") || !strings.Contains(string(body), "-suffix") {
+		t.Fatalf("bounded normal reference: status %d body %s", status, body)
+	}
+}
+
 type servedDynamicSecretBackend struct {
 	mu      sync.Mutex
 	n       int

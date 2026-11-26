@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // defaultBuckets are latency histogram buckets in seconds.
@@ -66,7 +68,8 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		parent, _ := ParseTraceparent(r.Header.Get("traceparent"))
 		ctx, span := m.tracer.StartFrom(r.Context(), parent, "http.request")
 		route := m.boundedRoute(r.URL.Path)
-		span.SetAttr("http.method", r.Method)
+		method := boundedHTTPMethod(r.Method)
+		span.SetAttr("http.method", method)
 		span.SetAttr("http.route", route)
 
 		// Hand the trace context back to the caller so the request is traceable
@@ -82,8 +85,8 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		span.End()
 
 		if m.reqs != nil {
-			m.reqs.WithLabelValues(r.Method, route, code).Inc()
-			m.dur.WithLabelValues(r.Method, route).Observe(elapsed.Seconds())
+			m.reqs.WithLabelValues(method, route, code).Inc()
+			m.dur.WithLabelValues(method, route).Observe(elapsed.Seconds())
 		}
 
 		level := slog.LevelInfo
@@ -94,7 +97,7 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		// duration, and the correlation id — never credentials, body, or query.
 		m.logger.LogAttrs(ctx, level, "http_request",
 			slog.String("trace_id", span.Context().TraceID),
-			slog.String("method", r.Method),
+			slog.String("method", method),
 			slog.String("route", route),
 			slog.Int("status", rec.status),
 			slog.Int("bytes", rec.bytes),
@@ -139,8 +142,26 @@ const maxDistinctRouteLabels = 512
 // otherRouteLabel is the single bucket every route beyond the cap folds into.
 const otherRouteLabel = "other"
 
+// A request line is attacker-controlled. Keep method labels and access logs in
+// a closed set, including for methods rejected by the router.
+func boundedHTTPMethod(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodOptions,
+		http.MethodConnect, http.MethodTrace:
+		return method
+	default:
+		return "other"
+	}
+}
+
 // boundedRoute is normalizeRoute with a hard ceiling on distinct label values.
 func (m *Middleware) boundedRoute(path string) string {
+	// Refuse overlong or malformed input before splitting, copying, or keeping a
+	// route in the process-lifetime label set.
+	if len(path) > 128 || !utf8.ValidString(path) || strings.IndexFunc(path, unicode.IsControl) >= 0 {
+		return otherRouteLabel
+	}
 	route := normalizeRoute(path)
 	m.routeMu.Lock()
 	defer m.routeMu.Unlock()

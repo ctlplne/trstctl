@@ -5,6 +5,7 @@ package observ_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -34,6 +35,42 @@ func TestCounterPromText(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("WriteProm output missing %q\n--- got ---\n%s", want, out)
 		}
+	}
+}
+
+func TestMetricVectorsBoundUntrustedLabelsAndSeries(t *testing.T) {
+	r := observ.NewRegistry()
+	c := r.CounterVec("trstctl_untrusted_total", "test", []string{"input"})
+	h := r.HistogramVec("trstctl_untrusted_seconds", "test", []float64{1}, []string{"input"})
+	g := r.GaugeVec("trstctl_untrusted_value", "test", []string{"input"})
+	c.WithLabelValues("__overflow__").Inc() // caller cannot claim the reserved overflow label
+	h.WithLabelValues("__overflow__").Observe(0.1)
+	g.WithLabelValues("__overflow__").Set(1)
+	for i := 0; i < 3000; i++ {
+		v := "attacker-" + strconv.Itoa(i)
+		c.WithLabelValues(v).Inc()
+		h.WithLabelValues(v).Observe(0.1)
+		g.WithLabelValues(v).Set(1)
+	}
+	for _, v := range []string{strings.Repeat("a", 128<<10), "bad\xff", "bad\rvalue"} {
+		c.WithLabelValues(v).Inc()
+		h.WithLabelValues(v).Observe(0.1)
+		g.WithLabelValues(v).Set(1)
+	}
+	var out strings.Builder
+	if err := r.WriteProm(&out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out.String(), "trstctl_untrusted_total{") > 2052 ||
+		strings.Count(out.String(), "trstctl_untrusted_seconds_count{") > 2052 ||
+		strings.Count(out.String(), "trstctl_untrusted_value{") > 2052 {
+		t.Fatal("metric vector accepted unbounded series")
+	}
+	if strings.Contains(out.String(), strings.Repeat("a", 100)) || strings.Contains(out.String(), "\xff") || strings.Contains(out.String(), "\r") {
+		t.Fatal("metric vector retained an unsafe label")
+	}
+	if strings.Count(out.String(), `trstctl_untrusted_total{input="__overflow__"}`) != 1 {
+		t.Fatal("overflow label is missing or collides with caller-controlled label")
 	}
 }
 

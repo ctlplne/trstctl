@@ -1795,13 +1795,52 @@ type secretReferenceDepthError struct{}
 
 func (secretReferenceDepthError) Error() string { return "secret reference depth exceeded" }
 
+type secretReferenceBudgetError struct{}
+
+func (secretReferenceBudgetError) Error() string { return "secret reference expansion limit exceeded" }
+
 const (
-	secretReferenceStart = "${secret."
-	secretReferenceEnd   = byte('}')
-	secretReferenceLimit = 32
+	secretReferenceStart    = "${secret."
+	secretReferenceEnd      = byte('}')
+	secretReferenceLimit    = 32
+	secretReferenceMaxHops  = 256
+	secretReferenceMaxBytes = 1 << 20
+	secretReferenceTimeout  = 10 * time.Second
 )
 
 func (a *API) resolveSecretValue(ctx context.Context, tenantID, name string, stack []string) ([]byte, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, secretReferenceTimeout)
+	defer cancel()
+	state := &secretReferenceState{memo: make(map[string]secretReferenceMemo)}
+	defer state.wipe()
+	return a.resolveSecretValueWithState(ctx, tenantID, name, stack, state)
+}
+
+type secretReferenceMemo struct {
+	value   *secret.Buffer
+	version int
+}
+
+type secretReferenceState struct {
+	hops      int
+	memoBytes int
+	memo      map[string]secretReferenceMemo
+}
+
+func (s *secretReferenceState) wipe() {
+	for _, entry := range s.memo {
+		entry.value.Destroy()
+	}
+}
+
+func (a *API) resolveSecretValueWithState(ctx context.Context, tenantID, name string, stack []string, state *secretReferenceState) ([]byte, int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+	state.hops++
+	if state.hops > secretReferenceMaxHops {
+		return nil, 0, secretReferenceBudgetError{}
+	}
 	if len(stack) >= secretReferenceLimit {
 		return nil, 0, secretReferenceDepthError{}
 	}
@@ -1816,6 +1855,9 @@ func (a *API) resolveSecretValue(ctx context.Context, tenantID, name string, sta
 	if err := a.requireSecretRead(ctx, tenantID, name); err != nil {
 		return nil, 0, err
 	}
+	if cached, ok := state.memo[name]; ok {
+		return append([]byte(nil), cached.value.Bytes()...), cached.version, nil
+	}
 	rec, err := a.secrets.be.Store.GetSecret(ctx, tenantID, name)
 	if err != nil {
 		return nil, 0, err
@@ -1826,27 +1868,59 @@ func (a *API) resolveSecretValue(ctx context.Context, tenantID, name string, sta
 	}
 	defer secret.Wipe(plain)
 	collectDecoyRead(ctx, name)
-	resolved, err := a.expandSecretReferences(ctx, tenantID, plain, append(stack, name))
+	resolved, err := a.expandSecretReferences(ctx, tenantID, plain, append(stack, name), state)
 	if err != nil {
 		return nil, 0, err
 	}
+	if len(resolved) > secretReferenceMaxBytes-state.memoBytes {
+		secret.Wipe(resolved)
+		return nil, 0, secretReferenceBudgetError{}
+	}
+	protected, err := secret.NewFrom(resolved)
+	if err != nil {
+		secret.Wipe(resolved)
+		return nil, 0, err
+	}
+	state.memoBytes += len(resolved)
+	state.memo[name] = secretReferenceMemo{value: protected, version: rec.Version}
 	return resolved, rec.Version, nil
 }
 
-func (a *API) expandSecretReferences(ctx context.Context, tenantID string, value []byte, stack []string) ([]byte, error) {
+func (a *API) expandSecretReferences(ctx context.Context, tenantID string, value []byte, stack []string, state *secretReferenceState) ([]byte, error) {
+	if len(value) > secretReferenceMaxBytes {
+		return nil, secretReferenceBudgetError{}
+	}
 	out := make([]byte, 0, len(value))
+	appendBounded := func(chunk []byte) error {
+		if len(chunk) > secretReferenceMaxBytes-len(out) {
+			secret.Wipe(out)
+			return secretReferenceBudgetError{}
+		}
+		out = append(out, chunk...)
+		return nil
+	}
 	rest := value
 	for {
+		if err := ctx.Err(); err != nil {
+			secret.Wipe(out)
+			return nil, err
+		}
 		idx := bytes.Index(rest, []byte(secretReferenceStart))
 		if idx < 0 {
-			out = append(out, rest...)
+			if err := appendBounded(rest); err != nil {
+				return nil, err
+			}
 			return out, nil
 		}
-		out = append(out, rest[:idx]...)
+		if err := appendBounded(rest[:idx]); err != nil {
+			return nil, err
+		}
 		refBody := rest[idx+len(secretReferenceStart):]
 		end := bytes.IndexByte(refBody, secretReferenceEnd)
 		if end < 0 {
-			out = append(out, rest[idx:]...)
+			if err := appendBounded(rest[idx:]); err != nil {
+				return nil, err
+			}
 			return out, nil
 		}
 		refName := string(refBody[:end])
@@ -1854,12 +1928,15 @@ func (a *API) expandSecretReferences(ctx context.Context, tenantID string, value
 			secret.Wipe(out)
 			return nil, errStatus(http.StatusBadRequest, "secret reference path is required")
 		}
-		refValue, _, err := a.resolveSecretValue(ctx, tenantID, refName, stack)
+		refValue, _, err := a.resolveSecretValueWithState(ctx, tenantID, refName, stack, state)
 		if err != nil {
 			secret.Wipe(out)
 			return nil, err
 		}
-		out = append(out, refValue...)
+		if err := appendBounded(refValue); err != nil {
+			secret.Wipe(refValue)
+			return nil, err
+		}
 		secret.Wipe(refValue)
 		rest = refBody[end+1:]
 	}
@@ -1868,11 +1945,16 @@ func (a *API) expandSecretReferences(ctx context.Context, tenantID string, value
 func (a *API) writeSecretReferenceError(w http.ResponseWriter, err error) {
 	var cycle secretReferenceCycleError
 	var depth secretReferenceDepthError
+	var budget secretReferenceBudgetError
 	switch {
 	case errors.As(err, &cycle):
 		a.writeProblem(w, problem.New(http.StatusConflict, "secret reference cycle detected").WithExtension("cycle", cycle.Cycle))
 	case errors.As(err, &depth):
 		a.writeProblem(w, problem.New(http.StatusConflict, "secret reference depth exceeded"))
+	case errors.As(err, &budget):
+		a.writeProblem(w, problem.New(http.StatusRequestEntityTooLarge, "secret reference expansion limit exceeded"))
+	case errors.Is(err, context.DeadlineExceeded):
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "secret reference resolution timed out"))
 	case errors.Is(err, store.ErrSecretNotFound):
 		a.writeProblem(w, problem.New(http.StatusNotFound, "no such secret reference"))
 	default:

@@ -3,7 +3,10 @@
 package observ
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +56,33 @@ func TestRouteLabelStillDistinguishesRealRoutes(t *testing.T) {
 	b := m.boundedRoute("/api/v1/certificates/00000000-0000-0000-0000-000000000001")
 	if a != b {
 		t.Fatalf("per-id paths produced different labels: %q vs %q", a, b)
+	}
+}
+
+func TestAnonymousMethodAndPathCannotGrowHTTPMetrics(t *testing.T) {
+	r := NewRegistry()
+	m := NewMiddleware(Options{Registry: r})
+	h := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	for i := 0; i < 3000; i++ {
+		req := httptest.NewRequest("HOSTILE"+strconv.Itoa(i), "/"+strings.Repeat("p", 4096)+strconv.Itoa(i), nil)
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	if got := len(m.knownRoutes); got > 1 {
+		t.Fatalf("oversized paths retained %d route labels", got)
+	}
+	if got := len(m.reqs.series); got > 1 {
+		t.Fatalf("unbounded methods retained %d counter series", got)
+	}
+	if got := len(m.dur.series); got > 1 {
+		t.Fatalf("unbounded methods retained %d histogram series", got)
+	}
+	var out strings.Builder
+	if err := r.WriteProm(&out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "HOSTILE") || strings.Contains(out.String(), strings.Repeat("p", 100)) {
+		t.Fatal("untrusted method or oversized path reached metrics output")
 	}
 }

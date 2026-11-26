@@ -58,6 +58,7 @@ func (s *Server) serveAgentHTTPRenewalWithLifetime(ctx context.Context, ln net.L
 	httpSrv := &http.Server{
 		Handler:           s.agentHTTPRenewalHandler,
 		ReadHeaderTimeout: 10 * time.Second,
+		MaxHeaderBytes:    64 << 10,
 	}
 	cert, err := s.agentChannelServerCertificate(s.agentChannelHosts(), lifetime)
 	if err != nil {

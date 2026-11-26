@@ -18,7 +18,54 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode"
+	"unicode/utf8"
 )
+
+const (
+	maxMetricLabelBytes      = 128
+	maxMetricSeriesPerVector = 2048
+	overflowSeriesKey        = "\x00overflow"
+	overflowLabelValue       = "__overflow__"
+)
+
+// All vectors share this last line of defense. Callers should use a closed label
+// set where possible; arbitrary user input must never make a lifetime metric
+// series or a very large label. The reserved overflow key cannot collide with a
+// normal label tuple because control bytes are rejected below.
+func boundedMetricValues(vals []string) []string {
+	for i, v := range vals {
+		invalid := len(v) > maxMetricLabelBytes || !utf8.ValidString(v) || v == overflowLabelValue
+		if !invalid {
+			for _, ch := range v {
+				if unicode.IsControl(ch) {
+					invalid = true
+					break
+				}
+			}
+		}
+		if invalid {
+			bounded := append([]string(nil), vals...)
+			bounded[i] = "other"
+			for j := i + 1; j < len(vals); j++ {
+				v = vals[j]
+				if len(v) > maxMetricLabelBytes || !utf8.ValidString(v) || v == overflowLabelValue || strings.IndexFunc(v, unicode.IsControl) >= 0 {
+					bounded[j] = "other"
+				}
+			}
+			return bounded
+		}
+	}
+	return vals
+}
+
+func overflowMetricValues(n int) []string {
+	vals := make([]string, n)
+	for i := range vals {
+		vals[i] = overflowLabelValue
+	}
+	return vals
+}
 
 // Registry holds the process's metrics and renders them in the Prometheus text
 // exposition format. It is safe for concurrent use.
@@ -97,11 +144,19 @@ func (r *Registry) CounterVec(name, help string, labels []string) *CounterVec {
 // WithLabelValues returns the counter for the given label values (creating it on
 // first use). The values must align with the vector's label names.
 func (cv *CounterVec) WithLabelValues(vals ...string) *Counter {
+	vals = boundedMetricValues(vals)
 	key := strings.Join(vals, "\x1f")
 	cv.mu.Lock()
 	defer cv.mu.Unlock()
 	if c, ok := cv.series[key]; ok {
 		return c
+	}
+	if len(cv.series) >= maxMetricSeriesPerVector {
+		key = overflowSeriesKey
+		if c, ok := cv.series[key]; ok {
+			return c
+		}
+		vals = overflowMetricValues(len(vals))
 	}
 	c := &Counter{labelValues: append([]string(nil), vals...)}
 	cv.series[key] = c
@@ -161,11 +216,19 @@ func (r *Registry) GaugeVec(name, help string, labels []string) *GaugeVec {
 
 // WithLabelValues returns the gauge for the given label values.
 func (gv *GaugeVec) WithLabelValues(vals ...string) *Gauge {
+	vals = boundedMetricValues(vals)
 	key := strings.Join(vals, "\x1f")
 	gv.mu.Lock()
 	defer gv.mu.Unlock()
 	if g, ok := gv.series[key]; ok {
 		return g
+	}
+	if len(gv.series) >= maxMetricSeriesPerVector {
+		key = overflowSeriesKey
+		if g, ok := gv.series[key]; ok {
+			return g
+		}
+		vals = overflowMetricValues(len(vals))
 	}
 	g := &Gauge{labelValues: append([]string(nil), vals...)}
 	gv.series[key] = g
@@ -209,11 +272,19 @@ func (r *Registry) HistogramVec(name, help string, buckets []float64, labels []s
 
 // WithLabelValues returns the histogram for the given label values.
 func (hv *HistogramVec) WithLabelValues(vals ...string) *Histogram {
+	vals = boundedMetricValues(vals)
 	key := strings.Join(vals, "\x1f")
 	hv.mu.Lock()
 	defer hv.mu.Unlock()
 	if h, ok := hv.series[key]; ok {
 		return h
+	}
+	if len(hv.series) >= maxMetricSeriesPerVector {
+		key = overflowSeriesKey
+		if h, ok := hv.series[key]; ok {
+			return h
+		}
+		vals = overflowMetricValues(len(vals))
 	}
 	h := &Histogram{labelValues: append([]string(nil), vals...), counts: make([]uint64, len(hv.buckets)+1), buckets: hv.buckets}
 	hv.series[key] = h

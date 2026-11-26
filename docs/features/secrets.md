@@ -131,7 +131,10 @@ only. The console lists them under **Deleted secrets** on the secrets page.
 Values may contain `${secret.path}` placeholders: a normal read returns the literal
 value, while `GET /api/v1/secrets/store/{name}?resolve=true` expands references within
 tenant/permission scope instead. Cycles like `a -> b -> a` return a structured `409`
-with the cycle path; missing references return a normal `404`.
+with the cycle path; missing references return a normal `404`. Each resolve request
+has a 10-second deadline, a 256-reference limit, and a 1 MiB budget for resolved
+values; exceeding the count or size returns `413`. These limits apply to preview
+as well, which reports a blocker without returning the value.
 
 `POST /api/v1/secrets/store/import` accepts `{"prefix":"optional/path","values":
 {"name":"value"}}` for 1–100 new secrets. Its one event holds tenant/name-bound
