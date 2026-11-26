@@ -1416,7 +1416,7 @@ not this file.
 | `internal/objectstore/s3.go:407` | page is at most listPageSize (CWE-190) |
 | `internal/objectstore/s3.go:489` | limit is at most listPageSize (CWE-190) |
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
-| `internal/orchestrator/discovery.go:386` | retained sequence was checked against MaxInt64 before conversion. |
+| `internal/orchestrator/discovery.go:397` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:75` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:448` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
 | `internal/orchestrator/operation_approvals.go:458` | a negative stored version is classified as drift before conversion (CWE-190). |
@@ -1460,7 +1460,7 @@ not this file.
 | `internal/reconcile/stepcasource_test.go:50` | a TCP port from the kernel (CWE-190) |
 | `internal/scancollect/cilogs.go:187` | bounded by the archive's own size check below (CWE-190) |
 | `internal/secretmigrate/assess.go:354` | bounded by MaxValueBytes (CWE-190) |
-| `internal/server/agentchannel_served_test.go:837` | fixture sequences are single-digit seconds (CWE-190). |
+| `internal/server/agentchannel_served_test.go:878` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/audit_archive_download_served_test.go:69` | a test fixture count (CWE-190) |
 | `internal/server/backup.go:293` | record counts bounded by the event log (CWE-190) |
@@ -2429,7 +2429,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/acme_adcs_upstream_served_test.go:176` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/acme_adcs_upstream_served_test.go:207` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/agentchannel_served_test.go:1553` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/agentchannel_served_test.go:1594` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/decoy_failed_login_served_test.go:35` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:65` | the kind node reads the lab's audit configuration |
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |

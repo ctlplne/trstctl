@@ -51,6 +51,17 @@ var ErrDiscoveryManagedIdentityIDInvalid = errors.New("orchestrator: managed ide
 // truthful conflict instead of recording a queued run that cannot start.
 var ErrDiscoveryRelayUnavailable = errors.New("orchestrator: no eligible network relay is enrolled")
 
+// ErrDiscoveryFindingInvalid is an admission failure. A finding that cannot be
+// projected must be rejected before its immutable event enters the shared log.
+var ErrDiscoveryFindingInvalid = errors.New("orchestrator: invalid discovery finding")
+
+func validateDiscoveryFinding(in store.DiscoveryFinding) error {
+	if err := discovery.ValidateFindingShape(in.Kind, in.Ref, in.Provenance, in.Fingerprint, in.Metadata); err != nil {
+		return fmt.Errorf("%w: %w", ErrDiscoveryFindingInvalid, err)
+	}
+	return nil
+}
+
 // ErrDiscoverySourceIdentityConflict means a tenant-local source name or ID is
 // already bound to a different producer identity. Changing the kind of an
 // existing source would turn old runs into evidence for a different collector.
@@ -874,6 +885,9 @@ func (o *Orchestrator) RecordAttackPathFindingWithEventID(ctx context.Context, t
 }
 
 func (o *Orchestrator) recordDiscoveryFinding(ctx context.Context, tenantID string, in store.DiscoveryFinding, eventID string, attackPath bool) (store.DiscoveryFinding, error) {
+	if err := validateDiscoveryFinding(in); err != nil {
+		return store.DiscoveryFinding{}, err
+	}
 	id := in.ID
 	if id == "" {
 		if in.SourceID != "" {
@@ -1066,6 +1080,31 @@ func (o *Orchestrator) RecordAgentInventory(ctx context.Context, tenantID, agent
 	sourceKind = strings.TrimSpace(sourceKind)
 	if sourceKind == "" {
 		sourceKind = "agent"
+	}
+	if len(sourceKind) > discovery.MaxFindingKindBytes {
+		return store.DiscoveryRun{}, 0, 0, ErrDiscoveryFindingInvalid
+	}
+	// Preflight the complete batch before source/run events. A late invalid or
+	// repeated natural key would otherwise leave a partial run and, historically,
+	// a poison event that prevents every tenant's projection tail from advancing.
+	seen := make(map[string]bool, len(findings))
+	for _, finding := range findings {
+		finding.Kind = strings.TrimSpace(finding.Kind)
+		finding.Ref = strings.TrimSpace(finding.Ref)
+		if finding.Kind == "" || finding.Ref == "" {
+			continue // The run records these as rejected findings below.
+		}
+		if finding.Provenance == "" {
+			finding.Provenance = sourceKind + ":" + finding.Ref
+		}
+		if err := validateDiscoveryFinding(finding); err != nil {
+			return store.DiscoveryRun{}, 0, 0, err
+		}
+		key := finding.Kind + "\x00" + finding.Ref + "\x00" + finding.Fingerprint
+		if seen[key] {
+			return store.DiscoveryRun{}, 0, 0, ErrDiscoveryFindingInvalid
+		}
+		seen[key] = true
 	}
 	sourceID := uuid.NewSHA1(agentInventorySourceNamespace, []byte(tenantID+"\x00"+agentName+"\x00"+sourceKind)).String()
 	sourceName := sourcecatalog.AgentSourcePrefix + agentName + ":" + sourceKind

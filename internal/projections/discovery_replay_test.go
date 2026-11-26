@@ -150,7 +150,7 @@ func TestDiscoveryFindingReplayCanonicalizesLegacyDuplicateAndPreservesTriageAUD
 	}
 }
 
-func TestDiscoveryFindingReplayRejectsConflictingSemanticPayloadWithoutMutationAUD96(t *testing.T) {
+func TestDiscoveryFindingReplayKeepsFirstConflictingSemanticPayloadAUD96(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)
 	ctx := context.Background()
@@ -170,22 +170,8 @@ func TestDiscoveryFindingReplayRejectsConflictingSemanticPayloadWithoutMutationA
 
 	mustAppendDiscoveryFindingAUD96(t, log, aud96ConflictingFind, canonicalAt.Add(time.Second), 99, `{"action":"silently-different"}`)
 	err = p.ProjectCatchUp(ctx, log)
-	if err == nil {
-		t.Fatal("conflicting immutable discovery payload replay succeeded; want fail-closed conflict")
-	}
-	for _, want := range []string{
-		"discovery finding identity conflict",
-		tenantA,
-		aud96EarlierFinding,
-		aud96ConflictingFind,
-		aud96RunID,
-		"shadow-ingress.demo.trstctl.local:443",
-		"risk_score",
-		"metadata",
-	} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("conflict error %q does not contain actionable field %q", err, want)
-		}
+	if err != nil {
+		t.Fatalf("historical conflicting payload blocked global replay: %v", err)
 	}
 	if after := discoveryRowsAUD96(t, s); !reflect.DeepEqual(after, before) {
 		t.Fatalf("conflicting replay mutated the committed row:\n before=%v\n after=%v", before, after)
@@ -194,8 +180,8 @@ func TestDiscoveryFindingReplayRejectsConflictingSemanticPayloadWithoutMutationA
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterCheckpoint != checkpoint {
-		t.Fatalf("checkpoint advanced across conflict: before=%d after=%d", checkpoint, afterCheckpoint)
+	if afterCheckpoint <= checkpoint {
+		t.Fatalf("checkpoint did not advance across ignored duplicate: before=%d after=%d", checkpoint, afterCheckpoint)
 	}
 }
 

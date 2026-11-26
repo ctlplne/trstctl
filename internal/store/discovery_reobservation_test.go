@@ -4,7 +4,6 @@ package store_test
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -114,11 +113,19 @@ func TestDiscoveryFindingReobservationRefreshesOneRow(t *testing.T) {
 		t.Fatalf("replay changed the row: seen %d last %s", again.SeenCount, again.LastSeenAt)
 	}
 
-	// A same-run payload that disagrees on the immutable observation is still a conflict.
+	// Historical same-run divergence keeps the first observation so replay can
+	// advance past the immutable duplicate without replacing its evidence.
 	err = s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		return s.ApplyDiscoveryFindingRecordedTx(ctx, tx, observation(run2, event3, 30, t2, `{"not_after":"2027-01-01T00:00:00Z"}`))
 	})
-	if !errors.Is(err, store.ErrDiscoveryFindingConflict) {
-		t.Fatalf("same-run divergent payload error = %v, want ErrDiscoveryFindingConflict", err)
+	if err != nil {
+		t.Fatalf("same-run historical duplicate blocked projection: %v", err)
+	}
+	kept, err := s.GetDiscoveryFinding(ctx, tenantA, findingID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kept.SeenCount != again.SeenCount || string(kept.Metadata) != string(again.Metadata) {
+		t.Fatalf("divergent duplicate changed first observation: before=%+v after=%+v", again, kept)
 	}
 }

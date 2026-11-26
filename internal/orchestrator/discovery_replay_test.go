@@ -5,6 +5,8 @@ package orchestrator_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +46,19 @@ func TestRecordDiscoveryFindingRetryEmitsOneDeterministicPayloadIdentityAUD96(t 
 	}
 
 	orch := orchestrator.NewOrchestrator(log, s, nil)
+	if _, err := orch.RecordDiscoveryFinding(ctx, tenantA, store.DiscoveryFinding{
+		RunID: runID, SourceID: sourceID, Kind: "api_key", Ref: strings.Repeat("r", 1025), Metadata: json.RawMessage(`{}`),
+	}); !errors.Is(err, orchestrator.ErrDiscoveryFindingInvalid) {
+		t.Fatalf("oversized finding admission = %v, want invalid finding", err)
+	}
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type == projections.EventDiscoveryFindingRecorded {
+			t.Fatal("oversized finding entered the immutable log")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	input := store.DiscoveryFinding{
 		RunID: runID, SourceID: sourceID, Kind: "x509_certificate",
 		Ref: "shadow-ingress.demo.trstctl.local:443", Provenance: "manual:shadow-inventory",

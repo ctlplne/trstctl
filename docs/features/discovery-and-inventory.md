@@ -288,6 +288,16 @@ its mutually-authenticated ([mTLS](../glossary.md)) channel. Each source is
 independent: if one token errors, the agent records the error and keeps going, so one
 broken source can't hide the rest.
 
+An agent inventory report contains at most 1,000 findings. Findings with an
+empty kind or reference are counted as rejected; nonempty kind is limited to
+128 bytes and reference to
+1,024 bytes, fingerprint to 256 bytes, provenance to 1,024 bytes, and metadata
+to 16 KiB of a valid JSON object. Two findings in one report cannot share the same kind,
+reference, and fingerprint, even if their other details differ. The channel
+returns `InvalidArgument` before recording any discovery event for an oversized
+or repeated finding. Correct the report and resend it; that refused batch does
+not create a partial run.
+
 The agent enrolls into the control plane with a one-time bootstrap token
 (`POST /enroll/bootstrap`); `GET /api/v1/agents` then lists it, and
 `POST /api/v1/agents/{id}/offboard` emits an `agent.offboarded` event, keeps the row

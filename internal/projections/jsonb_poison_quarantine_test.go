@@ -4,6 +4,7 @@ package projections
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -39,6 +40,16 @@ func TestHistoricalJSONBPoisonQuarantinesOnlyItsTenant(t *testing.T) {
 	}
 	if quarantined, err := st.ProjectionTenantQuarantined(ctx, poisoned); err != nil || !quarantined {
 		t.Fatalf("poisoned tenant quarantine=%v err=%v", quarantined, err)
+	}
+	const malformedFindingTenant = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+	findingData, err := json.Marshal(DiscoveryFindingRecorded{
+		Kind: "api_key", Ref: "service", RiskScore: 95, Metadata: json.RawMessage(`[]`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if skip, err := q.skip(ctx, events.Event{Sequence: 12, Type: EventDiscoveryFindingRecorded, TenantID: malformedFindingTenant, Data: findingData}); err != nil || !skip {
+		t.Fatalf("historical urgent finding with non-object metadata skipped=%v err=%v", skip, err)
 	}
 	event := events.Event{Sequence: 11, Type: EventIdentityCreated, TenantID: healthy, Data: []byte(`{"attributes":{}}`)}
 	if skip, err := q.skip(ctx, event); err != nil || skip {

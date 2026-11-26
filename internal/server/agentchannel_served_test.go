@@ -50,6 +50,47 @@ func registerInventoryAgent(t *testing.T, client *transport.AgentClient) {
 	}
 }
 
+func TestAgentInventoryRejectsPoisonBatchBeforeAnyDiscoveryEvent(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); h.srv.serveAgentChannel(ctx, ln) }()
+	t.Cleanup(func() { cancel(); <-done })
+	a := enrollAgent(t, h, "inventory-bounds-agent", "agent.trstctl.local")
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+	registerInventoryAgent(t, client)
+	before := servedEventCount(t, h, projections.EventDiscoverySourceUpserted)
+	for _, findings := range [][]transport.InventoryFinding{
+		{{Kind: "api_key", Ref: "service-a", Fingerprint: "fp", Provenance: "first"},
+			{Kind: "api_key", Ref: "service-a", Fingerprint: "fp", Provenance: "changed"}},
+		{{Kind: "api_key", Ref: strings.Repeat("r", 1025), Fingerprint: "fp"}},
+	} {
+		_, err := client.ReportInventory(t.Context(), &transport.InventoryRequest{SourceKind: "filesystem", Findings: findings})
+		if status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("poison inventory status = %v, want InvalidArgument", err)
+		}
+		if got := servedEventCount(t, h, projections.EventDiscoverySourceUpserted); got != before {
+			t.Fatalf("invalid batch appended a discovery source event: before=%d after=%d", before, got)
+		}
+	}
+	if _, err := client.ReportInventory(t.Context(), &transport.InventoryRequest{SourceKind: "filesystem", Findings: []transport.InventoryFinding{{Kind: "api_key", Ref: "service-a", Fingerprint: "fp"}}}); err != nil {
+		t.Fatalf("valid inventory after rejection: %v", err)
+	}
+}
+
 // withAgentChannel enables the served agent steady-state mTLS gRPC channel
 // (WIRE-004 / OPS-005) on a served harness. The channel binds an ephemeral port via
 // serveAgentChannel in the test, so AgentChannelAddr is not bound here.

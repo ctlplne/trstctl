@@ -1390,6 +1390,9 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 	run, recorded, rejected, err := a.orch.RecordAgentInventory(ctx, info.TenantID, info.CommonName,
 		agentRowID(info.TenantID, info.CommonName), sourceKind, findings)
 	if err != nil {
+		if errors.Is(err, orchestrator.ErrDiscoveryFindingInvalid) {
+			return nil, status.Error(codes.InvalidArgument, "inventory contains an oversized, invalid, or repeated finding")
+		}
 		return nil, status.Errorf(codes.Internal, "record agent inventory: %v", err)
 	}
 	// X2-L5R: libraries and keystore keys are CBOM assets too. The report

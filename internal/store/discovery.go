@@ -618,12 +618,12 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		}
 	}
 	if len(differences) > 0 {
-		sort.Strings(differences)
-		return fmt.Errorf(
-			"%w: tenant=%s natural_key=(run_id=%s kind=%q ref=%q fingerprint=%q) existing_id=%s incoming_id=%s differing_fields=%s",
-			ErrDiscoveryFindingConflict, f.TenantID, f.RunID, f.Kind, f.Ref, f.Fingerprint,
-			existingID, f.ID, strings.Join(differences, ","),
-		)
+		// A historical batch may contain two observations with the same
+		// natural key and different mutable detail. Keep the first projected
+		// observation. Rejecting here would strand the immutable second event
+		// in the shared log and block every tenant's ordered projection tail.
+		// New batches reject this duplicate before appending either finding.
+		return nil
 	}
 
 	// Same run, same observation, different payload ID: a byte-for-byte semantic
@@ -673,6 +673,22 @@ func (s *Store) ApplyDiscoveryFindingRecordedWithAlertTx(
 	if alertDestination == "" {
 		return nil
 	}
+	// A legacy same-run duplicate can have a higher claimed risk score than
+	// the first observation. Its projection is deliberately ignored above; do
+	// not enqueue an urgent alert for a score the read model never accepted.
+	var sameRisk, sameMetadata bool
+	if err := tx.QueryRow(ctx,
+		`SELECT risk_score = $3, metadata = $4::jsonb
+		   FROM discovery_findings WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+		f.TenantID, f.ID, f.RiskScore, normalizeJSON(f.Metadata)).Scan(&sameRisk, &sameMetadata); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // An ignored legacy alias is not the canonical finding.
+		}
+		return err
+	}
+	if !sameRisk || !sameMetadata {
+		return nil
+	}
 	// A237L4-L2: a rebuild re-projecting an event this deployment projected
 	// before queues no second effect.
 	if effectsAlreadyQueued(ctx) {
@@ -712,6 +728,22 @@ func (s *Store) ApplyDiscoveryFindingRecordedWithAlertTx(
 		return fmt.Errorf("store: enqueue discovery risk alert: %w", err)
 	}
 	return nil
+}
+
+// DiscoveryFindingMatchesRecordedTx reports whether this event's observation
+// actually won projection. A historical same-run duplicate can be ignored by
+// ApplyDiscoveryFindingRecordedTx; follow-on graph projections must then ignore
+// its mutable metadata too.
+func (s *Store) DiscoveryFindingMatchesRecordedTx(ctx context.Context, tx pgx.Tx, f DiscoveryFinding) (bool, error) {
+	var matches bool
+	err := tx.QueryRow(ctx,
+		`SELECT provenance = $3 AND risk_score = $4 AND metadata = $5::jsonb
+		   FROM discovery_findings WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+		f.TenantID, f.ID, f.Provenance, f.RiskScore, normalizeJSON(f.Metadata)).Scan(&matches)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return matches, err
 }
 
 // ApplyDiscoveryFindingTriageChangedTx projects a discovery.finding.triage_changed event.

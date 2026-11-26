@@ -3,6 +3,7 @@
 package projections
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/inputtext"
+	"trstctl.com/trstctl/internal/risk"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/succession"
 	"trstctl.com/trstctl/internal/succession/delegation"
@@ -79,6 +81,26 @@ func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.
 	}
 	textErr := events.ValidateEventText(e)
 	if textErr == nil {
+		if e.Type == EventDiscoveryFindingRecorded && schemaVersionOf(e) <= DiscoveryAttackPathFindingSchemaVersion {
+			var finding DiscoveryAttackPathFindingRecorded
+			if err := json.Unmarshal(e.Data, &finding); err == nil {
+				metadata := bytes.TrimSpace(finding.Metadata)
+				// This is a replay-only guard for an old natural key that cannot
+				// fit PostgreSQL's btree entry. Admission uses tighter per-field
+				// limits. Do not quarantine already accepted historical metadata
+				// merely because it exceeds today's admission policy.
+				if len(finding.Kind)+len(finding.Ref)+len(finding.Fingerprint) > 2300 ||
+					(len(metadata) > 0 && metadata[0] != '{' && string(metadata) != "null" &&
+						(risk.DiscoveryUrgency(finding.RiskScore) != "" ||
+							(finding.Kind == "ssh_key" && finding.Fingerprint != ""))) {
+					if err := q.record(ctx, tx, e.TenantID, e.Sequence, "discovery_finding_unprojectable"); err != nil {
+						return false, err
+					}
+					q.known[e.TenantID] = true
+					return true, nil
+				}
+			}
+		}
 		if tx == nil && e.Type != EventTenantOffboarded && uuid.Validate(e.TenantID) == nil {
 			// A protected offboard can commit inline ahead of this replay. Its
 			// exact pending destruction row proves all earlier tenant rows and

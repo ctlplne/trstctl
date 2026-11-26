@@ -8136,6 +8136,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.Kind != "ssh_key" || pl.Fingerprint == "" {
 			return nil
 		}
+		accepted, err := p.store.DiscoveryFindingMatchesRecordedTx(ctx, tx, finding)
+		if err != nil || !accepted {
+			return err
+		}
 		var meta struct {
 			Source         string          `json:"source"`
 			Location       string          `json:"location"`
