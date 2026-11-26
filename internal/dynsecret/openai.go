@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -43,10 +44,11 @@ type OpenAIConfig struct {
 
 // OpenAIBackend issues and deletes project service accounts.
 type OpenAIBackend struct {
-	api      hostedAPI
-	adminKey *secret.Buffer
-	projects map[string]string
-	prefix   string
+	api           hostedAPI
+	adminKey      *secret.Buffer
+	projects      map[string]string
+	prefix        string
+	adminIdentity string
 }
 
 // NewOpenAIBackend validates cfg.
@@ -58,7 +60,8 @@ func NewOpenAIBackend(cfg OpenAIConfig) (*OpenAIBackend, error) {
 	if len(cfg.AdminKey) == 0 {
 		return nil, errors.New("dynsecret openai: the organization admin key is required")
 	}
-	b := &OpenAIBackend{api: api, projects: map[string]string{}, prefix: cfg.UsernamePrefix}
+	b := &OpenAIBackend{api: api, projects: map[string]string{}, prefix: cfg.UsernamePrefix,
+		adminIdentity: crypto.SHA256Hex(cfg.AdminKey)}
 	for role, project := range cfg.RoleBindings {
 		if !openAIProject.MatchString(strings.TrimSpace(project)) {
 			return nil, fmt.Errorf("dynsecret openai: role %q is not bound to a project ID", role)
@@ -128,13 +131,19 @@ func (b *OpenAIBackend) CreateCredential(ctx context.Context, req GenerateReques
 	if err != nil {
 		return "", nil, err
 	}
-	return project + "/" + created.ID, credential, nil
+	return boundOpaqueRef("openai", b.prefix, project+"/"+created.ID, b.api.endpoint, b.adminIdentity), credential, nil
 }
 
 // Revoke implements Backend: the service account is deleted after its name is
 // checked, so a reference to one someone else created is refused; one already
 // gone counts as revoked.
 func (b *OpenAIBackend) Revoke(ctx context.Context, ref string) error {
+	var issuedPrefix string
+	var err error
+	ref, issuedPrefix, err = opaqueFromBoundRef(ref, "openai", b.api.endpoint, b.adminIdentity)
+	if err != nil {
+		return err
+	}
 	project, id, ok := strings.Cut(ref, "/")
 	if !ok || !openAIServiceAccount.MatchString(id) || !b.boundProject(project) {
 		return fmt.Errorf("dynsecret openai: refusing %q, which names no service account of a bound project", ref)
@@ -153,7 +162,7 @@ func (b *OpenAIBackend) Revoke(ctx context.Context, ref string) error {
 	if status != http.StatusOK || json.Unmarshal(response, &current) != nil {
 		return fmt.Errorf("dynsecret openai: read the service account: HTTP %d", status)
 	}
-	if !issuedPrincipalNameWith(b.prefix, current.Name, '-') {
+	if !issuedPrincipalNameWith(issuedPrefix, current.Name, '-') {
 		return fmt.Errorf("dynsecret openai: refusing to delete service account %s, which this provider did not create", id)
 	}
 	return b.delete(ctx, project, id)

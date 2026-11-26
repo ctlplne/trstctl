@@ -160,10 +160,10 @@ func TestDatadogKeysRotateInTwoPhases(t *testing.T) {
 	if err := backend.Revoke(ctx, oldRef); err != nil {
 		t.Fatalf("a key already gone counts as revoked: %v", err)
 	}
-	if err := backend.Revoke(ctx, "api_key/key-foreign"); err == nil || !strings.Contains(err.Error(), "did not create") {
+	if err := backend.Revoke(ctx, backend.reference(DatadogKind{}, "key-foreign")); err == nil || !strings.Contains(err.Error(), "did not create") {
 		t.Fatalf("a key this provider did not name was deleted: %v", err)
 	}
-	if err := backend.Revoke(ctx, "00000000-0000-4000-8000-000000000000/key-0001"); err == nil {
+	if err := backend.Revoke(ctx, backend.reference(DatadogKind{ServiceAccount: "00000000-0000-4000-8000-000000000000"}, "key-0001")); err == nil {
 		t.Fatal("a key of an unbound service account was accepted")
 	}
 	_ = newRef
@@ -172,11 +172,11 @@ func TestDatadogKeysRotateInTwoPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(appRef, "3f1e7e1a-1111-4222-8333-444455556666/") || !strings.Contains(string(appKey), `"application_key"`) {
+	if !strings.Contains(appRef, ":3f1e7e1a-1111-4222-8333-444455556666/") || !strings.Contains(string(appKey), `"application_key"`) {
 		t.Fatalf("application key = %q %s", appRef, appKey)
 	}
 	fake.mu.Lock()
-	_, id, _ := strings.Cut(appRef, "/")
+	id := appRef[strings.LastIndex(appRef, "/")+1:]
 	scopes := fake.keys[id].scopes
 	fake.mu.Unlock()
 	if strings.Join(scopes, ",") != "metrics_read,timeseries_query" {

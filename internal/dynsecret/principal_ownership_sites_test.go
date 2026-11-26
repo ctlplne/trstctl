@@ -450,6 +450,11 @@ func hostedKeysOwnershipSite() ownershipSite {
 			}
 		},
 		nameOf: func(ref string) string {
+			_, _, raw, err := opaqueBoundRefShape(ref)
+			if err != nil {
+				return ""
+			}
+			ref = raw
 			cut := strings.LastIndex(ref, "/")
 			return vendor.keys[ref[:cut]][ref[cut+1:]]
 		},

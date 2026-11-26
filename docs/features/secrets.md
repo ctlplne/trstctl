@@ -1274,6 +1274,13 @@ application key has no side-effect-free proof, so its rotation records
 so an uncertain attempt leaves one key. It is built against a stand-in of the Datadog
 API, with no Datadog proof yet.
 
+New Datadog key references bind the issuing site and administrator API/application
+key identities. A site or administrator credential change makes revocation fail
+before a vendor call, leaving the lease in failed/retryable state. Restore the
+original configuration to retry; if that credential is gone, revoke the exact key
+through the original site's administrator and verify deletion there. Historical
+references without this binding require the same manual reconciliation.
+
 `openai` (A240) issues and rotates OpenAI service-account keys. Each role is bound to a
 project; a lease, or a rotation's successor, is a new service account in that project,
 whose API key OpenAI returns once at creation, and revocation (or retirement) deletes
@@ -1281,6 +1288,18 @@ the service account and its key with it, after checking the provider named it. T
 rotation is two-phase, and a key is verified by listing models with it
 (`verify_mode: authenticated`). It is built against a stand-in of the admin API, with
 no OpenAI proof yet.
+
+New OpenAI service-account references bind the issuing API endpoint and organization
+administrator key identity. New OpenRouter, Cloudflare API-token and R2-key
+references bind the endpoint and administrator key identity; new Tailscale auth-key
+references bind the API endpoint, tailnet and API-token identity. The identity is a
+digest, never the credential value. A changed administrator credential is treated
+as a changed target even if the replacement reaches the same account: revocation
+fails closed until the original configuration is restored or the old key is
+reconciled directly at its original target. Changing only `username_prefix` does
+not prevent a new bound reference from revoking its issued key. References from
+earlier releases lack this proof and must be inventoried and revoked at their
+original target before their leases can be closed safely.
 
 `azure-entra` also rotates a stored client secret (A240): the successor is a second
 password of the bound application, added through Microsoft Graph and named for the

@@ -61,12 +61,13 @@ type TailscaleConfig struct {
 
 // TailscaleBackend issues Tailscale auth keys.
 type TailscaleBackend struct {
-	endpoint    string
-	tailnet     string
-	apiToken    *secret.Buffer
-	tags        map[string][]string
-	maxLifetime time.Duration
-	client      *http.Client
+	endpoint      string
+	tailnet       string
+	apiToken      *secret.Buffer
+	tags          map[string][]string
+	maxLifetime   time.Duration
+	client        *http.Client
+	tokenIdentity string
 }
 
 // NewTailscaleBackend validates cfg.
@@ -89,7 +90,7 @@ func NewTailscaleBackend(cfg TailscaleConfig) (*TailscaleBackend, error) {
 		return nil, errors.New("dynsecret tailscale: the API token, an HTTP client and the maximum lifetime are required")
 	}
 	b := &TailscaleBackend{endpoint: strings.TrimRight(endpoint, "/"), tailnet: tailnet, tags: map[string][]string{},
-		maxLifetime: cfg.MaxLifetime, client: cfg.HTTPClient}
+		maxLifetime: cfg.MaxLifetime, client: cfg.HTTPClient, tokenIdentity: crypto.SHA256Hex(cfg.APIToken)}
 	for role, binding := range cfg.RoleBindings {
 		tags, err := ParseTailscaleTags(binding)
 		if err != nil {
@@ -161,12 +162,17 @@ func (b *TailscaleBackend) CreateCredential(ctx context.Context, req GenerateReq
 	if err != nil {
 		return "", nil, err
 	}
-	return tailscaleRefPrefix + created.ID, credential, nil
+	return boundOpaqueRef("tailscale", "", tailscaleRefPrefix+created.ID, b.endpoint, b.tailnet, b.tokenIdentity), credential, nil
 }
 
 // Revoke implements Backend: the key is deleted, so Tailscale refuses it for any
 // further registration. A key already gone counts as deleted.
 func (b *TailscaleBackend) Revoke(ctx context.Context, ref string) error {
+	var err error
+	ref, _, err = opaqueFromBoundRef(ref, "tailscale", b.endpoint, b.tailnet, b.tokenIdentity)
+	if err != nil {
+		return err
+	}
 	id, ok := strings.CutPrefix(ref, tailscaleRefPrefix)
 	if !ok || !tailscaleKeyID.MatchString(id) {
 		return fmt.Errorf("dynsecret tailscale: %q is not an auth key this provider issued", ref)

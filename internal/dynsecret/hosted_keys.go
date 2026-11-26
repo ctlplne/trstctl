@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/hostedkey"
 )
@@ -86,14 +87,15 @@ type HostedKeyConfig struct {
 
 // HostedKeyBackend issues, rotates and deletes one vendor's keys.
 type HostedKeyBackend struct {
-	provider string
-	vendor   hostedKeyVendor
-	api      hostedAPI
-	admin    *secret.Buffer
-	bindings map[string]string
-	prefix   string
-	nameMax  int
-	nameSep  string
+	provider      string
+	vendor        hostedKeyVendor
+	api           hostedAPI
+	admin         *secret.Buffer
+	bindings      map[string]string
+	prefix        string
+	nameMax       int
+	nameSep       string
+	adminIdentity string
 }
 
 // NewHostedKeyBackend validates cfg for provider, one of
@@ -113,7 +115,8 @@ func NewHostedKeyBackend(provider string, cfg HostedKeyConfig) (*HostedKeyBacken
 	if prefix := sanitizeFragment(cfg.UsernamePrefix, defaultDynsecretPrefix); spec.nameSep == "_" && prefix[0] >= '0' && prefix[0] <= '9' {
 		return nil, fmt.Errorf("dynsecret %s: username_prefix must start with a letter, as the vendor's key names do", provider)
 	}
-	b := &HostedKeyBackend{provider: provider, api: api, bindings: map[string]string{}, prefix: cfg.UsernamePrefix, nameMax: spec.nameMax, nameSep: spec.nameSep}
+	b := &HostedKeyBackend{provider: provider, api: api, bindings: map[string]string{}, prefix: cfg.UsernamePrefix, nameMax: spec.nameMax, nameSep: spec.nameSep,
+		adminIdentity: crypto.SHA256Hex(cfg.AdminKey)}
 	for role, binding := range cfg.RoleBindings {
 		canonical, err := hostedkey.ParseBinding(provider, binding)
 		if err != nil {
@@ -179,13 +182,29 @@ func (b *HostedKeyBackend) CreateCredential(ctx context.Context, req GenerateReq
 		secret.Wipe(credential)
 		return "", nil, fmt.Errorf("dynsecret %s: the vendor returned an unusable key ID", b.provider)
 	}
-	return binding + "/" + id, credential, nil
+	ref := binding + "/" + id
+	if b.targetBound() {
+		ref = boundOpaqueRef(b.provider, b.prefix, ref, b.api.endpoint, b.adminIdentity)
+	}
+	return ref, credential, nil
+}
+
+func (b *HostedKeyBackend) targetBound() bool {
+	return hostedTargetBoundKind(b.provider)
 }
 
 // Revoke implements Backend: the key is deleted after its name is checked, so
 // a reference to a key someone else created is refused; one already gone
 // counts as revoked.
 func (b *HostedKeyBackend) Revoke(ctx context.Context, ref string) error {
+	issuedPrefix := b.prefix
+	if b.targetBound() {
+		var err error
+		ref, issuedPrefix, err = opaqueFromBoundRef(ref, b.provider, b.api.endpoint, b.adminIdentity)
+		if err != nil {
+			return err
+		}
+	}
 	cut := strings.LastIndex(ref, "/")
 	refused := fmt.Errorf("dynsecret %s: reference does not name a key of a bound target", b.provider)
 	if cut <= 0 {
@@ -213,7 +232,7 @@ func (b *HostedKeyBackend) Revoke(ctx context.Context, ref string) error {
 	if !found {
 		return nil
 	}
-	if !issuedPrincipalNameWith(b.prefix, name, b.nameSep[0]) {
+	if !issuedPrincipalNameWith(issuedPrefix, name, b.nameSep[0]) {
 		return fmt.Errorf("dynsecret %s: refusing to delete a key this provider did not create", b.provider)
 	}
 	return b.vendor.remove(ctx, b.api, binding, id)

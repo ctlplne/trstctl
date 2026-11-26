@@ -78,7 +78,7 @@ func TestTailscaleLeaseIsASingleUseTaggedAuthKeyA239(t *testing.T) {
 		ExpiresAt time.Time `json:"expires_at"`
 		Tags      []string  `json:"tags"`
 	}
-	if err := json.Unmarshal(credential, &got); err != nil || ref != "tailscale-key:"+got.ID || !strings.HasPrefix(got.Key, "tskey-auth-") ||
+	if err := json.Unmarshal(credential, &got); err != nil || !strings.HasSuffix(ref, ":tailscale-key:"+got.ID) || !strings.HasPrefix(got.Key, "tskey-auth-") ||
 		strings.Join(got.Tags, ",") != "tag:ci,tag:build" || got.ExpiresAt.IsZero() {
 		t.Fatalf("ref %q credential %+v (%v)", ref, got, err)
 	}

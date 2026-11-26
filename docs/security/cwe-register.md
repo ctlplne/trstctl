@@ -1741,7 +1741,7 @@ not this file.
 | `internal/dynsecret/cloudflare.go:144` | the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/convex.go:55` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/couchbase.go:145` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/datadog.go:179` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/datadog.go:183` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/dbt.go:60` | the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/elasticsearch.go:187` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/esxi.go:110` | the rotated host credential; the rotation seals it before storage (CWE-200) |
@@ -1764,7 +1764,7 @@ not this file.
 | `internal/dynsecret/network_api.go:137` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/network_device.go:125` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:311` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/openai.go:128` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:233` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/providers_real.go:1779` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
@@ -1774,7 +1774,7 @@ not this file.
 | `internal/dynsecret/snowflake.go:221` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/snowflake_keypair.go:121` | the rotated key pair is this provider's output: the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/supabase.go:61` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
-| `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/tailscale.go:156` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/vcenter_sso.go:133` | the rotated SSO credential; the rotation seals it before storage (CWE-200) |
 | `internal/server/dynamic_secret_oracle_lab_test.go:276` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
@@ -3975,7 +3975,7 @@ not this file.
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/signin_check.go:264` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/snowflake.go:318` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/tailscale.go:197` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/tailscale.go:203` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/vcenter_sso.go:222` | the operator's configured appliance through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/vcenter_sso.go:239` | same configured appliance (CWE-918) |
 | `internal/netconfine/netconfine_linux_test.go:36` | the probe dials the test's own listeners to show which the confinement lets through |

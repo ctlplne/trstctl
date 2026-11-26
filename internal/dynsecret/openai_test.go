@@ -150,7 +150,7 @@ func TestOpenAIServiceAccountKeysRotateInTwoPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(oldRef, "proj_orders/svc_acct_") || oldRef == newRef {
+	if !strings.Contains(oldRef, ":proj_orders/svc_acct_") || oldRef == newRef {
 		t.Fatalf("references %q %q", oldRef, newRef)
 	}
 	for name, key := range map[string][]byte{"predecessor": oldKey, "successor": newKey} {
@@ -175,7 +175,8 @@ func TestOpenAIServiceAccountKeysRotateInTwoPhases(t *testing.T) {
 		"proj_billing/svc_acct_0002": "no service account of a bound project",
 		"proj_orders/key_0001":       "no service account of a bound project",
 	} {
-		if err := backend.Revoke(ctx, ref); err == nil || !strings.Contains(err.Error(), want) {
+		bound := boundOpaqueRef("openai", backend.prefix, ref, backend.api.endpoint, backend.adminIdentity)
+		if err := backend.Revoke(ctx, bound); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("revoke %s: %v, want %q", ref, err, want)
 		}
 	}

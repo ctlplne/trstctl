@@ -18,6 +18,50 @@ import (
 
 type referenceTestTransport func(*http.Request) (*http.Response, error)
 
+type boundHostedPublicationProvider struct{ *HostedKeyBackend }
+
+func (*boundHostedPublicationProvider) Name() string { return "fixture-hosted" }
+func (p *boundHostedPublicationProvider) Generate(ctx context.Context, req GenerateRequest) (Credential, error) {
+	ref, document, err := p.CreateCredential(ctx, req)
+	return Credential{BackendRef: ref, Secret: document}, err
+}
+func (*boundHostedPublicationProvider) DynamicSecretProviderType() string { return "openrouter" }
+func (p *boundHostedPublicationProvider) DynamicSecretBindsRole(role, binding string) bool {
+	return p.bindings[role] == binding
+}
+
+func TestCR605HostedIssuedReferenceRetainsTargetBindingAtPublication(t *testing.T) {
+	backend, _ := fakeHostedBackend(t)
+	provider := &boundHostedPublicationProvider{backend}
+	ref, _, err := backend.CreateCredential(t.Context(), GenerateRequest{
+		Role: "inference", LeaseID: "lease-publication", PrincipalSuffix: testPrincipalSuffix("lease-publication"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const document = `{"api_key":"value-key-1","key_hash":"key-1"}`
+	canonical, err := NormalizeHostedReference(provider, "inference", ref)
+	if err != nil || canonical != ref {
+		t.Fatalf("publication lost the target binding: canonical=%q err=%v", canonical, err)
+	}
+	if err := ValidateIssuedHostedReference(provider, "inference", ref, []byte(document)); err != nil {
+		t.Fatalf("target-bound issued key refused at publication: %v", err)
+	}
+	raw, _, err := opaqueFromBoundRef(ref, "openrouter", backend.api.endpoint, backend.adminIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateIssuedHostedReference(provider, "inference", raw, []byte(document)); err == nil {
+		t.Fatal("new issuance admitted an old target-unbound reference")
+	}
+	if err := ValidateIssuedHostedReference(provider, "batch", ref, []byte(document)); err == nil {
+		t.Fatal("issued key was published under a role with another binding")
+	}
+	if _, err := NormalizeHostedReference(provider, "inference", "v2:bad:trstctl:"+raw); err == nil {
+		t.Fatal("malformed target binding passed reference admission")
+	}
+}
+
 func (f referenceTestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }

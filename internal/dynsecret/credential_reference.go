@@ -129,6 +129,15 @@ func HostedReferenceProviderType(provider Provider) string {
 	return ""
 }
 
+func hostedTargetBoundKind(kind string) bool {
+	switch kind {
+	case "openrouter", "cloudflare", "cloudflare-r2":
+		return true
+	default:
+		return false
+	}
+}
+
 // LegacyHostedCredentialDocument recognizes the credential fields written by
 // hosted adapters before issued events recorded their provider type. The
 // decoder remembers field presence and never saves the values.
@@ -165,11 +174,19 @@ func NormalizeHostedReference(provider Provider, role, reference string) (string
 		return reference, nil
 	}
 	bound, ok := provider.(interface{ DynamicSecretBindsRole(string, string) bool })
-	cut := strings.LastIndexByte(reference, '/')
-	if !ok || cut <= 0 || !bound.DynamicSecretBindsRole(role, reference[:cut]) {
+	raw := reference
+	if hostedTargetBoundKind(kind) && strings.HasPrefix(reference, "v2:") {
+		_, _, parsed, err := opaqueBoundRefShape(reference)
+		if err != nil {
+			return "", err
+		}
+		raw = parsed
+	}
+	cut := strings.LastIndexByte(raw, '/')
+	if !ok || cut <= 0 || !bound.DynamicSecretBindsRole(role, raw[:cut]) {
 		return "", errors.New("dynsecret: hosted reference does not name the configured role binding")
 	}
-	id := []byte(reference[cut+1:])
+	id := []byte(raw[cut+1:])
 	defer secret.Wipe(id)
 	if kind != "litellm" {
 		if err := validatePublicVendorID(kind, id); err != nil {
@@ -181,7 +198,7 @@ func NormalizeHostedReference(provider Provider, role, reference string) (string
 	if err != nil {
 		return "", err
 	}
-	return reference[:cut] + "/" + canonical, nil
+	return raw[:cut] + "/" + canonical, nil
 }
 
 type hostedCredentialDocument struct {
@@ -233,6 +250,9 @@ func ValidateIssuedHostedReference(provider Provider, role, reference string, cr
 	kind := HostedReferenceProviderType(provider)
 	if kind == "" {
 		return nil
+	}
+	if hostedTargetBoundKind(kind) && !strings.HasPrefix(reference, "v2:") {
+		return errors.New("dynsecret: newly issued hosted key lacks its target binding")
 	}
 	canonical, err := NormalizeHostedReference(provider, role, reference)
 	if err != nil {

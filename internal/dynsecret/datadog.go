@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -82,6 +83,8 @@ type DatadogBackend struct {
 	applicationKey *secret.Buffer
 	kinds          map[string]DatadogKind
 	prefix         string
+	apiKeyIdentity string
+	appKeyIdentity string
 }
 
 // NewDatadogBackend validates cfg.
@@ -93,7 +96,8 @@ func NewDatadogBackend(cfg DatadogConfig) (*DatadogBackend, error) {
 	if len(cfg.APIKey) == 0 || len(cfg.ApplicationKey) == 0 {
 		return nil, errors.New("dynsecret datadog: the administrator API and application keys are required")
 	}
-	b := &DatadogBackend{api: api, kinds: map[string]DatadogKind{}, prefix: cfg.UsernamePrefix}
+	b := &DatadogBackend{api: api, kinds: map[string]DatadogKind{}, prefix: cfg.UsernamePrefix,
+		apiKeyIdentity: crypto.SHA256Hex(cfg.APIKey), appKeyIdentity: crypto.SHA256Hex(cfg.ApplicationKey)}
 	for role, binding := range cfg.RoleBindings {
 		kind, err := ParseDatadogBinding(binding)
 		if err != nil {
@@ -185,19 +189,24 @@ func (b *DatadogBackend) CreateCredential(ctx context.Context, req GenerateReque
 	return b.reference(kind, created.Data.ID), credential, nil
 }
 
-// reference names a key: "api_key/<id>" or "<service-account>/<id>".
+// reference binds the key ID to the site and the administrator credential
+// that issued it. A new site or account must not report a missing key revoked.
 func (b *DatadogBackend) reference(kind DatadogKind, id string) string {
 	if kind.ServiceAccount == "" {
-		return "api_key/" + id
+		return boundOpaqueRef("datadog", b.prefix, "api_key/"+id, b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
 	}
-	return kind.ServiceAccount + "/" + id
+	return boundOpaqueRef("datadog", b.prefix, kind.ServiceAccount+"/"+id, b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
 }
 
 // Revoke implements Backend: the key is deleted after its name is checked, so
 // a reference to a key someone else created is refused; a key already gone
 // counts as revoked.
 func (b *DatadogBackend) Revoke(ctx context.Context, ref string) error {
-	owner, id, ok := strings.Cut(ref, "/")
+	raw, issuedPrefix, err := opaqueFromBoundRef(ref, "datadog", b.api.endpoint, b.apiKeyIdentity, b.appKeyIdentity)
+	if err != nil {
+		return err
+	}
+	owner, id, ok := strings.Cut(raw, "/")
 	if !ok || !datadogKeyID.MatchString(id) {
 		return fmt.Errorf("dynsecret datadog: refusing %q, which names no key this provider issued", ref)
 	}
@@ -230,7 +239,7 @@ func (b *DatadogBackend) Revoke(ctx context.Context, ref string) error {
 	if status != http.StatusOK || json.Unmarshal(response, &current) != nil {
 		return fmt.Errorf("dynsecret datadog: read key: HTTP %d", status)
 	}
-	if !issuedPrincipalNameWith(b.prefix, current.Data.Attributes.Name, '-') {
+	if !issuedPrincipalNameWith(issuedPrefix, current.Data.Attributes.Name, '-') {
 		return fmt.Errorf("dynsecret datadog: refusing to delete key %s, which this provider did not create", id)
 	}
 	return b.delete(ctx, kind, id)
