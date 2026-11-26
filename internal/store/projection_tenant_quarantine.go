@@ -81,5 +81,5 @@ func validProjectionTenantQuarantine(tenantID string, seq uint64, reasonCode str
 		(reasonCode == "nul_text" || reasonCode == "invalid_utf8" || reasonCode == "workload_source_target_conflict" ||
 			reasonCode == "json_unicode_escape" || reasonCode == "json_number_range" ||
 			reasonCode == "pcas_delegation_floor_out_of_range" || reasonCode == "discovery_finding_unprojectable" ||
-			reasonCode == "agent_heartbeat_invalid")
+			reasonCode == "agent_heartbeat_invalid" || reasonCode == "native_failure_receipt_invalid")
 }

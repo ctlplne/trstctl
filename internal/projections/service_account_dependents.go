@@ -59,6 +59,32 @@ func validateServiceDependentReceipt(jobID int64, attempt int, statement, signat
 	}
 	return nil
 }
+
+// ValidateNativeAgentReceipt shares the projector's receipt envelope check
+// with producer admission. The server calls it before appending any native
+// inventory or rotation result, so an accepted event remains replayable.
+func ValidateNativeAgentReceipt(kind string, data []byte) error {
+	switch kind {
+	case EventServiceDependentScanObserved, EventServiceDependentScanFailed,
+		EventServiceDependentStepObserved, EventWindowsLocalAccountScanObserved,
+		EventWindowsLocalAccountScanFailed, EventWindowsLocalRotationObserved:
+		var proof struct {
+			JobID             int64     `json:"job_id"`
+			Attempt           int       `json:"attempt"`
+			ReceiptStatement  string    `json:"receipt_statement"`
+			ReceiptSignature  string    `json:"receipt_signature_base64"`
+			SignerFingerprint string    `json:"signer_fingerprint"`
+			At                time.Time `json:"at"`
+		}
+		if err := json.Unmarshal(data, &proof); err != nil {
+			return err
+		}
+		return validateServiceDependentReceipt(proof.JobID, proof.Attempt, proof.ReceiptStatement,
+			proof.ReceiptSignature, proof.SignerFingerprint, proof.At)
+	default:
+		return nil
+	}
+}
 func (p *Projector) applyServiceDependentsTx(ctx context.Context, tx pgx.Tx, e events.Event) (bool, error) {
 	switch e.Type {
 	case EventServiceDependentHostSaved:

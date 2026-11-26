@@ -127,6 +127,15 @@ var ErrReceiptStatementInvalid = errors.New("transport: job receipt statement is
 // the signature would be perfectly valid over bytes that mean something other
 // than what the struct says.
 func (s JobReceiptStatement) Validate() error {
+	// A detached signature authenticates bytes, not their fitness for the
+	// projector. Keep every agent-controlled line below its receipt bound so
+	// a validly signed failure cannot poison the shared event tail.
+	if len(s.TenantID) > 128 || len(s.AgentCommonName) > 255 || len(s.Outcome) > 64 ||
+		len(s.EvidenceDigest) > 128 || len(s.CredentialFingerprint) > 128 ||
+		len(s.Custody.GeneratedBy) > 255 ||
+		(s.DetailDigest != "" && !validLowerHexFingerprint(s.DetailDigest)) {
+		return ErrReceiptStatementInvalid
+	}
 	if strings.TrimSpace(s.TenantID) == "" {
 		return errors.New("transport: receipt statement has no tenant")
 	}

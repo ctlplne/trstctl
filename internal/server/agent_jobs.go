@@ -1576,6 +1576,9 @@ func (a *agentService) verifyJobReceipt(ctx context.Context, info mtls.PeerCertI
 	if len(req.Signature) == 0 {
 		return reject("unsigned")
 	}
+	if len(req.Signature) > 16<<10 {
+		return reject("signature exceeds receipt limit")
+	}
 	if req.IssuedAtUnix <= 0 {
 		return reject("no issued-at")
 	}

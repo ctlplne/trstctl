@@ -1638,7 +1638,9 @@ func (s *Server) serveAgentChannelWithLifetime(ctx context.Context, ln net.Liste
 	}
 	stopRenewal := s.startAgentServerRenewal(ctx, cert, "grpc")
 	defer stopRenewal()
-	srv := transport.NewServer(cert.Credentials(), s.agentSvc, grpc.MaxConcurrentStreams(agentMaxConcurrentStreams))
+	// Keep an explicit inbound frame ceiling as the agent protocol evolves.
+	srv := transport.NewServer(cert.Credentials(), s.agentSvc,
+		grpc.MaxConcurrentStreams(agentMaxConcurrentStreams), grpc.MaxRecvMsgSize(4<<20))
 	go func() {
 		<-ctx.Done()
 		srv.GracefulStop()

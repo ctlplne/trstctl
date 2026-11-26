@@ -111,6 +111,9 @@ func (a *agentService) appendServiceDependentAgentEventID(ctx context.Context, t
 	if err != nil {
 		return err
 	}
+	if err := projections.ValidateNativeAgentReceipt(kind, raw); err != nil {
+		return err
+	}
 	event, err := a.log.Append(ctx, events.Event{ID: eventID, TenantID: tenantID, Type: kind, Data: raw, SchemaVersion: 1})
 	if err != nil {
 		return err

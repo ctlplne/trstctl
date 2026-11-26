@@ -614,7 +614,8 @@ type ReportJobResultRequest struct {
 	Detail string `json:"detail,omitempty"`
 	// EvidenceDigest optionally binds agent-provided execution evidence. The
 	// digest alone does not prove that a local transcript or downloadable
-	// artifact exists; the report does not transfer such an artifact.
+	// artifact exists; the report does not transfer such an artifact. The
+	// signed statement admits at most 128 bytes here.
 	EvidenceDigest string `json:"evidence_digest,omitempty"`
 	// CredentialFingerprint and Custody are present only when an agent has
 	// installed a certificate whose key it generated locally. Both are inside
@@ -644,7 +645,7 @@ type ReportJobResultRequest struct {
 	IssuedAtUnix int64 `json:"issued_at_unix,omitempty"`
 	// Signature is the agent's detached signature over the canonical receipt
 	// statement (epic A1), made with the same key behind its channel
-	// certificate.
+	// certificate. The server accepts at most 16 KiB of detached signature.
 	//
 	// mTLS already proved who is on the connection; this is what survives it.
 	// Without it, "agent-7 executed this deploy" is a sentence the control plane

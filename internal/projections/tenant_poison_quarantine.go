@@ -81,6 +81,15 @@ func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.
 	}
 	textErr := events.ValidateEventText(e)
 	if textErr == nil {
+		if e.SchemaVersion == 1 && (e.Type == EventWindowsLocalAccountScanFailed ||
+			e.Type == EventServiceDependentScanFailed) &&
+			ValidateNativeAgentReceipt(e.Type, e.Data) != nil {
+			if err := q.record(ctx, tx, e.TenantID, e.Sequence, "native_failure_receipt_invalid"); err != nil {
+				return false, err
+			}
+			q.known[e.TenantID] = true
+			return true, nil
+		}
 		if e.Type == EventAgentHeartbeat && schemaVersionOf(e) <= AgentHeartbeatRelayEgressSchemaVersion {
 			var heartbeat AgentHeartbeat
 			if err := json.Unmarshal(e.Data, &heartbeat); err == nil &&
