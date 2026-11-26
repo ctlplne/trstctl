@@ -3145,6 +3145,11 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux.Handle("/api/v1/graph/", heavyHandler)
 	mux.Handle("/api/v1/risk/", heavyHandler)
 	mux.Handle("/api/v1/cbom/", cbomHandler)
+	// Preview and apply share one admission slot, taken before the API worker
+	// decodes their (up to 41 MiB) JSON body.
+	switchingImports := switchingImportAdmission(apiHandler)
+	mux.Handle("POST /api/v1/switching/imports/preview", switchingImports)
+	mux.Handle("POST /api/v1/switching/imports", switchingImports)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/v1/", apiHandler)
 	mux.Handle("/auth/", apiHandler)

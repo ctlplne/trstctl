@@ -38,8 +38,9 @@ var Fields = []string{
 
 // Limits on one export.
 const (
-	MaxRows  = 50000
-	MaxBytes = 20 << 20
+	MaxRows         = 50000
+	MaxBytes        = 20 << 20
+	MaxFieldsPerRow = 256
 )
 
 // Outcomes a row can have.
@@ -212,6 +213,9 @@ func parseCSV(data []byte, columnMap map[string]string) ([]Row, error) {
 	if err != nil {
 		return nil, fmt.Errorf("switchkit: read CSV header: %w", err)
 	}
+	if len(header) > MaxFieldsPerRow {
+		return nil, fmt.Errorf("switchkit: CSV header has more than %d fields", MaxFieldsPerRow)
+	}
 	fields := make([]string, len(header))
 	for i, h := range header {
 		fields[i] = canonical(h, columnMap)
@@ -223,6 +227,12 @@ func parseCSV(data []byte, columnMap map[string]string) ([]Row, error) {
 		record, err := r.Read()
 		if errors.Is(err, io.EOF) {
 			break
+		}
+		if len(rows) >= MaxRows {
+			return nil, tooManyRows()
+		}
+		if len(record) > MaxFieldsPerRow {
+			return nil, fmt.Errorf("switchkit: CSV row has more than %d fields", MaxFieldsPerRow)
 		}
 		if err != nil {
 			// A malformed line is a row with a reason, not a stop: later rows
@@ -251,46 +261,173 @@ func parseCSV(data []byte, columnMap map[string]string) ([]Row, error) {
 }
 
 func parseJSON(data []byte, columnMap map[string]string) ([]Row, error) {
-	var items []map[string]any
-	if data[0] == '{' {
-		var wrapped struct {
-			Certificates []map[string]any `json:"certificates"`
-		}
-		if err := json.Unmarshal(data, &wrapped); err != nil {
-			return nil, fmt.Errorf("switchkit: read JSON export: %w", err)
-		}
-		items = wrapped.Certificates
-	} else if err := json.Unmarshal(data, &items); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	start, err := dec.Token()
+	if err != nil {
 		return nil, fmt.Errorf("switchkit: read JSON export: %w", err)
 	}
-	rows := make([]Row, 0, len(items))
-	for i, item := range items {
-		row := Row{Number: i + 1, Fields: map[string]string{}}
-		for key, value := range item {
-			field := canonical(key, columnMap)
-			if field == "" {
-				continue
+	var rows []Row
+	switch start {
+	case json.Delim('['):
+		rows, err = parseJSONArray(dec, columnMap)
+	case json.Delim('{'):
+		seenCertificates := false
+		for dec.More() {
+			key, tokenErr := dec.Token()
+			if tokenErr != nil {
+				return nil, fmt.Errorf("switchkit: read JSON export: %w", tokenErr)
 			}
-			switch v := value.(type) {
-			case string:
-				row.Fields[field] = strings.TrimSpace(v)
-			case float64:
-				row.Fields[field] = strconv.FormatFloat(v, 'f', -1, 64)
-			case bool:
-				row.Fields[field] = strconv.FormatBool(v)
-			case []any:
-				var parts []string
-				for _, p := range v {
-					if s, ok := p.(string); ok && strings.TrimSpace(s) != "" {
-						parts = append(parts, strings.TrimSpace(s))
-					}
+			if key == "certificates" {
+				if seenCertificates {
+					return nil, errors.New("switchkit: repeated certificates field")
 				}
-				row.Fields[field] = strings.Join(parts, ",")
+				seenCertificates = true
+				open, tokenErr := dec.Token()
+				if tokenErr != nil {
+					return nil, fmt.Errorf("switchkit: read JSON export: %w", tokenErr)
+				}
+				if open == nil {
+					continue
+				}
+				if open != json.Delim('[') {
+					return nil, errors.New("switchkit: certificates must be an array")
+				}
+				rows, err = parseJSONArray(dec, columnMap)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				var ignored json.RawMessage
+				if err := dec.Decode(&ignored); err != nil {
+					return nil, fmt.Errorf("switchkit: read JSON export: %w", err)
+				}
 			}
+		}
+		if err == nil {
+			_, err = dec.Token()
+		}
+	default:
+		return nil, errors.New("switchkit: JSON export must be an array or object")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("switchkit: read JSON export: %w", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return nil, errors.New("switchkit: JSON export has trailing data")
+	}
+	return rows, nil
+}
+
+func tooManyRows() error {
+	return fmt.Errorf("switchkit: export has %d rows, more than %d", MaxRows+1, MaxRows)
+}
+
+func parseJSONArray(dec *json.Decoder, columnMap map[string]string) ([]Row, error) {
+	var rows []Row
+	for dec.More() {
+		if len(rows) >= MaxRows {
+			return nil, tooManyRows()
+		}
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			return nil, fmt.Errorf("switchkit: read JSON row: %w", err)
+		}
+		row, err := parseJSONRow(raw, len(rows)+1, columnMap)
+		if err != nil {
+			return nil, err
 		}
 		rows = append(rows, row)
 	}
+	if end, err := dec.Token(); err != nil || end != json.Delim(']') {
+		return nil, errors.New("switchkit: JSON certificate array is incomplete")
+	}
 	return rows, nil
+}
+
+func parseJSONRow(raw []byte, number int, columnMap map[string]string) (Row, error) {
+	row := Row{Number: number, Fields: map[string]string{}}
+	if bytes.Equal(raw, []byte("null")) {
+		return row, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if start, err := dec.Token(); err != nil || start != json.Delim('{') {
+		return Row{}, fmt.Errorf("switchkit: JSON row %d must be an object", number)
+	}
+	fields := 0
+	for dec.More() {
+		fields++
+		if fields > MaxFieldsPerRow {
+			return Row{}, fmt.Errorf("switchkit: JSON row has more than %d fields", MaxFieldsPerRow)
+		}
+		key, err := dec.Token()
+		if err != nil {
+			return Row{}, fmt.Errorf("switchkit: read JSON row: %w", err)
+		}
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return Row{}, fmt.Errorf("switchkit: read JSON row: %w", err)
+		}
+		field := canonical(key.(string), columnMap)
+		if field == "" {
+			continue
+		}
+		mapped, ok, err := jsonFieldValue(value)
+		if err != nil {
+			return Row{}, fmt.Errorf("switchkit: read JSON row: %w", err)
+		}
+		if ok {
+			row.Fields[field] = mapped
+		}
+	}
+	return row, nil
+}
+
+func jsonFieldValue(raw []byte) (string, bool, error) {
+	switch raw[0] {
+	case '"':
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return "", false, err
+		}
+		return strings.TrimSpace(value), true, nil
+	case 't', 'f':
+		return string(raw), true, nil
+	case '[':
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		if _, err := dec.Token(); err != nil {
+			return "", false, err
+		}
+		var result strings.Builder
+		for dec.More() {
+			var item json.RawMessage
+			if err := dec.Decode(&item); err != nil {
+				return "", false, err
+			}
+			if len(item) == 0 || item[0] != '"' {
+				continue
+			}
+			var text string
+			if err := json.Unmarshal(item, &text); err != nil {
+				return "", false, err
+			}
+			if text = strings.TrimSpace(text); text != "" {
+				if result.Len() > 0 {
+					result.WriteByte(',')
+				}
+				result.WriteString(text)
+			}
+		}
+		return result.String(), true, nil
+	case 'n', '{':
+		return "", false, nil
+	default:
+		var value float64
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return "", false, err
+		}
+		return strconv.FormatFloat(value, 'f', -1, 64), true, nil
+	}
 }
 
 var hexFingerprint = regexp.MustCompile(`^[0-9a-f]{64}$`)

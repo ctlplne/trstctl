@@ -1803,6 +1803,9 @@ with the preview's digest refuses a changed export, column map, owner list or
 inventory (409), records the import and every row's outcome, and the leader
 then records each mapped row's certificate and owner in bounded batches of 500,
 so a 50,000-row export (the limit, with 20 MiB) never holds one request open.
+The parser stops at the first row past that limit and accepts at most 256 fields
+per row. Preview and apply share one server-side processing slot; a concurrent
+import returns 503 with `Retry-After: 1`, so retry it after the first finishes.
 A certificate already in the inventory is linked to its row and left exactly as
 it was. Imported certificates carry the source `switching:<import>` and no
 issuance key, so they are watch-only: the other product keeps renewing them
