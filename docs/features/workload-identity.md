@@ -33,8 +33,9 @@ Everything here rests on attestation: before issuing anything, trstctl demands a
 verifies proof of the workload's identity. The framework is pluggable — an `Attestor`
 verifies one kind of proof — and trstctl ships six:
 
-- **TPM 2.0 quote** — verifies a hardware TPM's endorsement chain back to the
-  manufacturer root, plus a signed quote bound to a fresh nonce.
+- **TPM quote envelope** — verifies an AK certificate chain and signature over
+  supplied bytes. This implementation does not yet parse `TPMS_ATTEST` or issue
+  a fresh server challenge; a trust source's configured nonce is static.
 - **AWS IMDSv2** — verifies the PKCS#7-signed EC2 instance identity document against the
   AWS root.
 - **GCP metadata** — verifies the Google-signed instance-identity JWT against Google's
@@ -69,6 +70,19 @@ source stays disabled.
 The issuance service verifies the proof, signs an X.509-SVID through the isolated signer, records the certificate as
 `certificate.recorded`, and binds the attestation with `attestation.bound` — or fails
 closed if no enabled trust source matches the method.
+
+For direct SVID issuance, each signed JWT proof can mint one certificate. Reusing
+the same proof with another HTTP idempotency key and public key returns a conflict;
+the same proof and public key recovers the original certificate after a lost
+response. AWS and Azure instance identity documents have no expiry or fresh
+nonce, so the current fence allows one SVID per verified instance. TPM quote
+envelopes are similarly limited to one SVID per verified AK. Obtain a new JWT
+proof for a later issuance. These limits apply to direct SVID issuance; brokered
+and SSH issuance still need their own proof/key binding. A caller who captures an unused
+bearer proof can race its first use, because this route does not yet prove
+possession of the submitted private key. Keep proofs and `certs:issue` tokens
+inside the workload boundary. Do not treat the TPM envelope as a production TPM
+challenge or use it to grant privileged identity until that protocol is built.
 
 #### GitHub Actions attempts
 

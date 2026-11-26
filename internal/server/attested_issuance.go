@@ -26,7 +26,6 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
-	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -214,6 +213,8 @@ func (s *attestedIssuerService) PreviewAttestedSVID(ctx context.Context, tenantI
 		Blockers: blockers,
 		RecoverySteps: []string{
 			"If a response is lost, retry the exact request with the same Idempotency-Key to recover the original result instead of minting twice.",
+			"For non-GitHub SVID issuance, a verified proof has one certificate slot. The same proof and public key can recover that certificate; another public key is refused even with a new HTTP retry key. Obtain a new signed JWT proof for a later issuance.",
+			"AWS and Azure instance documents and the current TPM envelopes cannot provide a fresh proof; their verified instance or AK has only one SVID slot. Plan renewal through a different supported method.",
 			"For GitHub Actions, a new signed run_id/run_attempt may issue once. A second public key within the same attempt is refused; changing the runner environment or HTTP retry key does not grant another mint.",
 			"If proof verification fails, correct the trust configuration or obtain fresh proof, then review a new request. Never disable verification to continue.",
 			"If the signer is unavailable, restore the isolated signer and retry the unchanged request. An expired proof requires a fresh preview.",
@@ -296,57 +297,7 @@ func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID,
 	if method == "github_oidc" {
 		return s.issueGitHubAttempt(ctx, tenantID, verifier, att, req.PublicKeyDER, ttl)
 	}
-	// The attested subject is folded into the recovery key, not just the caller's
-	// Idempotency-Key. Today the only caller is the API handler, which runs this
-	// behind mutateDurableBound — that rejects an empty key and binds it to
-	// (principal, method, payload, public key, TTL), so a mismatched replay never
-	// reaches here. This lookup is the second line for the case where the durable
-	// record is gone but certificates remain, and on its own it trusted the raw
-	// key alone: any future caller reaching the service without that outer
-	// binding could recover a certificate minted for a DIFFERENT workload in the
-	// same tenant. Binding the subject costs nothing — a genuine retry presents
-	// the same attestation and so derives the same key.
-	idemKey := "attested-issue:" + att.Subject + ":" + idempotencyKey
-	recovered, err := recoverCertificatesByIssuanceKey(ctx, s.store, s.log, tenantID, idemKey)
-	if err != nil {
-		return api.AttestedSVID{}, err
-	}
-	if len(recovered) > 0 {
-		if len(recovered) != 1 {
-			return api.AttestedSVID{}, fmt.Errorf("server: attested issuance key %q recovered %d certificates, want 1", idemKey, len(recovered))
-		}
-		return s.finish(ctx, tenantID, verifier, att, recovered[0].CertificateDER, ttl, false)
-	}
-
-	spiffeID, err := attestedSPIFFEID(s.trustDomain, tenantID, att.Method, att.Subject)
-	if err != nil {
-		return api.AttestedSVID{}, fmt.Errorf("%w: %v", api.ErrAttestedIssuanceInvalid, err)
-	}
-	if err := refuseCompromisedPublicKey(ctx, s.store, tenantID, req.PublicKeyDER); err != nil {
-		return api.AttestedSVID{}, err
-	}
-	certDER, err := crypto.SignSVID(s.caCertDER, s.caSigner, req.PublicKeyDER, spiffeID, ttl)
-	if err != nil {
-		return api.AttestedSVID{}, fmt.Errorf("server: sign attested SVID: %w", err)
-	}
-	info, err := certinfo.Inspect(certDER)
-	if err != nil {
-		return api.AttestedSVID{}, err
-	}
-	nb, na := info.NotBefore, info.NotAfter
-	if _, err := s.orch.RecordCertificate(ctx, tenantID, store.Certificate{
-		CAID: s.caID, Subject: info.Subject, SANs: sansOf(info), Issuer: info.Issuer,
-		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
-		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-		Source: "attested:" + att.Method, CertificateDER: append([]byte(nil), certDER...),
-		IssuanceIdempotencyKey: idemKey, EnrollmentProtocol: "attested",
-		// The workload supplied only its public key. Record that custody fact
-		// through the certificate event; storage and exportability stay unknown.
-		KeyOrigin: string(custody.OriginRequester),
-	}); err != nil {
-		return api.AttestedSVID{}, err
-	}
-	return s.finish(ctx, tenantID, verifier, att, certDER, ttl, true)
+	return s.issueFencedAttestation(ctx, tenantID, verifier, att, req.Payload, req.PublicKeyDER, ttl)
 }
 
 func (s *attestedIssuerService) ttl(seconds int64) time.Duration {

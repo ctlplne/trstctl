@@ -332,11 +332,14 @@ func TestAttesterTrustNarrowingRouteFamilyRetainedEvents(t *testing.T) {
 			if n := servedEventCount(t, h, tc.eventType); n != wantEvents {
 				t.Fatalf("%s retry appended %d source events, want %d", tc.name, n, wantEvents)
 			}
+			var rotatedKey string
+			var rotatedCertificate servedAttestedIssueResponse
 			if tc.name == "rotate" {
 				servedAttestedIssue(t, h, token, "ar9-rotate-old-rejected", "k8s_sat",
 					[]byte(first.SAT), servedAttestedPublicKeyPEM(t), http.StatusForbidden)
-				servedAttestedIssue(t, h, token, "ar9-rotate-new-accepted", "k8s_sat",
-					[]byte(rotated.SAT), servedAttestedPublicKeyPEM(t), http.StatusCreated)
+				rotatedKey = servedAttestedPublicKeyPEM(t)
+				rotatedCertificate = servedAttestedIssue(t, h, token, "ar9-rotate-new-accepted", "k8s_sat",
+					[]byte(rotated.SAT), rotatedKey, http.StatusCreated)
 			} else {
 				servedAttestedIssue(t, h, token, "ar9-"+tc.name+"-still-denied", "k8s_sat",
 					[]byte(first.SAT), servedAttestedPublicKeyPEM(t), http.StatusUnprocessableEntity)
@@ -345,8 +348,11 @@ func TestAttesterTrustNarrowingRouteFamilyRetainedEvents(t *testing.T) {
 				t.Fatalf("cold %s projection rebuild: %v", tc.name, err)
 			}
 			if tc.name == "rotate" {
-				servedAttestedIssue(t, h, token, "ar9-rotate-cold-new-accepted", "k8s_sat",
-					[]byte(rotated.SAT), servedAttestedPublicKeyPEM(t), http.StatusCreated)
+				recovered := servedAttestedIssue(t, h, token, "ar9-rotate-cold-new-accepted", "k8s_sat",
+					[]byte(rotated.SAT), rotatedKey, http.StatusCreated)
+				if recovered.CertificatePEM != rotatedCertificate.CertificatePEM || recovered.CredentialID != rotatedCertificate.CredentialID {
+					t.Fatal("rebuild reminted a rotated-trust proof instead of recovering its exact certificate")
+				}
 			} else {
 				servedAttestedIssue(t, h, token, "ar9-"+tc.name+"-cold-denied", "k8s_sat",
 					[]byte(first.SAT), servedAttestedPublicKeyPEM(t), http.StatusUnprocessableEntity)

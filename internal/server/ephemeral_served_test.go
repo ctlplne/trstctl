@@ -789,6 +789,15 @@ func (s *countingEphemeralDigestSigner) SignDigest(digest []byte, opts crypto.Si
 	return s.DigestSigner.SignDigest(digest, opts)
 }
 
+func (s *countingEphemeralDigestSigner) SignDigestForOperation(operationID string, digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	journal, ok := s.DigestSigner.(journaledLeafSigner)
+	if !ok {
+		return nil, errors.New("counting signer: underlying signer has no operation journal")
+	}
+	s.calls.Add(1)
+	return journal.SignDigestForOperation(operationID, digest, opts)
+}
+
 type servedEphemeralResponse struct {
 	State             string             `json:"state"`
 	RequestID         string             `json:"request_id"`
