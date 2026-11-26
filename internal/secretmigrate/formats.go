@@ -312,93 +312,137 @@ func recordEntry(n *node, folder []string) entry {
 	return e
 }
 
-// parseJSON reads a JSON document with a token decoder, so string values go
-// straight from the input to []byte without a Go string in between.
+// parseJSON walks offsets in the original document. Each subtree is a slice,
+// not a copied RawMessage, and string values are decoded into wipeable []byte.
 func parseJSON(src []byte) ([]entry, error) {
-	dec := json.NewDecoder(bytes.NewReader(src))
-	root, err := jsonNode(dec)
+	if !json.Valid(src) {
+		return nil, errors.New("invalid JSON document")
+	}
+	position, nodes := 0, 0
+	root, err := jsonValue(src, &position, 0, &nodes)
 	if err != nil {
 		root.wipe()
 		return nil, err
 	}
-	if _, err := dec.Token(); err != io.EOF {
+	skipJSONSpace(src, &position)
+	if position != len(src) {
 		root.wipe()
 		return nil, errors.New("trailing data after the document")
 	}
 	return entries(root)
 }
 
-// jsonNode reads one value. Strings are re-read from the input bytes at the
-// decoder's offset so the value never becomes a Go string.
-func jsonNode(dec *json.Decoder) (*node, error) {
-	var raw json.RawMessage
-	if err := dec.Decode(&raw); err != nil {
-		return nil, fmt.Errorf("invalid JSON: %w", err)
-	}
-	return jsonRaw(raw)
-}
+// maxJSONNodes allows metadata beside 500 secrets but rejects a flood of
+// nested arrays or objects before building an unbounded node tree.
+const maxJSONNodes = MaxObjects * 64
 
-func jsonRaw(raw json.RawMessage) (*node, error) {
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 {
+func jsonValue(src []byte, position *int, depth int, nodes *int) (*node, error) {
+	if depth > 32 {
+		return nil, errors.New("the document nests deeper than 32 levels")
+	}
+	if *nodes >= maxJSONNodes {
+		return nil, fmt.Errorf("the document has more than %d JSON nodes", maxJSONNodes)
+	}
+	*nodes = *nodes + 1
+	skipJSONSpace(src, position)
+	if *position >= len(src) {
 		return nil, errors.New("empty JSON value")
 	}
-	switch raw[0] {
+	switch src[*position] {
 	case '{':
 		n := &node{kind: nodeMap}
-		dec := json.NewDecoder(bytes.NewReader(raw))
-		if _, err := dec.Token(); err != nil {
-			return nil, err
-		}
-		for dec.More() {
-			tok, err := dec.Token()
-			if err != nil {
+		*position = *position + 1
+		skipJSONSpace(src, position)
+		for src[*position] != '}' {
+			keyRaw := jsonStringToken(src, position)
+			var key string // A field name, never the secret value.
+			if err := json.Unmarshal(keyRaw, &key); err != nil {
 				n.wipe()
 				return nil, err
 			}
-			key, _ := tok.(string)
-			var child json.RawMessage
-			if err := dec.Decode(&child); err != nil {
-				n.wipe()
-				return nil, err
-			}
-			v, err := jsonRaw(child)
-			secret.Wipe(child)
+			skipJSONSpace(src, position)
+			*position = *position + 1 // ':'; json.Valid checked the grammar.
+			v, err := jsonValue(src, position, depth+1, nodes)
 			if err != nil {
 				n.wipe()
 				return nil, err
 			}
 			n.keys, n.values = append(n.keys, key), append(n.values, v)
+			skipJSONSpace(src, position)
+			if src[*position] != ',' {
+				break
+			}
+			*position = *position + 1
+			skipJSONSpace(src, position)
 		}
+		*position = *position + 1 // '}'
 		return n, nil
 	case '[':
 		n := &node{kind: nodeList}
-		var items []json.RawMessage
-		if err := json.Unmarshal(raw, &items); err != nil {
-			return nil, err
-		}
-		for _, item := range items {
-			v, err := jsonRaw(item)
-			secret.Wipe(item)
+		*position = *position + 1
+		skipJSONSpace(src, position)
+		for src[*position] != ']' {
+			v, err := jsonValue(src, position, depth+1, nodes)
 			if err != nil {
 				n.wipe()
 				return nil, err
 			}
 			n.values = append(n.values, v)
+			skipJSONSpace(src, position)
+			if src[*position] != ',' {
+				break
+			}
+			*position = *position + 1
+			skipJSONSpace(src, position)
 		}
+		*position = *position + 1 // ']'
 		return n, nil
 	case '"':
-		value, err := secretjson.UnquoteBytes(raw)
+		value, err := secretjson.UnquoteBytes(jsonStringToken(src, position))
 		if err != nil {
 			return nil, err
 		}
 		return &node{kind: nodeScalar, scalar: value}, nil
 	case 'n':
+		*position += 4 // "null"
 		return &node{kind: nodeNull}, nil
 	default:
 		// A number or boolean is stored as its text.
-		return &node{kind: nodeScalar, scalar: append([]byte(nil), raw...)}, nil
+		start := *position
+		for *position < len(src) && !jsonValueDelimiter(src[*position]) {
+			*position = *position + 1
+		}
+		return &node{kind: nodeScalar, scalar: append([]byte(nil), src[start:*position]...)}, nil
 	}
+}
+
+func skipJSONSpace(src []byte, position *int) {
+	for *position < len(src) && (src[*position] == ' ' || src[*position] == '\n' || src[*position] == '\r' || src[*position] == '\t') {
+		*position = *position + 1
+	}
+}
+
+// jsonStringToken returns the exact quoted bytes. It never converts a secret
+// value into a Go string; secretjson.UnquoteBytes decodes that token to []byte.
+func jsonStringToken(src []byte, position *int) []byte {
+	start := *position
+	*position = *position + 1
+	for *position < len(src) {
+		switch src[*position] {
+		case '\\':
+			*position += 2
+		case '"':
+			*position = *position + 1
+			return src[start:*position]
+		default:
+			*position = *position + 1
+		}
+	}
+	return src[start:*position] // json.Valid made this case unreachable.
+}
+
+func jsonValueDelimiter(b byte) bool {
+	return b == ',' || b == '}' || b == ']' || b == ' ' || b == '\t' || b == '\r' || b == '\n'
 }
 
 // parseYAML reads a YAML document. Block scalars carry multiline values. A
