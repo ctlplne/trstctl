@@ -563,8 +563,8 @@ func ParseOCSPRequestSerial(reqDER []byte) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrMalformedOCSPRequest, err)
 	}
-	if req.SerialNumber == nil {
-		return "", fmt.Errorf("%w: missing serial", ErrMalformedOCSPRequest)
+	if err := validateOCSPRequestSerial(req.SerialNumber); err != nil {
+		return "", err
 	}
 	return req.SerialNumber.Text(16), nil
 }
@@ -575,8 +575,11 @@ func ParseOCSPRequestSerial(reqDER []byte) (string, error) {
 // forward one issuer's request to another issuer's responder.
 func ValidateOCSPRequestForIssuer(reqDER, issuerDER []byte) (string, error) {
 	req, err := ocsp.ParseRequest(reqDER)
-	if err != nil || req.SerialNumber == nil {
+	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrMalformedOCSPRequest, err)
+	}
+	if err := validateOCSPRequestSerial(req.SerialNumber); err != nil {
+		return "", err
 	}
 	issuer, err := x509.ParseCertificate(issuerDER)
 	if err != nil {
@@ -597,6 +600,18 @@ func ValidateOCSPRequestForIssuer(reqDER, issuerDER []byte) (string, error) {
 		return "", fmt.Errorf("%w: issuer hashes do not match the configured cache issuer", ErrMalformedOCSPRequest)
 	}
 	return req.SerialNumber.Text(16), nil
+}
+
+// RFC 5280 limits certificate serial numbers to positive values of at most
+// 20 DER octets. A 160-bit positive integer needs an extra sign octet, so the
+// largest valid positive value has 159 bits. Enforcing the same bound at both
+// OCSP entry points keeps a public
+// query from allocating oversized signed responses or cache keys.
+func validateOCSPRequestSerial(serial *big.Int) error {
+	if serial == nil || serial.Sign() <= 0 || serial.BitLen() > 159 {
+		return fmt.Errorf("%w: serial must be positive and at most 20 octets", ErrMalformedOCSPRequest)
+	}
+	return nil
 }
 
 // ParseOCSPRequestNonce extracts the optional RFC 6960 id-pkix-ocsp-nonce

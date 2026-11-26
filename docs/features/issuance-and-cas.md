@@ -889,6 +889,9 @@ instead of a 10-100M-row monolith. The OCSP responder signs with a delegated
 responder certificate (OCSPSigning EKU + ocsp-nocheck) rather than the CA
 certificate; rotations emit `ca.ocsp_responder.rotated`, and the responder runs in
 its own bounded [lane](../glossary.md) so a flood can't starve the API.
+Public OCSP GET and POST requests are capped at 1 KiB. The responder accepts
+only positive certificate serials of at most 20 octets and does not cache
+answers for serials its issued-certificate ledger does not know.
 
 RFCs 6960 (OCSP), 5280 (CRL).
 

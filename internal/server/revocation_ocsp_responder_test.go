@@ -164,6 +164,16 @@ func TestServedOCSPCachesIdenticalFreshResponses(t *testing.T) {
 	if st.activeCalls != 1 {
 		t.Fatalf("ActiveOCSPResponder calls = %d, want 1 because a cache hit must not replay projection catch-up", st.activeCalls)
 	}
+	unknownDER, err := crypto.BuildOCSPRequestForSerial(caDER, "c0ffef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.respondOCSP(ctx, publicCRLTestTenant, unknownDER); err != nil {
+		t.Fatalf("respondOCSP unknown: %v", err)
+	}
+	if size := len(svc.ocspCache.entries); size != 1 {
+		t.Fatalf("cache holds %d entries after unknown serial, want only the issued serial", size)
+	}
 }
 
 type countingDigestSigner struct {

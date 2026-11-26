@@ -31,11 +31,12 @@ func TestOCSPHandlerMalformedDERIsBadRequest(t *testing.T) {
 }
 
 func TestOCSPHandlerRejectsOverLimitBody(t *testing.T) {
+	const desiredOCSPRequestLimit = 1 << 10
 	svc := &revocationService{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /ocsp/{tenant}", svc.ocspHandler())
 
-	req := httptest.NewRequest(http.MethodPost, "/ocsp/11111111-1111-1111-1111-111111111111", bytes.NewReader(bytes.Repeat([]byte("x"), (1<<16)+1)))
+	req := httptest.NewRequest(http.MethodPost, "/ocsp/11111111-1111-1111-1111-111111111111", bytes.NewReader(bytes.Repeat([]byte("x"), desiredOCSPRequestLimit+1)))
 	req.Header.Set("Content-Type", "application/ocsp-request")
 	rec := httptest.NewRecorder()
 
@@ -52,16 +53,16 @@ func TestOCSPHandlerRejectsOverLimitBody(t *testing.T) {
 // unbounded decode-buffer allocation that the POST path already rejects. An
 // over-cap encoded value is now rejected with 413 BEFORE base64 decode runs.
 func TestOCSPGETRequestTooLarge(t *testing.T) {
+	const desiredOCSPRequestLimit = 1 << 10
 	svc := &revocationService{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ocsp/{tenant}/{b64request}", svc.ocspHandler())
 
-	// base64.StdEncoding.EncodedLen(64 KiB) is the largest legitimate encoded
+	// base64.StdEncoding.EncodedLen(desiredOCSPRequestLimit) is the largest encoded
 	// length; one full base64 quantum (4 chars) past it must be rejected. 'A' is a
 	// valid base64 symbol, so the value would decode fine if it were not capped —
 	// this proves the cap, not a base64 parse error.
-	const maxOCSPRequest = 1 << 16
-	over := base64.StdEncoding.EncodedLen(maxOCSPRequest) + 4
+	over := base64.StdEncoding.EncodedLen(desiredOCSPRequestLimit) + 4
 	enc := strings.Repeat("A", over)
 
 	req := httptest.NewRequest(http.MethodGet, "/ocsp/11111111-1111-1111-1111-111111111111/"+enc, nil)

@@ -229,7 +229,7 @@ func (s *revocationService) signedStatus(ctx context.Context, tenantID, serial s
 		tenantID: tenantID, caID: s.caID, serial: serial, status: status, reason: reason,
 		revokedAt: revokedAt,
 	}
-	if !noncePresent {
+	if !noncePresent && status != crypto.OCSPUnknown {
 		if der, ok := s.ocspCache.get(key, now); ok {
 			s.observeOCSPCache("hit")
 			s.observeOCSPResponse("cache_hit")
@@ -246,7 +246,7 @@ func (s *revocationService) signedStatus(ctx context.Context, tenantID, serial s
 		s.observeOCSPResponse("error")
 		return nil, err
 	}
-	if !noncePresent {
+	if !noncePresent && status != crypto.OCSPUnknown {
 		s.ocspCache.put(key, der, nextUpdate, now)
 	}
 	s.observeOCSPResponse("signed")
@@ -1004,7 +1004,7 @@ func writeCRLDER(w http.ResponseWriter, r *http.Request, der []byte) {
 
 // maxOCSPRequest bounds an inbound OCSP request body so a hostile client cannot
 // stream an unbounded body at the responder.
-const maxOCSPRequest = 1 << 16 // 64 KiB — far larger than any real OCSP request
+const maxOCSPRequest = 1 << 10 // 1 KiB covers ordinary CertID and bounded nonce requests.
 
 // readOCSPRequest reads an OCSP request (DER) from either the POST body
 // (Content-Type application/ocsp-request) or the base64-encoded final path
