@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/approvalresource"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
@@ -1410,7 +1411,7 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 	}
 
 	if mutation.Approval != nil {
-		if mutation.Approval.ResourceKind != "secret" || mutation.Approval.ResourceID != "secret:"+mutation.Name ||
+		if mutation.Approval.ResourceKind != "secret" || mutation.Approval.ResourceID != approvalresource.SecretID(mutation.Name) ||
 			mutation.Approval.Action != mutation.Action || mutation.Approval.TargetVersion != uint64(mutation.ExpectedVersion) ||
 			mutation.Approval.FromState != mutation.ApprovalFrom || mutation.Approval.ToState != mutation.ApprovalTo {
 			return ErrApprovalDrifted

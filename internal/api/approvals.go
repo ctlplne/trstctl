@@ -13,6 +13,7 @@ import (
 
 	googleuuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/approvalresource"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/projections"
@@ -394,7 +395,7 @@ func (a *API) approvalRecordAuthorized(r *http.Request, principal authz.Principa
 func approvalRecordSecretName(record ApprovalRequestRecord) (string, bool) {
 	switch record.ResourceKind {
 	case "secret":
-		return strings.CutPrefix(record.ResourceID, "secret:")
+		return approvalresource.DecodeSecretID(record.ResourceID)
 	case secretPromotionApprovalKind:
 		return record.ResourceID + "/", record.ResourceID != ""
 	case scopedSyncApprovalKind:

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/approvalresource"
 	"trstctl.com/trstctl/internal/auditsink"
 	apiauth "trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authmethod"
@@ -61,7 +62,11 @@ func secretShareAAD(tenantID, shareID, tokenHash string) []byte {
 }
 
 func secretApprovalResource(name string) string {
-	return "secret:" + name
+	return approvalresource.SecretID(name)
+}
+
+func secretApprovalResourceName(name string) string {
+	return approvalresource.SecretDisplayName(name)
 }
 
 func isSecretApprovalAction(action string) bool {

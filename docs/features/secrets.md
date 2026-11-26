@@ -3139,6 +3139,10 @@ enough distinct approvers approve it, and a requester can't approve their own ch
 Approvers call `POST /api/v1/secrets/store/approvals/{name}` with `{"action":"rotate"}`,
 `{"action":"recover"}`, or `{"action":"delete"}`; the response holds only `resource`,
 `action`, `approver`, and the approval count.
+The approval target is the exact stored secret name. Percent-encode spaces in the
+path and use the returned request ID and digest; trailing spaces remain part of
+the name. If a tenant is suspended, its pending secret command stays fenced and
+the recovery sweep resumes that tenant's approval work when service returns.
 
 ### In the console
 

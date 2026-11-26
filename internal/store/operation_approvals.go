@@ -800,13 +800,17 @@ func (s *Store) ConsumedOperationApprovalForAttempt(ctx context.Context, tenantI
 	attempt.ResourceKind = strings.TrimSpace(attempt.ResourceKind)
 	attempt.ResourceID = strings.TrimSpace(attempt.ResourceID)
 	attempt.Action = strings.TrimSpace(attempt.Action)
-	attempt.Requester = strings.TrimSpace(attempt.Requester)
+	// Secret approval subjects are exact sealed fence actors. A retry must
+	// look up that exact subject, including any edge whitespace.
+	if attempt.ResourceKind != "secret" {
+		attempt.Requester = strings.TrimSpace(attempt.Requester)
+	}
 	attempt.ToState = strings.TrimSpace(attempt.ToState)
 	attempt.Reason = strings.TrimSpace(attempt.Reason)
 	attempt.IdempotencyKeyDigest = strings.TrimSpace(attempt.IdempotencyKeyDigest)
 	attempt.SubjectCSRDigest = strings.TrimSpace(attempt.SubjectCSRDigest)
 	if tenantID == "" || attempt.ResourceKind == "" || attempt.ResourceID == "" ||
-		attempt.Action == "" || attempt.Requester == "" || attempt.ToState == "" ||
+		attempt.Action == "" || strings.TrimSpace(attempt.Requester) == "" || attempt.ToState == "" ||
 		attempt.IdempotencyKeyDigest == "" {
 		return OperationApprovalRequest{}, false, errors.New("store: consumed approval attempt is incomplete")
 	}

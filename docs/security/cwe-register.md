@@ -981,7 +981,7 @@ not this file.
 | `internal/store/secret_scoped_sync.go:395` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:437` | SQL column list, no credential (CWE-798) |
 | `internal/store/secret_static_rotation.go:429` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
-| `internal/store/secret_store.go:359` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/secret_store.go:360` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:235` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/tenant_name_held.go:43` | table names and read queries, not credentials (CWE-798) |
 | `internal/store/tenant_unique_names_test.go:19` | table names and reasons, not credentials (CWE-798) |
@@ -1263,7 +1263,7 @@ not this file.
 | `internal/agent/sessionobserve/session_test.go:83` | the C field is signed (CWE-190) |
 | `internal/agent/sessionobserve/session_test.go:137` | small test offsets (CWE-190) |
 | `internal/agent/sshkrl/revocations_test.go:167` | test fixture strings are a few bytes, far under the uint32 bound |
-| `internal/api/application_secret_approval.go:424` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
+| `internal/api/application_secret_approval.go:425` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
 | `internal/api/machine_sessions_served_test.go:65` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/notifications_helpers_test.go:210` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
@@ -1418,8 +1418,8 @@ not this file.
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
 | `internal/orchestrator/discovery.go:397` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:75` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/orchestrator/operation_approvals.go:448` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
-| `internal/orchestrator/operation_approvals.go:458` | a negative stored version is classified as drift before conversion (CWE-190). |
+| `internal/orchestrator/operation_approvals.go:449` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
+| `internal/orchestrator/operation_approvals.go:459` | a negative stored version is classified as drift before conversion (CWE-190). |
 | `internal/orchestrator/rewrap_tenant_command_owner_test.go:45` | net.TCPAddr.Port is bounded to the 16-bit TCP port range |
 | `internal/orchestrator/secret_rotation.go:628` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:243` | bounded test sequence. |

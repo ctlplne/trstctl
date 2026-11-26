@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/approvalresource"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
@@ -66,7 +67,7 @@ type OperationApprovalDecision struct {
 func (o *Orchestrator) EnsureOperationApprovalRequest(ctx context.Context, tenantID string, intent OperationApprovalIntent) (store.OperationApprovalRequest, error) {
 	intent = canonicalApprovalIntent(intent)
 	if strings.TrimSpace(tenantID) == "" || intent.ResourceKind == "" || intent.ResourceID == "" ||
-		intent.Action == "" || intent.Requester == "" {
+		intent.Action == "" || strings.TrimSpace(intent.Requester) == "" {
 		return store.OperationApprovalRequest{}, fmt.Errorf("orchestrator: approval tenant, resource kind/id, action, and requester are required")
 	}
 	if intent.RequiredApprovals <= 0 {
@@ -281,8 +282,8 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 					return lockErr
 				}
 			case "secret":
-				name, ok := strings.CutPrefix(preview.ResourceID, "secret:")
-				secretShapeValid = ok && name != "" && preview.ResourceName == name
+				name, ok := approvalresource.DecodeSecretID(preview.ResourceID)
+				secretShapeValid = ok && preview.ResourceName == approvalresource.SecretDisplayName(name)
 				if secretShapeValid {
 					var lockErr error
 					secretVersion, secretExists, lockErr = o.store.ApplicationSecretApprovalTargetTx(
@@ -820,7 +821,12 @@ func canonicalApprovalIntent(in OperationApprovalIntent) OperationApprovalIntent
 	in.ResourceID = strings.TrimSpace(in.ResourceID)
 	in.ResourceName = strings.TrimSpace(in.ResourceName)
 	in.Action = strings.TrimSpace(in.Action)
-	in.Requester = strings.TrimSpace(in.Requester)
+	// A secret's requester is the exact authenticated actor sealed in its
+	// command fence. Trimming it would strand that fence. Preserve existing
+	// canonicalization for other approval domains.
+	if in.ResourceKind != "secret" {
+		in.Requester = strings.TrimSpace(in.Requester)
+	}
 	in.FromState = strings.TrimSpace(in.FromState)
 	in.ToState = strings.TrimSpace(in.ToState)
 	in.Reason = strings.TrimSpace(in.Reason)

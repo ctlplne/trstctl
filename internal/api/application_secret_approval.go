@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -419,7 +420,7 @@ func (a *API) authorizeRequiredApplicationSecretMutation(
 	}
 	intent := ApprovalIntent{
 		TenantID: tenantID, ResourceKind: "secret", ResourceID: secretApprovalResource(payload.Name),
-		ResourceName: payload.Name, Action: payload.Action, Requester: principal.Subject,
+		ResourceName: secretApprovalResourceName(payload.Name), Action: payload.Action, Requester: principal.Subject,
 		FromState: from, ToState: to,
 		TargetVersion: uint64(payload.ExpectedVersion), // #nosec G115 -- ApplicationSecretApprovalBinding just proved the version is positive (CWE-190).
 		Reason:        "authorize exact " + payload.Surface + " application-secret " + payload.Action,
@@ -767,17 +768,30 @@ func (a *API) ReconcileApplicationSecretMutationFences(ctx context.Context) (rec
 	} else {
 		reconciled += count
 	}
+tenantsLoop:
 	for _, tenant := range tenants {
+		fences, err := a.secrets.be.Store.ListApplicationSecretMutationFences(ctx, tenant.TenantID)
+		if err != nil {
+			return reconciled, err
+		}
+		if len(fences) == 0 {
+			continue
+		}
+		// A suspended or erasing tenant cannot authorize new approval work.
+		// Its exact command remains fenced until service resumes; it must not
+		// stop recovery or readiness for tenants that are still live.
+		if err := a.secrets.be.Store.RequireLiveTenantService(ctx, tenant.TenantID); err != nil {
+			if errors.Is(err, tenancy.ErrServiceUnavailable) {
+				continue
+			}
+			return reconciled, err
+		}
 		if err := a.secrets.be.Store.WithApplicationSecretMutationPrivacyBarrier(
 			ctx, tenant.TenantID, func(context.Context) error { return nil }); err != nil {
 			if errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
 				blocked[applicationSecretReconcilePrivacyPreparationActive]++
 				continue
 			}
-			return reconciled, err
-		}
-		fences, err := a.secrets.be.Store.ListApplicationSecretMutationFences(ctx, tenant.TenantID)
-		if err != nil {
 			return reconciled, err
 		}
 		for _, fence := range fences {
@@ -826,6 +840,9 @@ func (a *API) ReconcileApplicationSecretMutationFences(ctx context.Context) (rec
 					use, err = a.authorizeRequiredApplicationSecretMutation(authCtx, tenant.TenantID, payload)
 					if err != nil {
 						if use == nil {
+							if errors.Is(err, tenancy.ErrServiceUnavailable) {
+								continue tenantsLoop
+							}
 							return reconciled, err
 						}
 						if _, bindErr := a.secrets.be.Store.BindApplicationSecretMutationFenceApproval(
