@@ -3063,7 +3063,7 @@ not this file.
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:409` | the test's own copied config (CWE-22) |
 | `internal/reconcile/gcpkmssource.go:353` | operator-configured credential file path (CWE-22) |
 | `internal/reconcile/kmipsource_pykmip_test.go:63` | test-generated TLS material in the test's temp dir (CWE-22) |
-| `internal/reconcile/stepcasource.go:175` | operator-configured step-ca database DSN file (CWE-22) |
+| `internal/reconcile/stepcasource.go:176` | operator-configured step-ca database DSN file (CWE-22) |
 | `internal/reconcile/vaultsource.go:411` | operator-configured token file from the reviewed config (CWE-22) |
 | `internal/reportarchive/archive.go:250` | fixed reports path under operator archive root; both path IDs and digest are validated UUID/SHA-256 components. |
 | `internal/reportarchive/archive.go:269` | directory is constructed under the operator archive root and checked as a private real directory. |

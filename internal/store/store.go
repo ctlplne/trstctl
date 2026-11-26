@@ -8,16 +8,17 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/jackc/pgx/v5/pgconn"
-	"strconv"
-	"time"
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/crypto/dbtls"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/tenancy"
 )
@@ -213,6 +214,7 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: parse dsn: %w", err)
 	}
+	dbtls.HardenPGXConfig(&cfg.ConnConfig.Config)
 	sizes := options.pools.withDefaults()
 	cfg.MaxConns = sizes.Request
 	if cfg.ConnConfig.RuntimeParams == nil {

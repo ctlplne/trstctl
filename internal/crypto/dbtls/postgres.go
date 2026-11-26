@@ -9,9 +9,9 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
 	"net"
 	"sync"
-	"sync/atomic"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
@@ -62,48 +62,23 @@ func Postgres(mode, negotiation, host, serverName string, ca []byte, systemRoots
 	}
 }
 
-// PostgresPreferDial confines a native driver's plaintext fallback to
-// listeners that explicitly refused this attempt's PostgreSQL SSL request.
-// The same guard also covers pgx's separate connection for a cancellation.
+// PostgresPreferDial confines a native driver's plaintext fallback to a
+// connection that itself explicitly refuses PostgreSQL's SSL request. A prior
+// refusal on another socket cannot authorize plaintext on a concurrent socket.
+// The same guard covers pgx's separate connection for a cancellation.
 func PostgresPreferDial(dial func(context.Context, string, string) (net.Conn, error)) func(context.Context, string, string) (net.Conn, error) {
-	plain := &postgresPlaintextAuthority{refused: make(map[string]bool)}
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
 		conn, err := dial(ctx, network, address)
 		if err != nil {
 			return nil, err
 		}
-		return &postgresPreferConn{Conn: conn, address: address, authority: plain}, nil
-	}
-}
-
-type postgresPlaintextAuthority struct {
-	mu      sync.Mutex
-	refused map[string]bool
-}
-
-func (a *postgresPlaintextAuthority) allow(address string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.refused[address]
-}
-
-func (a *postgresPlaintextAuthority) note(address string, refused bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if refused {
-		a.refused[address] = true
-	} else {
-		delete(a.refused, address)
+		return &postgresPreferConn{Conn: conn}, nil
 	}
 }
 
 type postgresPreferConn struct {
 	net.Conn
-	address   string
-	authority *postgresPlaintextAuthority
 	writeOnce sync.Once
-	probing   atomic.Bool
-	answered  atomic.Bool
 	writeErr  error
 }
 
@@ -115,24 +90,31 @@ func (c *postgresPreferConn) Write(payload []byte) (int, error) {
 	}
 	c.writeOnce.Do(func() {
 		if bytes.Equal(payload, postgresSSLRequest) {
-			c.authority.note(c.address, false)
-			c.probing.Store(true)
 			return
 		}
-		if !c.authority.allow(c.address) {
-			c.writeErr = errors.New("PostgreSQL plaintext fallback requires an explicit TLS refusal")
+		// pgx chose a plaintext fallback. Ask this very connection whether it
+		// supports TLS before passing the startup bytes to it. A refusal on a
+		// previous connection is not evidence about this one.
+		n, err := c.Conn.Write(postgresSSLRequest)
+		if err != nil {
+			c.writeErr = err
+			return
+		}
+		if n != len(postgresSSLRequest) {
+			c.writeErr = io.ErrShortWrite
+			return
+		}
+		answer := []byte{0}
+		if _, err := io.ReadFull(c.Conn, answer); err != nil {
+			c.writeErr = err
+			return
+		}
+		if answer[0] != 'N' {
+			c.writeErr = errors.New("PostgreSQL plaintext fallback refused: server did not reject TLS")
 		}
 	})
 	if c.writeErr != nil {
 		return 0, c.writeErr
 	}
 	return c.Conn.Write(payload)
-}
-
-func (c *postgresPreferConn) Read(payload []byte) (int, error) {
-	n, err := c.Conn.Read(payload)
-	if n == 1 && c.probing.Load() && c.answered.CompareAndSwap(false, true) && payload[0] == 'N' {
-		c.authority.note(c.address, true)
-	}
-	return n, err
 }

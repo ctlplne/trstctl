@@ -6,6 +6,7 @@
 package trusttest
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -14,6 +15,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -34,6 +36,114 @@ type Server struct {
 	IntermediateList []byte
 	// RootList names the root by key and certificate.
 	RootList []byte
+}
+
+// PostgresPasswordPeer is a fake PostgreSQL server. It asks for cleartext
+// authentication after TLS or a plaintext fallback and reports which transport
+// carried a PasswordMessage.
+// The message body is deliberately discarded, never copied into test output.
+type PostgresPasswordPeer struct {
+	Addr              string
+	RootsPEM          []byte
+	DistrustList      []byte
+	PasswordTransport <-chan string
+}
+
+// attempts is the maximum number of connections to observe. Two attempts
+// exercise pgx's sslmode=prefer TLS-then-plaintext fallback.
+func NewPostgresPasswordPeer(t *testing.T, attempts int) *PostgresPasswordPeer {
+	t.Helper()
+	if attempts < 1 || attempts > 2 {
+		t.Fatal("trusttest: PostgreSQL peer needs one or two attempts")
+	}
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _ := pem.Decode(caPEM)
+	if block == nil {
+		t.Fatal("trusttest: missing PostgreSQL fixture CA")
+	}
+	root, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	seen := make(chan string, 1)
+	go func() {
+		var transport string
+		defer func() { seen <- transport }()
+		for i := 0; i < attempts; i++ {
+			_ = listener.(*net.TCPListener).SetDeadline(time.Now().Add(2 * time.Second))
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			if got := postgresPasswordAttempt(conn, pair); got != "" {
+				transport = got
+			}
+		}
+	}()
+	return &PostgresPasswordPeer{Addr: listener.Addr().String(), RootsPEM: caPEM,
+		DistrustList: list(t, "operator-distrusted PostgreSQL root", trust.KindRoot, root, true), PasswordTransport: seen}
+}
+
+func postgresPasswordAttempt(conn net.Conn, pair tls.Certificate) string {
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	first := make([]byte, 8)
+	if _, err := io.ReadFull(conn, first); err != nil {
+		return ""
+	}
+	wire := conn
+	var alreadyRead int
+	transport := "plaintext"
+	if bytes.Equal(first, []byte{0, 0, 0, 8, 4, 210, 22, 47}) {
+		if _, err := conn.Write([]byte{'S'}); err != nil {
+			return ""
+		}
+		secure := tls.Server(conn, &tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12})
+		if err := secure.Handshake(); err != nil {
+			return ""
+		}
+		wire = secure
+		transport = "tls"
+	} else {
+		alreadyRead = 8 // plaintext startup packet on pgx fallback
+	}
+	length := make([]byte, 4)
+	if alreadyRead == 0 {
+		if _, err := io.ReadFull(wire, length); err != nil {
+			return ""
+		}
+		alreadyRead = 4
+	} else {
+		copy(length, first[:4])
+	}
+	n := int(length[0])<<24 | int(length[1])<<16 | int(length[2])<<8 | int(length[3])
+	if n < 8 || n > 8192 {
+		return ""
+	}
+	if _, err := io.CopyN(io.Discard, wire, int64(n-alreadyRead)); err != nil {
+		return ""
+	}
+	if _, err := wire.Write([]byte{'R', 0, 0, 0, 8, 0, 0, 0, 3}); err != nil {
+		return ""
+	}
+	kind := make([]byte, 1)
+	_, err := io.ReadFull(wire, kind)
+	if err == nil && kind[0] == 'p' {
+		return transport
+	}
+	return ""
 }
 
 func key(t *testing.T) *ecdsa.PrivateKey {

@@ -134,14 +134,20 @@ supply their connection strings:
 
 ```bash
 export TRSTCTL_POSTGRES_MODE=external
-export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmode=require'
+export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmode=verify-full&sslrootcert=/etc/trstctl/pg-ca.pem'
 export TRSTCTL_NATS_MODE=external
 export TRSTCTL_NATS_URL='nats://nats.internal:4222'
 export TRSTCTL_NATS_REPLICAS=3
 ```
 
 When a mode is `external`, its connection string is mandatory; trstctl refuses to
-start without it. External NATS also refuses to serve under-replicated: the event
+start without it. PostgreSQL TLS checks the peer's CA chain against `sslrootcert`
+or system roots even when the DSN says `prefer` or `require`; use `verify-full`
+to check the server name as well. With `prefer`, a failed TLS verification or
+distrusted CA cannot fall back to plaintext. A server that explicitly refuses
+the PostgreSQL SSL request can still cause plaintext fallback, so use
+`verify-full` for external production databases. External NATS also refuses to
+serve under-replicated: the event
 stream defaults to three replicas, startup fails on a non-clustered single NATS
 server, and `/readyz` reports degraded if the observed stream later has fewer
 replicas than configured. The Docker Compose eval stack uses the same external code
@@ -1099,7 +1105,7 @@ or CIDR. It is intended for disconnected networks and is paired with the Helm
 | `TRSTCTL_AIRGAP_ALLOW_PRIVATE` | `true` | Allows loopback, private, and link-local IP destinations. Leave true for private PostgreSQL/NATS/OTLP/local model endpoints. |
 | `TRSTCTL_AIRGAP_ALLOW_HOSTS` | — | Comma-separated host allowlist for operator-owned local services such as `otel-collector.observability.svc`. Hosts only; URLs are rejected. |
 | `TRSTCTL_AIRGAP_ALLOW_CIDRS` | — | Comma-separated CIDR allowlist for private service ranges, e.g. `10.0.0.0/8,172.16.0.0/12`. Invalid CIDRs fail startup. |
-| `TRSTCTL_TRUST_DISTRUST_FILE` | — | Optional JSON file in the shape of the shipped `internal/crypto/trust/distrust.json`. Its entries extend the runtime distrust list used by HTTP transports, core and Enterprise directory binds, verified-TCP/SMTP clients, and Redis/PostgreSQL/MongoDB/MySQL gateway sign-ins. Other non-HTTP TLS clients are not yet covered, so this file is not a universal credential-exposure kill switch. The shipped entries always apply and cannot be removed here; a malformed file fails startup. |
+| `TRSTCTL_TRUST_DISTRUST_FILE` | — | Optional JSON file in the shape of the shipped `internal/crypto/trust/distrust.json`. Its entries extend the runtime distrust list used by HTTP transports, core and Enterprise directory binds, verified-TCP/SMTP clients, the control-plane and step-ca PostgreSQL connections, and Redis/PostgreSQL/MongoDB/MySQL gateway sign-ins. Other non-HTTP TLS clients are not yet covered, so this file is not a universal credential-exposure kill switch. The shipped entries always apply and cannot be removed here; a malformed file fails startup. |
 | `TRSTCTL_TRUST_WEAK_KEY_BLOCKLIST_FILES` | — | Comma-separated operator-supplied blocklists of known-compromised RSA keys in Debian's `openssl-blacklist` format (for example the 2008 Debian OpenSSL lists); the weak-key checks flag any key on them. trstctl ships no list. A missing, empty or malformed file fails startup. See [Weak keys](security/weak-keys.md). |
 | `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS` | — | JSON array of env credential bindings (see [Outbound env credential bindings](#outbound-env-credential-bindings)): each `env:NAME` reference that API-authored discovery sources, cloud machine changes, audit feeds and response integrations may name, bound to one tenant, its integration kinds and exact destination origins. The API refuses an unbound reference before any event or outbox row (exactly for Azure and Google workload identities, AWS cloud machine entitlements and cloud changes, audit feeds and response integrations; best-effort for the other discovery kinds), and the worker always refuses it. Malformed JSON fails startup. |
 | `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS` | — | Retired. The old comma-separated, process-wide list approves nothing: startup names each entry no binding covers (an entry that is not a well-formed env name is only counted), and every use of a reference no binding covers is refused. |

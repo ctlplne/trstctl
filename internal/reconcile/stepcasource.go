@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/dbtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/reconcile/canon/reducers"
@@ -190,6 +191,7 @@ func (s *stepCASource) connect(ctx context.Context) (*pgx.Conn, error) {
 	cfg.DialFunc = dialer.DialContext
 	cfg.ConnectTimeout = stepCAConnectTimeout
 	cfg.RuntimeParams["application_name"] = "trstctl-xrec"
+	dbtls.HardenPGXConfig(&cfg.Config)
 	conn, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("xrec stepca source %s: connect: %w", s.cfg.AuthorityID, err)

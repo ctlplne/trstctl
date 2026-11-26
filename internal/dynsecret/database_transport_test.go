@@ -61,7 +61,8 @@ func TestAdmittedPostgresProfileMatchesNativeFields(t *testing.T) {
 	}
 }
 
-// CR-274: a verified TLS attempt must never authorize a plaintext startup.
+// CR-274/CR-071: only an explicit refusal on the fallback socket itself may
+// authorize its plaintext startup. A refusal on another socket is not enough.
 func TestNativePostgresPreferPlaintextRequiresRefusal(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -93,12 +94,35 @@ func TestNativePostgresPreferPlaintextRequiresRefusal(t *testing.T) {
 		_ = peer.SetDeadline(deadline)
 		return conn, peer
 	}
-	assertPlain := func(allowed bool) {
+	assertPlain := func(answer byte, allowed bool) {
 		t.Helper()
-		conn, _ := newConnection()
-		if n, err := conn.Write([]byte{0, 0, 0, 8, 0, 3, 0, 0}); allowed && (n == 0 || err != nil) ||
-			!allowed && (n != 0 || err == nil) {
-			t.Fatalf("plaintext startup permission = %t, want %t", n > 0 && err == nil, allowed)
+		conn, peer := newConnection()
+		startup := []byte{0, 0, 0, 8, 0, 3, 0, 0}
+		type result struct {
+			n   int
+			err error
+		}
+		written := make(chan result, 1)
+		go func() {
+			n, err := conn.Write(startup)
+			written <- result{n, err}
+		}()
+		probe := make([]byte, 8)
+		if _, err := io.ReadFull(peer, probe); err != nil || !bytes.Equal(probe, []byte{0, 0, 0, 8, 4, 210, 22, 47}) {
+			t.Fatalf("fallback did not probe its own socket: probe=%x err=%v", probe, err)
+		}
+		if _, err := peer.Write([]byte{answer}); err != nil {
+			t.Fatal(err)
+		}
+		if allowed {
+			got := make([]byte, len(startup))
+			if _, err := io.ReadFull(peer, got); err != nil || !bytes.Equal(got, startup) {
+				t.Fatalf("explicitly refused fallback did not send startup: got=%x err=%v", got, err)
+			}
+		}
+		out := <-written
+		if allowed && (out.n != len(startup) || out.err != nil) || !allowed && (out.n != 0 || out.err == nil) {
+			t.Fatalf("plaintext startup permission = %t, want %t", out.n > 0 && out.err == nil, allowed)
 		}
 	}
 	negotiate := func(answer byte) {
@@ -120,11 +144,12 @@ func TestNativePostgresPreferPlaintextRequiresRefusal(t *testing.T) {
 		}
 		_ = conn.Close()
 	}
-	assertPlain(false)
+	assertPlain('S', false)
 	negotiate('N')
-	assertPlain(true)
+	assertPlain('S', false)
+	assertPlain('N', true)
 	negotiate('S')
-	assertPlain(false)
+	assertPlain('S', false)
 }
 
 // CR-088: the admitted URI's explicit query host must survive workload issuance.
