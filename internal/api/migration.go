@@ -103,8 +103,14 @@ type migrationStartPending struct {
 // distinct issuance approval; its frozen issuance binding is part of what the
 // reviewers approve.
 type migrationGatedMember struct {
-	IdentityID string
-	Issuance   store.OperationApprovalIssuanceBinding
+	IdentityID               string
+	IssuingAuthorityID       string
+	IssuingAuthoritySource   string
+	TargetID                 string
+	TargetRevision           string
+	PredecessorCertificateID string
+	PredecessorFingerprint   string
+	Issuance                 store.OperationApprovalIssuanceBinding
 }
 
 // migrationStartApprovalIntent is the immutable intent reviewers approve for a
@@ -117,8 +123,10 @@ func migrationStartApprovalIntent(tenantID, principal, planID, authorityID, requ
 	refs := []string{"migration-intent:" + requestDigest, "authority:" + authorityID}
 	for _, member := range gated {
 		b := member.Issuance
-		refs = append(refs, fmt.Sprintf("member:%s:profile:%s:profile-id:%s:profile-version:%d:profile-spec-digest:%s:ttl:%d/%d",
-			member.IdentityID, b.ProfileName, b.ProfileID, b.ProfileVersion, b.ProfileSpecDigest, b.RequestedTTLSeconds, b.EffectiveTTLSeconds))
+		refs = append(refs, fmt.Sprintf("member:%s:issuer:%s/%s:target:%s:revision:%s:predecessor:%s/%s:profile:%s:profile-id:%s:profile-version:%d:profile-spec-digest:%s:ttl:%d/%d",
+			member.IdentityID, member.IssuingAuthoritySource, member.IssuingAuthorityID,
+			member.TargetID, member.TargetRevision, member.PredecessorCertificateID, member.PredecessorFingerprint,
+			b.ProfileName, b.ProfileID, b.ProfileVersion, b.ProfileSpecDigest, b.RequestedTTLSeconds, b.EffectiveTTLSeconds))
 	}
 	sort.Strings(refs[2:])
 	return ApprovalIntent{
@@ -452,6 +460,7 @@ func (a *API) assembleMigrationRun(ctx context.Context, tenantID, idempotencyKey
 			}
 			member.Binding.IssuingAuthoritySource = issuerSource
 			if gatedMember != nil {
+				gatedMember.IssuingAuthoritySource = issuerSource
 				gated = append(gated, *gatedMember)
 			}
 			wave.Members = append(wave.Members, member)
@@ -649,7 +658,7 @@ func (a *API) buildMigrationMember(
 			return migration.RunMember{}, nil, err
 		}
 	}
-	return migration.RunMember{IdentityID: identityID, Binding: migration.MemberBinding{
+	member := migration.RunMember{IdentityID: identityID, Binding: migration.MemberBinding{
 		IssuingAuthorityID: authorityID,
 		Issuance: &migration.IssuanceBinding{
 			ProfileName: issuance.ProfileName, ProfileID: issuance.ProfileID,
@@ -669,7 +678,15 @@ func (a *API) buildMigrationMember(
 		PredecessorExternalCAID:  predecessor.IssuingExternalCAID,
 		ExecutionModel:           executionModel,
 		ObservedAddresses:        observedAddresses,
-	}}, gated, nil
+	}}
+	if gated != nil {
+		gated.IssuingAuthorityID = member.Binding.IssuingAuthorityID
+		gated.TargetID = member.Binding.TargetID
+		gated.TargetRevision = member.Binding.TargetRevision
+		gated.PredecessorCertificateID = member.Binding.PredecessorCertificateID
+		gated.PredecessorFingerprint = member.Binding.PredecessorFingerprint
+	}
+	return member, gated, nil
 }
 
 // migrationMemberExecutor decides where a member's leaf work runs and checks

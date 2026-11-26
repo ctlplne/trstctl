@@ -577,8 +577,11 @@ func runApprovalGatedMigrationAUD40(t *testing.T, h *roleHarness, token, authori
 	if err != nil || request.ResourceKind != "migration_run" || request.Action != "start" || request.ResourceID != "plan-aud40-approval" {
 		t.Fatalf("approval request = %+v err=%v; want migration_run/plan/start", request, err)
 	}
-	if !strings.Contains(strings.Join(request.EvidenceRefs, "\n"), "member:"+identityID+":profile:migration-api:") {
-		t.Fatalf("approval evidence does not freeze the gated member's profile: %v", request.EvidenceRefs)
+	joinedEvidence := strings.Join(request.EvidenceRefs, "\n")
+	for _, want := range []string{"member:" + identityID + ":issuer:", ":target:", ":revision:", ":predecessor:", ":profile:migration-api:"} {
+		if !strings.Contains(joinedEvidence, want) {
+			t.Fatalf("approval evidence lacks frozen %s: %v", want, request.EvidenceRefs)
+		}
 	}
 	for index := 0; index < pending.RequiredApprovals; index++ {
 		approver := seedScopedTokenSubject(t, h.store, h.tenant, fmt.Sprintf("aud40-migration-approver-%d", index), "certs:issue")

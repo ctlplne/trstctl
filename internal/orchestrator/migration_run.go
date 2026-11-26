@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -92,9 +93,41 @@ func (o *Orchestrator) RecordMigrationRun(
 		return store.MigrationRun{}, err
 	}
 	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
+		// Reuse the retained time after an append-won/SQL-lost crash. The
+		// approval is checked against the same time the projector will see.
+		eventTime := time.Now().UTC().Truncate(time.Microsecond)
+		retained, found, err := o.log.EventByID(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		if found {
+			if retained.ID != eventID || retained.Type != projections.EventMigrationRunRecorded ||
+				retained.TenantID != tenantID || !bytes.Equal(retained.Data, payload) {
+				return fmt.Errorf("%w: canonical migration run differs", store.ErrIdempotencyConflict)
+			}
+			eventTime = retained.Time
+		}
+		if run.Approval != nil && eventID == MigrationEventID(tenantID, run.ID, "start") {
+			use := projections.MigrationApprovalUse(*run.Approval)
+			if _, err := o.store.ValidateOperationApprovalUseTx(ctx, tx, tenantID, use, eventTime); err != nil {
+				if !errors.Is(err, store.ErrApprovalConsumed) {
+					return err
+				}
+				approved, lookupErr := o.store.GetOperationApprovalForUpdateTx(ctx, tx, tenantID, use.RequestID)
+				if lookupErr != nil {
+					return lookupErr
+				}
+				if !found || approved.ConsumedEventID != eventID {
+					return store.ErrApprovalConsumed
+				}
+				// The original start and its outbox effects committed in the same
+				// SQL transaction as this consumption. It is an exact retry.
+				return nil
+			}
+		}
 		ev, err := o.log.Append(ctx, events.Event{
 			ID: eventID, Type: projections.EventMigrationRunRecorded,
-			TenantID: tenantID, Data: payload,
+			TenantID: tenantID, Time: eventTime, Data: payload,
 		})
 		if err != nil {
 			return err
@@ -495,6 +528,20 @@ func (o *Orchestrator) reconcileMigrationRun(ctx context.Context, ev events.Even
 	// lifetime admission. Restoring the exact queue intent grants no execution
 	// permission and must remain possible while ordinary service is suspended.
 	err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+		if recorded.Run.Approval != nil && ev.ID == MigrationEventID(ev.TenantID, recorded.Run.ID, "start") {
+			approval, err := o.store.GetOperationApprovalTx(ctx, tx, ev.TenantID, recorded.Run.Approval.RequestID)
+			if err != nil {
+				return err
+			}
+			if approval.Status == store.ApprovalStatusConsumed && approval.ConsumedEventID != ev.ID {
+				// A historical loser never projected a run, so it must not
+				// reconstruct external work from its immutable append.
+				return nil
+			}
+			if approval.Status != store.ApprovalStatusConsumed || approval.ConsumedEventID != ev.ID {
+				return store.ErrApprovalNotReady
+			}
+		}
 		for _, action := range recorded.Actions {
 			entry, err := migrationActionEntry(ev.TenantID, recorded.Run, action)
 			if err != nil {

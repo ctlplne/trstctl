@@ -5338,11 +5338,15 @@ than sending an operator looking for a credential that was never there.
   approved operation. The first `POST /api/v1/migrations/runs` records an
   immutable approval request (`resource_kind: migration_run`, the plan id,
   the requester, the canonical request digest, the new authority and each gated
-  member's frozen profile revision and lifetime) and answers `202` with
+  member's frozen profile revision, lifetime, issuer, target revision and
+  predecessor fingerprint) and answers `202` with
   `status: pending_approval`, the request id and intent digest; reviewers with
   `certs:issue` approve it through `/api/v1/approval-requests`, and the same
   start posted again under a new `Idempotency-Key` records the run with the
-  consumed approval on it (`approval` in the run). Incident fleet reissuance
+  consumed approval on it (`approval` in the run). A competing start is refused
+  before its event is appended; a duplicate left by an older binary isolates
+  that tenant for operator review while other tenants continue replaying.
+  Incident fleet reissuance
   still refuses such members; it has no start approval of its own yet.
 - Trust in the graph (H1): trust-store anchors agents collect are promoted from
   flat discovery findings into relationships — a `trust-store` node kind, `TRUSTS`

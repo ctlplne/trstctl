@@ -116,6 +116,7 @@ func newStore(t *testing.T) *store.Store {
 		          trstctl_recovery.tenant_key_domain_snapshots, trstctl_recovery.event_ingress_journal,
 		          trstctl_recovery.restore_activity_tokens, trstctl_recovery.restore_markers,
 		          secret_rotation_schedule_commands, secret_rotation_schedules, migration_runs,
+		          projection_tenant_quarantines,
 		          tenants, idempotency_keys, outbox, agent_job_attempt_bindings,
 		          owners, issuers, identities, identity_transitions, deployment_targets, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          connector_delivery_receipts, lifecycle_rotation_runs

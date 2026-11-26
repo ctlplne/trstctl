@@ -3786,9 +3786,9 @@ func MigrationEventID(tenantID, runID, purpose string) string {
 	return uuid.NewSHA1(migrationEventNamespace, []byte(tenantID+"\x00"+runID+"\x00"+purpose)).String()
 }
 
-// migrationApprovalUse maps the aggregate's storage-independent approval use
+// MigrationApprovalUse maps the aggregate's storage-independent approval use
 // onto the store's single-use authority.
-func migrationApprovalUse(a migration.ApprovalUse) store.OperationApprovalUse {
+func MigrationApprovalUse(a migration.ApprovalUse) store.OperationApprovalUse {
 	use := store.OperationApprovalUse{
 		RequestID: a.RequestID, IntentDigest: a.IntentDigest, Requester: a.Requester,
 		ResourceKind: a.ResourceKind, ResourceID: a.ResourceID, Action: a.Action,
@@ -8430,8 +8430,23 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			// not consume it again: the authority is already spent by the start
 			// event, and a second consumption would wedge the projector on the
 			// first pause, trust verdict or successor update.
-			use := migrationApprovalUse(*pl.Run.Approval)
+			use := MigrationApprovalUse(*pl.Run.Approval)
 			if _, err := p.store.ValidateOperationApprovalUseTx(ctx, tx, e.TenantID, use, e.Time); err != nil {
+				if errors.Is(err, store.ErrApprovalConsumed) {
+					approved, lookupErr := p.store.GetOperationApprovalTx(ctx, tx, e.TenantID, use.RequestID)
+					if lookupErr != nil {
+						return lookupErr
+					}
+					if approved.Status == store.ApprovalStatusConsumed && approved.ConsumedEventID != "" &&
+						approved.ConsumedEventID != e.ID {
+						// An older producer may have appended a second start before
+						// checking this single-use grant. The losing event cannot
+						// authorize a run or actions. Quarantine the tenant because
+						// historical commit order may differ from event order.
+						return p.store.RecordProjectionTenantQuarantineTx(ctx, tx, e.TenantID,
+							e.Sequence, "migration_approval_duplicate_start")
+					}
+				}
 				return fmt.Errorf("projections: migration start approval: %w", err)
 			}
 			if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, use, e.ID, e.Time); err != nil {
