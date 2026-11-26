@@ -126,6 +126,17 @@ func Resolve(kind string, raw json.RawMessage) (Intent, error) {
 			return Intent{}, errors.New("segment scan: relay_agent_id must be a UUID")
 		}
 	}
+	for name, count := range map[string]int{
+		"targets": len(cfg.Targets), "cidrs": len(cfg.CIDRs), "ranges": len(cfg.Ranges), "ports": len(cfg.Ports),
+		"exclude_targets": len(cfg.ExcludeTargets), "exclude_ports": len(cfg.ExcludePorts),
+	} {
+		if count > MaxTargets {
+			return Intent{}, fmt.Errorf("segment scan: %s has %d entries; maximum is %d", name, count, MaxTargets)
+		}
+	}
+	if len(cfg.ExcludeCIDRs) > 256 {
+		return Intent{}, errors.New("segment scan: exclude_cidrs has more than 256 entries")
+	}
 
 	targets := make([]string, 0, len(cfg.Targets))
 	for _, target := range cfg.Targets {
@@ -146,8 +157,20 @@ func Resolve(kind string, raw json.RawMessage) (Intent, error) {
 	if mode == ModeSSH && len(cidrs) > 0 && len(ports) == 0 {
 		ports = []int{22}
 	}
+	uniquePorts := make([]int, 0, len(ports))
+	seenPorts := make(map[int]struct{}, len(ports))
+	for _, port := range ports {
+		if port < 1 || port > 65535 {
+			return Intent{}, fmt.Errorf("segment scan: port %d must be inside 1-65535", port)
+		}
+		if _, exists := seenPorts[port]; !exists {
+			seenPorts[port] = struct{}{}
+			uniquePorts = append(uniquePorts, port)
+		}
+	}
+	ports = uniquePorts
 	for _, cidr := range cidrs {
-		expanded, err := netscan.ExpandRange(strings.TrimSpace(cidr), ports)
+		expanded, err := netscan.ExpandRange(strings.TrimSpace(cidr), ports, MaxTargets-len(targets))
 		if err != nil {
 			return Intent{}, err
 		}
@@ -310,7 +333,18 @@ func expandAddressRange(value string, ports []int, remaining int) ([]string, err
 	if err != nil {
 		return nil, fmt.Errorf("segment scan: address range %q is invalid", value)
 	}
-	out := make([]string, 0)
+	maxHosts := remaining / len(ports)
+	hosts := 0
+	for current := start; current.IsValid() && current.Compare(end) <= 0; current = current.Next() {
+		hosts++
+		if hosts > maxHosts {
+			return nil, fmt.Errorf("segment scan: source has more than the maximum %d targets", MaxTargets)
+		}
+		if current == end {
+			break
+		}
+	}
+	out := make([]string, 0, hosts*len(ports))
 	for current := start; ; current = current.Next() {
 		if !current.IsValid() || current.Compare(end) > 0 {
 			break

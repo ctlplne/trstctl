@@ -15,12 +15,16 @@ import (
 // bounded separately by the worker pool.
 const maxRangeHosts = 1 << 16
 
-// ExpandRange enumerates every address in a CIDR crossed with the given ports as
-// "host:port" targets, in order. It rejects an empty port list and a range whose
-// host count exceeds maxRangeHosts.
-func ExpandRange(cidr string, ports []int) ([]string, error) {
+// ExpandRange enumerates a CIDR crossed with ports, within the caller's
+// remaining target budget. It checks the product before allocating any targets.
+func ExpandRange(cidr string, ports []int, remaining int) ([]string, error) {
 	if len(ports) == 0 {
 		return nil, errors.New("netscan: at least one port is required")
+	}
+	for _, port := range ports {
+		if port < 1 || port > 65535 {
+			return nil, fmt.Errorf("netscan: port %d must be inside 1-65535", port)
+		}
 	}
 	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -31,8 +35,12 @@ func ExpandRange(cidr string, ports []int) ([]string, error) {
 	if hostBits >= 17 || (1<<uint(hostBits)) > maxRangeHosts {
 		return nil, fmt.Errorf("netscan: range %s has too many addresses (max %d)", cidr, maxRangeHosts)
 	}
+	hosts := 1 << uint(hostBits)
+	if remaining < 0 || hosts > remaining/len(ports) {
+		return nil, fmt.Errorf("netscan: range %s exceeds the maximum remaining %d targets", cidr, remaining)
+	}
 
-	var targets []string
+	targets := make([]string, 0, hosts*len(ports))
 	for ip := cloneIP(ipnet.IP); ipnet.Contains(ip); incIP(ip) {
 		host := ip.String()
 		for _, p := range ports {

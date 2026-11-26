@@ -178,7 +178,7 @@ func TestScannerPoolIsBounded(t *testing.T) {
 
 // ExpandRange enumerates CIDR x ports and guards against oversized ranges.
 func TestExpandRange(t *testing.T) {
-	got, err := netscan.ExpandRange("10.0.0.0/30", []int{443, 8443})
+	got, err := netscan.ExpandRange("10.0.0.0/30", []int{443, 8443}, 8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,14 +189,20 @@ func TestExpandRange(t *testing.T) {
 		t.Errorf("missing expected targets: %v", got)
 	}
 
-	if _, err := netscan.ExpandRange("10.0.0.0/8", []int{443}); err == nil {
+	if _, err := netscan.ExpandRange("10.0.0.0/8", []int{443}, 10_000); err == nil {
 		t.Error("an oversized range must be rejected")
 	}
-	if _, err := netscan.ExpandRange("10.0.0.0/30", nil); err == nil {
+	if _, err := netscan.ExpandRange("10.0.0.0/30", nil, 10_000); err == nil {
 		t.Error("an empty port list must be rejected")
 	}
-	if _, err := netscan.ExpandRange("not-a-cidr", []int{443}); err == nil {
+	if _, err := netscan.ExpandRange("not-a-cidr", []int{443}, 10_000); err == nil {
 		t.Error("a malformed CIDR must be rejected")
+	}
+	if _, err := netscan.ExpandRange("10.0.0.0/30", []int{443, 8443}, 7); err == nil {
+		t.Error("the product above the remaining target budget must be rejected")
+	}
+	if _, err := netscan.ExpandRange("10.0.0.0/30", []int{65536}, 10_000); err == nil {
+		t.Error("a port outside the TCP range must be rejected")
 	}
 }
 

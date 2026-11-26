@@ -857,6 +857,10 @@ non-invasive SSH host-key scans from the discovery outbox worker. Source configs
 explicit `targets` (`host:port`) or CIDRs plus ports, run on a bounded worker lane, and
 use reserved-address filtering unless the operator explicitly allows private or loopback
 diagnostic targets.
+The source preview and create routes cap the raw target, CIDR, range, port, and
+exclusion lists. They reject a CIDR or address range whose addresses multiplied
+by unique ports would exceed the 10,000-target command budget before building
+the target list. Exclusion rules do not increase that budget.
 
 ### Discovery source kinds, one shape
 
