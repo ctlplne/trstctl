@@ -4812,9 +4812,13 @@ func componentSchemas() map[string]*Schema {
 		"default_tenant": uuid(), "allow_default_tenant": {Type: "boolean"},
 		"tenant_mappings": {Type: "array", Items: ref("OIDCTenantMapping")},
 	}, "enabled", "claim_is_tenant", "allow_default_tenant", "tenant_mappings")
+	scimMemberBinding := object(map[string]*Schema{
+		"user_name": str(), "external_id": str(),
+		"subject_attribute": {Type: "string", Enum: []string{"userName", "externalId"}},
+	}, "user_name", "subject_attribute")
 	member := object(map[string]*Schema{
 		"tenant_id": uuid(), "subject": str(), "display_name": str(), "email": str(),
-		"roles": {Type: "array", Items: str()}, "source": str(),
+		"roles": {Type: "array", Items: str()}, "source": str(), "scim_identity": scimMemberBinding,
 		"status":     {Type: "string", Enum: []string{"active", "offboarded"}},
 		"created_at": timestamp(), "updated_at": timestamp(), "offboarded_at": timestamp(),
 		"offboarded_by": str(), "offboard_reason": str(),
@@ -4826,6 +4830,8 @@ func componentSchemas() map[string]*Schema {
 	}, "tenant_id", "subject", "roles", "source", "status", "created_at", "updated_at")
 	memberReq := object(map[string]*Schema{
 		"display_name": str(), "email": str(), "roles": {Type: "array", Items: str()}, "source": str(),
+		"scim_identity": {Type: "object", Description: "Required when source is scim: an operator-verified binding whose selected userName or externalId exactly equals the member subject; SCIM cannot adopt a local member itself.",
+			Properties: scimMemberBinding.Properties, Required: scimMemberBinding.Required},
 	}, "roles")
 	offboardMemberReq := object(map[string]*Schema{"reason": str()})
 	offboardMemberResp := object(map[string]*Schema{

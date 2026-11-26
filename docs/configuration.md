@@ -2409,7 +2409,23 @@ is interrupted during deprovisioning, the subject remains denied and the exact
 first offboard command resumes after restart. A group delta cannot reactivate
 the subject; send an explicit active user update after recovery.
 
-Changing a token's mapping does not relink existing accounts. Legacy members
+A SCIM token can list and change only members whose source is `scim` and whose
+stored subject mapping matches that token. A local or recovery member stays
+outside its scope even if `userName` matches; a group delete skips those members,
+and a direct GET, PUT, PATCH, DELETE, or group add/remove returns 404 for them.
+`POST /Users` cannot claim a local member or a subject that already owns or minted
+an active API token. To move an existing local account under SCIM, an operator
+must first verify the exact login subject and deliberately update that member
+through `PUT /api/v1/access/members/{subject}` with `source: "scim"`, its
+complete intended `roles` array, and `scim_identity`. The identity must include
+`user_name` and `subject_attribute` (`userName` or `externalId`); include
+`external_id` when selecting `externalId`. The selected value must exactly equal
+the path subject. The operator must verify the IdP mapping before submitting
+this request. This is an operator action, not something the SCIM
+token can do for itself. A SCIM deletion, `active:false`, or admin-group removal
+returns 409 if it would remove the last active member with the `admin` role.
+
+Changing a token's mapping does not relink existing accounts. Legacy SCIM-source members
 without a stored binding are hidden from the `externalId`-mapped user list until
 explicitly provisioned with the correct subject. Review existing email-named
 members, create the correctly bound resource, reapply intended groups, and

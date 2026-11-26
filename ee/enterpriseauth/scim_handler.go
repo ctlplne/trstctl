@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -289,6 +290,18 @@ func (a *scimHandler) applySCIMUserLocked(ctx context.Context, tok scimToken, su
 	if currentErr != nil && !store.IsNotFound(currentErr) {
 		return store.TenantMember{}, currentErr
 	}
+	if currentErr == nil && !scimMemberVisible(tok, current) {
+		return store.TenantMember{}, scimHTTPError{status: http.StatusConflict, detail: "subject is managed outside this SCIM token"}
+	}
+	if store.IsNotFound(currentErr) && !in.Active {
+		activeTokens, err := a.store.CountActiveAPITokensForSubject(ctx, tenantID, subject)
+		if err != nil {
+			return store.TenantMember{}, err
+		}
+		if activeTokens > 0 {
+			return store.TenantMember{}, scimHTTPError{status: http.StatusNotFound, detail: "SCIM user not found"}
+		}
+	}
 	if currentErr == nil && current.SCIM != nil && current.SCIM.SubjectAttribute != tok.SubjectAttribute {
 		return store.TenantMember{}, scimHTTPError{status: http.StatusConflict, scimType: "mutability", detail: "this principal already has a different explicit SCIM subject binding"}
 	}
@@ -301,7 +314,13 @@ func (a *scimHandler) applySCIMUserLocked(ctx context.Context, tok scimToken, su
 		return store.TenantMember{}, scimHTTPError{status: http.StatusConflict, scimType: "uniqueness", detail: "userName is already bound to another SCIM principal in this tenant"}
 	}
 	if !in.Active {
+		if err := a.requireSCIMAdminSurvivor(ctx, tok, current); err != nil {
+			return store.TenantMember{}, err
+		}
 		member, _, err := a.orch.OffboardSCIMTenantMember(ctx, tenantID, subject, "scim active=false", identity)
+		if errors.Is(err, store.ErrSCIMMemberOutOfScope) {
+			return store.TenantMember{}, scimHTTPError{status: http.StatusNotFound, detail: "SCIM user not found"}
+		}
 		return member, err
 	}
 	roles := []string{}
@@ -316,9 +335,13 @@ func (a *scimHandler) applySCIMUserLocked(ctx context.Context, tok scimToken, su
 	if email == "" {
 		email = in.UserName
 	}
-	return a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
+	member, err := a.orch.UpsertSCIMTenantMember(ctx, tenantID, store.TenantMember{
 		Subject: subject, DisplayName: displayName, Email: email, Roles: roles, Source: "scim", SCIM: identity,
 	})
+	if errors.Is(err, store.ErrSCIMMemberOutOfScope) {
+		return store.TenantMember{}, scimHTTPError{status: http.StatusConflict, detail: "subject is managed outside this SCIM token"}
+	}
+	return member, err
 }
 
 func (a *scimHandler) scimCreateGroup(w http.ResponseWriter, r *http.Request) {
@@ -430,16 +453,19 @@ func (a *scimHandler) addRoleToMember(ctx context.Context, tok scimToken, subjec
 		return nil
 	}
 	member, err := a.store.GetTenantMember(ctx, tenantID, subject)
-	if err != nil && !store.IsNotFound(err) {
+	if err != nil {
+		if store.IsNotFound(err) {
+			return scimHTTPError{status: http.StatusNotFound, detail: "bound SCIM user not found"}
+		}
 		return err
+	}
+	if !scimMemberVisible(tok, member) {
+		return scimHTTPError{status: http.StatusNotFound, detail: "bound SCIM user not found"}
 	}
 	// A group delta is not an account-reactivation command. In explicit mapping
 	// mode, a group member must also name a previously bound SCIM resource.
 	if err == nil && member.Status == "offboarded" {
 		return scimHTTPError{status: http.StatusConflict, scimType: "invalidValue", detail: "provision the user as active before adding group membership"}
-	}
-	if tok.SubjectAttribute == "externalId" && (err != nil || !scimMemberVisible(tok, member)) {
-		return scimHTTPError{status: http.StatusNotFound, detail: "bound SCIM user not found"}
 	}
 	roles := appendRole(member.Roles, roleName)
 	if member.DisplayName == "" {
@@ -451,6 +477,9 @@ func (a *scimHandler) addRoleToMember(ctx context.Context, tok scimToken, subjec
 	_, err = a.orch.UpsertActiveTenantMember(ctx, tenantID, store.TenantMember{
 		Subject: subject, DisplayName: member.DisplayName, Email: member.Email, Roles: roles, Source: "scim",
 	})
+	if errors.Is(err, store.ErrSCIMMemberOutOfScope) {
+		return scimHTTPError{status: http.StatusNotFound, detail: "bound SCIM user not found"}
+	}
 	if errors.Is(err, store.ErrTenantMemberOffboarded) {
 		return scimHTTPError{status: http.StatusConflict, scimType: "invalidValue", detail: "provision the user as active before adding group membership"}
 	}
@@ -458,23 +487,40 @@ func (a *scimHandler) addRoleToMember(ctx context.Context, tok scimToken, subjec
 }
 
 func (a *scimHandler) removeRoleFromMember(ctx context.Context, tok scimToken, subject, roleName string) error {
+	return a.store.WithProjectionLock(ctx, func(locked context.Context) error {
+		return a.removeRoleFromMemberLocked(locked, tok, subject, roleName)
+	})
+}
+
+func (a *scimHandler) removeRoleFromMemberLocked(ctx context.Context, tok scimToken, subject, roleName string) error {
 	tenantID := tok.TenantID
 	member, err := a.store.GetTenantMember(ctx, tenantID, subject)
 	if err != nil {
 		if store.IsNotFound(err) {
-			return nil
+			return scimHTTPError{status: http.StatusNotFound, detail: "bound SCIM user not found"}
 		}
 		return err
 	}
 	// Offboarding already removes all effective permissions. A delayed group
 	// removal must remain a no-op, not emit the active-member upsert below.
-	if member.Status == "offboarded" || !scimMemberVisible(tok, member) {
+	if !scimMemberVisible(tok, member) {
+		return scimHTTPError{status: http.StatusNotFound, detail: "bound SCIM user not found"}
+	}
+	if member.Status == "offboarded" {
 		return nil
+	}
+	if roleName == "admin" && slices.Contains(member.Roles, "admin") {
+		if err := a.requireSCIMAdminSurvivor(ctx, tok, member); err != nil {
+			return err
+		}
 	}
 	roles := removeRole(member.Roles, roleName)
 	_, err = a.orch.UpsertActiveTenantMember(ctx, tenantID, store.TenantMember{
 		Subject: member.Subject, DisplayName: member.DisplayName, Email: member.Email, Roles: roles, Source: "scim",
 	})
+	if errors.Is(err, store.ErrSCIMMemberOutOfScope) {
+		return scimHTTPError{status: http.StatusNotFound, detail: "bound SCIM user not found"}
+	}
 	if errors.Is(err, store.ErrTenantMemberOffboarded) {
 		return nil
 	}
@@ -894,10 +940,38 @@ func scimNonLegacySubjectAttribute(tok scimToken) string {
 }
 
 func scimMemberVisible(tok scimToken, member store.TenantMember) bool {
-	if member.SCIM == nil {
-		return tok.SubjectAttribute != "externalId"
+	if member.Source != "scim" {
+		return false
 	}
-	return member.SCIM.SubjectAttribute == tok.SubjectAttribute
+	if member.SCIM == nil {
+		return tok.SubjectAttribute == "userName"
+	}
+	if member.SCIM.SubjectAttribute != tok.SubjectAttribute {
+		return false
+	}
+	if tok.SubjectAttribute == "externalId" {
+		return member.SCIM.ExternalID == member.Subject
+	}
+	return member.SCIM.UserName == member.Subject
+}
+
+// The caller holds the projection lock across this read and the resulting
+// member command. Two SCIM removals cannot each count the other as survivor.
+// Local and recovery members are outside SCIM's mutation scope altogether.
+func (a *scimHandler) requireSCIMAdminSurvivor(ctx context.Context, tok scimToken, member store.TenantMember) error {
+	if member.Status != "active" || !slices.Contains(member.Roles, "admin") {
+		return nil
+	}
+	admins, err := a.store.ListTenantMembersByRole(ctx, tok.TenantID, "admin")
+	if err != nil {
+		return err
+	}
+	for _, admin := range admins {
+		if admin.Subject != member.Subject && admin.Status == "active" {
+			return nil
+		}
+	}
+	return scimHTTPError{status: http.StatusConflict, detail: "cannot remove the last active administrator"}
 }
 
 // NewSCIMHandler mounts the tenant protocol on the core-owned dependencies.
@@ -970,6 +1044,10 @@ func (a *scimHandler) opCreateUser(ctx context.Context, tok scimToken, base, sub
 }
 
 func (a *scimHandler) opPutUser(ctx context.Context, tok scimToken, base, subject string, in scim.User) (int, any, error) {
+	current, err := a.store.GetTenantMember(ctx, tok.TenantID, subject)
+	if err != nil || !scimMemberVisible(tok, current) {
+		return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
+	}
 	member, err := a.applySCIMUser(ctx, tok, subject, in)
 	if err != nil {
 		return 0, nil, err
@@ -994,10 +1072,25 @@ func (a *scimHandler) opPatchUser(ctx context.Context, tok scimToken, base, subj
 }
 
 func (a *scimHandler) opDeleteUser(ctx context.Context, tok scimToken, subject string) (int, any, error) {
-	if cur, err := a.store.GetTenantMember(ctx, tok.TenantID, subject); err != nil || !scimMemberVisible(tok, cur) {
-		return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
-	}
-	if _, _, err := a.orch.OffboardTenantMember(ctx, tok.TenantID, subject, "scim delete"); err != nil {
+	err := a.store.WithProjectionLock(ctx, func(locked context.Context) error {
+		current, err := a.store.GetTenantMember(locked, tok.TenantID, subject)
+		if err != nil || !scimMemberVisible(tok, current) {
+			return scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
+		}
+		if err := a.requireSCIMAdminSurvivor(locked, tok, current); err != nil {
+			return err
+		}
+		identity := current.SCIM
+		if identity == nil {
+			identity = &store.SCIMIdentity{UserName: subject, SubjectAttribute: "userName"}
+		}
+		_, _, err = a.orch.OffboardSCIMTenantMember(locked, tok.TenantID, subject, "scim delete", identity)
+		if errors.Is(err, store.ErrSCIMMemberOutOfScope) {
+			return scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
+		}
+		return err
+	})
+	if err != nil {
 		return 0, nil, err
 	}
 	return http.StatusNoContent, nil, nil
@@ -1146,6 +1239,9 @@ func (a *scimHandler) opDeleteGroup(ctx context.Context, tok scimToken, group st
 		return 0, nil, err
 	}
 	for _, m := range members {
+		if !scimMemberVisible(tok, m) {
+			continue
+		}
 		if err := a.removeRoleFromMember(ctx, tok, m.Subject, roleName); err != nil {
 			return 0, nil, err
 		}

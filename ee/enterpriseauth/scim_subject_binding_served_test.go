@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
@@ -42,6 +43,9 @@ func TestServedSCIMExplicitSubjectBindingControlsRealSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	bearer := seedServedAPIToken(t, ctx, st, tenantID, subject, []string{"access:read"})
+	adopter := seedServedAPIToken(t, ctx, st, tenantID, "scim-adoption-operator", []string{
+		string(authz.AccessWrite), string(authz.AccessRoleAssign),
+	})
 	tokenFile := t.TempDir() + "/scim.token"
 	if err := writeSecretFile(tokenFile, []byte(provisionToken)); err != nil {
 		t.Fatal(err)
@@ -74,6 +78,17 @@ func TestServedSCIMExplicitSubjectBindingControlsRealSessions(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 	user := map[string]any{"schemas": []string{scim.SchemaUser}, "userName": userName, "externalId": subject, "displayName": "Opaque Subject", "active": true}
+	if refused := doSCIM(t, ts, http.MethodPost, "/scim/v2/Users", provisionToken, "before-adoption", user); refused.Code != http.StatusConflict {
+		t.Fatalf("SCIM claimed an existing API-token subject before operator adoption: %d %s", refused.Code, refused.Body)
+	}
+	adoption := map[string]any{"display_name": "Opaque Subject", "roles": []string{}, "source": "scim",
+		"scim_identity": map[string]string{"user_name": userName, "external_id": subject, "subject_attribute": "externalId"}}
+	if code, body := doBearer(t, ts, http.MethodPut, "/api/v1/access/members/"+url.PathEscape(subject), adopter, "adopt-scim-subject", adoption); code != http.StatusOK {
+		t.Fatalf("operator adoption = %d %s", code, body)
+	}
+	if adopted, err := st.GetTenantMember(ctx, tenantID, subject); err != nil || adopted.Source != "scim" || adopted.SCIM == nil || adopted.SCIM.ExternalID != subject {
+		t.Fatalf("operator adoption did not bind the subject: %+v %v", adopted, err)
+	}
 	created := doSCIM(t, ts, http.MethodPost, "/scim/v2/Users", provisionToken, "bind-subject", user)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create=%d %s", created.Code, created.Body)
@@ -202,6 +217,15 @@ func TestServedSCIMExplicitSubjectBindingControlsRealSessions(t *testing.T) {
 		}
 		if upserts != 0 || offboards != 1 {
 			t.Fatalf("inactive-first emitted upserts=%d offboards=%d", upserts, offboards)
+		}
+		payload["active"] = true
+		activated := doSCIM(t, ts, http.MethodPost, "/scim/v2/Users", provisionToken, "activate-inactive-first", payload)
+		if activated.Code != http.StatusCreated {
+			t.Fatalf("SCIM could not activate its own inactive-first subject: %d %s", activated.Code, activated.Body)
+		}
+		member, err := st.GetTenantMember(ctx, tenantID, inactiveSubject)
+		if err != nil || member.Source != "scim" || member.Status != "active" {
+			t.Fatalf("inactive-first activation did not project an active SCIM member: %+v %v", member, err)
 		}
 	})
 	t.Run("concurrent case-insensitive alias collision is rejected before append", func(t *testing.T) {

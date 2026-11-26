@@ -31,7 +31,7 @@ type a207Deployment struct {
 	sessions  *auth.SessionIssuer
 }
 
-func newA207Deployment(t *testing.T, scimToken string, groupRoles map[string]string) *a207Deployment {
+func newA207Deployment(t *testing.T, scimToken string, groupRoles map[string]string, extraAdminScopes ...authz.Permission) *a207Deployment {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("starts an embedded PostgreSQL and embedded NATS; skipped in -short")
@@ -42,10 +42,14 @@ func newA207Deployment(t *testing.T, scimToken string, groupRoles map[string]str
 		t.Fatalf("seed tenant: %v", err)
 	}
 	d := &a207Deployment{tokenFile: t.TempDir() + "/scim.token"}
-	d.admin = seedServedAPIToken(t, ctx, st, a207Tenant, "platform-admin", []string{
+	adminScopes := []string{
 		string(authz.AccessRead), string(authz.AccessWrite), string(authz.AccessRoleAssign),
 		string(authz.CertsRead), string(authz.CertsRequest),
-	})
+	}
+	for _, scope := range extraAdminScopes {
+		adminScopes = append(adminScopes, string(scope))
+	}
+	d.admin = seedServedAPIToken(t, ctx, st, a207Tenant, "platform-admin", adminScopes)
 	if err := writeSecretFile(d.tokenFile, []byte(scimToken)); err != nil {
 		t.Fatalf("write scim token file: %v", err)
 	}

@@ -36,6 +36,10 @@ const tenantMemberUpsertCommandColumns = `tenant_id::text, subject_ref, event_id
     event_time, event_schema_version, offboard_event_id::text, privacy_erasure_event_id, event_actor,
     event_payload, payload_sha256, last_event_sequence, status`
 
+// ErrSCIMMemberOutOfScope means a provisioning token tried to claim a subject
+// already owned by a local member or by an API-token holder/minter.
+var ErrSCIMMemberOutOfScope = errors.New("store: subject is outside SCIM provisioning scope")
+
 func scanTenantMemberUpsertCommand(row pgx.Row) (TenantMemberUpsertCommand, error) {
 	var c TenantMemberUpsertCommand
 	var actor, payload []byte
@@ -78,6 +82,17 @@ func scanTenantMemberUpsertCommand(row pgx.Row) (TenantMemberUpsertCommand, erro
 // publishing the source event. Retries reuse its exact event and cannot lift
 // the pending restriction with a different set of roles.
 func (s *Store) ClaimTenantMemberUpsertCommand(ctx context.Context, tenantID, subject string, ev events.Event, requireActive bool) (TenantMemberUpsertCommand, bool, error) {
+	return s.claimTenantMemberUpsertCommand(ctx, tenantID, subject, ev, requireActive, false)
+}
+
+// ClaimSCIMTenantMemberUpsertCommand checks source ownership in the same
+// tenant+subject transaction that commits the pending event. A handler read can
+// race a local account change; this fence cannot.
+func (s *Store) ClaimSCIMTenantMemberUpsertCommand(ctx context.Context, tenantID, subject string, ev events.Event, requireActive bool) (TenantMemberUpsertCommand, bool, error) {
+	return s.claimTenantMemberUpsertCommand(ctx, tenantID, subject, ev, requireActive, true)
+}
+
+func (s *Store) claimTenantMemberUpsertCommand(ctx context.Context, tenantID, subject string, ev events.Event, requireActive, scimOnly bool) (TenantMemberUpsertCommand, bool, error) {
 	var canonical TenantMemberUpsertCommand
 	var created bool
 	if tenantID == "" || subject == "" || ev.ID == "" || ev.TenantID != tenantID ||
@@ -95,6 +110,31 @@ func (s *Store) ClaimTenantMemberUpsertCommand(ctx context.Context, tenantID, su
 		return s.WithTenant(barrierCtx, tenantID, func(tx pgx.Tx) error {
 			if err := s.LockTenantMemberSubjectTx(barrierCtx, tx, tenantID, subject); err != nil {
 				return err
+			}
+			if scimOnly {
+				ref := privacy.SubjectRef(tenantID, subject)
+				var source string
+				err := tx.QueryRow(barrierCtx, `SELECT source FROM tenant_members WHERE tenant_id = $1 AND subject_ref = $2`, tenantID, ref).Scan(&source)
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+				if err == nil && source != "scim" {
+					return ErrSCIMMemberOutOfScope
+				}
+				if errors.Is(err, pgx.ErrNoRows) {
+					if requireActive {
+						return ErrSCIMMemberOutOfScope
+					}
+					var hasToken bool
+					if err := tx.QueryRow(barrierCtx, `SELECT EXISTS (SELECT 1 FROM api_tokens
+						WHERE tenant_id = $1 AND (subject_ref = $2 OR minted_by_ref = $2) AND revoked_at IS NULL)`,
+						tenantID, ref).Scan(&hasToken); err != nil {
+						return err
+					}
+					if hasToken {
+						return ErrSCIMMemberOutOfScope
+					}
+				}
 			}
 			if err := s.CheckTenantMemberUpsertAdmissionTx(barrierCtx, tx, tenantID, subject); err != nil {
 				return err

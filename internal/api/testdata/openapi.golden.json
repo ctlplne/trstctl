@@ -36161,6 +36161,28 @@
             },
             "type": "array"
           },
+          "scim_identity": {
+            "properties": {
+              "external_id": {
+                "type": "string"
+              },
+              "subject_attribute": {
+                "enum": [
+                  "userName",
+                  "externalId"
+                ],
+                "type": "string"
+              },
+              "user_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_name",
+              "subject_attribute"
+            ],
+            "type": "object"
+          },
           "source": {
             "type": "string"
           },
@@ -36224,6 +36246,29 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "scim_identity": {
+            "description": "Required when source is scim: an operator-verified binding whose selected userName or externalId exactly equals the member subject; SCIM cannot adopt a local member itself.",
+            "properties": {
+              "external_id": {
+                "type": "string"
+              },
+              "subject_attribute": {
+                "enum": [
+                  "userName",
+                  "externalId"
+                ],
+                "type": "string"
+              },
+              "user_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_name",
+              "subject_attribute"
+            ],
+            "type": "object"
           },
           "source": {
             "type": "string"

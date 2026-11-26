@@ -144,6 +144,17 @@ func (s *Store) CheckTenantMemberCurrentlyActiveTx(ctx context.Context, tx pgx.T
 // append. makeEvent receives the token count observed under the same subject
 // lock; retries reuse the first event and cannot manufacture a second command.
 func (s *Store) ClaimTenantMemberOffboardCommand(ctx context.Context, tenantID, subject string, makeEvent func(int) (events.Event, error)) (TenantMemberOffboardCommand, int, bool, error) {
+	return s.claimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent, false)
+}
+
+// ClaimSCIMTenantMemberOffboardCommand keeps inactive-first provisioning but
+// refuses to create a tombstone over a local or API-token-only subject. The
+// decision is made under the same subject lock as the committed command.
+func (s *Store) ClaimSCIMTenantMemberOffboardCommand(ctx context.Context, tenantID, subject string, makeEvent func(int) (events.Event, error)) (TenantMemberOffboardCommand, int, bool, error) {
+	return s.claimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent, true)
+}
+
+func (s *Store) claimTenantMemberOffboardCommand(ctx context.Context, tenantID, subject string, makeEvent func(int) (events.Event, error), scimOnly bool) (TenantMemberOffboardCommand, int, bool, error) {
 	var canonical TenantMemberOffboardCommand
 	var count int
 	var created bool
@@ -156,6 +167,27 @@ func (s *Store) ClaimTenantMemberOffboardCommand(ctx context.Context, tenantID, 
 				return err
 			}
 			ref := privacy.SubjectRef(tenantID, subject)
+			if scimOnly {
+				var source string
+				err := tx.QueryRow(barrierCtx, `SELECT source FROM tenant_members WHERE tenant_id = $1 AND subject_ref = $2`, tenantID, ref).Scan(&source)
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+				if err == nil && source != "scim" {
+					return ErrSCIMMemberOutOfScope
+				}
+				if errors.Is(err, pgx.ErrNoRows) {
+					var hasToken bool
+					if err := tx.QueryRow(barrierCtx, `SELECT EXISTS (SELECT 1 FROM api_tokens
+						WHERE tenant_id = $1 AND (subject_ref = $2 OR minted_by_ref = $2) AND revoked_at IS NULL)`,
+						tenantID, ref).Scan(&hasToken); err != nil {
+						return err
+					}
+					if hasToken {
+						return ErrSCIMMemberOutOfScope
+					}
+				}
+			}
 			var err error
 			canonical, err = scanTenantMemberOffboardCommand(tx.QueryRow(barrierCtx,
 				`SELECT `+tenantMemberOffboardCommandColumns+` FROM tenant_member_offboard_commands

@@ -3682,7 +3682,7 @@ func TestSCIMProvisioningIsServedAndDisclosed(t *testing.T) {
 		}
 	}
 	apiSCIM := read(t, "../ee/enterpriseauth/scim_handler.go")
-	for _, want := range []string{"scimMutate", "UpsertTenantMember", "OffboardTenantMember", "ListTenantMembersByRole"} {
+	for _, want := range []string{"scimMutate", "UpsertSCIMTenantMember", "OffboardSCIMTenantMember", "ListTenantMembersByRole"} {
 		if !strings.Contains(apiSCIM, want) {
 			t.Errorf("ee/enterpriseauth/scim_handler.go should keep SCIM wired into RBAC membership via %q", want)
 		}

@@ -22237,6 +22237,12 @@ export interface components {
             offboarded_at?: string;
             offboarded_by?: string;
             roles: string[];
+            scim_identity?: {
+                external_id?: string;
+                /** @enum {string} */
+                subject_attribute: "userName" | "externalId";
+                user_name: string;
+            };
             source: string;
             /** @enum {string} */
             status: "active" | "offboarded";
@@ -22254,6 +22260,13 @@ export interface components {
             display_name?: string;
             email?: string;
             roles: string[];
+            /** @description Required when source is scim: an operator-verified binding whose selected userName or externalId exactly equals the member subject; SCIM cannot adopt a local member itself. */
+            scim_identity?: {
+                external_id?: string;
+                /** @enum {string} */
+                subject_attribute: "userName" | "externalId";
+                user_name: string;
+            };
             source?: string;
         };
         MigrationApprovalUse: {

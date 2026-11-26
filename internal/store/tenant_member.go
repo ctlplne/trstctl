@@ -120,7 +120,8 @@ func (s *Store) ApplyTenantMemberUpsertedTx(ctx context.Context, tx pgx.Tx, m Te
 
 // ApplyTenantMemberOffboardedTx projects a tenant.member.offboarded event. If
 // the subject was never explicitly onboarded, it creates a tombstone so the audit
-// and console still show that access for the subject was retired.
+// and console still show that access for the subject was retired. A tombstone
+// carrying a SCIM binding remains SCIM-owned for explicit later activation.
 func (s *Store) ApplyTenantMemberOffboardedTx(ctx context.Context, tx pgx.Tx, m TenantMember) error {
 	if err := lockTenantMemberProjection(ctx, tx, m.TenantID, m.Subject); err != nil {
 		return err
@@ -129,7 +130,8 @@ func (s *Store) ApplyTenantMemberOffboardedTx(ctx context.Context, tx pgx.Tx, m 
 		`INSERT INTO tenant_members
 		        (tenant_id, subject, subject_ref, display_name, email, roles, source, status,
 		         created_at, updated_at, offboarded_at, offboarded_by, offboard_reason, scim_identity, last_event_sequence)
-		 VALUES ($1, $2, $3, '', '', '{}', 'offboard', 'offboarded', $4, $4, $4, $5, $6, $7, $8::bigint)
+	 VALUES ($1, $2, $3, '', '', '{}', CASE WHEN $7::jsonb IS NULL THEN 'offboard' ELSE 'scim' END,
+	         'offboarded', $4, $4, $4, $5, $6, $7, $8::bigint)
 		 ON CONFLICT (tenant_id, subject) DO UPDATE
 		    SET subject_ref = EXCLUDED.subject_ref,
 		        status = 'offboarded',

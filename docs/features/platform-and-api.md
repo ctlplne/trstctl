@@ -155,6 +155,11 @@ custom role it grants ([custom roles](../configuration.md#custom-roles)); an unm
 group, or one mapped to a custom role the tenant has not defined, is refused and grants
 nothing.
 Group cleanup preserves offboarding; a group addition cannot reactivate an inactive user.
+The SCIM bearer can manage only members already sourced from SCIM, plus new
+subjects with no local member or active API-token owner. A same-named local or
+recovery member is not a SCIM resource. Removing the last active member with
+the `admin` role returns 409; an operator can explicitly adopt a verified local
+member through the governed member API before handing it to SCIM.
 Browser sessions consult the current tenant-member roles on each API request, so
 SCIM provisioning and deprovisioning change real authorization, beyond an admin list.
 Supported IdP operations are SCIM Users create/get/list/put/patch/delete and Groups

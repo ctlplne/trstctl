@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3656 annotated sites across 35 rules. Each row is
+3659 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (926 sites)
+### G101 — CWE-798 Use of hardcoded credentials (929 sites)
 
 | Location | Reason |
 |---|---|
@@ -94,11 +94,14 @@ not this file.
 | `deploy/helm/helm_test.go:1601` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/auth_kerberos_served_test.go:35` | fabricated fixture credential; the keytab is minted in-process (CWE-798) |
 | `ee/enterpriseauth/cr1003_scim_nul_served_test.go:28` | fabricated fixture credential/identifier |
+| `ee/enterpriseauth/cr831_scim_scope_served_test.go:25` | fabricated test credential (CWE-798) |
+| `ee/enterpriseauth/cr831_scim_scope_served_test.go:92` | fabricated test credential (CWE-798) |
+| `ee/enterpriseauth/cr831_scim_scope_served_test.go:139` | fabricated test credential (CWE-798) |
 | `ee/enterpriseauth/scim_bulk_served_test.go:35` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
-| `ee/enterpriseauth/scim_custom_roles_served_test.go:108` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
-| `ee/enterpriseauth/scim_custom_roles_served_test.go:201` | fabricated fixture credentials (CWE-798) |
+| `ee/enterpriseauth/scim_custom_roles_served_test.go:112` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `ee/enterpriseauth/scim_custom_roles_served_test.go:205` | fabricated fixture credentials (CWE-798) |
 | `ee/enterpriseauth/scim_served_test.go:35` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `ee/enterpriseauth/scim_subject_binding_served_test.go:39` | fabricated local fixture, not a credential (CWE-798) |
+| `ee/enterpriseauth/scim_subject_binding_served_test.go:40` | fabricated local fixture, not a credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_private_test.go:50` | fabricated fixture credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_rotation_served_test.go:35` | fabricated fixture credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_rotation_served_test.go:36` | fabricated fixture credentials (CWE-798) |
@@ -1429,10 +1432,10 @@ not this file.
 | `internal/projections/certificate_sct.go:105` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:637` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:8038` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8055` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:8068` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8103` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:8042` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8059` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:8072` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8107` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:46` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |

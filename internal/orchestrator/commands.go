@@ -2413,6 +2413,17 @@ func normalizeAgentCertFingerprint(v string) string {
 // projection of tenant.member.upserted, so a rebuild restores the same admin
 // inventory operators used to create RA approvers.
 func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, member store.TenantMember) (store.TenantMember, error) {
+	return o.upsertTenantMember(ctx, tenantID, member, false)
+}
+
+// UpsertSCIMTenantMember admits a new SCIM subject only when no local member or
+// bearer-token owner already holds it. The store repeats this check under the
+// durable subject lock immediately before the event command is committed.
+func (o *Orchestrator) UpsertSCIMTenantMember(ctx context.Context, tenantID string, member store.TenantMember) (store.TenantMember, error) {
+	return o.upsertTenantMember(ctx, tenantID, member, true)
+}
+
+func (o *Orchestrator) upsertTenantMember(ctx context.Context, tenantID string, member store.TenantMember, scimOnly bool) (store.TenantMember, error) {
 	if member.Source == "" {
 		member.Source = "manual"
 	}
@@ -2435,7 +2446,12 @@ func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, 
 		TenantID: tenantID, SchemaVersion: version, Time: time.Now().UTC().Truncate(time.Microsecond),
 		Data: payload, Actor: actor}
 	requireActive, _ := ctx.Value(requireActiveMemberUpsertKey{}).(bool)
-	command, _, err := o.store.ClaimTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive)
+	var command store.TenantMemberUpsertCommand
+	if scimOnly {
+		command, _, err = o.store.ClaimSCIMTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive)
+	} else {
+		command, _, err = o.store.ClaimTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive)
+	}
 	if err != nil {
 		return store.TenantMember{}, err
 	}
@@ -2455,7 +2471,7 @@ type requireActiveMemberUpsertKey struct{}
 // UpsertActiveTenantMember applies a SCIM group delta only while the member is
 // still active at source append. A stale group read must not rehire a principal.
 func (o *Orchestrator) UpsertActiveTenantMember(ctx context.Context, tenantID string, member store.TenantMember) (store.TenantMember, error) {
-	return o.UpsertTenantMember(context.WithValue(ctx, requireActiveMemberUpsertKey{}, true), tenantID, member)
+	return o.upsertTenantMember(context.WithValue(ctx, requireActiveMemberUpsertKey{}, true), tenantID, member, true)
 }
 
 // OffboardTenantMember records member retirement and lets the projector revoke
@@ -2485,7 +2501,7 @@ func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subje
 	if a, ok := events.ActorFromContext(ctx); ok {
 		eventActor = &a
 	}
-	command, revokedCount, created, err := o.store.ClaimTenantMemberOffboardCommand(ctx, tenantID, subject, func(count int) (events.Event, error) {
+	makeEvent := func(count int) (events.Event, error) {
 		payload, err := json.Marshal(projections.TenantMemberOffboarded{
 			Subject: subject, Reason: reason, OffboardedBy: actor, RevokedTokenCount: count, SCIM: identity,
 		})
@@ -2495,7 +2511,16 @@ func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subje
 		return events.Event{ID: uuid.NewString(), Type: projections.EventTenantMemberOffboarded,
 			TenantID: tenantID, SchemaVersion: version, Time: time.Now().UTC().Truncate(time.Microsecond),
 			Data: payload, Actor: eventActor}, nil
-	})
+	}
+	var command store.TenantMemberOffboardCommand
+	var revokedCount int
+	var created bool
+	var err error
+	if identity != nil {
+		command, revokedCount, created, err = o.store.ClaimSCIMTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent)
+	} else {
+		command, revokedCount, created, err = o.store.ClaimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent)
+	}
 	if err != nil {
 		return store.TenantMember{}, 0, err
 	}

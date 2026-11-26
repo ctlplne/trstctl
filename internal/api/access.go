@@ -41,25 +41,27 @@ type oidcMappingResponse struct {
 }
 
 type memberRequest struct {
-	DisplayName string   `json:"display_name"`
-	Email       string   `json:"email"`
-	Roles       []string `json:"roles"`
-	Source      string   `json:"source"`
+	DisplayName  string              `json:"display_name"`
+	Email        string              `json:"email"`
+	Roles        []string            `json:"roles"`
+	Source       string              `json:"source"`
+	SCIMIdentity *store.SCIMIdentity `json:"scim_identity,omitempty"`
 }
 
 type memberResponse struct {
-	TenantID       string     `json:"tenant_id"`
-	Subject        string     `json:"subject"`
-	DisplayName    string     `json:"display_name,omitempty"`
-	Email          string     `json:"email,omitempty"`
-	Roles          []string   `json:"roles"`
-	Source         string     `json:"source"`
-	Status         string     `json:"status"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	OffboardedAt   *time.Time `json:"offboarded_at,omitempty"`
-	OffboardedBy   string     `json:"offboarded_by,omitempty"`
-	OffboardReason string     `json:"offboard_reason,omitempty"`
+	TenantID       string              `json:"tenant_id"`
+	Subject        string              `json:"subject"`
+	DisplayName    string              `json:"display_name,omitempty"`
+	Email          string              `json:"email,omitempty"`
+	Roles          []string            `json:"roles"`
+	Source         string              `json:"source"`
+	SCIMIdentity   *store.SCIMIdentity `json:"scim_identity,omitempty"`
+	Status         string              `json:"status"`
+	CreatedAt      time.Time           `json:"created_at"`
+	UpdatedAt      time.Time           `json:"updated_at"`
+	OffboardedAt   *time.Time          `json:"offboarded_at,omitempty"`
+	OffboardedBy   string              `json:"offboarded_by,omitempty"`
+	OffboardReason string              `json:"offboard_reason,omitempty"`
 	// LastSignInAt and LastSignInNetwork (M1-L2) are the member's last
 	// recorded browser sign-in and the client network it came from.
 	LastSignInAt      *time.Time `json:"last_sign_in_at,omitempty"`
@@ -257,9 +259,26 @@ func (a *API) upsertMember(w http.ResponseWriter, r *http.Request) {
 		if source == "" {
 			source = "manual"
 		}
+		if source == "scim" {
+			if req.SCIMIdentity == nil {
+				return 0, nil, errStatus(http.StatusBadRequest, "adopting a SCIM member requires the exact scim_identity binding")
+			}
+			identity := *req.SCIMIdentity
+			identity.UserName = strings.TrimSpace(identity.UserName)
+			identity.ExternalID = strings.TrimSpace(identity.ExternalID)
+			if identity.UserName == "" ||
+				(identity.SubjectAttribute != "userName" && identity.SubjectAttribute != "externalId") ||
+				(identity.SubjectAttribute == "userName" && identity.UserName != subject) ||
+				(identity.SubjectAttribute == "externalId" && identity.ExternalID != subject) {
+				return 0, nil, errStatus(http.StatusBadRequest, "scim_identity must bind the selected login-subject attribute to this exact member subject")
+			}
+			req.SCIMIdentity = &identity
+		} else if req.SCIMIdentity != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "scim_identity requires source scim")
+		}
 		member, err := a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
 			Subject: subject, DisplayName: req.DisplayName, Email: req.Email,
-			Roles: req.Roles, Source: source,
+			Roles: req.Roles, Source: source, SCIM: req.SCIMIdentity,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -529,7 +548,7 @@ func (a *API) validatePermissionScopes(scopes []string) error {
 func toMemberResponse(m store.TenantMember) memberResponse {
 	return memberResponse{
 		TenantID: m.TenantID, Subject: m.Subject, DisplayName: m.DisplayName, Email: m.Email,
-		Roles: append([]string{}, m.Roles...), Source: m.Source, Status: m.Status,
+		Roles: append([]string{}, m.Roles...), Source: m.Source, SCIMIdentity: m.SCIM, Status: m.Status,
 		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, OffboardedAt: m.OffboardedAt,
 		OffboardedBy: m.OffboardedBy, OffboardReason: m.OffboardReason,
 	}
