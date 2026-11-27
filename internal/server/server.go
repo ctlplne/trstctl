@@ -4436,6 +4436,10 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	}
 	now := renewalAt.UTC()
 	_, ariDiscoveryErr := s.discoverExternalARICandidates(ctx, now)
+	var sweepErrors []error
+	if ariDiscoveryErr != nil {
+		sweepErrors = append(sweepErrors, fmt.Errorf("external ARI discovery: %w", ariDiscoveryErr))
+	}
 	if ariDiscoveryErr != nil && s.logger != nil {
 		s.logger.Warn("external ACME ARI discovery failed", slog.String("error", ariDiscoveryErr.Error()))
 	}
@@ -4444,13 +4448,11 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	// retain their original completion/report path until they finish or expire.
 	stoppedTenants, err := s.store.TenantsWithStoppedIdentityWork(ctx, now)
 	if err != nil {
-		s.observeLifecycleSweep(0, 0, err)
-		return 0, err
+		sweepErrors = append(sweepErrors, fmt.Errorf("stopped identity work candidates: %w", err))
 	}
 	for _, tenant := range stoppedTenants {
 		if _, err := s.orch.ReconcileStoppedIdentityWork(ctx, tenant, now); err != nil {
-			s.observeLifecycleSweep(0, 0, err)
-			return 0, err
+			sweepErrors = append(sweepErrors, fmt.Errorf("stopped identity work tenant %s: %w", tenant, err))
 		}
 	}
 	queued := 0
@@ -4469,15 +4471,23 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 			cutoff := now.Add(s.lifecycleRenewBefore)
 			tenants, err := s.store.TenantsWithRenewalIdentityCandidates(ctx, cutoff, now)
 			if err != nil {
-				s.observeLifecycleSweep(queued, 0, err)
-				return 0, err
+				sweepErrors = append(sweepErrors, fmt.Errorf("renewal candidates: %w", err))
 			}
 			for _, tenant := range tenants {
+				ready, err := s.lifecycleTenantReady(ctx, tenant, "renewal")
+				if err != nil {
+					sweepErrors = append(sweepErrors, err)
+					continue
+				}
+				if !ready {
+					continue
+				}
 				n, err := s.queueTenantLifecycleRenewals(ctx, tenant, cutoff, now)
 				queued += n
 				if err != nil {
-					s.observeLifecycleSweep(queued, 0, err)
-					return queued, err
+					if tenantErr := s.lifecycleTenantError("renewal", tenant, err); tenantErr != nil {
+						sweepErrors = append(sweepErrors, tenantErr)
+					}
 				}
 			}
 			// A47: tenant posture rules that ask for remediation queue a
@@ -4486,8 +4496,7 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 			// deferral as expiry-driven renewals.
 			remediated, err := s.runPostureRemediationOnce(ctx, now)
 			if err != nil {
-				s.observeLifecycleSweep(queued, 0, err)
-				return queued, err
+				sweepErrors = append(sweepErrors, fmt.Errorf("posture remediation: %w", err))
 			}
 			queued += remediated
 			// A100: tenant nhi_posture rules that ask for revoke or right_size
@@ -4500,8 +4509,7 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	}
 	alerted, err := s.runLifecycleAlertsOnce(ctx)
 	if err != nil {
-		s.observeLifecycleSweep(queued, alerted, err)
-		return queued, err
+		sweepErrors = append(sweepErrors, fmt.Errorf("expiry alerts: %w", err))
 	}
 	// The CA calendar runs on the same sweep but its own clock: leaf expiry is
 	// measured in days, a trust anchor's in months (H5). Its alerts count toward
@@ -4509,8 +4517,7 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	// sweep.
 	horizonAlerts, err := s.runCAHorizonAlertsOnce(ctx)
 	if err != nil {
-		s.observeLifecycleSweep(queued, alerted+horizonAlerts, err)
-		return queued, err
+		sweepErrors = append(sweepErrors, fmt.Errorf("CA horizon alerts: %w", err))
 	}
 	// A216: an authority inside the configured rollover band gets a drafted
 	// re-key ceremony that custodians approve and a person executes. A draft
@@ -4520,14 +4527,37 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	}
 	ownershipAlerts, err := s.runOwnershipReattestationOnce(ctx)
 	if err != nil {
-		s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, err)
-		return queued, err
+		sweepErrors = append(sweepErrors, fmt.Errorf("ownership reattestation: %w", err))
 	}
 	s.runRiskAcceptanceExpiryOnce(ctx, now)
 	s.runProfilePostureOnce(ctx)
 	s.runPKISecretInventoryRecoveryOnce(ctx)
-	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, ariDiscoveryErr)
-	return queued, ariDiscoveryErr
+	sweepErr := errors.Join(sweepErrors...)
+	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, sweepErr)
+	return queued, sweepErr
+}
+
+// lifecycleTenantReady keeps scheduled tenant work within the tenant's current
+// service state. A refused tenant is logged and retried on a later sweep.
+func (s *Server) lifecycleTenantReady(ctx context.Context, tenant, stage string) (bool, error) {
+	if err := s.store.RequireLiveTenantService(ctx, tenant); err != nil {
+		if tenantErr := s.lifecycleTenantError(stage, tenant, err); tenantErr != nil {
+			return false, tenantErr
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *Server) lifecycleTenantError(stage, tenant string, err error) error {
+	if errors.Is(err, tenancy.ErrServiceUnavailable) {
+		if s.logger != nil {
+			s.logger.Warn("lifecycle tenant work deferred", slog.String("stage", stage),
+				slog.String("tenant_id", tenant), slog.String("reason", tenancy.RefusalReason(err)))
+		}
+		return nil
+	}
+	return fmt.Errorf("%s tenant %s: %w", stage, tenant, err)
 }
 
 // queueTenantLifecycleRenewals is the expiry stage of the lifecycle sweep for one
@@ -4645,22 +4675,37 @@ func (s *Server) runOwnershipReattestationOnce(ctx context.Context) (int, error)
 		return 0, err
 	}
 	queued := 0
+	var errs []error
 	for _, tenantID := range tenants {
+		ready, err := s.lifecycleTenantReady(ctx, tenantID, "ownership reattestation")
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !ready {
+			continue
+		}
 		owners, err := s.store.ListOwnershipReattestationCandidates(ctx, tenantID, now, s.ownershipAttestationCadence, 200)
 		if err != nil {
-			return queued, err
+			if tenantErr := s.lifecycleTenantError("ownership reattestation", tenantID, err); tenantErr != nil {
+				errs = append(errs, tenantErr)
+			}
+			continue
 		}
 		for _, owner := range owners {
 			inserted, err := s.orch.QueueOwnershipReattestation(ctx, tenantID, owner.ID, s.ownershipAttestationCadence)
 			if err != nil {
-				return queued, err
+				if tenantErr := s.lifecycleTenantError("ownership reattestation", tenantID, err); tenantErr != nil {
+					errs = append(errs, tenantErr)
+				}
+				break
 			}
 			if inserted {
 				queued++
 			}
 		}
 	}
-	return queued, nil
+	return queued, errors.Join(errs...)
 }
 
 // runCAHorizonAlertsOnce sweeps every tenant's CA authorities for year-scale
@@ -4683,14 +4728,25 @@ func (s *Server) runCAHorizonAlertsOnce(ctx context.Context) (int, error) {
 	}
 	m := lifecycle.NewManager(s.store, nil, s.outbox, s.idem, s.log, lifecycle.Config{LeafValidity: s.lifecycleLeafValidity})
 	alerted := 0
+	var errs []error
 	for _, tenant := range tenants {
+		ready, err := s.lifecycleTenantReady(ctx, tenant, "CA horizon alerts")
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !ready {
+			continue
+		}
 		n, err := m.AlertCAHorizon(ctx, tenant)
 		if err != nil {
-			return alerted, err
+			if tenantErr := s.lifecycleTenantError("CA horizon alerts", tenant, err); tenantErr != nil {
+				errs = append(errs, tenantErr)
+			}
 		}
 		alerted += n
 	}
-	return alerted, nil
+	return alerted, errors.Join(errs...)
 }
 
 func (s *Server) runLifecycleAlertsOnce(ctx context.Context) (int, error) {
@@ -4704,14 +4760,25 @@ func (s *Server) runLifecycleAlertsOnce(ctx context.Context) (int, error) {
 	}
 	m := lifecycle.NewManager(s.store, nil, s.outbox, s.idem, s.log, lifecycle.Config{AlertBefore: s.lifecycleAlertBefore})
 	alerted := 0
+	var errs []error
 	for _, tenant := range tenants {
+		ready, err := s.lifecycleTenantReady(ctx, tenant, "expiry alerts")
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !ready {
+			continue
+		}
 		n, err := m.AlertExpiring(ctx, tenant)
 		if err != nil {
-			return alerted, err
+			if tenantErr := s.lifecycleTenantError("expiry alerts", tenant, err); tenantErr != nil {
+				errs = append(errs, tenantErr)
+			}
 		}
 		alerted += n
 	}
-	return alerted, nil
+	return alerted, errors.Join(errs...)
 }
 
 func lifecycleRenewalReason(cert store.Certificate, now, fixedCutoff time.Time) (string, bool) {
@@ -4759,7 +4826,6 @@ func (s *Server) observeLifecycleSweep(queued, alerted int, err error) {
 		if s.logger != nil {
 			s.logger.Warn("lifecycle scheduler sweep failed", slog.String("error", err.Error()))
 		}
-		return
 	}
 	if queued > 0 {
 		if s.mLifecycleQueued != nil {
@@ -4777,7 +4843,7 @@ func (s *Server) observeLifecycleSweep(queued, alerted int, err error) {
 			s.logger.Info("lifecycle scheduler queued expiry alerts", slog.Int("alerts", alerted))
 		}
 	}
-	if s.mLifecycleLastOK != nil {
+	if err == nil && s.mLifecycleLastOK != nil {
 		s.mLifecycleLastOK.Set(float64(time.Now().Unix()))
 	}
 }

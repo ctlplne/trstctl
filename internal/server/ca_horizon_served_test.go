@@ -47,7 +47,7 @@ func seedCAAuthority(t *testing.T, ctx context.Context, st *store.Store, tenantI
 }
 
 func TestServedCAHorizonAlertsYearsAheadAndReAlertsOnEachTightening(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 
 	now := time.Now().UTC()
@@ -114,7 +114,7 @@ func TestServedCAHorizonAlertsYearsAheadAndReAlertsOnEachTightening(t *testing.T
 }
 
 func TestServedCAHorizonBrokerFailureCannotCommitAlertStampOrOutbox(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 	ca := seedCAAuthority(t, ctx, h.store, h.tenant, "broker failure root", "root", "ca-horizon-broker-failure",
 		time.Now().UTC().Add(30*30*24*time.Hour))
@@ -299,7 +299,7 @@ func TestServedCAHorizonRetryKeepsRetainedDecisionAfterBrokerWindow(t *testing.T
 }
 
 func TestServedCAHorizonFlagsLeafValidityCompression(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleLeafValidity = 90 * 24 * time.Hour
 	})
 	ctx := t.Context()
@@ -403,7 +403,7 @@ func TestServedCAHorizonReportsLeavesAlreadyTruncated(t *testing.T) {
 // A23: a root beyond the widest band announces itself once as a planning
 // entry (severity low, no band) and is then quiet until it crosses into a band.
 func TestServedCAHorizonAnnouncesOnceBeyondTheWidestBand(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 
 	root := seedCAAuthority(t, ctx, h.store, h.tenant, "acme root R0", "root", "ca-root-00",
@@ -472,7 +472,7 @@ func TestServedCAHorizonRaisesUnknownExpiryOnce(t *testing.T) {
 // certificate parses gets its expiry derived and recorded by the sweep's
 // decision, and alerts in the band that expiry puts it in.
 func TestServedCAHorizonDerivesExpiryFromTheStoredCertificate(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 
 	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

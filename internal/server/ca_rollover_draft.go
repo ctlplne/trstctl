@@ -47,10 +47,20 @@ func (s *Server) RunCARolloverDraftsOnce(ctx context.Context) (int, error) {
 	drafted := 0
 	var errs []error
 	for _, tenantID := range tenants {
+		ready, err := s.lifecycleTenantReady(ctx, tenantID, "CA rollover drafts")
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !ready {
+			continue
+		}
 		n, err := s.draftTenantCARollovers(ctx, h, tenantID, now)
 		drafted += n
 		if err != nil {
-			errs = append(errs, fmt.Errorf("tenant %s: %w", tenantID, err))
+			if tenantErr := s.lifecycleTenantError("CA rollover drafts", tenantID, err); tenantErr != nil {
+				errs = append(errs, tenantErr)
+			}
 		}
 	}
 	return drafted, errors.Join(errs...)

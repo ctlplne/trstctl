@@ -44,14 +44,25 @@ func (s *Server) runPostureRemediationOnce(ctx context.Context, now time.Time) (
 		return 0, err
 	}
 	queued := 0
+	var errs []error
 	for _, tenant := range tenants {
+		ready, err := s.lifecycleTenantReady(ctx, tenant.TenantID, "posture remediation")
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !ready {
+			continue
+		}
 		n, err := s.remediateTenantPosture(ctx, tenant.TenantID, now)
 		queued += n
 		if err != nil {
-			return queued, err
+			if tenantErr := s.lifecycleTenantError("posture remediation", tenant.TenantID, err); tenantErr != nil {
+				errs = append(errs, tenantErr)
+			}
 		}
 	}
-	return queued, nil
+	return queued, errors.Join(errs...)
 }
 
 func (s *Server) remediateTenantPosture(ctx context.Context, tenantID string, now time.Time) (int, error) {

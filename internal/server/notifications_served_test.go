@@ -1191,7 +1191,7 @@ func signedNotificationCertificate(t *testing.T, h *servedHarness, ownerID, name
 		t.Fatal(err)
 	}
 	defer key.Destroy()
-	issued, err := h.srv.issueLeafWithValidity(t.Context(), key.CSRDER, ttl, crypto.LeafProfile{ClampTTLToIssuer: true})
+	issued, err := h.srv.issueLeafWithValidity(withPlatformIssuanceTenant(t.Context(), h.tenant), key.CSRDER, ttl, crypto.LeafProfile{ClampTTLToIssuer: true})
 	if err != nil {
 		t.Fatal(err)
 	}
