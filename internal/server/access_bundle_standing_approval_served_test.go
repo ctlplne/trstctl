@@ -100,7 +100,7 @@ func TestServedBundleStandingApprovalOpensAgentSessionsOD9(t *testing.T) {
 		if name == "an unknown bundle's" {
 			path = "/api/v1/access/bundles/" + uuid.NewString() + "/standing-approvals"
 		}
-		if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, path, tc.token, "od9-refused-"+name, tc.body); status != tc.status || !strings.Contains(string(body), tc.want) {
+		if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, path, tc.token, "od9-refused-"+uuid.NewString(), tc.body); status != tc.status || !strings.Contains(string(body), tc.want) {
 			t.Fatalf("a standing approval %s = %d %s; want %d naming %q", name, status, body, tc.status, tc.want)
 		}
 	}

@@ -55,7 +55,8 @@ func runServedPendingMemberRolePrivacyCase(t *testing.T, name string, projected,
 		t.Fatal(err)
 	}
 	log, err := openHistoryAwareEventLog(ctx,
-		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, st, auditKey)
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, st, auditKey,
+		events.WithFixtureAppendAdmission())
 	if err != nil {
 		t.Fatal(err)
 	}
