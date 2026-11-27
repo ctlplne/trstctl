@@ -4,10 +4,42 @@ package acme_test
 
 import (
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
+
+func TestParseOrderRequestBoundsUniqueIdentifiers(t *testing.T) {
+	identifiers := make([]map[string]string, 100)
+	for i := range identifiers {
+		identifiers[i] = map[string]string{"type": "dns", "value": fmt.Sprintf("host-%d.example.test", i)}
+	}
+	marshal := func(ids []map[string]string) []byte {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{"identifiers": ids})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	if _, err := acmesrv.ParseOrderRequest(marshal(identifiers)); err != nil {
+		t.Fatalf("bounded order was rejected: %v", err)
+	}
+	for name, ids := range map[string][]map[string]string{
+		"count":     append(append([]map[string]string(nil), identifiers...), map[string]string{"type": "dns", "value": "last.example.test"}),
+		"duplicate": {{"type": "dns", "value": "HOST.example.test"}, {"type": "dns", "value": "host.example.test"}},
+		"length":    {{"type": "dns", "value": strings.Repeat("a", 254)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := acmesrv.ParseOrderRequest(marshal(ids)); err == nil {
+				t.Fatal("order parser admitted identifiers outside the bounded unique set")
+			}
+		})
+	}
+}
 
 func TestParseOrderRequest(t *testing.T) {
 	good := []byte(`{"identifiers":[{"type":"dns","value":"a.example"},{"type":"dns","value":"b.example"}]}`)
@@ -69,9 +101,37 @@ func TestParseFinalizeRequest(t *testing.T) {
 	}
 }
 
-// FuzzParseOrderRequest fuzzes the newOrder payload parser — the parser the
-// server runs on every untrusted order body — for panics and to confirm it
-// always fails closed (never returns a malformed-but-nil-error order). (B9/N3.)
+// FuzzParseOrderRequestBoundedIdentifiers verifies that accepted orders stay
+// within the identifier limit and contain a distinct canonical identifier set.
+func FuzzParseOrderRequestBoundedIdentifiers(f *testing.F) {
+	f.Add([]byte(`{"identifiers":[{"type":"dns","value":"a.example.test"}]}`))
+	f.Add([]byte(`{"identifiers":[{"type":"dns","value":"A.example.test"},{"type":"dns","value":"a.example.test"}]}`))
+	f.Add([]byte(`{"identifiers":[{"type":"email","value":"user@example.test"}]}`))
+	f.Fuzz(func(t *testing.T, payload []byte) {
+		order, err := acmesrv.ParseOrderRequest(payload)
+		if err != nil {
+			return
+		}
+		if len(order.Identifiers) == 0 || len(order.Identifiers) > 100 {
+			t.Fatalf("accepted order has %d identifiers", len(order.Identifiers))
+		}
+		seen := make(map[string]bool, len(order.Identifiers))
+		for _, id := range order.Identifiers {
+			canonical := strings.ToLower(strings.TrimSuffix(id.Value, "."))
+			if id.Type == "email" {
+				canonical, err = acmesrv.NormalizeEmailIdentifier(id.Value)
+				if err != nil {
+					t.Fatalf("accepted email identifier is invalid: %v", err)
+				}
+			}
+			key := id.Type + "|" + canonical
+			if seen[key] {
+				t.Fatal("accepted order repeats a canonical identifier")
+			}
+			seen[key] = true
+		}
+	})
+}
 
 // FuzzParseFinalizeRequest fuzzes the finalize payload parser for panics and to
 // confirm it never returns an empty CSR with a nil error.

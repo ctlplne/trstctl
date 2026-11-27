@@ -107,6 +107,8 @@ type OrderRequest struct {
 	Profile string
 }
 
+const maxOrderIdentifiers = 100
+
 // ParseOrderRequest decodes and validates a newOrder payload. It is the single
 // parser the newOrder handler uses, exported so it can be fuzzed against the
 // exact production code path. It fails closed: a malformed body, no identifiers,
@@ -132,7 +134,11 @@ func ParseOrderRequest(payload []byte) (OrderRequest, error) {
 	if len(raw.Identifiers) == 0 {
 		return OrderRequest{}, fmt.Errorf("acme: newOrder requests no identifiers")
 	}
+	if len(raw.Identifiers) > maxOrderIdentifiers {
+		return OrderRequest{}, fmt.Errorf("acme: newOrder accepts at most %d identifiers", maxOrderIdentifiers)
+	}
 	out := OrderRequest{Replaces: raw.Replaces, Profile: strings.TrimSpace(raw.Profile)}
+	seen := make(map[string]bool, len(raw.Identifiers))
 	for i, id := range raw.Identifiers {
 		if id.Type != IdentifierDNS && id.Type != IdentifierEmail {
 			return OrderRequest{}, fmt.Errorf("acme: identifier %d has unsupported type %q (dns or email)", i, id.Type)
@@ -140,6 +146,24 @@ func ParseOrderRequest(payload []byte) (OrderRequest, error) {
 		if id.Value == "" {
 			return OrderRequest{}, fmt.Errorf("acme: identifier %d has empty value", i)
 		}
+		var canonical string
+		if id.Type == IdentifierDNS {
+			if len(id.Value) > 253 {
+				return OrderRequest{}, fmt.Errorf("acme: identifier %d is too long", i)
+			}
+			canonical = strings.ToLower(strings.TrimSuffix(id.Value, "."))
+		} else {
+			var err error
+			canonical, err = NormalizeEmailIdentifier(id.Value)
+			if err != nil {
+				return OrderRequest{}, fmt.Errorf("acme: identifier %d: %w", i, err)
+			}
+		}
+		key := id.Type + "|" + canonical
+		if seen[key] {
+			return OrderRequest{}, fmt.Errorf("acme: identifier %d repeats an earlier identifier", i)
+		}
+		seen[key] = true
 		out.Identifiers = append(out.Identifiers, Identifier{Type: id.Type, Value: id.Value})
 	}
 	if raw.Replaces != "" && !ari.ValidCertID(raw.Replaces) {

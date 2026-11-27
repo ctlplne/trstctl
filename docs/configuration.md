@@ -5184,12 +5184,21 @@ the internal profile should be the mount default. Accounts still need a
 matching pin on that mount. The server checks the current pin and active
 profile both when it admits the order and when it finalizes the certificate.
 
+An ACME order accepts at most 100 distinct identifiers. The source order budget
+is checked before domain-validation policy lookups. Pending authorizations and
+challenges have separate account and external-account-credential shares; invalid
+or deactivated work releases its pending share while its event history remains.
+
 | `TRSTCTL_PROTOCOLS_ACME_MAX_NONCES` | `4096` | Maximum outstanding ACME replay nonces retained by the tenant-bound ACME mount. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS` | `2048` | Maximum ACME accounts retained by the tenant-bound ACME mount. |
-| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS` | `4096` | Maximum pending ACME orders retained before the server returns ACME `rateLimited` (429). |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS` | `4096` | Maximum pending ACME orders retained before the server returns ACME `rateLimited` (429). Invalidated orders no longer spend the pending share. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS` | `8192` | Maximum pending ACME authorizations retained across pending orders. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES` | `24576` | Maximum pending ACME challenge records retained across pending authorizations. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT` | `128` | Per-account pending-order cap, independent from source-IP budgets. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS_PER_ACCOUNT` | `200` | Per-account share of pending authorizations. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES_PER_ACCOUNT` | `600` | Per-account share of pending challenges. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS_PER_EAB` | `400` | Pending authorizations shared by every account bound to one external account credential. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES_PER_EAB` | `1200` | Pending challenges shared by every account bound to one external account credential. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_ACCOUNT` | `60` | Per-account update/key-change budget per hour. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_TENANT` | `600` | Tenant-wide update/key-change budget per hour. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_NEW_NONCES_PER_SOURCE` | `120` | Per-source newNonce budget per source window. |

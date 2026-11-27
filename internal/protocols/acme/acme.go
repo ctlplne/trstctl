@@ -63,22 +63,26 @@ const (
 // per tenant mount, so these limits are tenant-local; source limits are keyed by
 // the request peer address and account limits are keyed by the ACME account URL.
 type QuotaConfig struct {
-	MaxNonces                     int
-	MaxAccounts                   int
-	MaxPendingOrders              int
-	MaxPendingAuthorizations      int
-	MaxPendingChallenges          int
-	MaxPendingOrdersPerAccount    int
-	MaxNewOrdersPerAccount        int
-	MaxAccountMutationsPerAccount int
-	MaxAccountMutationsPerTenant  int
-	MaxNewNoncesPerSource         int
-	MaxNewAccountsPerSource       int
-	MaxNewOrdersPerSource         int
-	MaxAccountMutationsPerSource  int
-	SourceWindow                  time.Duration
-	NonceTTL                      time.Duration
-	StateTTL                      time.Duration
+	MaxNonces                          int
+	MaxAccounts                        int
+	MaxPendingOrders                   int
+	MaxPendingAuthorizations           int
+	MaxPendingChallenges               int
+	MaxPendingOrdersPerAccount         int
+	MaxPendingAuthorizationsPerAccount int
+	MaxPendingChallengesPerAccount     int
+	MaxPendingAuthorizationsPerEAB     int
+	MaxPendingChallengesPerEAB         int
+	MaxNewOrdersPerAccount             int
+	MaxAccountMutationsPerAccount      int
+	MaxAccountMutationsPerTenant       int
+	MaxNewNoncesPerSource              int
+	MaxNewAccountsPerSource            int
+	MaxNewOrdersPerSource              int
+	MaxAccountMutationsPerSource       int
+	SourceWindow                       time.Duration
+	NonceTTL                           time.Duration
+	StateTTL                           time.Duration
 }
 
 // DefaultQuotaConfig returns conservative in-process caps for the public ACME
@@ -86,22 +90,26 @@ type QuotaConfig struct {
 // memory-only view from growing without an abuse budget.
 func DefaultQuotaConfig() QuotaConfig {
 	return QuotaConfig{
-		MaxNonces:                     4096,
-		MaxAccounts:                   2048,
-		MaxPendingOrders:              4096,
-		MaxPendingAuthorizations:      8192,
-		MaxPendingChallenges:          24576,
-		MaxPendingOrdersPerAccount:    128,
-		MaxNewOrdersPerAccount:        100,
-		MaxAccountMutationsPerAccount: 60,
-		MaxAccountMutationsPerTenant:  600,
-		MaxNewNoncesPerSource:         120,
-		MaxNewAccountsPerSource:       20,
-		MaxNewOrdersPerSource:         60,
-		MaxAccountMutationsPerSource:  60,
-		SourceWindow:                  10 * time.Minute,
-		NonceTTL:                      10 * time.Minute,
-		StateTTL:                      24 * time.Hour,
+		MaxNonces:                          4096,
+		MaxAccounts:                        2048,
+		MaxPendingOrders:                   4096,
+		MaxPendingAuthorizations:           8192,
+		MaxPendingChallenges:               24576,
+		MaxPendingOrdersPerAccount:         128,
+		MaxPendingAuthorizationsPerAccount: 200,
+		MaxPendingChallengesPerAccount:     600,
+		MaxPendingAuthorizationsPerEAB:     400,
+		MaxPendingChallengesPerEAB:         1200,
+		MaxNewOrdersPerAccount:             100,
+		MaxAccountMutationsPerAccount:      60,
+		MaxAccountMutationsPerTenant:       600,
+		MaxNewNoncesPerSource:              120,
+		MaxNewAccountsPerSource:            20,
+		MaxNewOrdersPerSource:              60,
+		MaxAccountMutationsPerSource:       60,
+		SourceWindow:                       10 * time.Minute,
+		NonceTTL:                           10 * time.Minute,
+		StateTTL:                           24 * time.Hour,
 	}
 }
 
@@ -124,6 +132,18 @@ func normalizeQuota(q QuotaConfig) QuotaConfig {
 	}
 	if q.MaxPendingOrdersPerAccount <= 0 {
 		q.MaxPendingOrdersPerAccount = d.MaxPendingOrdersPerAccount
+	}
+	if q.MaxPendingAuthorizationsPerAccount <= 0 {
+		q.MaxPendingAuthorizationsPerAccount = d.MaxPendingAuthorizationsPerAccount
+	}
+	if q.MaxPendingChallengesPerAccount <= 0 {
+		q.MaxPendingChallengesPerAccount = d.MaxPendingChallengesPerAccount
+	}
+	if q.MaxPendingAuthorizationsPerEAB <= 0 {
+		q.MaxPendingAuthorizationsPerEAB = d.MaxPendingAuthorizationsPerEAB
+	}
+	if q.MaxPendingChallengesPerEAB <= 0 {
+		q.MaxPendingChallengesPerEAB = d.MaxPendingChallengesPerEAB
 	}
 	if q.MaxNewOrdersPerAccount <= 0 {
 		q.MaxNewOrdersPerAccount = d.MaxNewOrdersPerAccount
@@ -1201,6 +1221,15 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
 		return
 	}
+	s.mu.Lock()
+	sourceNow := time.Now()
+	s.pruneExpiredLocked(sourceNow)
+	allowedSource := s.consumeSourceLocked(sourceKey(r), "order", sourceNow)
+	s.mu.Unlock()
+	if !allowedSource {
+		s.rateLimited(w, r, "too many ACME newOrder requests from this source")
+		return
+	}
 	// P15: an order naming email identifiers is an RFC 8823 S/MIME order; it
 	// holds only email identifiers, each in a mail domain this server issues for.
 	var emailAddresses []string
@@ -1291,11 +1320,6 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	s.mu.Lock()
 	now := time.Now()
 	s.pruneExpiredLocked(now)
-	if !s.consumeSourceLocked(sourceKey(r), "order", now) {
-		s.mu.Unlock()
-		s.rateLimited(w, r, "too many ACME newOrder requests from this source")
-		return
-	}
 	if s.pendingOrdersLocked("") >= s.quota.MaxPendingOrders {
 		s.mu.Unlock()
 		s.rateLimited(w, r, "too many pending ACME orders")
@@ -1315,14 +1339,27 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	if authMode == profile.ACMEAuthModeTrustAuthenticated {
 		pendingAuthzDelta = 0
 	}
-	if s.pendingAuthzsLocked()+pendingAuthzDelta > s.quota.MaxPendingAuthorizations {
+	globalPending, accountPending, credentialPending := s.pendingWorkLocked(acct)
+	if globalPending.authorizations+pendingAuthzDelta > s.quota.MaxPendingAuthorizations {
 		s.mu.Unlock()
 		s.rateLimited(w, r, "too many pending ACME authorizations")
 		return
 	}
-	if s.pendingChallengesLocked()+pendingChallengeDelta > s.quota.MaxPendingChallenges {
+	if globalPending.challenges+pendingChallengeDelta > s.quota.MaxPendingChallenges {
 		s.mu.Unlock()
 		s.rateLimited(w, r, "too many pending ACME challenges")
+		return
+	}
+	if accountPending.authorizations+pendingAuthzDelta > s.quota.MaxPendingAuthorizationsPerAccount ||
+		accountPending.challenges+pendingChallengeDelta > s.quota.MaxPendingChallengesPerAccount {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too much pending ACME challenge work for this account")
+		return
+	}
+	if eabCred != nil && (credentialPending.authorizations+pendingAuthzDelta > s.quota.MaxPendingAuthorizationsPerEAB ||
+		credentialPending.challenges+pendingChallengeDelta > s.quota.MaxPendingChallengesPerEAB) {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too much pending ACME challenge work for this external account credential")
 		return
 	}
 	orderStatus := statusPending
@@ -2171,7 +2208,7 @@ func (s *Server) deleteOrderStateLocked(orderID string) {
 func (s *Server) pendingOrdersLocked(accountURL string) int {
 	n := 0
 	for _, o := range s.orders {
-		if o == nil || o.status == statusValid {
+		if o == nil || o.status == statusValid || o.status == statusInvalid || o.status == statusDeactivated {
 			continue
 		}
 		if accountURL == "" || o.accountURL == accountURL {
@@ -2181,28 +2218,64 @@ func (s *Server) pendingOrdersLocked(accountURL string) int {
 	return n
 }
 
-func (s *Server) pendingAuthzsLocked() int {
-	n := 0
-	for _, az := range s.authzs {
-		if az != nil && az.status != statusValid {
-			n++
-		}
-	}
-	return n
+type pendingOrderWork struct {
+	authorizations int
+	challenges     int
 }
 
-func (s *Server) pendingChallengesLocked() int {
-	n := 0
-	for _, ch := range s.challenges {
-		if ch == nil || ch.status == statusValid {
-			continue
+func (s *Server) pendingWorkLocked(acct *account) (global, accountWork, credential pendingOrderWork) {
+	belongs := func(az *authorization) (bool, bool, bool) {
+		if az == nil || az.status != statusPending {
+			return false, false, false
 		}
-		if az := s.authzs[ch.authzID]; az != nil && az.status == statusValid {
-			continue
+		order := s.orders[az.orderID]
+		if order == nil || order.status == statusInvalid || order.status == statusDeactivated {
+			return false, false, false
 		}
-		n++
+		owned := order.accountURL == acct.url
+		if acct.eabKeyID == "" {
+			return true, owned, false
+		}
+		owner := s.accounts[order.accountURL]
+		return true, owned, owner != nil && owner.eabKeyID == acct.eabKeyID
 	}
-	return n
+	for _, az := range s.authzs {
+		if az == nil || az.status != statusPending {
+			continue
+		}
+		active, owned, sameCredential := belongs(az)
+		if !active {
+			continue
+		}
+		global.authorizations++
+		if owned {
+			accountWork.authorizations++
+		}
+		if sameCredential {
+			credential.authorizations++
+		}
+	}
+	for _, ch := range s.challenges {
+		if ch == nil || ch.status != statusPending && ch.status != statusProcessing {
+			continue
+		}
+		az := s.authzs[ch.authzID]
+		if az == nil || az.status != statusPending {
+			continue
+		}
+		active, owned, sameCredential := belongs(az)
+		if !active {
+			continue
+		}
+		global.challenges++
+		if owned {
+			accountWork.challenges++
+		}
+		if sameCredential {
+			credential.challenges++
+		}
+	}
+	return global, accountWork, credential
 }
 
 func (s *Server) allAuthzValid(o *order) bool {

@@ -1254,22 +1254,26 @@ type KMIPProtocol struct {
 // event/projection backlog; these numbers are the abuse-budget fence for the
 // memory-resident protocol view.
 type ACMEQuota struct {
-	MaxNonces                     int `json:"max_nonces,omitempty"`
-	MaxAccounts                   int `json:"max_accounts,omitempty"`
-	MaxPendingOrders              int `json:"max_pending_orders,omitempty"`
-	MaxPendingAuthorizations      int `json:"max_pending_authorizations,omitempty"`
-	MaxPendingChallenges          int `json:"max_pending_challenges,omitempty"`
-	MaxPendingOrdersPerAccount    int `json:"max_pending_orders_per_account,omitempty"`
-	MaxNewOrdersPerAccount        int `json:"max_new_orders_per_account,omitempty"`
-	MaxAccountMutationsPerAccount int `json:"max_account_mutations_per_account,omitempty"`
-	MaxAccountMutationsPerTenant  int `json:"max_account_mutations_per_tenant,omitempty"`
-	MaxNewNoncesPerSource         int `json:"max_new_nonces_per_source,omitempty"`
-	MaxNewAccountsPerSource       int `json:"max_new_accounts_per_source,omitempty"`
-	MaxNewOrdersPerSource         int `json:"max_new_orders_per_source,omitempty"`
-	MaxAccountMutationsPerSource  int `json:"max_account_mutations_per_source,omitempty"`
-	SourceWindowSeconds           int `json:"source_window_seconds,omitempty"`
-	NonceTTLSeconds               int `json:"nonce_ttl_seconds,omitempty"`
-	StateTTLSeconds               int `json:"state_ttl_seconds,omitempty"`
+	MaxNonces                          int `json:"max_nonces,omitempty"`
+	MaxAccounts                        int `json:"max_accounts,omitempty"`
+	MaxPendingOrders                   int `json:"max_pending_orders,omitempty"`
+	MaxPendingAuthorizations           int `json:"max_pending_authorizations,omitempty"`
+	MaxPendingChallenges               int `json:"max_pending_challenges,omitempty"`
+	MaxPendingOrdersPerAccount         int `json:"max_pending_orders_per_account,omitempty"`
+	MaxPendingAuthorizationsPerAccount int `json:"max_pending_authorizations_per_account,omitempty"`
+	MaxPendingChallengesPerAccount     int `json:"max_pending_challenges_per_account,omitempty"`
+	MaxPendingAuthorizationsPerEAB     int `json:"max_pending_authorizations_per_eab,omitempty"`
+	MaxPendingChallengesPerEAB         int `json:"max_pending_challenges_per_eab,omitempty"`
+	MaxNewOrdersPerAccount             int `json:"max_new_orders_per_account,omitempty"`
+	MaxAccountMutationsPerAccount      int `json:"max_account_mutations_per_account,omitempty"`
+	MaxAccountMutationsPerTenant       int `json:"max_account_mutations_per_tenant,omitempty"`
+	MaxNewNoncesPerSource              int `json:"max_new_nonces_per_source,omitempty"`
+	MaxNewAccountsPerSource            int `json:"max_new_accounts_per_source,omitempty"`
+	MaxNewOrdersPerSource              int `json:"max_new_orders_per_source,omitempty"`
+	MaxAccountMutationsPerSource       int `json:"max_account_mutations_per_source,omitempty"`
+	SourceWindowSeconds                int `json:"source_window_seconds,omitempty"`
+	NonceTTLSeconds                    int `json:"nonce_ttl_seconds,omitempty"`
+	StateTTLSeconds                    int `json:"state_ttl_seconds,omitempty"`
 }
 
 // ACMEExternalAccountBinding is the server-side EAB key registry for ACME account
@@ -3908,22 +3912,26 @@ func Default() *Config {
 			TSA:                   ProtocolToggle{Enabled: false},
 			KMIP:                  KMIPProtocol{Enabled: false, Addr: ":5696"},
 			ACMEQuota: ACMEQuota{
-				MaxNonces:                     4096,
-				MaxAccounts:                   2048,
-				MaxPendingOrders:              4096,
-				MaxPendingAuthorizations:      8192,
-				MaxPendingChallenges:          24576,
-				MaxPendingOrdersPerAccount:    128,
-				MaxNewOrdersPerAccount:        100,
-				MaxAccountMutationsPerAccount: 60,
-				MaxAccountMutationsPerTenant:  600,
-				MaxNewNoncesPerSource:         120,
-				MaxNewAccountsPerSource:       20,
-				MaxNewOrdersPerSource:         60,
-				MaxAccountMutationsPerSource:  60,
-				SourceWindowSeconds:           600,
-				NonceTTLSeconds:               600,
-				StateTTLSeconds:               86400,
+				MaxNonces:                          4096,
+				MaxAccounts:                        2048,
+				MaxPendingOrders:                   4096,
+				MaxPendingAuthorizations:           8192,
+				MaxPendingChallenges:               24576,
+				MaxPendingOrdersPerAccount:         128,
+				MaxPendingAuthorizationsPerAccount: 200,
+				MaxPendingChallengesPerAccount:     600,
+				MaxPendingAuthorizationsPerEAB:     400,
+				MaxPendingChallengesPerEAB:         1200,
+				MaxNewOrdersPerAccount:             100,
+				MaxAccountMutationsPerAccount:      60,
+				MaxAccountMutationsPerTenant:       600,
+				MaxNewNoncesPerSource:              120,
+				MaxNewAccountsPerSource:            20,
+				MaxNewOrdersPerSource:              60,
+				MaxAccountMutationsPerSource:       60,
+				SourceWindowSeconds:                600,
+				NonceTTLSeconds:                    600,
+				StateTTLSeconds:                    86400,
 			},
 			RAKeyFile:   "data/protocols/ra-transport.key",
 			TSACertFile: "data/protocols/tsa.crt",
@@ -4515,6 +4523,10 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS", &p.ACMEQuota.MaxPendingAuthorizations)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES", &p.ACMEQuota.MaxPendingChallenges)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT", &p.ACMEQuota.MaxPendingOrdersPerAccount)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS_PER_ACCOUNT", &p.ACMEQuota.MaxPendingAuthorizationsPerAccount)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES_PER_ACCOUNT", &p.ACMEQuota.MaxPendingChallengesPerAccount)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS_PER_EAB", &p.ACMEQuota.MaxPendingAuthorizationsPerEAB)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES_PER_EAB", &p.ACMEQuota.MaxPendingChallengesPerEAB)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_ACCOUNT", &p.ACMEQuota.MaxNewOrdersPerAccount)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_ACCOUNT", &p.ACMEQuota.MaxAccountMutationsPerAccount)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_TENANT", &p.ACMEQuota.MaxAccountMutationsPerTenant)
@@ -6500,6 +6512,10 @@ func (q ACMEQuota) validate() []error {
 	check("max_pending_authorizations", q.MaxPendingAuthorizations)
 	check("max_pending_challenges", q.MaxPendingChallenges)
 	check("max_pending_orders_per_account", q.MaxPendingOrdersPerAccount)
+	check("max_pending_authorizations_per_account", q.MaxPendingAuthorizationsPerAccount)
+	check("max_pending_challenges_per_account", q.MaxPendingChallengesPerAccount)
+	check("max_pending_authorizations_per_eab", q.MaxPendingAuthorizationsPerEAB)
+	check("max_pending_challenges_per_eab", q.MaxPendingChallengesPerEAB)
 	check("max_new_orders_per_account", q.MaxNewOrdersPerAccount)
 	check("max_account_mutations_per_account", q.MaxAccountMutationsPerAccount)
 	check("max_account_mutations_per_tenant", q.MaxAccountMutationsPerTenant)
