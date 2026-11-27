@@ -44,6 +44,47 @@ func TestPublicHoneyTokenProbeIsAbuseLimited(t *testing.T) {
 	}
 }
 
+func TestPublicCatalogTrafficKeepsSignInBudgetAvailable(t *testing.T) {
+	cfg, _ := authConfig()
+	h := api.New(nil, nil, nil, api.WithAuth(cfg), api.WithSpecialRouteAbuseLimits(api.SpecialRouteAbuseLimits{
+		Global: 1, PerSource: 1, PerToken: 10, PerTenant: 10,
+	}))
+	for _, tc := range []struct {
+		path string
+		want int
+	}{
+		{"/api/v1/editions", http.StatusOK},
+		{"/auth/login", http.StatusFound},
+	} {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		req.RemoteAddr = "203.0.113.42:1234"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Fatalf("GET %s = %d, want %d: %s", tc.path, rec.Code, tc.want, rec.Body.String())
+		}
+	}
+}
+
+func TestPublicRouteSourceBudgetGroupsIPv6Subnet(t *testing.T) {
+	h := api.New(nil, nil, nil, api.WithSpecialRouteAbuseLimits(api.SpecialRouteAbuseLimits{
+		Global: 10, PerSource: 1, PerToken: 10, PerTenant: 10,
+	}))
+	for i, address := range []string{"[2001:db8:1:2::1]:1234", "[2001:db8:1:2::2]:5678"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/editions", nil)
+		req.RemoteAddr = address
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		want := http.StatusOK
+		if i == 1 {
+			want = http.StatusTooManyRequests
+		}
+		if rec.Code != want {
+			t.Fatalf("request %d = %d, want %d: %s", i, rec.Code, want, rec.Body.String())
+		}
+	}
+}
+
 func TestSpecialAuthLoginRouteRateLimitedSEC002(t *testing.T) {
 	cfg, _ := authConfig()
 	h := api.New(nil, nil, nil,

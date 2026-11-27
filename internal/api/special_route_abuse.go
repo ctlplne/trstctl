@@ -3,8 +3,11 @@
 package api
 
 import (
+	"net/netip"
 	"sync"
 	"time"
+
+	guuid "github.com/google/uuid"
 )
 
 const (
@@ -72,13 +75,14 @@ type specialRouteAbuseRequest struct {
 	Source   string
 	TokenKey string
 	TenantID string
+	Family   string
 }
 
 type specialRouteAbuseLimiter struct {
 	mu      sync.Mutex
 	now     func() time.Time
 	limits  SpecialRouteAbuseLimits
-	global  abuseCounter
+	globals map[string]abuseCounter
 	sources map[string]abuseCounter
 	tokens  map[string]abuseCounter
 	tenants map[string]abuseCounter
@@ -93,6 +97,7 @@ func newSpecialRouteAbuseLimiter(limits SpecialRouteAbuseLimits) *specialRouteAb
 	return &specialRouteAbuseLimiter{
 		now:     time.Now,
 		limits:  limits.withDefaults(),
+		globals: map[string]abuseCounter{},
 		sources: map[string]abuseCounter{},
 		tokens:  map[string]abuseCounter{},
 		tenants: map[string]abuseCounter{},
@@ -103,20 +108,28 @@ func (l *specialRouteAbuseLimiter) allow(req specialRouteAbuseRequest) (bool, ti
 	if l == nil {
 		return true, 0
 	}
+	if req.Family == "" {
+		req.Family = "other"
+	}
+	if tenant, err := guuid.Parse(req.TenantID); err == nil {
+		req.TenantID = tenant.String()
+	}
+	sourceKey := req.Family + "\x00" + req.Source
+	tokenKey := req.Family + "\x00" + req.TokenKey
 	now := l.now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.pruneLocked(now)
 
-	global := l.activeCounter(l.global, now)
+	global := l.activeMapCounter(l.globals, req.Family, now)
 	if retryAfter, denied := denyRetryAfter(global, l.limits.Global, now); denied {
 		return false, retryAfter
 	}
-	source := l.activeMapCounter(l.sources, req.Source, now)
+	source := l.activeMapCounter(l.sources, sourceKey, now)
 	if retryAfter, denied := denyRetryAfter(source, l.limits.PerSource, now); denied {
 		return false, retryAfter
 	}
-	token := l.activeMapCounter(l.tokens, req.TokenKey, now)
+	token := l.activeMapCounter(l.tokens, tokenKey, now)
 	if retryAfter, denied := denyRetryAfter(token, l.limits.PerToken, now); denied {
 		return false, retryAfter
 	}
@@ -125,12 +138,12 @@ func (l *specialRouteAbuseLimiter) allow(req specialRouteAbuseRequest) (bool, ti
 		return false, retryAfter
 	}
 
-	l.global = incrementCounter(global)
+	l.globals[req.Family] = incrementCounter(global)
 	if req.Source != "" {
-		l.sources[req.Source] = incrementCounter(source)
+		l.sources[sourceKey] = incrementCounter(source)
 	}
 	if req.TokenKey != "" {
-		l.tokens[req.TokenKey] = incrementCounter(token)
+		l.tokens[tokenKey] = incrementCounter(token)
 	}
 	if req.TenantID != "" {
 		l.tenants[req.TenantID] = incrementCounter(tenant)
@@ -153,9 +166,24 @@ func (l *specialRouteAbuseLimiter) activeMapCounter(m map[string]abuseCounter, k
 }
 
 func (l *specialRouteAbuseLimiter) pruneLocked(now time.Time) {
+	pruneAbuseCounters(l.globals, now)
 	pruneAbuseCounters(l.sources, now)
 	pruneAbuseCounters(l.tokens, now)
 	pruneAbuseCounters(l.tenants, now)
+}
+
+// specialRouteSource groups IPv6 addresses by their ordinary delegated subnet
+// so rotating one host address does not reset a public-route source budget.
+func specialRouteSource(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ip
+	}
+	addr = addr.Unmap().WithZone("")
+	if !addr.Is6() {
+		return addr.String()
+	}
+	return netip.PrefixFrom(addr, 64).Masked().String()
 }
 
 func pruneAbuseCounters(m map[string]abuseCounter, now time.Time) {

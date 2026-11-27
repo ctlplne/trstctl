@@ -27,7 +27,7 @@ func (l *enrollDenyLimiter) Allow(_ context.Context, tenantID string) (bool, tim
 	return false, l.retryAfter, nil
 }
 
-func TestSpecialEnrollBootstrapRouteRateLimitedRED003(t *testing.T) {
+func TestSpecialEnrollBootstrapKeepsAnonymousTrafficOffTenantQuota(t *testing.T) {
 	limiter := &enrollDenyLimiter{retryAfter: 3 * time.Second}
 	a := api.New(nil, nil, nil, api.WithAgentEnroller(enrollOnlyEnroller{}), api.WithRateLimiter(limiter))
 
@@ -41,13 +41,10 @@ func TestSpecialEnrollBootstrapRouteRateLimitedRED003(t *testing.T) {
 	rec := httptest.NewRecorder()
 	a.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("POST /enroll/bootstrap over budget = %d, want 429", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /enroll/bootstrap = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	if got := rec.Header().Get("Retry-After"); got != "3" {
-		t.Fatalf("Retry-After = %q, want 3", got)
-	}
-	if limiter.calls != 1 || limiter.tenantID != testTenant {
-		t.Fatalf("limiter calls=%d tenant=%q, want one call for %q", limiter.calls, limiter.tenantID, testTenant)
+	if limiter.calls != 0 {
+		t.Fatalf("anonymous enrollment charged tenant quota: calls=%d tenant=%q", limiter.calls, limiter.tenantID)
 	}
 }

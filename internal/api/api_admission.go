@@ -38,11 +38,9 @@ func (a *API) allowTenantRequest(w http.ResponseWriter, r *http.Request, tenantI
 
 func (a *API) allowSpecialRouteRequest(w http.ResponseWriter, r *http.Request, req specialRouteAbuseRequest) bool {
 	if req.Source == "" {
-		req.Source = requestClientIP(r)
+		req.Source = specialRouteSource(requestClientIP(r))
 	}
-	if req.TenantID == "" {
-		req.TenantID = strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
-	}
+	req.Family = specialRouteFamily(r.URL.Path)
 	if a.specialAbuse != nil {
 		allowed, retryAfter := a.specialAbuse.allow(req)
 		if !allowed {
@@ -54,6 +52,23 @@ func (a *API) allowSpecialRouteRequest(w http.ResponseWriter, r *http.Request, r
 		return false
 	}
 	return true
+}
+
+func specialRouteFamily(path string) string {
+	switch {
+	case path == "/api/v1/editions":
+		return "catalog"
+	case strings.HasPrefix(path, "/auth/"):
+		return "signin"
+	case strings.HasPrefix(path, "/enroll/"):
+		return "enrollment"
+	case strings.HasPrefix(path, "/scim/") || strings.Contains(path, "/scim/"):
+		return "scim"
+	case strings.Contains(path, "/webhook"):
+		return "webhook"
+	default:
+		return "other"
+	}
 }
 
 func (a *API) writeRateLimitExceeded(w http.ResponseWriter, retryAfter time.Duration) {

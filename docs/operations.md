@@ -353,6 +353,12 @@ tenant cannot exhaust the control plane while others are unaffected.
 | `TRSTCTL_RATE_LIMIT_REQUESTS` | `600` | Burst/budget per window, per tenant. |
 | `TRSTCTL_RATE_LIMIT_WINDOW` | `1m` | The refill window (Go duration). |
 
+Public sign-in, enrollment, SCIM and webhook routes use separate bounded
+pre-authentication budgets by route family, source and token reference. The
+source budget groups IPv6 addresses by /64. A tenant named only in an
+`X-Tenant-ID` header does not consume the authenticated PostgreSQL bucket;
+that bucket is charged only when a verified credential supplies the tenant.
+
 ## Graceful drain on shutdown
 
 On `SIGTERM` the control plane drains **without losing in-flight work**: it stops

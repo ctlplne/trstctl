@@ -72,7 +72,7 @@ func (a *API) refusePublicHoneyTokenBearer(w http.ResponseWriter, r *http.Reques
 	// route. Bound those pre-tenant lookups before they touch PostgreSQL.
 	if a.specialAbuse != nil {
 		allowed, retryAfter := a.specialAbuse.allow(specialRouteAbuseRequest{
-			Source: requestClientIP(r), TokenKey: hash,
+			Source: specialRouteSource(requestClientIP(r)), TokenKey: hash, Family: "public-credential-probe",
 		})
 		if !allowed {
 			a.writeRateLimitExceeded(w, retryAfter)
