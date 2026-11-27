@@ -169,7 +169,8 @@ func (s *Store) ActiveRunStandingApproval(ctx context.Context, tenantID, runID, 
 			SELECT `+accessBundleStandingApprovalColumns+`
 			  FROM access_bundle_standing_approvals a
 			 WHERE a.tenant_id = $1 AND a.target_type = $5 AND a.target_id = $6 AND a.role = $7
-			   AND a.revoked_at IS NULL AND a.expires_at > $3 AND a.granted_by <> $2
+		   AND a.revoked_at IS NULL AND a.expires_at > $3 AND a.granted_by <> $2
+		   AND a.granted_by <> $8
 			   AND EXISTS (
 			       SELECT 1 FROM access_bundle_grants g
 			         JOIN access_bundles b ON b.tenant_id = g.tenant_id AND b.id = g.bundle_id
@@ -178,7 +179,7 @@ func (s *Store) ActiveRunStandingApproval(ctx context.Context, tenantID, runID, 
 			          AND EXISTS (SELECT 1 FROM jsonb_array_elements(b.access_targets) t
 			                       WHERE t->>'target_type' = $5 AND t->>'target_id' = $6 AND t->'roles' ? $7))
 			 ORDER BY a.expires_at DESC, a.id
-			 LIMIT 1`, tenantID, run.Principal, now.UTC(), run.GrantIDs, targetType, targetID, role), &out)
+			LIMIT 1`, tenantID, run.Principal, now.UTC(), run.GrantIDs, targetType, targetID, role, run.IssuedBy), &out)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}

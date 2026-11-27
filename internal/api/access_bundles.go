@@ -19,6 +19,7 @@ import (
 
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -1043,11 +1044,33 @@ func (a *API) issueAccessRun(w http.ResponseWriter, r *http.Request) {
 		}
 		sort.Strings(ids)
 		sort.Strings(grantIDs)
-		rec, raw, err := a.orch.IssueAccessBundleRun(ctx, tenantID, projections.AccessBundleRunIssued{
-			Principal: principal, BundleIDs: ids, GrantIDs: grantIDs, Permissions: perms, Label: label, ExpiresAt: expires,
-			IssuedBy: caller.Subject,
-		})
-		if err != nil {
+		// Take the same per-bundle fence used by standing-approval grants. Sorted
+		// acquisition gives multi-bundle runs a stable cross-process lock order.
+		var rec store.APITokenRecord
+		var raw []byte
+		var issue func(context.Context, int) error
+		issue = func(work context.Context, index int) error {
+			if index == len(ids) {
+				var err error
+				rec, raw, err = a.orch.IssueAccessBundleRun(work, tenantID, projections.AccessBundleRunIssued{
+					Principal: principal, BundleIDs: ids, GrantIDs: grantIDs, Permissions: perms, Label: label, ExpiresAt: expires,
+					IssuedBy: caller.Subject,
+				})
+				return err
+			}
+			return a.store.WithTenantResourceCreation(work, tenantID, standingApprovalAdmissionResource(ids[index]), func(locked context.Context) error {
+				issuedOwnApproval, err := a.store.HasLiveAccessBundleStandingApprovalByGranter(locked, tenantID, ids[index], caller.Subject, time.Now().UTC())
+				if err != nil {
+					return err
+				}
+				if issuedOwnApproval {
+					return errStatus(http.StatusForbidden, "you granted a live standing approval for this bundle: revoke it before issuing a run")
+				}
+				return issue(locked, index+1)
+			})
+		}
+		if err := issue(ctx, 0); err != nil {
+			secret.Wipe(raw)
 			return 0, nil, err
 		}
 		resp := &accessRunIssued{Token: secretJSONBytes(raw), Launch: accessRunLaunch(),

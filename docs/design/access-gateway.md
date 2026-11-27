@@ -298,8 +298,10 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
   delegates that account and role, and the session ends before the approval expires; the
   choice is frozen with the evaluation (`pam.auto_approval.evaluated`), the request records
   one approval by `standing-approval:<id>`, and `access.bundle_standing_approval.used` names
-  the run. Reusing the frozen choice and opening a session check that its author is not
-  the run's principal and that the approval is still in force. Revoking it ends the
+  the run. Reusing the frozen choice and opening a session check that its author is neither
+  the run's principal nor its issuer, and that the approval is still in force.
+  A grantor cannot issue a run for this bundle while their standing approval is live;
+  a run issuer cannot grant a standing approval while their run is live. Revoking it ends the
   live sessions it approved, as an operator's revocation does, under keys derived from the
   call's own.
 - **What it does not do.** The command's network is not confined: it holds no credential

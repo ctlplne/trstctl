@@ -27,4 +27,7 @@ func TestSameIdentityMatchesAcrossIdentifiersA225L1(t *testing.T) {
 	if err := CanDecide("Dana@Example.test", "dana@example.test"); !errors.Is(err, ErrRequesterCannotDecide) {
 		t.Fatalf("CanDecide with the requester's subject in another case = %v, want the separation-of-duties refusal", err)
 	}
+	if err := CanDecide("bundle-run:dana@example.test", "Dana@Example.test"); !errors.Is(err, ErrRequesterCannotDecide) {
+		t.Fatalf("CanDecide with the requester's run alias = %v, want the separation-of-duties refusal", err)
+	}
 }

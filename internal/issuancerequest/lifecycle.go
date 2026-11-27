@@ -13,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"trstctl.com/trstctl/internal/authz"
 )
 
 // The states a request can be in.
@@ -93,7 +95,14 @@ func CanDecide(requester, principal string) error {
 	if requester == "" || principal == "" {
 		return fmt.Errorf("issuancerequest: both requester and approver must be known")
 	}
-	if SameIdentity([]string{requester}, []string{principal}) {
+	requesterIdentity, principalIdentity := requester, principal
+	if owner, ok := authz.BundleRunPrincipal(requester); ok {
+		requesterIdentity = owner
+	}
+	if owner, ok := authz.BundleRunPrincipal(principal); ok {
+		principalIdentity = owner
+	}
+	if authz.SameApprovalPrincipal(requester, principal) || SameIdentity([]string{requesterIdentity}, []string{principalIdentity}) {
 		return fmt.Errorf(
 			"%w: %s opened this request and cannot decide it; self-approval would make "+
 				"the approval record look legitimate while nobody independent ever looked", ErrRequesterCannotDecide, principal)

@@ -664,6 +664,18 @@ func (s *Store) GetAccessBundleRun(ctx context.Context, tenantID, id string) (Ac
 	return r, err
 }
 
+// HasLiveAccessBundleRunIssuedBy checks all runs for standing-approval admission.
+func (s *Store) HasLiveAccessBundleRunIssuedBy(ctx context.Context, tenantID, bundleID, issuer string, now time.Time) (bool, error) {
+	var found bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM access_bundle_runs
+			 WHERE tenant_id = $1 AND $2::uuid = ANY(bundle_ids) AND issued_by = $3
+			   AND revoked_at IS NULL AND expires_at > $4)`, tenantID, bundleID, issuer, now.UTC()).Scan(&found)
+	})
+	return found, err
+}
+
 // ListAccessBundleRuns lists runs, newest first, optionally one principal's
 // or those minted under one bundle.
 func (s *Store) ListAccessBundleRuns(ctx context.Context, tenantID, principal, bundleID string, limit int) ([]AccessBundleRun, error) {

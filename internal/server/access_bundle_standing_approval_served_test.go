@@ -16,6 +16,8 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/cli"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 type servedBundleStandingApproval struct {
@@ -44,7 +46,7 @@ func TestServedBundleStandingApprovalOpensAgentSessionsOD9(t *testing.T) {
 	h := f.h
 	const agent = "agent-9"
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "od9-admin", "access:read", "access:write", "access:bundle.run")
-	approver := seedScopedTokenSubject(t, h.store, h.tenant, "od9-approver", "access:read", "access:write", "access:approve")
+	approver := seedScopedTokenSubject(t, h.store, h.tenant, "od9-approver", "access:read", "access:write", "access:approve", "access:bundle.run", "access:sessions.open")
 
 	status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/bundles", admin, "od9-bundle", map[string]any{
 		"name": "od9-report-agent", "permissions": []string{"access:sessions.open"}, "max_run_ttl_seconds": 3600,
@@ -134,11 +136,8 @@ func TestServedBundleStandingApprovalOpensAgentSessionsOD9(t *testing.T) {
 	}
 	activationGuard := &pamService{store: h.store, clock: time.Now}
 	standingEvidence := []string{pamStandingApprovalEvidence + standing.ID}
-	if err := activationGuard.pamStandingApprovalInForce(f.ctx, h.tenant, "bundle-run:od9-approver", standingEvidence); err == nil {
+	if err := activationGuard.pamStandingApprovalInForce(f.ctx, h.tenant, "bundle-run:od9-approver", "", standingEvidence); err == nil {
 		t.Fatal("the standing approver's own run could activate under its approval")
-	}
-	if err := activationGuard.pamStandingApprovalInForce(f.ctx, h.tenant, "bundle-run:"+agent, standingEvidence); err != nil {
-		t.Fatalf("another principal's run lost its standing approval: %v", err)
 	}
 	// CR-100: the reverse order must also hold for machine grants. A later
 	// grant to the approval's author would make that person's own runs eligible
@@ -158,6 +157,33 @@ func TestServedBundleStandingApprovalOpensAgentSessionsOD9(t *testing.T) {
 	}
 	if status != http.StatusCreated || json.Unmarshal(body, &run) != nil || run.Token == "" {
 		t.Fatalf("mint the agent's run = %d %s", status, body)
+	}
+	if err := activationGuard.pamStandingApprovalInForce(f.ctx, h.tenant, "bundle-run:"+agent, run.Run.ID, standingEvidence); err != nil {
+		t.Fatalf("another issuer's run lost its standing approval: %v", err)
+	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/runs", approver, "od9-author-run",
+		map[string]any{"principal": agent, "bundle_ids": []string{bundle.ID}, "ttl_seconds": 600}); status != http.StatusForbidden {
+		t.Fatalf("standing approval's author issued a run: %d %s", status, body)
+	}
+	// Model an already recorded run from before the admission rule existed.
+	// Activation must still reject its standing approval.
+	grants, err := h.store.LiveAccessBundleGrants(f.ctx, h.tenant, agent, time.Now())
+	if err != nil || len(grants) != 1 {
+		t.Fatalf("agent grants = %v, %v", grants, err)
+	}
+	historical, raw, err := h.srv.orch.IssueAccessBundleRun(f.ctx, h.tenant, projections.AccessBundleRunIssued{
+		Principal: agent, BundleIDs: []string{bundle.ID}, GrantIDs: []string{grants[0].ID},
+		Permissions: []string{"access:sessions.open"}, ExpiresAt: time.Now().Add(10 * time.Minute), IssuedBy: "od9-approver",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret.Wipe(raw)
+	if err := activationGuard.pamStandingApprovalInForce(f.ctx, h.tenant, "bundle-run:"+agent, historical.ID, standingEvidence); err == nil {
+		t.Fatal("a historical run issued by the standing approver could activate")
+	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, standingPath, approver, "od9-issuer-standing", grantBody(nil)); status != http.StatusForbidden {
+		t.Fatalf("live run issuer granted a standing approval: %d %s", status, body)
 	}
 
 	// No reviewer runs anywhere in this test: the launcher's session is

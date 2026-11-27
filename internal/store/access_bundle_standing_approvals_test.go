@@ -54,19 +54,20 @@ func TestAccessBundleStandingApprovalLookupOD9(t *testing.T) {
 		})
 		return g.ID
 	}
-	issue := func(principal string, bundleIDs, grantIDs []string, expires time.Time) string {
+	issue := func(principal, issuer string, bundleIDs, grantIDs []string, expires time.Time) string {
 		runID := googleuuid.NewString()
 		apply(func(tx pgx.Tx, eventID string, sequence uint64) error {
 			return s.ApplyAccessBundleRunIssuedTx(ctx, tx, tenant, store.AccessBundleRun{ID: runID, Principal: principal,
 				BundleIDs: bundleIDs, GrantIDs: grantIDs, Permissions: []string{"access:sessions.open"}, ExpiresAt: expires,
-				IssuedBy: "admin", IssuedAt: now}, eventID, sequence)
+				IssuedBy: issuer, IssuedAt: now}, eventID, sequence)
 		})
 		return runID
 	}
 	gAgent := grant(bundle.ID, "agent-9")
 	gOther := grant(other.ID, "agent-10")
-	run := issue("agent-9", []string{bundle.ID}, []string{gAgent}, now.Add(time.Hour))
-	otherRun := issue("agent-10", []string{other.ID}, []string{gOther}, now.Add(time.Hour))
+	run := issue("agent-9", "admin", []string{bundle.ID}, []string{gAgent}, now.Add(time.Hour))
+	otherRun := issue("agent-10", "admin", []string{other.ID}, []string{gOther}, now.Add(time.Hour))
+	granterRun := issue("agent-9", "approver", []string{bundle.ID}, []string{gAgent}, now.Add(time.Hour))
 
 	approval := store.AccessBundleStandingApproval{TenantID: tenant, ID: googleuuid.NewString(), BundleID: bundle.ID,
 		TargetType: "postgres", TargetID: "orders-db", Role: "readonly", Reason: "nightly report", GrantedBy: "approver",
@@ -96,6 +97,7 @@ func TestAccessBundleStandingApprovalLookupOD9(t *testing.T) {
 		t.Fatal("the run's approved account does not match")
 	}
 	for name, matched := range map[string]bool{
+		"standing granter issued the run":   lookup(granterRun, "orders-db", "readonly", now),
 		"another role":                      lookup(run, "orders-db", "readwrite", now),
 		"another account":                   lookup(run, "billing-db", "readonly", now),
 		"another bundle's run":              lookup(otherRun, "orders-db", "readonly", now),

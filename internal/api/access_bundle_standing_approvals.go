@@ -182,6 +182,13 @@ func (a *API) grantAccessBundleStandingApproval(w http.ResponseWriter, r *http.R
 			if slices.ContainsFunc(grants, func(g store.AccessBundleGrant) bool { return g.BundleID == bundle.ID }) {
 				return errStatus(http.StatusForbidden, "this bundle is granted to you: a standing approval for it must come from someone it is not granted to")
 			}
+			issued, err := a.store.HasLiveAccessBundleRunIssuedBy(work, tenantID, bundle.ID, principal.Subject, time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if issued {
+				return errStatus(http.StatusForbidden, "you issued a live run for this bundle: revoke it before granting a standing approval")
+			}
 			return a.orch.GrantAccessBundleStandingApproval(work, tenantID, projections.AccessBundleStandingApprovalGranted{
 				ID: id, BundleID: bundle.ID, TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role,
 				Reason: reason, ExpiresAt: expires, GrantedBy: principal.Subject,

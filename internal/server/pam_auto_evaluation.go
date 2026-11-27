@@ -29,12 +29,6 @@ func (s *pamService) pamApprovalPrincipalConflict(ctx context.Context, tenantID,
 	if authz.SameApprovalPrincipal(author, requester) {
 		return true, nil
 	}
-	if owner, ok := orchestrator.BundleRunPrincipal(requester); ok {
-		requester = owner
-	}
-	if owner, ok := orchestrator.BundleRunPrincipal(author); ok {
-		author = owner
-	}
 	conflict, err := s.store.DelegatedTokenMinterMatches(ctx, tenantID, requester, []string{author})
 	if err != nil || conflict {
 		return conflict, err
@@ -396,11 +390,21 @@ func (s *pamService) pamApproveUnderStandingApproval(work context.Context, tenan
 
 // pamStandingApprovalInForce refuses to activate a request a standing
 // approval approved once that approval was revoked or has expired (OD-9).
-func (s *pamService) pamStandingApprovalInForce(ctx context.Context, tenantID, requester string, evidenceRefs []string) error {
+func (s *pamService) pamStandingApprovalInForce(ctx context.Context, tenantID, requester, runID string, evidenceRefs []string) error {
 	for _, ref := range evidenceRefs {
 		id, ok := strings.CutPrefix(ref, pamStandingApprovalEvidence)
 		if !ok {
 			continue
+		}
+		run, err := s.store.GetAccessBundleRun(ctx, tenantID, runID)
+		if errors.Is(err, store.ErrAccessBundleNotFound) {
+			return fmt.Errorf("%w: the run that received the standing approval is gone; start a new request", api.ErrPAMRejected)
+		}
+		if err != nil {
+			return err
+		}
+		if requester != "bundle-run:"+run.Principal {
+			return fmt.Errorf("%w: the standing approval belongs to a different run principal", api.ErrPAMRejected)
 		}
 		approval, err := s.store.GetAccessBundleStandingApproval(ctx, tenantID, id)
 		if errors.Is(err, store.ErrAccessBundleStandingApprovalNotFound) {
@@ -411,6 +415,9 @@ func (s *pamService) pamStandingApprovalInForce(ctx context.Context, tenantID, r
 		}
 		if authz.SameApprovalPrincipal(approval.GrantedBy, requester) {
 			return fmt.Errorf("%w: the standing approval's author cannot approve their own run", api.ErrPAMRejected)
+		}
+		if authz.SameApprovalPrincipal(approval.GrantedBy, run.IssuedBy) {
+			return fmt.Errorf("%w: the standing approval's author cannot issue the run it approves", api.ErrPAMRejected)
 		}
 		conflict, err := s.pamApprovalPrincipalConflict(ctx, tenantID, approval.GrantedBy, requester)
 		if err != nil {

@@ -44,15 +44,16 @@ func (s *Store) DelegatedTokenMinterMatchesTx(ctx context.Context, tx pgx.Tx, te
 			return true, nil
 		}
 	}
-	if owner, ok := authz.BundleRunPrincipal(requester); ok {
-		requester = owner
-	}
 	requesterRef := privacy.SubjectRef(tenantID, requester)
+	ownerRef := requesterRef
+	if owner, ok := authz.BundleRunPrincipal(requester); ok {
+		ownerRef = privacy.SubjectRef(tenantID, owner)
+	}
 	var unknownMinter bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (
 	    SELECT 1 FROM api_tokens
-	     WHERE tenant_id=$1 AND subject_ref=$2 AND delegated AND btrim(minted_by_ref)=''
-	)`, tenantID, requesterRef).Scan(&unknownMinter); err != nil {
+	     WHERE tenant_id=$1 AND subject_ref IN ($2,$3) AND delegated AND btrim(minted_by_ref)=''
+	)`, tenantID, requesterRef, ownerRef).Scan(&unknownMinter); err != nil {
 		return false, fmt.Errorf("store: read historical delegated token provenance: %w", err)
 	}
 	if unknownMinter {
@@ -60,11 +61,11 @@ func (s *Store) DelegatedTokenMinterMatchesTx(ctx context.Context, tx pgx.Tx, te
 	}
 	rows, err := tx.Query(ctx, `WITH RECURSIVE minter_lineage(ref, name) AS (
 	    SELECT minted_by_ref, minted_by FROM api_tokens
-	     WHERE tenant_id=$1 AND subject_ref=$2 AND minted_by_ref<>'' AND minted_by_ref<>subject_ref
+	     WHERE tenant_id=$1 AND subject_ref IN ($2,$3) AND minted_by_ref<>'' AND minted_by_ref<>subject_ref
 	    UNION
 	    SELECT t.minted_by_ref, t.minted_by FROM api_tokens AS t JOIN minter_lineage AS m ON t.subject_ref=m.ref
 	     WHERE t.tenant_id=$1 AND t.minted_by_ref<>'' AND t.minted_by_ref<>t.subject_ref
-	) SELECT ref, name FROM minter_lineage LIMIT 1025`, tenantID, requesterRef)
+	) SELECT ref, name FROM minter_lineage LIMIT 1025`, tenantID, requesterRef, ownerRef)
 	if err != nil {
 		return false, fmt.Errorf("store: read delegated token lineage: %w", err)
 	}

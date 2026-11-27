@@ -731,6 +731,8 @@ trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly
   granting it needs `access:approve` as well as `access:write`, and nobody the bundle is
   granted to may grant it. While it is live, granting the bundle to its author is also
   refused; revoke the standing approval before granting that person the bundle.
+  The approval's author also cannot issue a run for that bundle while it is live,
+  and a live run's issuer cannot grant the bundle a standing approval.
 
 ```bash
 cat > standing.json <<'JSON'
