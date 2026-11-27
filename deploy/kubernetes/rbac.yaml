@@ -43,6 +43,16 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "create", "update", "patch"]
+  # The DaemonSet elects one issuer reconciler with this one local Lease.
+  # Kubernetes cannot restrict create by resourceNames, so its rule remains
+  # separate and scoped by this namespaced Role.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: ["trstctl-agent-issuer-controller"]
+    verbs: ["get", "update"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -77,12 +87,6 @@ metadata:
   labels:
     app.kubernetes.io/name: trstctl-agent
 rules:
-  # Leader election for the cluster-scoped issuer controller: the agent is a
-  # DaemonSet, so one Lease elects a single reconciler instead of every node
-  # reconciling the same cluster-scoped objects. Deliberately without delete.
-  - apiGroups: ["coordination.k8s.io"]
-    resources: ["leases"]
-    verbs: ["get", "create", "update"]
   - apiGroups: ["cert-manager.io"]
     resources: ["certificaterequests"]
     verbs: ["get", "list", "watch"]

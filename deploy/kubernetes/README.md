@@ -18,8 +18,9 @@ in-cluster CA — no `client-go` dependency.
 - `certmanager-issuer-crds.yaml` — the trstctl `Issuer`, `ClusterIssuer`,
   `Certificate`, and `TrustBundle` CRDs.
 - `rbac.yaml` — the agent's `ServiceAccount`, a `trstctl-agents` Role for
-  Secret and ConfigMap writes, and a ClusterRole for controller reads and
-  status updates. The default ClusterRole cannot write ConfigMaps.
+  local Secret and ConfigMap writes and issuer leader election, and a
+  ClusterRole for controller reads and status updates. The ClusterRole
+  cannot write ConfigMaps or Leases across namespaces.
 - `rbac-trust-configmaps.yaml` — opt-in namespaced Role and RoleBinding for
   TrustBundle ConfigMap targets outside `trstctl`. Copy it for each approved
   target namespace and set both `metadata.namespace` values before applying.
@@ -162,7 +163,8 @@ certificates.
 
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and
 validated in tests. The `trstctl-agents` namespace Role permits the agent to write its
-local Secrets and public trust-bundle ConfigMaps. The ClusterRole permits it to
+local Secrets and public trust-bundle ConfigMaps and update its named issuer
+leader Lease. The ClusterRole permits it to
 read cert-manager `CertificateRequest`s, native Kubernetes
 `CertificateSigningRequest`s, and trstctl `Issuer`/`ClusterIssuer`/`Certificate`
 resources; it updates only status subresources for request/controller resources

@@ -208,6 +208,44 @@ func TestAgentRBACAllowsTrustBundleDistribution(t *testing.T) {
 	}
 }
 
+func TestAgentLeaderLeaseGrantIsNamespaced(t *testing.T) {
+	for _, object := range docs(t) {
+		if object["kind"] != "ClusterRole" {
+			continue
+		}
+		for _, verb := range []string{"create", "update", "patch", "delete"} {
+			if hasClusterRoleRule(object, "coordination.k8s.io", "leases", verb) {
+				t.Errorf("ClusterRole grants cluster-wide Lease %s", verb)
+			}
+		}
+	}
+	role := namedDoc(t, "Role", "trstctl-agent")
+	if namespace, _ := nestedString(role, "metadata", "namespace"); namespace != "trstctl-agents" {
+		t.Fatalf("agent leader Role namespace = %q", namespace)
+	}
+	var named, create int
+	for _, rule := range asMaps(role["rules"]) {
+		if !contains(asStringSlice(rule["apiGroups"]), "coordination.k8s.io") ||
+			!contains(asStringSlice(rule["resources"]), "leases") {
+			continue
+		}
+		verbs := asStringSlice(rule["verbs"])
+		names := asStringSlice(rule["resourceNames"])
+		switch {
+		case len(verbs) == 2 && contains(verbs, "get") && contains(verbs, "update") &&
+			len(names) == 1 && names[0] == "trstctl-agent-issuer-controller":
+			named++
+		case len(verbs) == 1 && verbs[0] == "create" && len(names) == 0:
+			create++
+		default:
+			t.Errorf("agent leader Lease rule has unexpected scope: %v", rule)
+		}
+	}
+	if named != 1 || create != 1 {
+		t.Errorf("agent leader Lease rules: named=%d create=%d, want one each", named, create)
+	}
+}
+
 // The node agent's service-account token is exposed on every worker node. It
 // must not have Secret permissions in the control-plane/signer namespace.
 func TestAgentSecretRoleIsOutsideControlPlaneNamespace(t *testing.T) {
