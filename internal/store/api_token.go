@@ -39,6 +39,11 @@ func (s *Store) DelegatedTokenMinterMatchesTx(ctx context.Context, tx pgx.Tx, te
 	if requester == "" || len(reviewers) == 0 {
 		return false, nil
 	}
+	for _, reviewer := range reviewers {
+		if authz.SameApprovalPrincipal(requester, reviewer) {
+			return true, nil
+		}
+	}
 	if owner, ok := authz.BundleRunPrincipal(requester); ok {
 		requester = owner
 	}

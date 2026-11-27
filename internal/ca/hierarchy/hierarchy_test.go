@@ -21,8 +21,26 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestC0004HierarchyCeremonyRejectsBundleRunOwner(t *testing.T) {
+	m, _ := newHierarchyHarness(t)
+	ctx := context.Background()
+	opener := events.ContextWithActor(ctx, events.Actor{Subject: "bundle-run:c0004-owner"})
+	id, err := m.StartCeremony(opener, testTenant, "root", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := events.ContextWithActor(ctx, events.Actor{Subject: "c0004-owner"})
+	if _, err := m.Approve(owner, testTenant, id, "ignored"); !errors.Is(err, store.ErrSelfApproval) {
+		t.Fatalf("bundle-run owner approved their own ceremony: %v", err)
+	}
+	if count, err := m.Approve(ctx, testTenant, id, "independent-custodian"); err != nil || count != 1 {
+		t.Fatalf("independent custodian refused: count=%d err=%v", count, err)
+	}
+}
 
 const testTenant = "11111111-1111-1111-1111-111111111111"
 

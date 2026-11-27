@@ -1279,7 +1279,7 @@ not this file.
 | `internal/backup/backup.go:724` | receiptIndex starts at zero and is bounded by len(affectedOrder) above (CWE-190). |
 | `internal/backup/backup.go:1007` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
 | `internal/backup/postgres_state.go:335` | records starts at zero and advances only for exported rows; it cannot be negative (CWE-190) |
-| `internal/ca/hierarchy/hierarchy_test.go:39` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/ca/hierarchy/hierarchy_test.go:57` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/cli/doctor/doctor_test.go:41` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:26` | test SID inputs have at most 255 sub-authorities (CWE-190). |
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:28` | ParseUint limits authority to 48 bits and this loop emits one byte at a time (CWE-190). |
@@ -1549,8 +1549,8 @@ not this file.
 | `internal/store/breakglass_issue_receipt.go:35` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/breakglass_issue_receipt.go:93` | MaxInt64 bound above rejects narrowing (CWE-190). |
 | `internal/store/breakglass_issue_receipt.go:136` | MaxInt64 bound above rejects narrowing (CWE-190). |
-| `internal/store/ca.go:558` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/ca.go:644` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:561` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:647` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/ca_rollover_draft.go:45` | event sequences fit int64 (CWE-190) |
 | `internal/store/ca_rollover_draft.go:68` | positive by constraint (CWE-190) |
 | `internal/store/ca_upstream_standing_approval.go:52` | event sequences fit int64 (CWE-190) |

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/events"
 )
 
@@ -542,6 +543,8 @@ func (s *Store) ApplyKeyCeremonyApprovedTx(ctx context.Context, tx pgx.Tx, tenan
 		}
 		return ErrKeyCeremonyNotPending
 	}
+	// Keep replay compatible with alias votes accepted before C0004. Live
+	// reservation rejects them, and quorum validation excludes them.
 	if opener != "" && opener == custodian {
 		return ErrSelfApproval
 	}
@@ -590,7 +593,7 @@ func (s *Store) ReserveKeyCeremonyApproval(ctx context.Context, tenantID, ceremo
 		if fenced {
 			return ErrKeyCeremonyNotPending
 		}
-		if opener != "" && opener == custodian {
+		if opener != "" && authz.SameApprovalPrincipal(opener, custodian) {
 			return ErrSelfApproval
 		}
 		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, opener, []string{custodian})
@@ -707,7 +710,7 @@ func (s *Store) countIndependentKeyCeremonyApprovalsTx(ctx context.Context, tx p
 	}
 	count := 0
 	for _, custodian := range custodians {
-		if custodian == opener {
+		if authz.SameApprovalPrincipal(custodian, opener) {
 			continue
 		}
 		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, opener, []string{custodian})
@@ -957,7 +960,7 @@ func (s *Store) keyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx
 	}
 	valid := evidence[:0]
 	for _, item := range evidence {
-		if item.Custodian == c.Opener {
+		if authz.SameApprovalPrincipal(item.Custodian, c.Opener) {
 			continue
 		}
 		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, c.Opener, []string{item.Custodian})

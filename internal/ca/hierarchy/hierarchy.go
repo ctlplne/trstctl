@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/authz"
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 	"trstctl.com/trstctl/internal/events"
@@ -190,7 +191,7 @@ func (m *Manager) Approve(ctx context.Context, tenantID, ceremonyID, custodian s
 	if current.Status != "pending" {
 		return current.Approvals, store.ErrKeyCeremonyNotPending
 	}
-	if current.Opener != "" && current.Opener == custodian {
+	if current.Opener != "" && authz.SameApprovalPrincipal(current.Opener, custodian) {
 		return current.Approvals, store.ErrSelfApproval
 	}
 	minter, err := m.store.DelegatedTokenMinterMatches(ctx, tenantID, current.Opener, []string{custodian})

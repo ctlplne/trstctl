@@ -20,6 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -752,7 +753,7 @@ var ErrProfileEditApprovalPending = errors.New("orchestrator: profile edit appro
 func (o *Orchestrator) independentProfileEditApprovalCount(ctx context.Context, tenantID string, parked store.ProfileEditApproval) (int, error) {
 	count := 0
 	for _, decision := range parked.Approvals {
-		if decision.Decision != "approve" || decision.Approver == parked.Requester {
+		if decision.Decision != "approve" || authz.SameApprovalPrincipal(decision.Approver, parked.Requester) {
 			continue
 		}
 		minter, err := o.store.DelegatedTokenMinterMatches(ctx, tenantID, parked.Requester, []string{decision.Approver})
@@ -846,7 +847,7 @@ func (o *Orchestrator) ApproveProfileEdit(ctx context.Context, tenantID, request
 	if err != nil {
 		return store.ProfileEditApproval{}, err
 	}
-	if approver == parked.Requester || minter {
+	if authz.SameApprovalPrincipal(approver, parked.Requester) || minter {
 		payload, _ := json.Marshal(map[string]string{"id": parked.ID, "approver": approver, "reason": "self-approval"})
 		if _, err := o.emit(ctx, eventProfileEditApprovalRefused, tenantID, payload); err != nil {
 			return store.ProfileEditApproval{}, err
@@ -855,7 +856,7 @@ func (o *Orchestrator) ApproveProfileEdit(ctx context.Context, tenantID, request
 	}
 	alreadyApproved := false
 	for _, a := range parked.Approvals {
-		if a.Approver == approver && a.Decision == "approve" {
+		if authz.SameApprovalPrincipal(a.Approver, approver) && a.Decision == "approve" {
 			alreadyApproved = true
 		}
 	}

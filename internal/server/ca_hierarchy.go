@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	libhierarchy "trstctl.com/trstctl/internal/ca/hierarchy"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -370,7 +371,7 @@ func (h *caHierarchyService) ApproveCeremony(ctx context.Context, tenantID, id s
 			FROM ca_key_ceremonies c WHERE tenant_id=$1 AND id=$2`, tenantID, id).Scan(&opener, &approvals); err != nil {
 			return err
 		}
-		if opener != "" && opener == custodian {
+		if opener != "" && authz.SameApprovalPrincipal(opener, custodian) {
 			return store.ErrSelfApproval
 		}
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM ca_ceremony_approvals
