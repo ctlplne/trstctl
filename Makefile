@@ -632,6 +632,9 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
 	@bash scripts/ci/check-actions-pinned_selftest.sh >/dev/null
 	@bash scripts/ci/check-actions-pinned.sh .
+	@echo ">> release Go setup cache policy"
+	@python3 scripts/ci/check-release-go-cache_test.py
+	@python3 scripts/ci/check-release-go-cache.py .github/workflows/release.yml
 	@echo ">> web dependency reuse guard self-test"
 	@bash scripts/ci/install-web-deps_selftest.sh >/dev/null
 	@# ee/ ratchet runs LAST, deliberately: as a prerequisite it executed before the

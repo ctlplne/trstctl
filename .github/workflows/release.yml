@@ -48,10 +48,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
 
-      - name: Prefetch dependencies (retries a transient module-proxy failure)
-        run: scripts/ci/go-mod-download.sh
+      - name: Download and verify Go modules
+        run: scripts/ci/go-mod-download.sh && go mod verify
 
       - name: Build (all three binaries)
         run: make build
@@ -116,7 +116,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
+
+      - name: Download and verify Go modules
+        run: scripts/ci/go-mod-download.sh && go mod verify
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -237,7 +240,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
+
+      - name: Download and verify Go modules
+        run: scripts/ci/go-mod-download.sh && go mod verify
 
       - name: Build deterministic CLI archives and checksums
         run: scripts/release/cli-assets.sh "$GITHUB_REF_NAME" dist/cli
@@ -320,7 +326,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
+
+      - name: Download and verify Go modules
+        run: scripts/ci/go-mod-download.sh && go mod verify
 
       - name: Build exact-commit Linux and macOS agent archives
         run: scripts/release/agent-assets.sh "$GITHUB_REF_NAME" dist/agent
@@ -793,7 +802,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
+
+      - name: Download and verify Go modules
+        run: scripts/ci/go-mod-download.sh && go mod verify
 
       - name: Install Authenticode verification + MSI toolchain
         run: |
@@ -916,10 +928,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
 
-      - name: Prefetch dependencies (retries a transient module-proxy failure)
-        run: scripts/ci/go-mod-download.sh
+      - name: Download and verify Go modules
+        run: scripts/ci/go-mod-download.sh && go mod verify
 
       - name: Build the plugin (linux amd64 + arm64, reproducible flags)
         run: |
@@ -1020,7 +1032,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
+
+      - name: Download and verify Go modules
+        run: scripts/ci/go-mod-download.sh && go mod verify
 
       - name: Package registry assets (zips + manifest + signed SHA256SUMS)
         env:
@@ -1193,6 +1208,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
+          cache: false
+
+      - name: Download and verify Go modules
+        run: scripts/ci/go-mod-download.sh && go mod verify
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
