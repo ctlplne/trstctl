@@ -2751,8 +2751,10 @@ P14-L4): the formats the pinned defaults miss in a corpus of the tokens trstctl 
 trstctl's API (`trst_`), opaque access (`trsto_`) and response-wrapping (`trstw_`) tokens, Doppler
 service, service account, CLI, SCIM and audit tokens, Infisical service tokens and Bitwarden Secrets
 Manager access tokens — each a `trstctl-` rule carried through the custom-rules path. A scanned
-repository's own `.gitleaks.toml`, which Gitleaks reads by itself, is extended rather than
-replaced, so its allowlists still hold;
+repository's own `.gitleaks.toml` is read as a regular file of at most 1 MiB and
+copied to a temporary snapshot before the scanner runs. Its rules and allowlists
+still apply. A repository config may extend the scanner defaults, but an
+`[extend] path` to another file is refused during preview and execution;
 the response and stored finding carry only rule id, file, line, scanner version, and
 fingerprint — Gitleaks redacts the value, never reaching the API, event log, graph, or
 audit output.

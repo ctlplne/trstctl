@@ -234,13 +234,10 @@ func (r *GitleaksRunner) PlanContext(ctx context.Context, target string, opts Sc
 		return Plan{}, err
 	}
 	rulesActive := GitleaksDefaultRulesActive + TrstctlRulesActive
-	if repo := repositoryGitleaksConfig(targetPath); repo != "" {
-		// The scan extends the repository's own config, as Gitleaks would
-		// have read it, rather than the bare defaults (P14-L4).
-		base, err := countGitleaksRules(repo)
-		if err != nil {
-			return Plan{}, err
-		}
+	if repo, data, repoErr := loadRepositoryGitleaksConfig(ctx, targetPath); repoErr != nil {
+		return Plan{}, repoErr
+	} else if repo != "" {
+		base, _ := countGitleaksRulesData(data)
 		rulesActive = base + TrstctlRulesActive
 	}
 	customRulesPath := ""
@@ -397,30 +394,48 @@ func NormalizeScanMode(raw string) (string, error) {
 	}
 }
 
-// prepareCustomRulesConfig writes the scan's config: the pinned defaults (or
-// the scanned repository's own config, which Gitleaks reads by itself when no
-// config is named, and which the scan therefore extends), trstctl's own rules
+// prepareCustomRulesConfig writes the scan's config from the pinned defaults or
+// an admitted snapshot of the repository config, then adds trstctl's rules
 // (P14-L4) and the operator's custom rules, if any.
 func prepareCustomRulesConfig(ctx context.Context, customRulesPath string, allowedRoots []string, targetPath string) (string, func(), error) {
 	cleanup := func() {}
 	header := "[extend]\nuseDefault = true\n\n"
-	if repo := repositoryGitleaksConfig(targetPath); repo != "" {
-		header = "[extend]\npath = " + tomlString(repo) + "\n\n"
+	repo, repoData, err := loadRepositoryGitleaksConfig(ctx, targetPath)
+	if err != nil {
+		return "", cleanup, err
+	}
+	if repo != "" {
+		snapshot, err := os.CreateTemp("", "trstctl-gitleaks-repository-*.toml")
+		if err != nil {
+			return "", cleanup, fmt.Errorf("secretscan: create repository config snapshot: %w", err)
+		}
+		snapshotPath := snapshot.Name()
+		_, writeErr := snapshot.Write(repoData)
+		closeErr := snapshot.Close()
+		if writeErr != nil || closeErr != nil {
+			_ = os.Remove(snapshotPath)
+			return "", cleanup, fmt.Errorf("secretscan: write repository config snapshot: %w", errors.Join(writeErr, closeErr))
+		}
+		cleanup = func() { _ = os.Remove(snapshotPath) }
+		header = "[extend]\npath = " + tomlString(snapshotPath) + "\n\n"
 	}
 	data := trstctlRulesFragment()
 	if customRulesPath = strings.TrimSpace(customRulesPath); customRulesPath != "" {
 		_, custom, err := loadCustomRulesFragment(ctx, customRulesPath, allowedRoots)
 		if err != nil {
+			cleanup()
 			return "", cleanup, err
 		}
 		data = append(append(data, '\n'), custom...)
 	}
 	cfg, err := os.CreateTemp("", "trstctl-gitleaks-config-*.toml")
 	if err != nil {
+		cleanup()
 		return "", cleanup, fmt.Errorf("secretscan: create gitleaks config: %w", err)
 	}
 	configPath := cfg.Name()
-	cleanup = func() { _ = os.Remove(configPath) }
+	priorCleanup := cleanup
+	cleanup = func() { _ = os.Remove(configPath); priorCleanup() }
 	_, writeErr := cfg.Write([]byte(header))
 	if writeErr == nil {
 		_, writeErr = cfg.Write(data)
@@ -705,10 +720,31 @@ func countGitleaksRules(configPath string) (int, error) {
 // another by path (the scan's own config extending a repository's, P14-L4)
 // adds that config's count, one level deep.
 func countGitleaksRulesIn(configPath string, follow bool) (int, error) {
-	body, err := os.ReadFile(configPath) // #nosec G304,G703 -- the operator's own scanner config, already validated as a path this process was told to use (CWE-22)
+	dir, name := filepath.Split(configPath)
+	if dir == "" {
+		dir = "."
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return 0, fmt.Errorf("secretscan: open gitleaks config directory: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	body, err := safefile.ReadRegularFileNoFollow(context.Background(), root, name, 2<<20)
 	if err != nil {
 		return 0, fmt.Errorf("secretscan: read gitleaks config to count active rules: %w", err)
 	}
+	rules, extendsPath := countGitleaksRulesData(body)
+	if follow && extendsPath != "" {
+		base, err := countGitleaksRulesIn(extendsPath, false)
+		if err != nil {
+			return 0, err
+		}
+		rules += base
+	}
+	return rules, nil
+}
+
+func countGitleaksRulesData(body []byte) (int, string) {
 	rules, extendsDefault, extendsPath, table := 0, false, "", ""
 	for _, line := range strings.Split(string(body), "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -734,18 +770,71 @@ func countGitleaksRulesIn(configPath string, follow bool) (int, error) {
 	if extendsDefault {
 		rules += GitleaksDefaultRulesActive
 	}
-	if follow && extendsPath != "" {
-		base, err := countGitleaksRulesIn(extendsPath, false)
-		if err != nil {
-			return 0, err
-		}
-		rules += base
-	}
-	return rules, nil
+	return rules, extendsPath
 }
 
-// repositoryGitleaksConfig is a scanned directory's own .gitleaks.toml, which
-// Gitleaks reads by itself when no config is named; "" when it has none.
+func loadRepositoryGitleaksConfig(ctx context.Context, targetPath string) (string, []byte, error) {
+	path := repositoryGitleaksConfig(targetPath)
+	if path == "" {
+		return "", nil, nil
+	}
+	root, err := os.OpenRoot(targetPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: open repository config directory: %w", ErrInvalidCustomRules, err)
+	}
+	defer func() { _ = root.Close() }()
+	data, err := safefile.ReadRegularFileNoFollow(ctx, root, ".gitleaks.toml", 1<<20)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: repository config must be a regular file of at most 1 MiB: %w", ErrInvalidCustomRules, err)
+	}
+	if err := validateRepositoryGitleaksConfig(data); err != nil {
+		return "", nil, err
+	}
+	return path, data, nil
+}
+
+func validateRepositoryGitleaksConfig(data []byte) error {
+	inExtend := false
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") {
+			header := strings.TrimSpace(strings.SplitN(line, "#", 2)[0])
+			if strings.ContainsAny(header, `"'\`) {
+				return fmt.Errorf("%w: repository config table names must be plain", ErrInvalidCustomRules)
+			}
+			inExtend = strings.Map(func(r rune) rune {
+				if r == ' ' || r == '\t' {
+					return -1
+				}
+				return r
+			}, header) == "[extend]"
+			continue
+		}
+		key, _, assignment := strings.Cut(line, "=")
+		if !assignment {
+			continue
+		}
+		if strings.ContainsRune(key, '\\') {
+			return fmt.Errorf("%w: repository config keys must be plain", ErrInvalidCustomRules)
+		}
+		key = strings.Map(func(r rune) rune {
+			if r == ' ' || r == '\t' || r == '\'' || r == '"' {
+				return -1
+			}
+			return r
+		}, key)
+		if inExtend && key != "useDefault" || strings.HasPrefix(key, "extend.") || key == "extend" {
+			return fmt.Errorf("%w: repository config may extend defaults but not load another path", ErrInvalidCustomRules)
+		}
+	}
+	return nil
+}
+
+// repositoryGitleaksConfig finds a scanned directory's own .gitleaks.toml for
+// bounded admission and snapshotting; "" means it has no regular config.
 func repositoryGitleaksConfig(targetPath string) string {
 	if strings.TrimSpace(targetPath) == "" {
 		return ""
