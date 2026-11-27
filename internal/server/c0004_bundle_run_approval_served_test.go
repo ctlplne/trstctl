@@ -49,7 +49,7 @@ func TestC0004BundleRunOpenerCannotApproveAsItsOwner(t *testing.T) {
 	}
 	ceremony := createCACeremony(t, h, run.Token, "create_root", "", spec, 1, "c0004-ceremony")
 	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/"+ceremony.ID+"/approvals",
-		ownerToken, "c0004-ceremony-self-approval", nil)
+		ownerToken, "own-ca", nil)
 	if status != http.StatusConflict {
 		t.Errorf("bundle-run ceremony approved by its owner: %d %s; want 409", status, body)
 	}

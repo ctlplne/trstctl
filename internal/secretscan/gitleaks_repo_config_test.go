@@ -133,6 +133,15 @@ func TestGitleaksHistoricalGeneratedIdentifierPinsAreExact(t *testing.T) {
 	}
 }
 
+func TestC0004HistoricalTestLabelPinIsExact(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	ignore := readRepoFile(t, root, ".gitleaksignore")
+	const fingerprint = "dbf41b9cfc7e8d448750c31f27ad433cb05e9e96:internal/server/c0004_bundle_run_approval_served_test.go:generic-api-key:52"
+	if got := strings.Count(ignore, fingerprint); got != 1 {
+		t.Errorf("C0004 historical test-label exception occurs %d times, want exactly once", got)
+	}
+}
+
 // TestGitleaksBuildRunFixturePinsAreExact guards the pins from the build run's
 // full-history review (2026-11-02): every match was inspected at its
 // introducing commit and is a test fixture, a canary, an identifier or a

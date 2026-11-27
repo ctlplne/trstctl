@@ -298,3 +298,7 @@ f5851b60f56f5d10c7a76d6a290875b68651c718:internal/server/mcp_inventory_served_te
 # CR-418: historical deterministic test idempotency key, removed in the next
 # commit. This exact committed line contains no credential.
 bf1e1075c2a0755d22d97e5e5e1e16c1cf26d61b:internal/server/cr418_cbom_host_roots_served_test.go:generic-api-key:26
+# C0004: the committed test idempotency label beside ownerToken is not a
+# credential. The label is shortened in the next commit; only this historical
+# commit/path/rule/line is ignored, so a new secret in test source still fails.
+dbf41b9cfc7e8d448750c31f27ad433cb05e9e96:internal/server/c0004_bundle_run_approval_served_test.go:generic-api-key:52
