@@ -4476,6 +4476,12 @@ func (p *Projector) requireCurrentCanonicalEventTx(ctx context.Context, tx pgx.T
 	if !found || gate.Generation == 0 && !gate.InProgress {
 		return nil
 	}
+	if ctx.Value(preappendPreviewContextKey{}) == true {
+		if gate.InProgress {
+			return p.store.RequireRewrapCoordinatorEventTx(ctx, tx, e.TenantID, e.Type)
+		}
+		return nil
+	}
 	if gate.InProgress {
 		if err := p.store.RequireRewrapCoordinatorEventTx(ctx, tx, e.TenantID, e.Type); err != nil {
 			return err

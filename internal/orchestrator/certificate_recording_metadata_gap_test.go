@@ -168,8 +168,8 @@ func TestCertificateRecordingAfterMissingMetadataAgreesWithOrderedRebuild(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	// An exact owned database fault makes the real public assignment append
-	// win while its SQL transaction rolls back. It never installs fake state.
+	// An exact owned database fault must stop the command before publication.
+	// A direct retained event then exercises recovery of older source history.
 	_, err = s.SystemPool().Exec(ctx, `CREATE FUNCTION recording_metadata_gap_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
 		IF NEW.tenant_id='11111111-1111-1111-1111-111111111111'::uuid AND NEW.owner_id IS DISTINCT FROM OLD.owner_id THEN
 			RAISE EXCEPTION 'owned metadata projection rollback';
@@ -188,6 +188,23 @@ func TestCertificateRecordingAfterMissingMetadataAgreesWithOrderedRebuild(t *tes
 	t.Cleanup(cleanup)
 	if _, err := o.AssignOwnership(ctx, tenantA, ownerB.ID, []string{"certificate/" + certificate.ID}, "explicit reassignment", "fixture operator"); err == nil {
 		t.Fatal("owned SQL rollback was not exercised")
+	}
+	if head, err := log.LastSequence(ctx); err != nil || head != before {
+		t.Fatalf("rejected assignment advanced source head: %d %v", head, err)
+	}
+	assignment := projections.OwnershipAssigned{
+		OwnerID: ownerB.ID, InventoryIDs: []string{"certificate/" + certificate.ID},
+		Reason: "explicit reassignment", AssignedBy: "fixture operator", AssignedAt: time.Now().UTC(),
+	}
+	retainedData, err := json.Marshal(assignment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type: projections.EventOwnershipAssigned, TenantID: tenantA,
+		Time: assignment.AssignedAt, Data: retainedData,
+	}); err != nil {
+		t.Fatal(err)
 	}
 	cleanup()
 	missing, err := log.LastSequence(ctx)

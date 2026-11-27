@@ -132,6 +132,15 @@ func TestDiscoveryScheduleLostProjectionFencesSameName(t *testing.T) {
 	if _, err := o.UpsertDiscoverySchedule(ctx, tenantA, first); err == nil {
 		t.Fatal("owned SQL fault did not interrupt first schedule projection")
 	}
+	if head, err := log.LastSequence(ctx); err != nil || head != baseline {
+		t.Fatalf("rejected schedule advanced source head: %d %v", head, err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type: projections.EventDiscoveryScheduleUpserted, TenantID: tenantA,
+		Data: []byte(`{"id":"00000000-0000-4000-8000-00000000d212","source_id":"00000000-0000-4000-8000-00000000d211","name":"one-lost-schedule","interval_seconds":300,"enabled":true}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
 	retained, err := log.LastSequence(ctx)
 	if err != nil || retained != baseline+1 {
 		t.Fatalf("first append head=%d err=%v want=%d", retained, err, baseline+1)
@@ -240,8 +249,8 @@ func TestDiscoveryScheduleTwoReplicaFencePrecedesAppend(t *testing.T) {
 		t.Fatal("first schedule writer never reached the held projection lock")
 	}
 	firstHead, err := log.LastSequence(ctx)
-	if err != nil || firstHead != baseline+1 {
-		t.Fatalf("first schedule event head=%d err=%v want=%d", firstHead, err, baseline+1)
+	if err != nil || firstHead != baseline {
+		t.Fatalf("held schedule event head=%d err=%v want=%d", firstHead, err, baseline)
 	}
 	second := first
 	second.ID = "00000000-0000-4000-8000-00000000d223"
@@ -259,6 +268,9 @@ func TestDiscoveryScheduleTwoReplicaFencePrecedesAppend(t *testing.T) {
 	}
 	if err := <-firstDone; err != nil {
 		t.Fatalf("first schedule declaration: %v", err)
+	}
+	if head, err := log.LastSequence(ctx); err != nil || head != baseline+1 {
+		t.Fatalf("completed schedule event head=%d err=%v want=%d", head, err, baseline+1)
 	}
 	if err := projector.ProjectCatchUp(ctx, log); err != nil {
 		t.Fatal(err)

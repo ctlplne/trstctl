@@ -324,6 +324,49 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 				return err
 			}
 		}
+		// A candidate and its SQL projection use this same transaction. Peers
+		// preparing the same event type take one transaction lock to close
+		// same-type races over shared read-model identities.
+		if _, err := tx.Exec(ctx,
+			`SELECT pg_advisory_xact_lock(1953657716, hashtext($1::text))`, next.Type); err != nil {
+			return err
+		}
+		previous := false
+		if next.ID != "" {
+			_, found, lookupErr := o.log.EventByID(ctx, next.ID)
+			if lookupErr != nil {
+				return lookupErr
+			}
+			previous = found
+		}
+		if !previous && !events.RequiresExclusiveKeyStateAdmission(next.Type) {
+			if next.ID == "" {
+				next.ID = events.NewID()
+			}
+			candidate := next
+			if candidate.Time.IsZero() {
+				candidate.Time = time.Now().UTC()
+			}
+			if candidate.SchemaVersion == 0 {
+				candidate.SchemaVersion = events.DefaultSchemaVersion
+			}
+			if candidate.Actor == nil {
+				if actor, ok := events.ActorFromContext(ctx); ok {
+					candidate.Actor = &actor
+				}
+			}
+			latest, err := o.log.LastSequence(ctx)
+			if err != nil {
+				return err
+			}
+			if latest == ^uint64(0) {
+				return errors.New("orchestrator: event sequence exhausted")
+			}
+			candidate.Sequence = latest + 1
+			if err := o.proj.PreviewTx(ctx, tx, candidate); err != nil {
+				return err
+			}
+		}
 		var err error
 		ev, err = o.log.Append(ctx, next)
 		if err != nil {

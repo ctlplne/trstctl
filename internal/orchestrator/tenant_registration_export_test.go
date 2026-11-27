@@ -17,3 +17,9 @@ func EmitTenantOffboardForTest(
 ) (events.Event, error) {
 	return orchestrator.emitPrepared(ctx, next)
 }
+
+// EmitPreparedForTest exercises the shared command admission and projection
+// boundary with a supplied event contract.
+func EmitPreparedForTest(ctx context.Context, orchestrator *Orchestrator, next events.Event) (events.Event, error) {
+	return orchestrator.emitPrepared(ctx, next)
+}

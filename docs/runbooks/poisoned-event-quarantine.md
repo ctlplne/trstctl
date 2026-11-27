@@ -8,6 +8,15 @@ retargeting refuse an occupied provider/target before publishing. An older relea
 stored either kind of event. The event is still the source of truth; the control
 plane does not edit or discard it.
 
+Ordinary orchestrator commands also preview the core SQL projection inside a
+savepoint of their own tenant transaction before publishing. The savepoint is
+rolled back, and the actual projection runs after the event append. Commands
+preparing the same event type serialize across tenants, which closes same-type
+races over shared read-model identities through that command path. Other event
+types and direct producers can still change read state between the two steps.
+Tenant lifecycle, certificate recording, key-state changes, direct log producers,
+and nontransactional extension projections retain their own admission rules.
+
 On catch-up, live tail, full replay, or atomic rebuild, the projector records the first
 affected sequence in `projection_tenant_quarantines`. It advances the global
 checkpoint so later events from other tenants continue. Ordinary events for

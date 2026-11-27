@@ -155,6 +155,15 @@ func TestDiscoverySourceLostProjectionFencesDifferentFirstWriter(t *testing.T) {
 	if _, err := o.UpsertDiscoverySource(ctx, tenantA, first); err == nil {
 		t.Fatal("the owned SQL fault did not interrupt the first source projection")
 	}
+	if head, err := log.LastSequence(ctx); err != nil || head != baseline {
+		t.Fatalf("rejected source advanced source head: %d %v", head, err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type: projections.EventDiscoverySourceUpserted, TenantID: tenantA,
+		Data: []byte(`{"id":"00000000-0000-4000-8000-00000000d101","kind":"manual","name":"one-source-identity","config":{}}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
 	retainedHead, err := log.LastSequence(ctx)
 	if err != nil || retainedHead != baseline+1 {
 		t.Fatalf("first append head = %d, err %v; want %d", retainedHead, err, baseline+1)
@@ -259,8 +268,8 @@ func TestDiscoverySourceTwoReplicaFirstWriterFencePrecedesAppend(t *testing.T) {
 		t.Fatal("first writer never reached the held projection lock")
 	}
 	afterFirst, err := log.LastSequence(ctx)
-	if err != nil || afterFirst != baseline+1 {
-		t.Fatalf("first writer event head=%d err=%v, want %d", afterFirst, err, baseline+1)
+	if err != nil || afterFirst != baseline {
+		t.Fatalf("held first writer event head=%d err=%v, want %d", afterFirst, err, baseline)
 	}
 	second := store.DiscoverySource{ID: secondID, Kind: "ct_log", Name: first.Name}
 	_, secondErr := orchestrator.NewOrchestrator(log, peers[1], nil).UpsertDiscoverySource(ctx, tenantA, second)
@@ -277,6 +286,9 @@ func TestDiscoverySourceTwoReplicaFirstWriterFencePrecedesAppend(t *testing.T) {
 	}
 	if err := <-firstDone; err != nil {
 		t.Fatalf("first source declaration: %v", err)
+	}
+	if head, err := log.LastSequence(ctx); err != nil || head != baseline+1 {
+		t.Fatalf("completed first writer event head=%d err=%v, want %d", head, err, baseline+1)
 	}
 	if err := projector.ProjectCatchUp(ctx, log); err != nil {
 		t.Fatal(err)

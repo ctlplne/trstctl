@@ -188,7 +188,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 	}
-	if needsCanonical {
+	if needsCanonical && ctx.Value(preappendPreviewContextKey{}) != true {
 		if err := p.requireCurrentCanonicalEvent(ctx, e); err != nil {
 			return err
 		}

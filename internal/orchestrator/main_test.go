@@ -119,6 +119,7 @@ func newStore(t *testing.T) *store.Store {
 		          projection_tenant_quarantines,
 		          tenants, idempotency_keys, outbox, agent_job_attempt_bindings,
 		          owners, issuers, identities, identity_transitions, deployment_targets, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
+		          discovery_sources,
 		          connector_delivery_receipts, lifecycle_rotation_runs
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
