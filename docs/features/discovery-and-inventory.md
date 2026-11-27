@@ -867,6 +867,15 @@ trstctl-agent ... \
   --inventory-ssh-sshd-configs /etc/ssh/sshd_config
 ```
 
+The first SSH scan runs in the background with a two-minute deadline, so a
+large home-directory glob does not delay heartbeats, agent certificate renewal,
+or job claims. Key discovery skips selected symlinks and special files and reads
+at most 1 MiB per regular key or configuration file. Trust-posture reads can
+follow an operator-configured symlink, but verify the opened file is regular.
+An `sshd_config` trust-posture read can read a configured public trust file up
+to 4 MiB. Inspect the agent log if expected SSH inventory is missing after
+startup, then narrow the glob or replace oversized files and restart the agent.
+
 The agent reports the result over its existing mTLS inventory RPC. The control plane
 derives the tenant from the verified agent certificate, appends discovery events, and
 projects the metadata into `GET /api/v1/ssh/fleet`. Operators can read the same view

@@ -998,9 +998,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	reportHostCryptoInventory(ctx, a, ch)     // X2: keystores, TLS libraries, Go programs
 	reportMCPInventory(ctx, a, ch, o.keyPath) // P7: MCP client configuration
 	if hasSSHInventory(o.inventorySSH) {
-		if err := reportSSHInventory(ctx, a, ch, o.inventorySSH); err != nil {
-			fmt.Fprintln(os.Stderr, "trstctl-agent: SSH inventory report failed:", err)
-		}
+		inventoryCtx, stopInventory := context.WithCancel(ctx)
+		defer stopInventory() // cancel this run's scan before closing its mTLS channel on rotation
+		startSSHInventory(inventoryCtx, a, ch, o.inventorySSH)
 	}
 	if o.inventoryK8sSecrets {
 		if err := reportKubernetesSecretInventory(ctx, a, ch, o.inventoryK8sNamespaces); err != nil {
@@ -1623,6 +1623,18 @@ func hasSSHInventory(cfg sshdiscovery.Config) bool {
 		len(cfg.SSHDConfigPaths) > 0
 }
 
+// SSH inventory is independent of heartbeat, renewal, and job claiming. A
+// large user-owned glob or slow report must not delay those core loops.
+func startSSHInventory(ctx context.Context, reporter inventoryReporter, ch agent.ChannelClient, cfg sshdiscovery.Config) {
+	go func() {
+		scanCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		if err := reportSSHInventory(scanCtx, reporter, ch, cfg); err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: SSH inventory report failed:", err)
+		}
+	}()
+}
+
 // reportSSHInventory is the shipped-agent caller for F42. Collection is
 // explicitly configured and metadata-only: public key bytes never cross the
 // agent channel. The control plane derives the tenant from this connection's
@@ -1661,7 +1673,11 @@ func reportSSHInventory(ctx context.Context, reporter inventoryReporter, ch agen
 	// A115: each sshd configuration's trust posture (the CAs it trusts for
 	// user certificates, its RevokedKeys list, the host certificates it
 	// presents, AuthorizedKeysFile) rides the same report.
-	trust, err := sshTrustInventoryFindings(sshdiscovery.New(cfg).TrustPosture())
+	postures, err := sshdiscovery.New(cfg).TrustPostureContext(ctx)
+	if err != nil {
+		return err
+	}
+	trust, err := sshTrustInventoryFindings(postures)
 	if err != nil {
 		return err
 	}

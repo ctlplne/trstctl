@@ -22,11 +22,14 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/decoy"
 	"trstctl.com/trstctl/internal/crypto/sshkeys"
+	"trstctl.com/trstctl/internal/safefile"
 	"trstctl.com/trstctl/internal/sshinv"
 )
 
 // SourceKind is the agent inventory channel source for one on-host SSH scan.
 const SourceKind = "ssh"
+
+const maxSSHInventoryFileBytes = 1 << 20
 
 // Config locates the SSH material to inventory. All fields are optional; paths
 // and globs that match nothing are skipped. Defaulting to system locations is
@@ -49,16 +52,25 @@ func New(cfg Config) *Source { return &Source{cfg: cfg} }
 
 // Discover inventories every SSH key the source can read. It is best-effort: a
 // missing or unparseable file is skipped, never fatal.
-func (s *Source) Discover(_ context.Context) ([]sshinv.Found, error) {
+func (s *Source) Discover(ctx context.Context) ([]sshinv.Found, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var out []sshinv.Found
 
 	// Host keys and user keys: one public key per .pub file.
-	out = append(out, s.collectPubFiles(s.cfg.HostKeyGlobs, sshinv.SourceHostKey)...)
-	out = append(out, s.collectPubFiles(s.cfg.UserKeyGlobs, sshinv.SourceUserKey)...)
+	out = append(out, s.collectPubFiles(ctx, s.cfg.HostKeyGlobs, sshinv.SourceHostKey)...)
+	out = append(out, s.collectPubFiles(ctx, s.cfg.UserKeyGlobs, sshinv.SourceUserKey)...)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// authorized_keys: each entry is a standing-access grant.
 	for _, path := range expandGlobs(s.cfg.AuthorizedKeysPaths) {
-		data, err := os.ReadFile(path) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		data, err := readInventoryFile(ctx, path)
 		if err != nil {
 			continue
 		}
@@ -77,7 +89,10 @@ func (s *Source) Discover(_ context.Context) ([]sshinv.Found, error) {
 
 	// known_hosts: trusted host keys.
 	for _, path := range expandGlobs(s.cfg.KnownHostsPaths) {
-		data, err := os.ReadFile(path) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		data, err := readInventoryFile(ctx, path)
 		if err != nil {
 			continue
 		}
@@ -93,8 +108,11 @@ func (s *Source) Discover(_ context.Context) ([]sshinv.Found, error) {
 	}
 
 	// sshd TrustedUserCAKeys: the CA whose user certificates the host trusts.
-	for _, caPath := range s.trustedCAPaths() {
-		data, err := os.ReadFile(caPath) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
+	for _, caPath := range s.trustedCAPaths(ctx) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		data, err := readInventoryFile(ctx, caPath)
 		if err != nil {
 			continue
 		}
@@ -109,15 +127,21 @@ func (s *Source) Discover(_ context.Context) ([]sshinv.Found, error) {
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
 // collectPubFiles reads each .pub file matched by the globs as a single public
 // key.
-func (s *Source) collectPubFiles(globs []string, source string) []sshinv.Found {
+func (s *Source) collectPubFiles(ctx context.Context, globs []string, source string) []sshinv.Found {
 	var out []sshinv.Found
 	for _, path := range expandGlobs(globs) {
-		data, err := os.ReadFile(path) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
+		if ctx.Err() != nil {
+			break
+		}
+		data, err := readInventoryFile(ctx, path)
 		if err != nil {
 			continue
 		}
@@ -138,10 +162,13 @@ func (s *Source) collectPubFiles(globs []string, source string) []sshinv.Found {
 
 // trustedCAPaths reads each sshd_config and returns the TrustedUserCAKeys paths
 // it configures.
-func (s *Source) trustedCAPaths() []string {
+func (s *Source) trustedCAPaths(ctx context.Context) []string {
 	var paths []string
 	for _, cfgPath := range expandGlobs(s.cfg.SSHDConfigPaths) {
-		data, err := os.ReadFile(cfgPath) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
+		if ctx.Err() != nil {
+			break
+		}
+		data, err := readInventoryFile(ctx, cfgPath)
 		if err != nil {
 			continue
 		}
@@ -158,6 +185,18 @@ func (s *Source) trustedCAPaths() []string {
 		}
 	}
 	return paths
+}
+
+// readInventoryFile refuses a selected symlink or special file even if a user
+// swaps it between glob expansion and open. The descriptor itself is checked
+// and read under one bounded allocation.
+func readInventoryFile(ctx context.Context, path string) ([]byte, error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	return safefile.ReadRegularFileNoFollow(ctx, root, filepath.Base(path), maxSSHInventoryFileBytes)
 }
 
 // expandGlobs resolves glob patterns to file paths, skipping patterns that match

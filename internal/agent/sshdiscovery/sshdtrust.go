@@ -5,9 +5,9 @@ package sshdiscovery
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/sshkrl"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/sshkeys"
+	"trstctl.com/trstctl/internal/safefile"
 	"trstctl.com/trstctl/internal/sshcollection"
 )
 
@@ -99,21 +100,41 @@ type sshdSettings struct {
 // A configuration that cannot be read is reported with its state rather than
 // dropped, so a host whose posture is unknown does not look unconfigured.
 func (s *Source) TrustPosture() []SSHDTrust {
-	var out []SSHDTrust
-	for _, path := range expandGlobs(s.cfg.SSHDConfigPaths) {
-		out = append(out, readSSHDTrust(path))
-	}
-	return out
+	postures, _ := s.TrustPostureContext(context.Background())
+	return postures
 }
 
-func readSSHDTrust(configPath string) SSHDTrust {
+// TrustPostureContext stops walking configuration includes when the agent's
+// bounded startup inventory is canceled.
+func (s *Source) TrustPostureContext(ctx context.Context) ([]SSHDTrust, error) {
+	var out []SSHDTrust
+	for _, path := range expandGlobs(s.cfg.SSHDConfigPaths) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		posture, err := readSSHDTrust(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, posture)
+	}
+	return out, ctx.Err()
+}
+
+func readSSHDTrust(ctx context.Context, configPath string) (SSHDTrust, error) {
 	trust := SSHDTrust{ConfigPath: configPath, ConfigState: StateRead}
 	var settings sshdSettings
-	if err := settings.read(configPath, 0); err != nil {
+	if err := settings.read(ctx, configPath, 0); err != nil {
+		if ctx.Err() != nil {
+			return trust, ctx.Err()
+		}
 		trust.ConfigState = fileState(err)
-		return trust
+		return trust, nil
 	}
-	return interpretTrust(configPath, settings, readTrustFile)
+	trust = interpretTrust(configPath, settings, func(path string) ([]byte, string) {
+		return readTrustFileContext(ctx, path)
+	})
+	return trust, ctx.Err()
 }
 
 // TrustFromSnapshot interprets the fixed helper output without reading relay files.
@@ -195,11 +216,14 @@ func interpretTrust(configPath string, settings sshdSettings, readPublic func(st
 
 // read applies one configuration file's global keywords to s, first value
 // first, following Include in place.
-func (s *sshdSettings) read(path string, depth int) error {
+func (s *sshdSettings) read(ctx context.Context, path string, depth int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if depth > maxSSHDIncludeDepth {
 		return errors.New("sshd configuration includes nest too deeply")
 	}
-	data, err := readBounded(path, maxSSHDConfigBytes)
+	data, err := readBoundedContext(ctx, path, maxSSHDConfigBytes)
 	if err != nil {
 		return err
 	}
@@ -207,6 +231,9 @@ func (s *sshdSettings) read(path string, depth int) error {
 	scanner.Buffer(make([]byte, 0, 64<<10), maxSSHDConfigBytes)
 	inMatch := false
 	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		keyword, args := sshdLine(scanner.Text())
 		if keyword == "" {
 			continue
@@ -224,6 +251,9 @@ func (s *sshdSettings) read(path string, depth int) error {
 		switch keyword {
 		case "include":
 			for _, pattern := range args {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				if !filepath.IsAbs(pattern) {
 					pattern = filepath.Join(sshdIncludeBase, pattern)
 				}
@@ -233,8 +263,11 @@ func (s *sshdSettings) read(path string, depth int) error {
 				}
 				sort.Strings(matches)
 				for _, included := range matches {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
 					s.included++
-					if err := s.read(included, depth+1); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					if err := s.read(ctx, included, depth+1); err != nil && !errors.Is(err, fs.ErrNotExist) {
 						return err
 					}
 				}
@@ -303,26 +336,19 @@ func sshdLine(line string) (string, []string) {
 }
 
 // readTrustFile reads one public file the configuration names.
-func readTrustFile(path string) ([]byte, string) {
+func readTrustFileContext(ctx context.Context, path string) ([]byte, string) {
 	if !filepath.IsAbs(path) {
 		return nil, StateRelative
 	}
-	data, err := readBounded(path, maxTrustFileBytes)
+	data, err := readBoundedContext(ctx, path, maxTrustFileBytes)
 	if err != nil {
 		return nil, fileState(err)
 	}
 	return data, StateRead
 }
 
-func readBounded(path string, limit int64) ([]byte, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() || info.Size() > limit {
-		return nil, errors.New("not a bounded regular file")
-	}
-	return os.ReadFile(path) // #nosec G304 -- the agent inventories operator-configured sshd configuration and the public files it names (CWE-22)
+func readBoundedContext(ctx context.Context, path string, limit int64) ([]byte, error) {
+	return safefile.ReadRegularPath(ctx, path, limit)
 }
 
 func fileState(err error) string {

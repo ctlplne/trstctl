@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3672 annotated sites across 35 rules. Each row is
+3668 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2536,7 +2536,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (859 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (855 sites)
 
 | Location | Reason |
 |---|---|
@@ -2587,7 +2587,7 @@ not this file.
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:78` | operator-configured keystore password file (CWE-22) |
 | `cmd/trstctl-agent/main.go:1401` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:2071` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:2087` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/observe.go:105` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:487` | operator-supplied runtime configuration path (CWE-22) |
@@ -2843,12 +2843,8 @@ not this file.
 | `internal/agent/sessionobserve/objects_test.go:46` | the committed probe objects beside the test (CWE-22) |
 | `internal/agent/sessionobserve/observer_linux_test.go:40` | the proof traffic's own output (CWE-22) |
 | `internal/agent/sessionobserve/observer_linux_test.go:175` | the proof traffic's own output (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:61` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:80` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:97` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:120` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:144` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdtrust.go:325` | the agent inventories operator-configured sshd configuration and the public files it names (CWE-22) |
+| `internal/agent/sshdiscovery/sshdiscovery_bounds_unix_test.go:48` | test-owned FIFO fixture opened only to unblock a failed regression |
+| `internal/agent/sshdiscovery/sshdiscovery_bounds_unix_test.go:59` | test fixture in an owned temp directory |
 | `internal/agent/sshdiscovery/sshdtrust_test.go:21` | committed test fixture |
 | `internal/agent/sshkrl/install.go:304` | read only the derived predecessor in the checked private rollback directory |
 | `internal/agent/sshkrl/install.go:338` | syncs only the validated target or private rollback directory |
