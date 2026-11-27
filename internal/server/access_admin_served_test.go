@@ -107,7 +107,12 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 		t.Fatalf("OIDC mapping status = %d body=%s; want served group mapping", oidcCode, oidcBody)
 	}
 
-	upsertMember(t, ts, adminToken, "requester", []string{"ra-officer"})
+	code, body := doBearer(t, ts, http.MethodPut, "/api/v1/access/roles/requester-token-writer", adminToken,
+		"requester-token-writer", map[string]any{"permissions": []string{"access:write", "identities:write"}})
+	if code != http.StatusOK {
+		t.Fatalf("create requester token role = %d body=%s", code, body)
+	}
+	upsertMember(t, ts, adminToken, "requester", []string{"ra-officer", "requester-token-writer"})
 	assertAccessMemberEvidenceOrderAUD68(t, ctx, log, tenantID, "requester")
 	upsertMember(t, ts, adminToken, "issuer", []string{"operator"})
 	upsertMember(t, ts, adminToken, "approver-one", []string{"operator"})

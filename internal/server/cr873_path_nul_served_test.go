@@ -8,20 +8,23 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 )
 
-// VL-174 (SW-NULC-PATH, SW-NUL-11): a percent-encoded %00 in a path segment is decoded by
-// net/http's ServeMux into a real NUL byte in r.PathValue. For each event-appending route that
-// copies a free-text path value into its event payload, post %00 through the served route and
-// report whether the event is retained although the request is refused (or the projection fails).
-func TestCR873PathValueNULCannotPoisonLog(t *testing.T) {
+// Invalid decoded path values are rejected before source publication on the
+// covered tenant routes, including project member administration.
+func TestServedTextAdmissionRejectsInvalidPathValues(t *testing.T) {
 	ctx := t.Context()
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	second := uuid.NewString()
 	registerServedTenantID(t, h, second, "VL174 victim tenant")
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "vl174-admin", "access:write", "access:read", "access:role.assign", "secrets:write", "secrets:read")
+	adminScopes := []string{"access:write", "access:read", "access:role.assign", "secrets:write", "secrets:read"}
+	for _, permission := range authz.BuiltinRoles()["viewer"].Permissions {
+		adminScopes = append(adminScopes, string(permission))
+	}
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "vl174-admin", adminScopes...)
 
 	// Fixtures and controls (clean requests).
 	if st, b := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/projects", admin, "vl174-fx-proj",
@@ -29,7 +32,7 @@ func TestCR873PathValueNULCannotPoisonLog(t *testing.T) {
 		t.Fatalf("project fixture: %d %s", st, b)
 	}
 	if st, b := secretsReqKey(t, h, http.MethodPut, "/api/v1/access/members/vl174-clean", admin, "vl174-ctl-member",
-		map[string]any{"display_name": "Clean", "email": "clean@example.test", "roles": []string{}}); st != http.StatusOK {
+		map[string]any{"display_name": "Clean", "email": "clean@example.test", "roles": []string{"viewer"}}); st != http.StatusOK {
 		t.Fatalf("control member: %d %s", st, b)
 	}
 	if st, b := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/projects/vl174/members/vl174-clean2", admin, "vl174-ctl-pm",
@@ -43,12 +46,12 @@ func TestCR873PathValueNULCannotPoisonLog(t *testing.T) {
 		map[string]any{"role": "admin"}); st != http.StatusOK {
 		t.Fatalf("project admin fixture: %d %s", st, b)
 	}
-	type attack struct {
+	type testCase struct {
 		name, method, path, key string
 		body                    any
 		tok                     string
 	}
-	attacks := []attack{
+	cases := []testCase{
 		{"access member upsert {subject}", http.MethodPut, "/api/v1/access/members/vl174%00member", "vl174-a1",
 			map[string]any{"display_name": "Clean", "email": "m@example.test", "roles": []string{}}, ""},
 		{"access member offboard {subject}", http.MethodPost, "/api/v1/access/members/vl174%00member2/offboard", "vl174-a2",
@@ -63,9 +66,9 @@ func TestCR873PathValueNULCannotPoisonLog(t *testing.T) {
 		{"secret project {project} grant", http.MethodPut, "/api/v1/secrets/projects/vl174%00proj/members/vl174-ok", "vl174-a7",
 			map[string]any{"role": "viewer"}, ""},
 	}
-	attacks = append(attacks, attack{"PROJECT-ADMIN secret project grant {subject}", http.MethodPut, "/api/v1/secrets/projects/vl174/members/vl174%00padm", "vl174-a8",
+	cases = append(cases, testCase{"PROJECT-ADMIN secret project grant {subject}", http.MethodPut, "/api/v1/secrets/projects/vl174/members/vl174%00padm", "vl174-a8",
 		map[string]any{"role": "viewer"}, padmin})
-	for _, a := range attacks {
+	for _, a := range cases {
 		tok := a.tok
 		if tok == "" {
 			tok = admin

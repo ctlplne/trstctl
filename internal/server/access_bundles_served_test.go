@@ -395,8 +395,10 @@ func TestServedAccessBundleAttenuationA251(t *testing.T) {
 
 	// A user grant lives only while its member is active.
 	const member = "dev@payments.example"
+	x.call(http.MethodPut, "/api/v1/access/roles/bundle-runner", tenantAdmin, "a251-bundle-role",
+		map[string]any{"permissions": []string{"access:bundle.run"}}, http.StatusOK)
 	x.call(http.MethodPut, "/api/v1/access/members/"+url.PathEscape(member), tenantAdmin, "a251-member",
-		map[string]any{"display_name": "Dev", "roles": []string{"viewer"}, "source": "manual"}, http.StatusOK)
+		map[string]any{"display_name": "Dev", "roles": []string{"bundle-runner"}, "source": "manual"}, http.StatusOK)
 	if code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/bundles/"+certs+"/grants", admin, "a251-grant-ghost",
 		map[string]any{"principal_type": "user", "principal": "nobody@payments.example"}); code != http.StatusUnprocessableEntity {
 		t.Fatalf("user grant to a non-member = %d %s, want 422", code, body)

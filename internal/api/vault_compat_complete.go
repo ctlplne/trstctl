@@ -311,7 +311,7 @@ func (a *API) vaultMountedKVStoreName(r *http.Request) (string, error) {
 	}
 	name, err := vaultKVPathName(r.PathValue("name"), false)
 	if err != nil {
-		return "", errStatus(http.StatusBadRequest, err.Error())
+		return "", errStatusFrom(http.StatusBadRequest, err)
 	}
 	return vaultKVStoreNameForGeneration(mount, state.mountEpochs[mountName], name)
 }

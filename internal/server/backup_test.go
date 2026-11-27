@@ -682,7 +682,7 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 	cfg.Postgres.DSN = serverTestPostgresDSN(t)
 	cfg.NATS = config.NATS{
 		Mode: config.NATSExternal, URL: nats.ClientURL(), Replicas: 1,
-		AllowSingleReplica: true,
+		AllowSingleReplica: true, AllowPlaintextDev: true,
 	}
 	cfg.Secrets.KEKFile = filepath.Join(dir, "source", "deployment-kek.bin")
 	cfg.Signer.KeyStoreDir = filepath.Join(dir, "source", "signer-keystore")

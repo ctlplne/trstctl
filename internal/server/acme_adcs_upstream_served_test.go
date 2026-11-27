@@ -256,7 +256,7 @@ func adcsUpstreamConfig(t *testing.T, certsrvURL string) []ExternalCA {
 	}
 	address := netip.MustParseAddr(endpoint.Hostname())
 	upstreams, err := externalCAsFromConfig(context.Background(), []config.ExternalCAConfig{{
-		ID: "corp-adcs-web", Type: "adcs", Name: "Corp AD CS (WebServer template)", Endpoint: certsrvURL + "/certsrv",
+		ID: "corp-adcs-web", TenantID: servedTestTenant, Type: "adcs", Name: "Corp AD CS (WebServer template)", Endpoint: certsrvURL + "/certsrv",
 		CAConfig: `CORP-DC01\Corp Issuing CA`, Template: "WebServer", PollInterval: "10ms",
 		Network: config.ExternalCANetworkConfig{AllowInsecureHTTP: true, AllowPrivateEndpoint: true,
 			PrivateEgressCIDRs: []string{netip.PrefixFrom(address, 32).String()}, Timeout: "10s"},

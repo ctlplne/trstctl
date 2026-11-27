@@ -55,7 +55,7 @@ func issueThroughADCS(t *testing.T, h *servedHarness, token, name string) int {
 // issuer is working, from the evidence trstctl records: an issuer with no
 // activity is idle, a successful AD CS issuance makes it healthy, and a refusal
 // after that makes it failing with the classified cause and remediation.
-// Another tenant sees the same issuer with none of this tenant's evidence.
+// Another tenant cannot see this tenant-bound issuer.
 func TestServedADCSIssuerHealthFollowsIssuanceAndRefusals(t *testing.T) {
 	standIn, certsrv := newADCSCertsrvStandIn(t)
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.ExternalCAs = adcsUpstreamConfig(t, certsrv.URL) })
@@ -88,7 +88,9 @@ func TestServedADCSIssuerHealthFollowsIssuanceAndRefusals(t *testing.T) {
 	const otherTenant = "22222222-2222-4222-8222-222222222222"
 	registerServedTenantID(t, h, otherTenant, "AD CS issuer health neighbor")
 	other := seedScopedToken(t, h.store, otherTenant, "issuers:read")
-	if neighbor := readADCSIssuerHealth(t, h, other); neighbor.Items[0].Status != "idle" || neighbor.Items[0].IssuedInWindow != 0 {
-		t.Fatalf("another tenant sees %+v; want idle with none of this tenant's evidence", neighbor.Items[0])
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/adcs/issuers/health", other, nil)
+	var neighbor adcsIssuerHealthView
+	if status != http.StatusOK || json.Unmarshal(body, &neighbor) != nil || len(neighbor.Items) != 0 {
+		t.Fatalf("another tenant's issuer catalog = %d %s; want no issuer", status, body)
 	}
 }

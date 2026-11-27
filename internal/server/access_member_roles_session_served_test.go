@@ -84,7 +84,8 @@ func TestServedMemberRolesReplaceSignInRoles(t *testing.T) {
 	adminToken := seedServedAPIToken(t, ctx, srv.store, tenantID, "people-admin", adminScopes)
 	upsertMember(t, ts, adminToken, "reader", []string{"viewer"})
 	upsertMember(t, ts, adminToken, "mapped", []string{"viewer"})
-	if code, body := doBearer(t, ts, http.MethodPut, "/api/v1/access/members/profile-only", adminToken, "member-profile-only",
+	rolelessAdmin := seedServedAPIToken(t, ctx, srv.store, tenantID, "roleless-member-admin", []string{string(authz.Wildcard)})
+	if code, body := doBearer(t, ts, http.MethodPut, "/api/v1/access/members/profile-only", rolelessAdmin, "member-profile-only",
 		map[string]any{"display_name": "Profile only", "roles": []string{}, "source": "manual"}); code != http.StatusOK {
 		t.Fatalf("upsert role-less member = %d, want 200; body=%s", code, body)
 	}

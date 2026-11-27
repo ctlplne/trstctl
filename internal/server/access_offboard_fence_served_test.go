@@ -174,8 +174,7 @@ func TestServedMemberOffboardDeniesBearerDuringProjectionGap(t *testing.T) {
 	if err != nil || denied {
 		t.Fatalf("rehire admission denied=%v err=%v", denied, err)
 	}
-	newSeed := seedServedAPIToken(t, ctx, st, tenantID, subject, []string{"access:write", "access:read"})
-	newToken := createServedToken(t, ts, newSeed, subject, []string{"access:read"})
+	newToken := seedServedAPIToken(t, ctx, st, tenantID, subject, []string{"access:read"})
 	if code, body := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", newToken, "", nil); code != http.StatusOK {
 		t.Fatalf("new rehire bearer = %d body=%s", code, body)
 	}

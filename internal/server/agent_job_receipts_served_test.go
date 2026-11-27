@@ -18,22 +18,10 @@ import (
 	"trstctl.com/trstctl/internal/events"
 )
 
-// Signed job receipts, proven on the assembled binary (epic A1, acceptance #2).
-//
-// mTLS already proves who is on the connection, so the question these tests
-// actually answer is what a SIGNATURE adds. It adds evidence that outlives the
-// connection: after the session ends, "agent-7 executed this deploy" is either
-// a sentence the control plane wrote about itself — which anyone with write
-// access to the event store could also write — or it is a statement the agent
-// signed with a key the control plane does not hold. These prove it is the
-// second, and prove that everything which is not the second is refused.
+// Signed job receipts preserve agent-authenticated execution evidence after
+// the transport session ends.
 
-// A receipt with no signature is refused, and the refusal is recorded.
-//
-// This is the case that decides whether the signature is a security control or
-// a decoration. If an unsigned report still lands, then an attacker who reaches
-// the channel simply omits the field, and every signed receipt beside it proves
-// nothing about the ones that are missing.
+// A receipt without a signature is refused and audited.
 func TestServedChannelRefusesAnUnsignedJobReceipt(t *testing.T) {
 	ctx := context.Background()
 	h := agentJobHarness(t, "connector.deploy")
@@ -89,11 +77,7 @@ func TestServedChannelRefusesAReceiptSignedByAnotherAgent(t *testing.T) {
 	assertJobNotCompleted(t, ctx, h, job.JobID)
 }
 
-// A receipt whose statement was tampered with after signing is refused.
-//
-// The signature covers the outcome. Flipping "failed" to "executed" in flight
-// is the attack that matters most — it is how a deploy that never happened
-// becomes a deploy the ledger believes in.
+// The signature binds the reported outcome to the agent's statement.
 func TestServedChannelRefusesATamperedOutcome(t *testing.T) {
 	ctx := context.Background()
 	h := agentJobHarness(t, "connector.deploy")
@@ -355,14 +339,8 @@ func TestOperationsJobPostureReportsRefusedReceipts(t *testing.T) {
 	}
 }
 
-// A refusal for a job the agent never claimed is audited but not counted.
-//
-// The two records answer different questions and must not be conflated. The
-// audit event answers "what happened on this channel", and it takes everything
-// unconditionally. The Operations counter answers "how much refused work is out
-// there", and an enrolled agent naming job ids it never held could otherwise
-// fill that number with work that does not exist — which would make the one
-// signal an operator is supposed to trust the easiest one to poison.
+// A refusal for an unclaimed job is audited without inflating the count of
+// claimed work that needs operator attention.
 func TestARefusalForUnclaimedWorkIsAuditedButNotCounted(t *testing.T) {
 	ctx := context.Background()
 	h := agentJobHarness(t, "connector.deploy")
@@ -440,39 +418,21 @@ func TestRollbackContactClassificationMatchesWhatTheRelayDid(t *testing.T) {
 	}
 }
 
-// Relay-executed work must survive the control plane's own outbox sweep.
-//
-// This is the defect that made D4 non-functional end to end and had already
-// made D5's connector.test non-functional in production without anyone
-// noticing. The control plane sweeps every "connector." outbox row and does not
-// filter on required_agent_role, so a destination with no dispatcher case hits
-// the default branch, burns its attempt budget on a hard error, and lands in
-// status='failed'. ClaimAgentJobs requires status='pending', so the row becomes
-// permanently invisible to the relay that was supposed to execute it — while
-// the API has already told the operator it is queued.
-//
-// Nothing failed anywhere. Every unit test passed, because none of them ran the
-// control-plane dispatcher and the relay claim path against the same row.
+// Relay-executed work remains available to the relay after the control plane
+// dispatches other outbox destinations.
 func TestRelayExecutedWorkSurvivesTheControlPlaneDispatcher(t *testing.T) {
 	ctx := context.Background()
 	for _, destination := range []string{"connector.rollback", "connector.test"} {
 		t.Run(destination, func(t *testing.T) {
 			h := agentJobHarness(t, destination)
-			seedRelayExecutedJob(t, ctx, h, destination, "dispatcher-survives:"+destination)
+			seedRelayExecutedJob(t, ctx, h, destination, "dispatcher-survives-"+destination)
 
-			// The real dispatcher and the real handler — not a stand-in. A test
-			// with its own handler could not see this defect, because the
-			// defect IS which destinations the production handler recognizes.
+			// Exercise the production dispatcher and handler together.
 			if _, err := h.srv.outbox.Dispatch(ctx, h.srv.obHandler); err != nil {
 				t.Fatalf("dispatch: %v", err)
 			}
 
-			// The precise property, not a proxy for it: the dispatcher must not
-			// consume an ATTEMPT. Asserting only that the row is still
-			// claimable proves nothing here — retry backoff keeps a row pending
-			// long after the first failure, so a hard error looks identical to a
-			// correct deferral until the budget finally runs out in production,
-			// hours later, with the operator already told the work was queued.
+			// Deferral preserves the attempt budget for the enrolled relay.
 			var status string
 			var attempts int
 			var lastError string
@@ -518,10 +478,10 @@ func seedRelayExecutedJob(t *testing.T, ctx context.Context, h *agentChannelHarn
 	payload := []byte(`{"connector":"f5","target":"edge-1","target_config":{"endpoint":"https://f5.example.internal"}}`)
 	if destination == "connector.rollback" {
 		// Claim-time revocation authorization needs the exact predecessor in
-		// inventory. Import a real signed fixture; do not bypass that safety gate.
+		// inventory. Import a signed fixture for the authorization check.
 		pem := servedHealthLeafPEM(t, h.servedHarness, "rollback.dispatcher.test", 24*time.Hour)
 		token := seedScopedToken(t, h.store, h.tenant, "certs:write")
-		ingestServedHealthCertificate(t, h.servedHarness, token, idemKey+":predecessor", pem, "import", "f5:/Common/edge-1")
+		ingestServedHealthCertificate(t, h.servedHarness, token, idemKey+"-predecessor", pem, "import", "f5:/Common/edge-1")
 		info, err := certinfo.Inspect([]byte(pem))
 		if err != nil {
 			t.Fatal(err)
