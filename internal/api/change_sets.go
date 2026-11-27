@@ -602,9 +602,13 @@ func (a *API) changeMemberStep(tenantID string, x BaselineMember) changeStep {
 		if err := a.authorizeRoleAssignment(ctx, tenantID, subject, x.Roles, true); err != nil {
 			return "", "", err
 		}
-		if _, err := a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
+		principal, err := requestAuthzPrincipal(ctx)
+		if err != nil {
+			return "", "", err
+		}
+		if _, err := a.orch.UpsertTenantMemberWithAdmission(ctx, tenantID, store.TenantMember{
 			Subject: subject, DisplayName: x.DisplayName, Email: x.Email, Roles: x.Roles, Source: "change_set",
-		}); err != nil {
+		}, a.memberAdmission(principal, x.Roles, false)); err != nil {
 			return "", "", err
 		}
 		return createdOrUpdated(current), "", nil

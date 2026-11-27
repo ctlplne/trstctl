@@ -280,10 +280,14 @@ func (a *API) upsertMember(w http.ResponseWriter, r *http.Request) {
 		} else if req.SCIMIdentity != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, "scim_identity requires source scim")
 		}
-		member, err := a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
+		principal, err := requestAuthzPrincipal(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		member, err := a.orch.UpsertTenantMemberWithAdmission(ctx, tenantID, store.TenantMember{
 			Subject: subject, DisplayName: req.DisplayName, Email: req.Email,
 			Roles: req.Roles, Source: source, SCIM: req.SCIMIdentity,
-		})
+		}, a.memberAdmission(principal, req.Roles, false))
 		if err != nil {
 			return 0, nil, err
 		}
@@ -383,7 +387,12 @@ func (a *API) offboardMember(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"member subject is limited to 1024 bytes and offboard reason to 2048 bytes")
 		}
-		member, revoked, err := a.orch.OffboardTenantMember(ctx, tenantID, subject, req.Reason)
+		principal, err := requestAuthzPrincipal(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		member, revoked, err := a.orch.OffboardTenantMemberWithAdmission(ctx, tenantID, subject, req.Reason,
+			a.memberAdmission(principal, nil, true))
 		if err != nil {
 			return 0, nil, err
 		}

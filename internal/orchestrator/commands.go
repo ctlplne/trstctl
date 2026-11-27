@@ -2461,17 +2461,26 @@ func normalizeAgentCertFingerprint(v string) string {
 // projection of tenant.member.upserted, so a rebuild restores the same admin
 // inventory operators used to create RA approvers.
 func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, member store.TenantMember) (store.TenantMember, error) {
-	return o.upsertTenantMember(ctx, tenantID, member, false)
+	return o.upsertTenantMember(ctx, tenantID, member, false, nil)
+}
+
+// UpsertTenantMemberWithAdmission checks tenant API authority in the durable
+// command claim, where the target member cannot change between read and claim.
+func (o *Orchestrator) UpsertTenantMemberWithAdmission(ctx context.Context, tenantID string, member store.TenantMember, admit store.TenantMemberAdmission) (store.TenantMember, error) {
+	if admit == nil {
+		return store.TenantMember{}, errors.New("orchestrator: member admission is required")
+	}
+	return o.upsertTenantMember(ctx, tenantID, member, false, admit)
 }
 
 // UpsertSCIMTenantMember admits a new SCIM subject only when no local member or
 // bearer-token owner already holds it. The store repeats this check under the
 // durable subject lock immediately before the event command is committed.
 func (o *Orchestrator) UpsertSCIMTenantMember(ctx context.Context, tenantID string, member store.TenantMember) (store.TenantMember, error) {
-	return o.upsertTenantMember(ctx, tenantID, member, true)
+	return o.upsertTenantMember(ctx, tenantID, member, true, nil)
 }
 
-func (o *Orchestrator) upsertTenantMember(ctx context.Context, tenantID string, member store.TenantMember, scimOnly bool) (store.TenantMember, error) {
+func (o *Orchestrator) upsertTenantMember(ctx context.Context, tenantID string, member store.TenantMember, scimOnly bool, admit store.TenantMemberAdmission) (store.TenantMember, error) {
 	if member.Source == "" {
 		member.Source = "manual"
 	}
@@ -2500,6 +2509,8 @@ func (o *Orchestrator) upsertTenantMember(ctx context.Context, tenantID string, 
 	var command store.TenantMemberUpsertCommand
 	if scimOnly {
 		command, _, err = o.store.ClaimSCIMTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive)
+	} else if admit != nil {
+		command, _, err = o.store.ClaimAuthorizedTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive, admit)
 	} else {
 		command, _, err = o.store.ClaimTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive)
 	}
@@ -2522,7 +2533,7 @@ type requireActiveMemberUpsertKey struct{}
 // UpsertActiveTenantMember applies a SCIM group delta only while the member is
 // still active at source append. A stale group read must not rehire a principal.
 func (o *Orchestrator) UpsertActiveTenantMember(ctx context.Context, tenantID string, member store.TenantMember) (store.TenantMember, error) {
-	return o.upsertTenantMember(context.WithValue(ctx, requireActiveMemberUpsertKey{}, true), tenantID, member, true)
+	return o.upsertTenantMember(context.WithValue(ctx, requireActiveMemberUpsertKey{}, true), tenantID, member, true, nil)
 }
 
 // OffboardTenantMember records member retirement and lets the projector revoke
@@ -2530,16 +2541,25 @@ func (o *Orchestrator) UpsertActiveTenantMember(ctx context.Context, tenantID st
 // before the event is applied; replay is still deterministic because the event
 // carries the subject and the projection revokes by subject.
 func (o *Orchestrator) OffboardTenantMember(ctx context.Context, tenantID, subject, reason string) (store.TenantMember, int, error) {
-	return o.offboardTenantMember(ctx, tenantID, subject, reason, nil)
+	return o.offboardTenantMember(ctx, tenantID, subject, reason, nil, nil)
+}
+
+// OffboardTenantMemberWithAdmission checks tenant API authority under the
+// durable member command lock before a retirement event can be claimed.
+func (o *Orchestrator) OffboardTenantMemberWithAdmission(ctx context.Context, tenantID, subject, reason string, admit store.TenantMemberAdmission) (store.TenantMember, int, error) {
+	if admit == nil {
+		return store.TenantMember{}, 0, errors.New("orchestrator: member admission is required")
+	}
+	return o.offboardTenantMember(ctx, tenantID, subject, reason, nil, admit)
 }
 
 // OffboardSCIMTenantMember records identifiers and access removal in one event;
 // inactive-first provisioning must never briefly activate the principal.
 func (o *Orchestrator) OffboardSCIMTenantMember(ctx context.Context, tenantID, subject, reason string, identity *store.SCIMIdentity) (store.TenantMember, int, error) {
-	return o.offboardTenantMember(ctx, tenantID, subject, reason, identity)
+	return o.offboardTenantMember(ctx, tenantID, subject, reason, identity, nil)
 }
 
-func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subject, reason string, identity *store.SCIMIdentity) (store.TenantMember, int, error) {
+func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subject, reason string, identity *store.SCIMIdentity, admit store.TenantMemberAdmission) (store.TenantMember, int, error) {
 	actor := ""
 	if a, ok := events.ActorFromContext(ctx); ok {
 		actor = a.Subject
@@ -2573,6 +2593,8 @@ func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subje
 	var err error
 	if identity != nil {
 		command, revokedCount, created, err = o.store.ClaimSCIMTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent)
+	} else if admit != nil {
+		command, revokedCount, created, err = o.store.ClaimAuthorizedTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent, admit)
 	} else {
 		command, revokedCount, created, err = o.store.ClaimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent)
 	}

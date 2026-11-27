@@ -145,17 +145,26 @@ func (s *Store) CheckTenantMemberCurrentlyActiveTx(ctx context.Context, tx pgx.T
 // append. makeEvent receives the token count observed under the same subject
 // lock; retries reuse the first event and cannot manufacture a second command.
 func (s *Store) ClaimTenantMemberOffboardCommand(ctx context.Context, tenantID, subject string, makeEvent func(int) (events.Event, error)) (TenantMemberOffboardCommand, int, bool, error) {
-	return s.claimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent, false)
+	return s.claimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent, false, nil)
+}
+
+// ClaimAuthorizedTenantMemberOffboardCommand checks the caller's authority
+// under the same subject lock that claims the member command.
+func (s *Store) ClaimAuthorizedTenantMemberOffboardCommand(ctx context.Context, tenantID, subject string, makeEvent func(int) (events.Event, error), admit TenantMemberAdmission) (TenantMemberOffboardCommand, int, bool, error) {
+	if admit == nil {
+		return TenantMemberOffboardCommand{}, 0, false, errors.New("store: member admission is required")
+	}
+	return s.claimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent, false, admit)
 }
 
 // ClaimSCIMTenantMemberOffboardCommand keeps inactive-first provisioning but
 // refuses to create a tombstone over a local or API-token-only subject. The
 // decision is made under the same subject lock as the committed command.
 func (s *Store) ClaimSCIMTenantMemberOffboardCommand(ctx context.Context, tenantID, subject string, makeEvent func(int) (events.Event, error)) (TenantMemberOffboardCommand, int, bool, error) {
-	return s.claimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent, true)
+	return s.claimTenantMemberOffboardCommand(ctx, tenantID, subject, makeEvent, true, nil)
 }
 
-func (s *Store) claimTenantMemberOffboardCommand(ctx context.Context, tenantID, subject string, makeEvent func(int) (events.Event, error), scimOnly bool) (TenantMemberOffboardCommand, int, bool, error) {
+func (s *Store) claimTenantMemberOffboardCommand(ctx context.Context, tenantID, subject string, makeEvent func(int) (events.Event, error), scimOnly bool, admit TenantMemberAdmission) (TenantMemberOffboardCommand, int, bool, error) {
 	var canonical TenantMemberOffboardCommand
 	var count int
 	var created bool
@@ -214,6 +223,11 @@ func (s *Store) claimTenantMemberOffboardCommand(ctx context.Context, tenantID, 
 				}
 				if !active && !pendingRehire {
 					return nil
+				}
+			}
+			if admit != nil {
+				if err := admit(barrierCtx, tx, tenantID, subject); err != nil {
+					return err
 				}
 			}
 			if err := tx.QueryRow(barrierCtx,

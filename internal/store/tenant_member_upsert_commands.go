@@ -89,17 +89,26 @@ func scanTenantMemberUpsertCommand(row pgx.Row) (TenantMemberUpsertCommand, erro
 // publishing the source event. Retries reuse its exact event and cannot lift
 // the pending restriction with a different set of roles.
 func (s *Store) ClaimTenantMemberUpsertCommand(ctx context.Context, tenantID, subject string, ev events.Event, requireActive bool) (TenantMemberUpsertCommand, bool, error) {
-	return s.claimTenantMemberUpsertCommand(ctx, tenantID, subject, ev, requireActive, false)
+	return s.claimTenantMemberUpsertCommand(ctx, tenantID, subject, ev, requireActive, false, nil)
+}
+
+// ClaimAuthorizedTenantMemberUpsertCommand checks the caller's authority while
+// the subject command lock is held, before accepting a pending role change.
+func (s *Store) ClaimAuthorizedTenantMemberUpsertCommand(ctx context.Context, tenantID, subject string, ev events.Event, requireActive bool, admit TenantMemberAdmission) (TenantMemberUpsertCommand, bool, error) {
+	if admit == nil {
+		return TenantMemberUpsertCommand{}, false, errors.New("store: member admission is required")
+	}
+	return s.claimTenantMemberUpsertCommand(ctx, tenantID, subject, ev, requireActive, false, admit)
 }
 
 // ClaimSCIMTenantMemberUpsertCommand checks source ownership in the same
 // tenant+subject transaction that commits the pending event. A handler read can
 // race a local account change; this fence cannot.
 func (s *Store) ClaimSCIMTenantMemberUpsertCommand(ctx context.Context, tenantID, subject string, ev events.Event, requireActive bool) (TenantMemberUpsertCommand, bool, error) {
-	return s.claimTenantMemberUpsertCommand(ctx, tenantID, subject, ev, requireActive, true)
+	return s.claimTenantMemberUpsertCommand(ctx, tenantID, subject, ev, requireActive, true, nil)
 }
 
-func (s *Store) claimTenantMemberUpsertCommand(ctx context.Context, tenantID, subject string, ev events.Event, requireActive, scimOnly bool) (TenantMemberUpsertCommand, bool, error) {
+func (s *Store) claimTenantMemberUpsertCommand(ctx context.Context, tenantID, subject string, ev events.Event, requireActive, scimOnly bool, admit TenantMemberAdmission) (TenantMemberUpsertCommand, bool, error) {
 	var canonical TenantMemberUpsertCommand
 	var created bool
 	if tenantID == "" || subject == "" || ev.ID == "" || ev.TenantID != tenantID ||
@@ -169,6 +178,11 @@ func (s *Store) claimTenantMemberUpsertCommand(ctx context.Context, tenantID, su
 					return ErrIdempotencyConflict
 				}
 				return nil
+			}
+			if admit != nil {
+				if err := admit(barrierCtx, tx, tenantID, subject); err != nil {
+					return err
+				}
 			}
 			var offboardEventID *string
 			if err := tx.QueryRow(barrierCtx, `SELECT event_id::text FROM tenant_member_offboard_commands

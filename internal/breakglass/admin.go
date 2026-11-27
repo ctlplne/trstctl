@@ -59,6 +59,18 @@ func NewAdminService(cfg AdminConfig) *AdminService {
 
 func (s *AdminService) Enabled() bool { return s != nil && s.cfg.Enabled }
 
+// IsAdminActor reports whether this tenant's configured emergency actor owns
+// the subject. Member administration cannot replace its login authority.
+func (s *AdminService) IsAdminActor(tenantID, subject string) bool {
+	if !s.Enabled() || tenantID != s.tenantID() || subject == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.creds[subject]
+	return ok
+}
+
 func (s *AdminService) SessionIssuer() *auth.SessionIssuer {
 	if s == nil {
 		return nil

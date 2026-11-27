@@ -2347,6 +2347,17 @@ Use `[]` to deliberately clear all member roles; that change still requires
 `access:role.assign` and cannot target the caller's own member record. Omitting
 `roles` or sending `null` is rejected, so a partial update cannot silently
 restore broader sign-in roles.
+Member upserts and offboarding require both `access:write` and
+`access:role.assign`. The caller must hold every permission in the member's
+current roles and any replacement roles; a member with the wildcard requires a
+wildcard caller. An empty role set can restore sign-in roles, so clearing roles
+requires a wildcard caller. A member with no recorded roles, or offboarding a
+subject with no member record, also requires a wildcard caller because sign-in
+authority is not known to the member API. A new member may receive explicit,
+nonempty roles from a caller who holds every proposed permission. The configured
+emergency administrator is managed
+outside tenant member administration. The last active member with wildcard
+authority cannot be offboarded or changed to a lesser role.
 Role changes commit a subject-bound admission fence before their event is appended.
 While that exact event is pending projection, existing browser sessions keep their
 identity but have no grants; an access check returns 403. A failed member/fence
