@@ -97,12 +97,45 @@ func vaultCompatKVExtraSchemas(schemas map[string]*Schema) {
 }
 
 func vaultKVName(w http.ResponseWriter, r *http.Request) (string, bool) {
-	name := strings.Trim(r.PathValue("name"), "/")
-	if name == "" {
-		writeVaultError(w, http.StatusBadRequest, "secret path is required")
+	name, err := vaultKVPathName(r.PathValue("name"), false)
+	if err != nil {
+		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return "", false
 	}
 	return name, true
+}
+
+// vaultKVPathName is the one path shape accepted by authorization and KV
+// handlers. Root metadata listings are the only operation without a name.
+func vaultKVPathName(name string, allowRoot bool) (string, error) {
+	if name == "" && allowRoot {
+		return "", nil
+	}
+	if name == "" {
+		return "", errors.New("secret path is required")
+	}
+	for _, segment := range strings.Split(name, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", errors.New("secret path has an invalid segment")
+		}
+	}
+	return name, nil
+}
+
+func vaultKVRequestPath(r *http.Request) (string, bool, error) {
+	requestPath := strings.TrimPrefix(strings.Trim(r.URL.Path, "/"), "v1/")
+	parts := strings.SplitN(requestPath, "/", 3)
+	if len(parts) != 3 || (parts[1] != "data" && parts[1] != "metadata") ||
+		(parts[0] != vaultKVSecretMount && r.PathValue("mount") == "") {
+		return requestPath, false, nil
+	}
+	allowRoot := parts[1] == "metadata" && (r.Method == "LIST" ||
+		(r.Method == http.MethodGet && r.URL.Query().Get("list") == "true"))
+	name, err := vaultKVPathName(r.PathValue("name"), allowRoot)
+	if err != nil {
+		return "", true, err
+	}
+	return parts[0] + "/" + parts[1] + "/" + name, true, nil
 }
 
 func (a *API) vaultKVMetadataReadOrList(w http.ResponseWriter, r *http.Request) {
@@ -173,7 +206,11 @@ func (a *API) vaultKVList(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusForbidden, "permission denied")
 		return
 	}
-	prefix := strings.Trim(r.PathValue("name"), "/")
+	prefix, err := vaultKVPathName(r.PathValue("name"), true)
+	if err != nil {
+		writeVaultError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if prefix != "" {
 		prefix += "/"
 	}

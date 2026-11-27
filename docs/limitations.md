@@ -5825,7 +5825,10 @@ when off, requiring a KEK when on):
   `POST/PUT /v1/pki/sign/{role}` for requester-generated CSRs, and the deprecated
   `POST/PUT /v1/pki/issue/{role}` server-keygen path for stock `vault` CLI token lookup, KV v2
   put/get, mount and ACL policy lifecycle, and PKI issue — deliberately a subset over the native secret store
-  and dynamic PKI secret. Tenant-authored mount management, ACL policies,
+  and dynamic PKI secret. KV names use the same decoded path for project scope, ABAC, Vault ACL, and
+  storage. Empty, leading/trailing, `.` and `..` path segments return HTTP 400;
+  an encoded separator between nonempty segments names the same secret as `/`.
+  Tenant-authored mount management, ACL policies,
   and common transit paths are also served, as are response wrapping
   (`/v1/sys/wrapping/wrap|unwrap|lookup` over the native one-time share rows,
   single-use `trstw_` tokens with a bounded TTL) and the per-token cubbyhole

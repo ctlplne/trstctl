@@ -309,9 +309,9 @@ func (a *API) vaultMountedKVStoreName(r *http.Request) (string, error) {
 	if !ok || mount.Type != "kv" {
 		return "", errStatus(http.StatusNotFound, "no handler for route")
 	}
-	name := strings.Trim(r.PathValue("name"), "/")
-	if name == "" {
-		return "", errStatus(http.StatusBadRequest, "secret path is required")
+	name, err := vaultKVPathName(r.PathValue("name"), false)
+	if err != nil {
+		return "", errStatus(http.StatusBadRequest, err.Error())
 	}
 	return vaultKVStoreNameForGeneration(mount, state.mountEpochs[mountName], name)
 }

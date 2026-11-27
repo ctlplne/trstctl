@@ -246,8 +246,21 @@ func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerF
 			}
 			return
 		}
+		requestPath, kvPath, err := vaultKVRequestPath(r)
+		if err != nil {
+			writeVaultError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		authorizationRequest := r
+		if kvPath {
+			authorizationRequest = r.Clone(r.Context())
+			canonicalURL := *r.URL
+			canonicalURL.Path = "/v1/" + requestPath
+			canonicalURL.RawPath = ""
+			authorizationRequest.URL = &canonicalURL
+		}
 		if perm != "" {
-			target, err := a.vaultTargetScope(r.Context(), principal, strings.TrimPrefix(strings.Trim(r.URL.Path, "/"), "v1/"))
+			target, err := a.vaultTargetScope(r.Context(), principal, requestPath)
 			if err != nil {
 				writeVaultError(w, vaultHTTPStatus(err), "secret project scope unavailable")
 				return
@@ -256,12 +269,11 @@ func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerF
 				writeVaultError(w, http.StatusForbidden, "permission denied")
 				return
 			}
-			if err := a.checkABAC(r.Context(), r, principal, perm, target); err != nil {
+			if err := a.checkABAC(r.Context(), authorizationRequest, principal, perm, target); err != nil {
 				writeVaultError(w, vaultStatus(err), err.Error())
 				return
 			}
 		}
-		requestPath := strings.TrimPrefix(strings.Trim(r.URL.Path, "/"), "v1/")
 		allowed, governed, err := a.vaultACLDecision(r.Context(), principal.TenantID, principalRoles(principal), requestPath, vaultRequestCapability(r))
 		if err != nil {
 			writeVaultError(w, http.StatusInternalServerError, "ACL policy projection unavailable")
@@ -497,9 +509,8 @@ func (a *API) vaultKVWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer secret.Wipe(body)
-	name := strings.Trim(r.PathValue("name"), "/")
-	if name == "" {
-		writeVaultError(w, http.StatusBadRequest, "secret path is required")
+	name, ok := vaultKVName(w, r)
+	if !ok {
 		return
 	}
 	if tenantID, ok := a.tenant(r); ok {
@@ -715,9 +726,8 @@ func (a *API) vaultKVRead(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusForbidden, "permission denied")
 		return
 	}
-	name := strings.Trim(r.PathValue("name"), "/")
-	if name == "" {
-		writeVaultError(w, http.StatusBadRequest, "secret path is required")
+	name, ok := vaultKVName(w, r)
+	if !ok {
 		return
 	}
 	rec, err := a.secrets.be.Store.GetSecret(r.Context(), tenantID, name)
