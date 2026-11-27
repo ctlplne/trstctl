@@ -624,7 +624,7 @@ never live in the API process. What you can do end to end against the running bi
   A5's other items have since landed and their honest scope lives with the
   staged-upgrade entry below: rings run as dispatched, per-agent-targeted jobs
   when a campaign publishes artifacts; the agent's `-self-upgrade` executor
-  verifies the pinned sha256, keeps the previous binary as `.old`, reports a
+  verifies the pinned publisher signature and sha256, keeps the previous binary as `.old`, reports a
   signed receipt and restarts; and `--demo` exists. Agent/control-plane version
   skew IS enforced — `agentProtocolInterceptor` refuses a handshake outside
   `MinSupportedVersion..MaxSupportedVersion` — and was met before this
@@ -4702,14 +4702,15 @@ than sending an operator looking for a credential that was never there.
   pre-dispatch behavior, kept for fleets an external mechanism upgrades, where
   verification is "the agent reports the target version and has been seen
   since" and nothing is pushed; the console says which mode a campaign is in.
-  The artifact sha256 is operator-supplied — the platform guarantees the fleet
-  installs exactly those bytes, not that those bytes are good. An artifact may
-  also carry its publisher's Ed25519 signature over that sha256: a control
-  plane that pins the publisher key (`agent_channel.upgrade_publisher_key_file`)
-  refuses to open a campaign whose artifacts it does not verify, and an agent
-  started with `--upgrade-publisher-key` refuses to stage an artifact that is
-  the pinned bytes but not the pinned publisher's. With neither key pinned the
-  digest is the only integrity control, which is the default. Ring assignment is
+  The artifact sha256 is operator-supplied and pins the downloaded bytes. A
+  staged campaign also requires a publisher Ed25519 signature over that digest:
+  the control plane must pin `agent_channel.upgrade_publisher_key_file`, and
+  every self-upgrading agent must pin the publisher's public key with
+  `--upgrade-publisher-key`. Without the control-plane key, an artifact campaign
+  is refused; an observe-only campaign remains available. Without an agent key,
+  `--self-upgrade` fails at startup, and the executor refuses an upgrade job
+  before fetching any binary. Publisher verification happens before the download;
+  the digest check happens before binary replacement. Ring assignment is
   by hand per agent (`POST /api/v1/agents/upgrade-ring`) or by one deterministic
   placement (`POST /api/v1/agents/upgrade-rings/auto-assign`, `trstctl agents
   upgrade-rings auto`). Manual assignment requires an existing agent's UUID;

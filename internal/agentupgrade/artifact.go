@@ -15,12 +15,9 @@ import (
 
 // Artifact is one downloadable build of the agent for one platform.
 //
-// The digest is the trust anchor: the agent verifies the downloaded bytes
-// against it before touching its own binary, so a compromised or misconfigured
-// artifact host can deny an upgrade but cannot substitute a build. The digest
-// is operator-supplied at campaign start — the platform does not vouch for what
-// the operator published, it guarantees the fleet installs exactly that and
-// nothing else.
+// The digest pins downloaded bytes, and a signature from the pinned publisher
+// authenticates who published them. The campaign opener supplies the digest,
+// so that digest alone cannot authorize executable code on agent hosts.
 type Artifact struct {
 	OS   string `json:"os"`
 	Arch string `json:"arch"`
@@ -28,10 +25,8 @@ type Artifact struct {
 	// SHA256 is the lowercase hex digest of the artifact bytes.
 	SHA256 string `json:"sha256"`
 	// Signature is the publisher's base64 Ed25519 signature over the raw sha256
-	// digest (A68). Optional unless the control plane or the agent pins a
-	// publisher key, in which case an artifact without a verifying signature
-	// is refused: the digest pins the bytes, the signature says who published
-	// them.
+	// digest (A68). Required for a staged upgrade: the digest pins the bytes,
+	// and the signature says who published them.
 	Signature string `json:"signature,omitempty"`
 }
 
@@ -159,11 +154,14 @@ func VerifyArtifactSignature(a Artifact, publisherKeyDER []byte) error {
 }
 
 // ValidateArtifactSignatures refuses a campaign whose artifacts are not all
-// signed by the pinned publisher key. A control plane with no key pinned
-// accepts the digest pin alone and says so in its limitations.
+// signed by the pinned publisher key. An observe-only campaign needs no key,
+// but a campaign publishing executable artifacts fails closed without one.
 func ValidateArtifactSignatures(artifacts []Artifact, publisherKeyDER []byte) error {
-	if len(publisherKeyDER) == 0 {
+	if len(artifacts) == 0 {
 		return nil
+	}
+	if len(publisherKeyDER) == 0 {
+		return fmt.Errorf("agentupgrade: a staged upgrade requires a configured publisher key; the campaign's own sha256 cannot authorize executable code")
 	}
 	for i, a := range artifacts {
 		if err := VerifyArtifactSignature(a, publisherKeyDER); err != nil {

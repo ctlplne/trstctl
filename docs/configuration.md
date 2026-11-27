@@ -5284,7 +5284,7 @@ interrupts agent claims and application-certificate delivery.
 | `TRSTCTL_AGENT_CHANNEL_CLOCK_SKEW_WARNING` | `2m` | How far an agent's clock may be from the control plane's, measured on each heartbeat, before the agent is flagged: the heartbeat's answer tells the agent, the Agents page and `GET /api/v1/agents` name it, and `trstctl_agents_clock_skewed_total` (alert `TrstctlAgentClockSkew`) counts it. Agents still time their own certificate renewal by their own clock. |
 | `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` | empty | Comma-separated, explicit allowlist of estate-touching jobs agents may claim. Empty fails closed. |
 | `TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT` | `0` (no quota) | Most leases one agent may hold at once. At the cap the channel withholds new claims for that agent until a lease completes, fails or lapses; the Agents page shows the held count against it. The shared agent bulkhead still bounds the channel as a whole. |
-| `TRSTCTL_AGENT_CHANNEL_UPGRADE_PUBLISHER_KEY_FILE` | empty | Path to the upgrade publisher's Ed25519 public key (one `PUBLIC KEY` PEM block). When set, a staged upgrade campaign may only publish artifacts that carry that publisher's signature over their sha256; empty accepts the operator-supplied sha256 pin alone. Agents pin the same key with `--upgrade-publisher-key`. |
+| `TRSTCTL_AGENT_CHANNEL_UPGRADE_PUBLISHER_KEY_FILE` | empty | Path to the upgrade publisher's Ed25519 public key (one `PUBLIC KEY` PEM block). Empty permits observe-only campaigns but refuses staged campaigns with executable artifacts. Each artifact must carry a signature over its sha256. Self-upgrading agents pin the same key with `--upgrade-publisher-key`. |
 | `TRSTCTL_AGENT_CHANNEL_PROBE_SCANNED_CERTIFICATES` | `false` | Keep the public bytes of certificates relays find in network scans, with the first issuers served after them, and check each such certificate's own serial at its CRL and OCSP endpoints during revocation health probing. Adds outbound CRL and OCSP requests from relays. |
 
 **Which work agents may claim.** `agent_channel.claimable_job_kinds`, or its
@@ -5310,12 +5310,12 @@ waited.
 
 **Who published the upgrade.** `agent_channel.upgrade_publisher_key_file`, or
 `TRSTCTL_AGENT_CHANNEL_UPGRADE_PUBLISHER_KEY_FILE`, pins the Ed25519 public key
-of whoever publishes agent builds. With it set, opening a staged upgrade campaign
-refuses any artifact that does not carry that publisher's signature over its
-sha256 (`artifacts[].signature`, base64). Each agent can pin the same key with
-`--upgrade-publisher-key <pem>` and then refuses to stage an artifact that is the
-pinned bytes but not the pinned publisher's. Neither key set keeps the
-operator-supplied sha256 as the only integrity control.
+of whoever publishes agent builds. Opening a staged upgrade campaign requires
+this key and refuses any artifact that does not carry that publisher's signature
+over its sha256 (`artifacts[].signature`, base64). An observe-only campaign has
+no artifacts and needs no key. Each self-upgrading agent must pin the same key
+with `--upgrade-publisher-key <pem>`; without it the agent fails at startup.
+The agent verifies the signature before fetching and the digest before staging.
 
 **Access gateways upgrade too, after draining (A278).** A gateway-role agent started with
 `--self-upgrade` takes `agent.upgrade` (and its `agent.self_check`) like host agents and

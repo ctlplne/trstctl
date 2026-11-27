@@ -12,7 +12,7 @@ import (
 
 // A68: an artifact may carry its publisher's Ed25519 signature over the pinned
 // sha256. With a publisher key pinned, an unsigned, malformed or foreign
-// signature is refused by name; without one, the digest pin alone still holds.
+// signature is refused by name; without a key, staged campaigns fail closed.
 func TestArtifactPublisherSignatureVerifiesAgainstThePinnedKey(t *testing.T) {
 	privPEM, pubPEM, err := crypto.GenerateEd25519KeyPEM()
 	if err != nil {
@@ -61,8 +61,14 @@ func TestArtifactPublisherSignatureVerifiesAgainstThePinnedKey(t *testing.T) {
 	if err := fleet.VerifyArtifactSignature(signed, other.DER); err == nil {
 		t.Fatal("a signature verified against a different publisher's key")
 	}
-	// No key pinned: the digest pin alone, unchanged.
-	if err := fleet.ValidateArtifactSignatures([]fleet.Artifact{artifact}, nil); err != nil {
-		t.Fatalf("without a pinned key an unsigned artifact must still validate: %v", err)
+	// A digest supplied by the campaign opener does not authenticate the
+	// executable. Even a signature is meaningless without a trusted key.
+	for _, candidate := range []fleet.Artifact{artifact, signed} {
+		if err := fleet.ValidateArtifactSignatures([]fleet.Artifact{candidate}, nil); err == nil || !strings.Contains(err.Error(), "publisher key") {
+			t.Fatalf("artifact without a pinned publisher key passed campaign validation: %v", err)
+		}
+	}
+	if err := fleet.ValidateArtifactSignatures(nil, nil); err != nil {
+		t.Fatalf("observe-only campaign without artifacts needs no publisher key: %v", err)
 	}
 }

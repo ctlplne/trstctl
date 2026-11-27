@@ -50,9 +50,8 @@ type SelfUpgrade struct {
 	// halts the ring. Nil skips the restart (tests, and "stage now, restart
 	// in the window" setups).
 	// PublisherKeyDER pins the upgrade publisher's Ed25519 public key (PKIX DER,
-	// A68). When set, an artifact whose signature does not verify is refused
-	// after the digest check and before the swap; nil keeps the digest pin as
-	// the only integrity control, which the limitations state.
+	// A68). An artifact whose signature does not verify is refused before any
+	// download or binary swap. Nil disables executable staging.
 	PublisherKeyDER []byte
 	Restart         func() error
 }
@@ -84,6 +83,10 @@ func runSelfUpgrade(ctx context.Context, ch Channel, su *SelfUpgrade, job Job) b
 		report(ctx, ch, job, OutcomeFailed, "self-upgrade is not enabled on this agent")
 		return false
 	}
+	if len(su.PublisherKeyDER) == 0 {
+		report(ctx, ch, job, OutcomeFailed, "upgrade publisher key is not pinned on this agent")
+		return false
+	}
 	var intent fleet.UpgradeIntent
 	if err := decodeJobPayload(job.Payload, &intent); err != nil {
 		report(ctx, ch, job, OutcomeFailed, "job payload is not an upgrade intent")
@@ -108,6 +111,11 @@ func runSelfUpgrade(ctx context.Context, ch Channel, su *SelfUpgrade, job Job) b
 		report(ctx, ch, job, OutcomeFailed, "no artifact published for this agent's platform")
 		return false
 	}
+	if err := fleet.VerifyArtifactSignature(artifact, su.PublisherKeyDER); err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: self-upgrade:", err)
+		report(ctx, ch, job, OutcomeFailed, upgradePublisherRefusal)
+		return false
+	}
 
 	staged, err := downloadUpgradeArtifact(ctx, su.client(), artifact, su.ExecutablePath)
 	if err != nil {
@@ -118,15 +126,6 @@ func runSelfUpgrade(ctx context.Context, ch Channel, su *SelfUpgrade, job Job) b
 		report(ctx, ch, job, OutcomeFailed, upgradeFailurePhrase(err))
 		return false
 	}
-	if len(su.PublisherKeyDER) > 0 {
-		if err := fleet.VerifyArtifactSignature(artifact, su.PublisherKeyDER); err != nil {
-			_ = os.Remove(staged)
-			fmt.Fprintln(os.Stderr, "trstctl-agent: self-upgrade:", err)
-			report(ctx, ch, job, OutcomeFailed, upgradePublisherRefusal)
-			return false
-		}
-	}
-
 	if err := swapBinary(su.ExecutablePath, staged); err != nil {
 		_ = os.Remove(staged)
 		fmt.Fprintln(os.Stderr, "trstctl-agent: self-upgrade:", err)

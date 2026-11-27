@@ -225,7 +225,8 @@ func TestServedAnEmptyCanaryRingHaltsRatherThanBeingSkipped(t *testing.T) {
 // artifacts DISPATCHES targeted jobs through the ledger, halts the moment a
 // signed receipt reports failure, and re-dispatches a fresh round on resume.
 func TestServedDispatchingCampaignDispatchesAndGatesOnReceipts(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{})
+	publisher, signedArtifact := signedUpgradeFixture(t)
+	h := newOperatingServedHarness(t, config.Protocols{}, publisher)
 	tok := seedScopedToken(t, h.store, h.tenant, "agents:read", "agents:write")
 
 	canary := seedAgent(t, h, "canary-1", "1.0.0")
@@ -238,10 +239,7 @@ func TestServedDispatchingCampaignDispatchesAndGatesOnReceipts(t *testing.T) {
 	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/upgrade-campaign", tok,
 		"campaign-d", map[string]any{
 			"target_version": "2.0.0",
-			"artifacts": []map[string]any{{
-				"os": "linux", "arch": "amd64",
-				"url": "https://dl.example/agent-2.0.0", "sha256": digest,
-			}},
+			"artifacts":      []map[string]any{signedArtifact("https://dl.example/agent-2.0.0", digest)},
 		}); status != http.StatusCreated {
 		t.Fatalf("open campaign: %d %s", status, body)
 	}
@@ -370,7 +368,8 @@ func TestServedDispatchingCampaignDispatchesAndGatesOnReceipts(t *testing.T) {
 // A dispatched agent that neither fails nor arrives is SILENT once its grace
 // expires, and silence halts.
 func TestServedDispatchedSilenceHaltsAfterGrace(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{})
+	publisher, signedArtifact := signedUpgradeFixture(t)
+	h := newOperatingServedHarness(t, config.Protocols{}, publisher)
 	tok := seedScopedToken(t, h.store, h.tenant, "agents:read", "agents:write")
 	a := seedAgent(t, h, "canary-quiet", "1.0.0")
 	if status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/upgrade-ring", tok,
@@ -380,10 +379,7 @@ func TestServedDispatchedSilenceHaltsAfterGrace(t *testing.T) {
 	if status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/upgrade-campaign", tok,
 		"campaign-q", map[string]any{
 			"target_version": "2.0.0",
-			"artifacts": []map[string]any{{
-				"os": "linux", "arch": "amd64",
-				"url": "https://dl.example/agent", "sha256": strings.Repeat("cd", 32),
-			}},
+			"artifacts":      []map[string]any{signedArtifact("https://dl.example/agent", strings.Repeat("cd", 32))},
 		}); status != http.StatusCreated {
 		t.Fatal("open campaign failed")
 	}

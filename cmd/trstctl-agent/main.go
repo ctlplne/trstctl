@@ -93,7 +93,7 @@ func main() {
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim certificate lifecycle jobs allowed by this agent's enrolled roles: host agents execute destinations assigned to their agent ID using --host-exec-profile; network agents execute appliance work in their segment. Off by default; enable deliberately because jobs may redeem credentials")
 	adcsCertutil := flag.String("adcs-certutil", relay.CertutilPath, "path of certutil.exe for AD CS CA database reads on a domain-joined Windows relay (A162): the relay runs it as its own domain identity and returns per-disposition counts only. Defaults to certutil.exe on Windows; empty disables the reads")
-	upgradePublisherKeyFile := flag.String("upgrade-publisher-key", "", "path to the upgrade publisher's Ed25519 public key (PEM) this agent pins (A68): with it set, a campaign artifact must carry that publisher's signature over its sha256 or the agent refuses to stage it; empty keeps the pinned sha256 as the only integrity control")
+	upgradePublisherKeyFile := flag.String("upgrade-publisher-key", "", "path to the upgrade publisher's Ed25519 public key (PEM) this agent pins (A68); required with --self-upgrade, and every staged artifact must carry its signature")
 	selfUpgrade := flag.Bool("self-upgrade", false, "claim this agent's own agent.upgrade jobs from staged rollout campaigns (epic A5): download the campaign's artifact for this platform, verify its sha256, swap the binary, and restart. Off by default because it replaces this executable — the control-plane operator starts the campaign, but replacing the binary on THIS machine is this machine's operator's decision. The previous binary is kept beside it as .old")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
 	hostRollbackDir := flag.String("host-rollback-dir", "", "directory for this agent's encrypted, two-generation connector predecessor bundles (AUD32/G1): a host agent's deploys and a host or network relay's Envoy TLS posture (A104). Empty stores them beside --key under host-rollbacks. The bundles never return to the control plane and are required for rollback after restart")
@@ -782,6 +782,9 @@ var errAgentIdentityRotated = errors.New("agent identity rotated; reconnect the 
 // channel and every client derived from it, then dials again with the new key and
 // certificate before another heartbeat, job, or renewal is attempted.
 func runAgent(ctx context.Context, o agentOptions) error {
+	if o.selfUpgrade && strings.TrimSpace(o.upgradePublisherKeyFile) == "" {
+		return errors.New("--self-upgrade requires --upgrade-publisher-key; a campaign-supplied sha256 cannot authorize a new executable")
+	}
 	for {
 		err := runAgentUntilRotation(ctx, o)
 		if errors.Is(err, errAgentIdentityRotated) {
@@ -1111,10 +1114,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 				PublisherKeyDER: upgradePublisherKey(o.upgradePublisherKeyFile),
 				// Private ranges allowed, deliberately: this agent lives inside
 				// the customer network and an air-gapped estate's artifact
-				// mirror is RFC1918 by construction. --self-upgrade is the
-				// machine operator's consent to fetch what campaigns point at;
-				// the pinned sha256, not the network path, is the integrity
-				// control. Loopback, link-local and the other SSRF classes
+				// mirror is RFC1918 by construction. The agent checks the
+				// pinned publisher signature before fetching, then checks the
+				// digest before staging. Loopback, link-local and other SSRF classes
 				// stay blocked.
 				Client: netsec.SafeClientWithOptions(5*time.Minute, netsec.SafeClientOptions{
 					AllowPrivateCIDRs: rfc1918AndULA(),

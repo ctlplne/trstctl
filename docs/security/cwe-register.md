@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3671 annotated sites across 35 rules. Each row is
+3672 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1938,7 +1938,7 @@ not this file.
 | `clients/terraform/internal/terraformprovider/provider_tls_test.go:169` | fixed arguments to this test's own executable (CWE-78) |
 | `cmd/trstctl-agent/edgeca_pkcs11_softhsm_container_test.go:31` | fixed docker invocation for the acceptance test (CWE-78) |
 | `cmd/trstctl-agent/edgeca_pkcs11_softhsm_real_test.go:76` | fixed pkcs11-tool invocation inside the SoftHSM test container (CWE-78) |
-| `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
+| `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the staged binary was publisher-signature-verified and digest-verified before replacement (CWE-78) |
 | `cmd/trstctl-agent/sshtrust.go:179` | operator-configured sshd reload command; running it is the feature (CWE-78) |
 | `cmd/trstctl-signer/fips_startup_test.go:53` | current local test executable and bounded QA flags |
 | `cmd/trstctl/backup_cmd_test.go:40` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2478,7 +2478,7 @@ not this file.
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/listenersessions/listenersessions_test.go:77` | a test directory restored so TempDir can remove it |
-| `internal/agent/relay/selfupgrade.go:224` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
+| `internal/agent/relay/selfupgrade.go:223` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/swtpm_host_key_l2_journey_test.go:96` | the tpm2 provider config is not secret (CWE-276) |
 | `internal/agent/secretrender/replace_windows_test.go:41` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/workloadapi/attest.go:123` | a DIRECTORY, not a file. 0700 is the tightest mode that |
@@ -2536,7 +2536,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (858 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (859 sites)
 
 | Location | Reason |
 |---|---|
@@ -2586,8 +2586,8 @@ not this file.
 | `cmd/trstctl-agent/factory_test.go:32` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:78` | operator-configured keystore password file (CWE-22) |
-| `cmd/trstctl-agent/main.go:1399` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:2069` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1401` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:2071` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/observe.go:105` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:479` | operator-supplied runtime configuration path (CWE-22) |
@@ -2789,11 +2789,12 @@ not this file.
 | `internal/agent/relay/relay_test.go:772` | certPath is created beneath this test's private t.TempDir, |
 | `internal/agent/relay/relay_test.go:1203` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
 | `internal/agent/relay/rollback_test.go:224` | test-owned temporary path (CWE-22) |
-| `internal/agent/relay/selfupgrade_test.go:87` | test reads its own tempdir fixture path (CWE-22) |
-| `internal/agent/relay/selfupgrade_test.go:152` | test reads its own tempdir fixture path (CWE-22) |
-| `internal/agent/relay/selfupgrade_test.go:156` | test reads its own tempdir fixture path (CWE-22) |
-| `internal/agent/relay/selfupgrade_test.go:259` | the test reads its own temp fixture (CWE-22) |
-| `internal/agent/relay/selfupgrade_test.go:274` | the test reads its own temp fixture (CWE-22) |
+| `internal/agent/relay/selfupgrade_test.go:83` | test reads its own temp fixture (CWE-22) |
+| `internal/agent/relay/selfupgrade_test.go:129` | test reads its own tempdir fixture path (CWE-22) |
+| `internal/agent/relay/selfupgrade_test.go:195` | test reads its own tempdir fixture path (CWE-22) |
+| `internal/agent/relay/selfupgrade_test.go:199` | test reads its own tempdir fixture path (CWE-22) |
+| `internal/agent/relay/selfupgrade_test.go:304` | the test reads its own temp fixture (CWE-22) |
+| `internal/agent/relay/selfupgrade_test.go:319` | the test reads its own temp fixture (CWE-22) |
 | `internal/agent/relay/swtpm_host_key_journey_test.go:165` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/swtpm_host_key_journey_test.go:188` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/swtpm_host_key_journey_test.go:299` | the container's nginx log and the test's own temp directory (CWE-22) |
@@ -3615,7 +3616,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:953` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:956` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |
@@ -3706,7 +3707,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
+| `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the staged binary was publisher-signature-verified and digest-verified before replacement (CWE-78) |
 | `ee/auditcompliance/protected_archive_minio_fixture_test.go:42` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `ee/enterpriseauth/cr071_ldap_distrust_test.go:25` | this test reruns its own fixed binary with a fixed test selector, no shell or untrusted argument (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |

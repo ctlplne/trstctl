@@ -45,6 +45,46 @@ func runUpgrade(t *testing.T, ch relay.Channel, su *relay.SelfUpgrade) {
 	}
 }
 
+func signedUpgradeArtifact(t *testing.T, artifact fleet.Artifact) (fleet.Artifact, []byte) {
+	t.Helper()
+	private, public, err := crypto.GenerateEd25519KeyPEM()
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := crypto.ParsePublicKeyPEM(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact.Signature, err = fleet.SignArtifact(artifact, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return artifact, key.DER
+}
+
+func TestSelfUpgradeWithoutPublisherKeyRefusesBeforeFetchingBinary(t *testing.T) {
+	var downloads int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downloads++
+		_, _ = w.Write([]byte("attacker-binary"))
+	}))
+	defer srv.Close()
+	exe := seedExecutable(t, "current-binary")
+	ch := &fakeChannel{jobs: []relay.Job{upgradeJob(t, fleet.UpgradeIntent{
+		TargetVersion: "9.9.9",
+		Artifacts: []fleet.Artifact{{OS: runtime.GOOS, Arch: runtime.GOARCH,
+			URL: srv.URL, SHA256: crypto.SHA256Hex([]byte("attacker-binary"))}},
+	})}}
+	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0", Client: srv.Client()})
+	if downloads != 0 || len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed ||
+		!strings.Contains(ch.reports[0].detail, "publisher key") {
+		t.Fatalf("unsigned upgrade without a trust anchor: downloads=%d reports=%+v", downloads, ch.reports)
+	}
+	if current, _ := os.ReadFile(exe); string(current) != "current-binary" { // #nosec G304 -- test reads its own temp fixture (CWE-22)
+		t.Fatalf("untrusted binary replaced executable: %q", current)
+	}
+}
+
 func TestSelfUpgradeAlreadyOnTargetReportsExecutedWithoutDownloading(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("the artifact host was contacted for a version this agent already runs")
@@ -56,7 +96,7 @@ func TestSelfUpgradeAlreadyOnTargetReportsExecutedWithoutDownloading(t *testing.
 		Artifacts: []fleet.Artifact{{OS: runtime.GOOS, Arch: runtime.GOARCH,
 			URL: srv.URL, SHA256: strings.Repeat("a", 64)}},
 	})}}
-	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "2.0.0"})
+	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "2.0.0", PublisherKeyDER: []byte{1}})
 	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeExecuted {
 		t.Fatalf("reports = %+v, want one executed. A redelivered job after a completed upgrade "+
 			"must close, not cycle", ch.reports)
@@ -69,19 +109,21 @@ func TestSelfUpgradeRefusesDigestMismatchAndLeavesBinaryAlone(t *testing.T) {
 	}))
 	defer srv.Close()
 	exe := seedExecutable(t, "current-binary")
+	artifact, publisherKey := signedUpgradeArtifact(t, fleet.Artifact{OS: runtime.GOOS, Arch: runtime.GOARCH,
+		URL: srv.URL, SHA256: crypto.SHA256Hex([]byte("the-published-build"))})
 	ch := &fakeChannel{jobs: []relay.Job{upgradeJob(t, fleet.UpgradeIntent{
 		TargetVersion: "2.0.0",
-		Artifacts: []fleet.Artifact{{OS: runtime.GOOS, Arch: runtime.GOARCH,
-			URL: srv.URL, SHA256: crypto.SHA256Hex([]byte("the-published-build"))}},
+		Artifacts:     []fleet.Artifact{artifact},
 	})}}
 	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0",
-		Client:  srv.Client(),
-		Restart: func() error { t.Error("restarted onto bytes that failed verification"); return nil }})
+		Client:          srv.Client(),
+		PublisherKeyDER: publisherKey,
+		Restart:         func() error { t.Error("restarted onto bytes that failed verification"); return nil }})
 
 	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed ||
 		!strings.Contains(ch.reports[0].detail, "digest did not match") {
 		t.Fatalf("reports = %+v, want one failed naming the digest.\n\n"+
-			"The digest is the ONLY thing standing between a compromised artifact host and every "+
+			"The digest is what stops a compromised artifact host substituting bytes for the signed build on every "+
 			"agent in the ring; a generic failure phrase would send the operator to the wrong log", ch.reports)
 	}
 	got, err := os.ReadFile(exe) // #nosec G304 -- test reads its own tempdir fixture path (CWE-22)
@@ -104,7 +146,7 @@ func TestSelfUpgradeReportsThePlatformGapByName(t *testing.T) {
 		TargetVersion: "2.0.0",
 		Artifacts:     []fleet.Artifact{{OS: "plan9", Arch: "mips", URL: "https://dl.example/x", SHA256: strings.Repeat("a", 64)}},
 	})}}
-	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0"})
+	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0", PublisherKeyDER: []byte{1}})
 	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed ||
 		!strings.Contains(ch.reports[0].detail, "platform") {
 		t.Fatalf("reports = %+v; the closed phrase must say the campaign published no build for "+
@@ -119,15 +161,16 @@ func TestSelfUpgradeStagesSwapsReportsThenRestarts(t *testing.T) {
 	}))
 	defer srv.Close()
 	exe := seedExecutable(t, "current-binary")
+	artifact, publisherKey := signedUpgradeArtifact(t, fleet.Artifact{OS: runtime.GOOS, Arch: runtime.GOARCH,
+		URL: srv.URL, SHA256: crypto.SHA256Hex(newBinary)})
 	ch := &fakeChannel{jobs: []relay.Job{upgradeJob(t, fleet.UpgradeIntent{
 		TargetVersion: "2.0.0",
-		Artifacts: []fleet.Artifact{{OS: runtime.GOOS, Arch: runtime.GOARCH,
-			URL: srv.URL, SHA256: crypto.SHA256Hex(newBinary)}},
+		Artifacts:     []fleet.Artifact{artifact},
 	})}}
 	reportsAtRestart := -1
 	restarted := 0
 	executed, err := relay.RunOnceSelfUpgradeOnly(t.Context(), ch, &relay.SelfUpgrade{
-		ExecutablePath: exe, CurrentVersion: "1.0.0", Client: srv.Client(),
+		ExecutablePath: exe, CurrentVersion: "1.0.0", Client: srv.Client(), PublisherKeyDER: publisherKey,
 		Restart: func() error {
 			restarted++
 			reportsAtRestart = len(ch.reports)
@@ -174,14 +217,16 @@ func TestSelfUpgradeRestartFailureKeepsTheExecutedReport(t *testing.T) {
 	}))
 	defer srv.Close()
 	exe := seedExecutable(t, "current-binary")
+	artifact, publisherKey := signedUpgradeArtifact(t, fleet.Artifact{OS: runtime.GOOS, Arch: runtime.GOARCH,
+		URL: srv.URL, SHA256: crypto.SHA256Hex(newBinary)})
 	ch := &fakeChannel{jobs: []relay.Job{upgradeJob(t, fleet.UpgradeIntent{
 		TargetVersion: "2.0.0",
-		Artifacts: []fleet.Artifact{{OS: runtime.GOOS, Arch: runtime.GOARCH,
-			URL: srv.URL, SHA256: crypto.SHA256Hex(newBinary)}},
+		Artifacts:     []fleet.Artifact{artifact},
 	})}}
 	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0",
-		Client:  srv.Client(),
-		Restart: func() error { return os.ErrPermission }})
+		Client:          srv.Client(),
+		PublisherKeyDER: publisherKey,
+		Restart:         func() error { return os.ErrPermission }})
 	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeExecuted {
 		t.Fatalf("reports = %+v; the stage DID succeed and the report must say so — if this "+
 			"process never comes back on the new version, the ring's grace handles it as silence, "+

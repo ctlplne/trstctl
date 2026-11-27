@@ -20,5 +20,5 @@ func restartSelf() error {
 	if err != nil {
 		return err
 	}
-	return syscall.Exec(exe, os.Args, os.Environ()) // #nosec G204 G702 -- re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78)
+	return syscall.Exec(exe, os.Args, os.Environ()) // #nosec G204 G702 -- re-exec of this process's OWN executable path with its own args; the staged binary was publisher-signature-verified and digest-verified before replacement (CWE-78)
 }

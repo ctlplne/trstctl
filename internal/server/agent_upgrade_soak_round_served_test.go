@@ -25,7 +25,8 @@ import (
 func TestServedUpgradeSoakKeepsTheDispatchRoundAndTheSoakStart(t *testing.T) {
 	t.Run("dispatching", func(t *testing.T) {
 		ctx := context.Background()
-		h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost}, []string{"agent.upgrade"})
+		publisher, signedArtifact := signedUpgradeFixture(t)
+		h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost}, []string{"agent.upgrade"}, publisher)
 		if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "1.0.0", Status: "active"}); err != nil {
 			t.Fatalf("heartbeat: %v", err)
 		}
@@ -37,7 +38,7 @@ func TestServedUpgradeSoakKeepsTheDispatchRoundAndTheSoakStart(t *testing.T) {
 		if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/agents/upgrade-campaign", tok,
 			"soak-round-campaign", map[string]any{
 				"target_version": "2.0.0", "soak_seconds": 3600,
-				"artifacts": []map[string]any{{"os": "linux", "arch": "amd64", "url": "https://dl.example/agent-2.0.0", "sha256": strings.Repeat("ab", 32)}},
+				"artifacts": []map[string]any{signedArtifact("https://dl.example/agent-2.0.0", strings.Repeat("ab", 32))},
 			}); status != http.StatusCreated {
 			t.Fatalf("open campaign: %d %s", status, body)
 		}
