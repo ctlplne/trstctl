@@ -604,8 +604,11 @@ func (l *Log) ExportBackupHistoryThrough(
 			if err := flushGap(sequence - 1); err != nil {
 				return err
 			}
-			event, err := decodeStored(raw.Data, raw.Sequence)
+			event, err := l.decodeStored(raw.Data, raw.Sequence)
 			if err != nil {
+				return err
+			}
+			if err := l.verifyAuthenticatedPosition(ctx, event); err != nil {
 				return err
 			}
 			if event.ID == "" || event.Type == "" || event.TenantID == "" {
@@ -980,7 +983,7 @@ func (l *Log) restoreBackupHistoryAdmitted(
 						record.Sequence, cut,
 					)
 				}
-				if err := validateBackupLiveRecord(record); err != nil {
+				if err := l.validateBackupLiveRecord(record); err != nil {
 					return err
 				}
 				return l.withBackupHistoryRecordJournal(ctx, cut, artifactDigest, "live", record,

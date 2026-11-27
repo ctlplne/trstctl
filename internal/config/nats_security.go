@@ -50,5 +50,8 @@ func (n NATS) ValidateExternalSecurity() error {
 	if identities == 0 && !n.AllowPlaintextDev {
 		return errors.New("external NATS requires a client identity file (credentials, NKey seed, or mTLS certificate)")
 	}
+	if n.EventAuthKeyFile == "" && !n.AllowPlaintextDev {
+		return errors.New("external NATS requires nats.event_auth_key_file to authenticate stored events")
+	}
 	return nil
 }

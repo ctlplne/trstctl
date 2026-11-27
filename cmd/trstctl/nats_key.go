@@ -7,9 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"io/fs"
+	"path/filepath"
 
+	"trstctl.com/trstctl/internal/crypto/eventauth"
 	"trstctl.com/trstctl/internal/crypto/natskey"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 // runNATSKey prepares one stable evaluation broker identity. The public-only
@@ -22,28 +25,22 @@ func runNATSKey(args []string, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if err := eventauth.Provision(filepath.Join(filepath.Dir(args[1]), "event-auth.key")); err != nil {
+		return fmt.Errorf("nats-key: provision event authentication key: %w", err)
+	}
 	contents := []byte("authorization { users = [{ nkey: " + public + " }] }\n")
-	existing, err := os.ReadFile(args[2]) // #nosec G304 -- exact operator-selected evaluation broker config path (CWE-22)
+	existing, err := secretfile.Load(args[2])
 	if err == nil {
 		if !bytes.Equal(existing, contents) {
 			return errors.New("nats-key: existing broker config does not match the protected seed")
 		}
 		return nil
 	}
-	if !errors.Is(err, os.ErrNotExist) {
+	if !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("nats-key: inspect broker config: %w", err)
 	}
-	f, err := os.OpenFile(args[2], os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- exact operator-selected evaluation path with exclusive create (CWE-22)
-	if err != nil {
+	if err := secretfile.Create(args[2], contents); err != nil {
 		return fmt.Errorf("nats-key: create broker config: %w", err)
-	}
-	_, writeErr := f.Write(contents)
-	closeErr := f.Close()
-	if writeErr != nil {
-		return fmt.Errorf("nats-key: write broker config: %w", writeErr)
-	}
-	if closeErr != nil {
-		return fmt.Errorf("nats-key: close broker config: %w", closeErr)
 	}
 	_, _ = fmt.Fprintln(stderr, "Provisioned evaluation NATS NKey identity and broker config.")
 	return nil

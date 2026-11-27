@@ -54,6 +54,7 @@ func TestSignerExternalRequiresSocket(t *testing.T) {
 		"TRSTCTL_NATS_MODE":                           "external",
 		"TRSTCTL_NATS_URL":                            "tls://h:4222",
 		"TRSTCTL_NATS_NKEY_SEED_FILE":                 "/run/secrets/test-nats.seed",
+		"TRSTCTL_NATS_EVENT_AUTH_KEY_FILE":            "/run/secrets/test-events-auth.key",
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 	}
@@ -80,6 +81,7 @@ func TestSignerCoResidentAuthorizerIsEvalOnly(t *testing.T) {
 	prod.NATS.Mode = config.NATSExternal
 	prod.NATS.URL = "tls://h:4222"
 	prod.NATS.NKeySeedFile = "/run/secrets/test-nats.seed"
+	prod.NATS.EventAuthKeyFile = "/run/secrets/test-events-auth.key"
 	prod.NATS.Replicas = config.DefaultExternalReplicas
 	prod.NATS.AllowSingleReplica = false
 	prod.Signer.Mode = config.SignerExternal
@@ -128,6 +130,7 @@ func TestSignerExternalMTLSValidation(t *testing.T) {
 		"TRSTCTL_NATS_MODE":                           "external",
 		"TRSTCTL_NATS_URL":                            "tls://h:4222",
 		"TRSTCTL_NATS_NKEY_SEED_FILE":                 "/run/secrets/test-nats.seed",
+		"TRSTCTL_NATS_EVENT_AUTH_KEY_FILE":            "/run/secrets/test-events-auth.key",
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 	}

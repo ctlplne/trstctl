@@ -3,6 +3,7 @@
 package events
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/eventauth"
 )
 
 const (
@@ -28,13 +30,23 @@ const (
 var ErrEventIDIndexBehind = errors.New("events: event identity index is behind source history")
 
 type eventIDIndexEntry struct {
-	Sequence uint64 `json:"sequence"`
-	Digest   string `json:"digest"`
-	Conflict bool   `json:"conflict,omitempty"`
+	Sequence       uint64 `json:"sequence"`
+	Digest         string `json:"digest"`
+	Conflict       bool   `json:"conflict,omitempty"`
+	Authentication []byte `json:"auth,omitempty"`
 }
 
 type eventIDIndexCursor struct {
-	Through uint64 `json:"through"`
+	Through        uint64 `json:"through"`
+	Authentication []byte `json:"auth,omitempty"`
+}
+
+func (l *Log) eventIDIndexEpoch(state schedulerSafetyState) string {
+	epoch := eventIDSourceEpoch(state)
+	if l.eventAuth != nil {
+		return "AUTHV1_" + epoch
+	}
+	return epoch
 }
 
 func eventIDSourceEpoch(state schedulerSafetyState) string {
@@ -63,7 +75,7 @@ func (l *Log) eventIDIndexFor(ctx context.Context, state schedulerSafetyState) (
 	if l.desiredReplicas < 1 {
 		return nil, "", errors.New("events: identity projection is unavailable on a read-only external source")
 	}
-	epoch := eventIDSourceEpoch(state)
+	epoch := l.eventIDIndexEpoch(state)
 	name := eventIDIndexPrefix + epoch
 	stream, err := l.js.Stream(ctx, name)
 	if errors.Is(err, jetstream.ErrStreamNotFound) {
@@ -105,7 +117,46 @@ func (l *Log) eventIDIndexFor(ctx context.Context, state schedulerSafetyState) (
 	return stream, epoch, nil
 }
 
-func readEventIDCursor(ctx context.Context, stream jetstream.Stream, epoch string) (uint64, uint64, error) {
+func indexAuthenticationBody(subject string, canonical []byte) []byte {
+	body := make([]byte, 0, len(subject)+1+len(canonical))
+	body = append(body, subject...)
+	body = append(body, 0)
+	return append(body, canonical...)
+}
+
+func (l *Log) marshalEventIDEntry(epoch, id string, entry eventIDIndexEntry) ([]byte, error) {
+	if l.eventAuth == nil {
+		return json.Marshal(entry)
+	}
+	entry.Authentication = nil
+	canonical, err := json.Marshal(entry)
+	if err != nil {
+		return nil, err
+	}
+	entry.Authentication, err = l.eventAuth.Sign(indexAuthenticationBody(eventIDKeySubject(epoch, id), canonical))
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(entry)
+}
+
+func (l *Log) marshalEventIDCursor(epoch string, cursor eventIDIndexCursor) ([]byte, error) {
+	if l.eventAuth == nil {
+		return json.Marshal(cursor)
+	}
+	cursor.Authentication = nil
+	canonical, err := json.Marshal(cursor)
+	if err != nil {
+		return nil, err
+	}
+	cursor.Authentication, err = l.eventAuth.Sign(indexAuthenticationBody(eventIDCursorSubject(epoch), canonical))
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(cursor)
+}
+
+func readEventIDCursor(ctx context.Context, stream jetstream.Stream, epoch string, authenticator *eventauth.File) (uint64, uint64, error) {
 	raw, err := stream.GetLastMsgForSubject(ctx, eventIDCursorSubject(epoch))
 	if errors.Is(err, jetstream.ErrMsgNotFound) {
 		return 0, 0, nil
@@ -117,10 +168,26 @@ func readEventIDCursor(ctx context.Context, stream jetstream.Stream, epoch strin
 	if err := json.Unmarshal(raw.Data, &cursor); err != nil {
 		return 0, 0, fmt.Errorf("events: decode identity projection cursor: %w", err)
 	}
+	if authenticator != nil {
+		tag := cursor.Authentication
+		cursor.Authentication = nil
+		canonical, err := json.Marshal(cursor)
+		if err != nil {
+			return 0, 0, err
+		}
+		if err := authenticator.Verify(indexAuthenticationBody(eventIDCursorSubject(epoch), canonical), tag); err != nil {
+			return 0, 0, err
+		}
+		cursor.Authentication = tag
+		encoded, err := json.Marshal(cursor)
+		if err != nil || !bytes.Equal(encoded, raw.Data) {
+			return 0, 0, ErrEventAuthentication
+		}
+	}
 	return cursor.Through, raw.Sequence, nil
 }
 
-func readEventIDEntry(ctx context.Context, stream jetstream.Stream, epoch, eventID string) (eventIDIndexEntry, uint64, bool, error) {
+func readEventIDEntry(ctx context.Context, stream jetstream.Stream, epoch, eventID string, authenticator *eventauth.File) (eventIDIndexEntry, uint64, bool, error) {
 	raw, err := stream.GetLastMsgForSubject(ctx, eventIDKeySubject(epoch, eventID))
 	if errors.Is(err, jetstream.ErrMsgNotFound) {
 		return eventIDIndexEntry{}, 0, false, nil
@@ -132,6 +199,22 @@ func readEventIDEntry(ctx context.Context, stream jetstream.Stream, epoch, event
 	if err := json.Unmarshal(raw.Data, &entry); err != nil {
 		return eventIDIndexEntry{}, 0, false, fmt.Errorf("events: decode identity projection entry: %w", err)
 	}
+	if authenticator != nil {
+		tag := entry.Authentication
+		entry.Authentication = nil
+		canonical, err := json.Marshal(entry)
+		if err != nil {
+			return eventIDIndexEntry{}, 0, false, err
+		}
+		if err := authenticator.Verify(indexAuthenticationBody(eventIDKeySubject(epoch, eventID), canonical), tag); err != nil {
+			return eventIDIndexEntry{}, 0, false, err
+		}
+		entry.Authentication = tag
+		encoded, err := json.Marshal(entry)
+		if err != nil || !bytes.Equal(encoded, raw.Data) {
+			return eventIDIndexEntry{}, 0, false, ErrEventAuthentication
+		}
+	}
 	if entry.Sequence == 0 || len(entry.Digest) != 64 {
 		return eventIDIndexEntry{}, 0, false, errors.New("events: malformed identity projection entry")
 	}
@@ -139,7 +222,7 @@ func readEventIDEntry(ctx context.Context, stream jetstream.Stream, epoch, event
 }
 
 func (l *Log) indexEventID(ctx context.Context, source, index jetstream.Stream, epoch string, raw *jetstream.RawStreamMsg) error {
-	event, err := decodeStored(raw.Data, raw.Sequence)
+	event, err := l.decodeStored(raw.Data, raw.Sequence)
 	if err != nil {
 		return err
 	}
@@ -148,7 +231,7 @@ func (l *Log) indexEventID(ctx context.Context, source, index jetstream.Stream, 
 	}
 	subject := eventIDKeySubject(epoch, event.ID)
 	newEntry := eventIDIndexEntry{Sequence: raw.Sequence, Digest: crypto.SHA256Hex(raw.Data)}
-	payload, err := json.Marshal(newEntry)
+	payload, err := l.marshalEventIDEntry(epoch, event.ID, newEntry)
 	if err != nil {
 		return err
 	}
@@ -159,7 +242,7 @@ func (l *Log) indexEventID(ctx context.Context, source, index jetstream.Stream, 
 	// The first-write CAS failed. Read the winner and compare its immutable
 	// canonical envelope. Unique IDs use one broker write, not a read and write.
 	for attempt := 0; attempt < 4; attempt++ {
-		entry, last, found, err := readEventIDEntry(ctx, index, epoch, event.ID)
+		entry, last, found, err := readEventIDEntry(ctx, index, epoch, event.ID, l.eventAuth)
 		if err != nil {
 			return err
 		}
@@ -173,15 +256,18 @@ func (l *Log) indexEventID(ctx context.Context, source, index jetstream.Stream, 
 		if crypto.SHA256Hex(canonicalRaw.Data) != entry.Digest {
 			return errors.New("events: identity projection differs from retained canonical envelope")
 		}
-		canonical, err := decodeStored(canonicalRaw.Data, entry.Sequence)
+		canonical, err := l.decodeStored(canonicalRaw.Data, entry.Sequence)
 		if err != nil || canonical.ID != event.ID {
 			return errors.New("events: identity projection canonical ID differs from retained history")
+		}
+		if l.eventAuth != nil && entry.Sequence != raw.Sequence {
+			return ErrEventAuthentication
 		}
 		if sameRetainedEvent(canonical, event) || entry.Conflict {
 			return nil
 		}
 		entry.Conflict = true
-		payload, err := json.Marshal(entry)
+		payload, err := l.marshalEventIDEntry(epoch, event.ID, entry)
 		if err != nil {
 			return err
 		}
@@ -201,7 +287,7 @@ func (l *Log) indexEventIDsThrough(ctx context.Context, source jetstream.Stream,
 	if err != nil {
 		return 0, err
 	}
-	covered, cursorSequence, err := readEventIDCursor(ctx, index, epoch)
+	covered, cursorSequence, err := readEventIDCursor(ctx, index, epoch, l.eventAuth)
 	if err != nil {
 		return 0, err
 	}
@@ -220,10 +306,10 @@ func (l *Log) indexEventIDsThrough(ctx context.Context, source jetstream.Stream,
 	if err != nil {
 		return covered, err
 	}
-	if !appendOnlySince(state, after) || eventIDSourceEpoch(after) != epoch {
+	if !appendOnlySince(state, after) || l.eventIDIndexEpoch(after) != epoch {
 		return covered, ErrGenerationChanged
 	}
-	payload, err := json.Marshal(eventIDIndexCursor{Through: through})
+	payload, err := l.marshalEventIDCursor(epoch, eventIDIndexCursor{Through: through})
 	if err != nil {
 		return covered, err
 	}
@@ -236,7 +322,7 @@ func (l *Log) indexEventIDsThrough(ctx context.Context, source jetstream.Stream,
 		// Every entry through this cut was already written. A competing
 		// replica may have advanced an earlier cursor; CAS from its durable
 		// sequence without replaying the source or moving the cursor back.
-		current, sequence, err := readEventIDCursor(ctx, index, epoch)
+		current, sequence, err := readEventIDCursor(ctx, index, epoch, l.eventAuth)
 		if err != nil {
 			return covered, err
 		}
@@ -252,13 +338,16 @@ func (l *Log) indexEventIDsThrough(ctx context.Context, source jetstream.Stream,
 // for unindexed history when no append has woken it.
 const eventIDIndexerInterval = 5 * time.Second
 
-// The background indexer wakes every eventIDIndexerKickEvery appends and
-// indexes only once the projection is more than eventIDIndexerLag events
-// behind: half of what one lookup catches up on its own. Under ordinary
-// traffic the lookups keep the projection current and the indexer does no
-// work (waking it on every append cost a served issuance about 5 ms and the
-// issuance SLO its throughput floor); after a burst no lookup touched, the
-// lag stays inside one lookup's bound.
+// Authenticated federation readers cannot write the producer's first-ID index.
+// Keep every signed event visible to those readers within the federation RPO.
+const eventIDIndexerAuthenticatedInterval = 500 * time.Millisecond
+
+// Without event authentication, the background indexer wakes every
+// eventIDIndexerKickEvery appends and indexes only once the projection is
+// eventIDIndexerLag events behind. Authenticated federation readers cannot
+// advance the producer's index, so their producer indexes each new event on
+// a short timer. The timer performs bounded pages on its own worker and never
+// blocks an append.
 const (
 	eventIDIndexerKickEvery = 128
 	eventIDIndexerLag       = eventIDIndexReadLimit / 2
@@ -272,7 +361,11 @@ func (l *Log) startEventIDIndexer() {
 	l.idIndexDone = make(chan struct{})
 	go func() {
 		defer close(l.idIndexDone)
-		ticker := time.NewTicker(eventIDIndexerInterval)
+		interval := eventIDIndexerInterval
+		if l.eventAuth != nil {
+			interval = eventIDIndexerAuthenticatedInterval
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -315,7 +408,11 @@ func (l *Log) stopEventIDIndexer() {
 // lock, so a lookup or a history rewrite never waits behind a long catch-up.
 func (l *Log) catchUpEventIDIndex(ctx context.Context) error {
 	covered, head, err := l.EventIDIndexCovered(ctx)
-	if err != nil || head < covered+eventIDIndexerLag {
+	lag := eventIDIndexerLag
+	if l.eventAuth != nil {
+		lag = 1
+	}
+	if err != nil || head < covered+lag {
 		return err
 	}
 	for ctx.Err() == nil {
@@ -348,7 +445,7 @@ func (l *Log) EventIDIndexCovered(ctx context.Context) (covered, head uint64, er
 		if err != nil {
 			return err
 		}
-		covered, _, err = readEventIDCursor(readCtx, index, epoch)
+		covered, _, err = readEventIDCursor(readCtx, index, epoch, l.eventAuth)
 		return err
 	})
 	return covered, head, err
@@ -376,7 +473,7 @@ func (l *Log) indexEventIDPage(ctx context.Context) (bool, error) {
 		if err != nil {
 			return err
 		}
-		covered, _, err := readEventIDCursor(readCtx, index, epoch)
+		covered, _, err := readEventIDCursor(readCtx, index, epoch, l.eventAuth)
 		if err != nil {
 			return err
 		}
@@ -410,7 +507,7 @@ func (l *Log) warmEventIDIndex(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			covered, _, err := readEventIDCursor(readCtx, index, epoch)
+			covered, _, err := readEventIDCursor(readCtx, index, epoch, l.eventAuth)
 			if err != nil {
 				return err
 			}

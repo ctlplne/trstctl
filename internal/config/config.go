@@ -220,15 +220,16 @@ type Federation struct {
 
 // FederationPeer is one source cluster this cluster imports from.
 type FederationPeer struct {
-	ID                  string `json:"id,omitempty"`
-	Region              string `json:"region,omitempty"`
-	NATSURL             string `json:"nats_url,omitempty"`
-	NATSTLSCAFile       string `json:"nats_tls_ca_file,omitempty"`
-	NATSCredentialsFile string `json:"nats_credentials_file,omitempty"`
-	NATSNKeySeedFile    string `json:"nats_nkey_seed_file,omitempty"`
-	NATSTLSCertFile     string `json:"nats_tls_cert_file,omitempty"`
-	NATSTLSKeyFile      string `json:"nats_tls_key_file,omitempty"`
-	AllowPlaintextDev   bool   `json:"allow_plaintext_dev,omitempty"`
+	ID                   string `json:"id,omitempty"`
+	Region               string `json:"region,omitempty"`
+	NATSURL              string `json:"nats_url,omitempty"`
+	NATSTLSCAFile        string `json:"nats_tls_ca_file,omitempty"`
+	NATSCredentialsFile  string `json:"nats_credentials_file,omitempty"`
+	NATSNKeySeedFile     string `json:"nats_nkey_seed_file,omitempty"`
+	NATSEventAuthKeyFile string `json:"nats_event_auth_key_file,omitempty"`
+	NATSTLSCertFile      string `json:"nats_tls_cert_file,omitempty"`
+	NATSTLSKeyFile       string `json:"nats_tls_key_file,omitempty"`
+	AllowPlaintextDev    bool   `json:"allow_plaintext_dev,omitempty"`
 }
 
 // PCAS configures optional workers for core credential algorithm succession.
@@ -1660,6 +1661,7 @@ type NATS struct {
 	TLSKeyFile        string `json:"tls_key_file,omitempty"`
 	CredentialsFile   string `json:"credentials_file,omitempty"`
 	NKeySeedFile      string `json:"nkey_seed_file,omitempty"`
+	EventAuthKeyFile  string `json:"event_auth_key_file,omitempty"`
 	AllowPlaintextDev bool   `json:"allow_plaintext_dev,omitempty"`
 
 	// Replicas is the JetStream replication factor for the event stream — the
@@ -4148,6 +4150,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_TLS_CA_FILE", &peer.NATSTLSCAFile)
 	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_CREDENTIALS_FILE", &peer.NATSCredentialsFile)
 	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_NKEY_SEED_FILE", &peer.NATSNKeySeedFile)
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_EVENT_AUTH_KEY_FILE", &peer.NATSEventAuthKeyFile)
 	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_TLS_CERT_FILE", &peer.NATSTLSCertFile)
 	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_TLS_KEY_FILE", &peer.NATSTLSKeyFile)
 	setBool(getenv, "TRSTCTL_FEDERATION_PEER_ALLOW_PLAINTEXT_DEV", &peer.AllowPlaintextDev)
@@ -4296,6 +4299,7 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setString(getenv, "TRSTCTL_NATS_TLS_KEY_FILE", &c.NATS.TLSKeyFile)
 	setString(getenv, "TRSTCTL_NATS_CREDENTIALS_FILE", &c.NATS.CredentialsFile)
 	setString(getenv, "TRSTCTL_NATS_NKEY_SEED_FILE", &c.NATS.NKeySeedFile)
+	setString(getenv, "TRSTCTL_NATS_EVENT_AUTH_KEY_FILE", &c.NATS.EventAuthKeyFile)
 	setBool(getenv, "TRSTCTL_NATS_ALLOW_PLAINTEXT_DEV", &c.NATS.AllowPlaintextDev)
 	setString(getenv, "TRSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
 	setInt(getenv, "TRSTCTL_NATS_REPLICAS", &c.NATS.Replicas)
@@ -6542,7 +6546,7 @@ func validateFederationConfig(c *Config) []error {
 			errs = append(errs, fmt.Errorf("federation.peers[%d].nats_url is required", i))
 		} else if err := (NATS{Mode: NATSExternal, URL: peer.NATSURL,
 			TLSCAFile: peer.NATSTLSCAFile, CredentialsFile: peer.NATSCredentialsFile,
-			NKeySeedFile: peer.NATSNKeySeedFile, TLSCertFile: peer.NATSTLSCertFile,
+			NKeySeedFile: peer.NATSNKeySeedFile, EventAuthKeyFile: peer.NATSEventAuthKeyFile, TLSCertFile: peer.NATSTLSCertFile,
 			TLSKeyFile: peer.NATSTLSKeyFile, AllowPlaintextDev: peer.AllowPlaintextDev}).ValidateExternalSecurity(); err != nil {
 			errs = append(errs, fmt.Errorf("federation.peers[%d]: %w", i, err))
 		}

@@ -153,9 +153,14 @@ directory or into the restored data directory.
 export TRSTCTL_POSTGRES_DSN='postgres://trstctl:<password>@restore-db:5432/trstctl?sslmode=require'
 export TRSTCTL_NATS_URL='tls://restore-nats:4222'
 export TRSTCTL_NATS_NKEY_SEED_FILE=/etc/trstctl/nats/nkey.seed
+export TRSTCTL_NATS_EVENT_AUTH_KEY_FILE=/etc/trstctl/nats/event-auth.key
 export TRSTCTL_SECRETS_KEK_FILE=/etc/trstctl/kek/kek.bin
 install -m 0400 /secure/restored-kek.bin "$TRSTCTL_SECRETS_KEK_FILE"
 ```
+
+Restore the same 32-byte NATS event authentication key that protected the
+source stream to `TRSTCTL_NATS_EVENT_AUTH_KEY_FILE`. A fresh random key cannot
+verify the backed-up event envelopes; the restore will refuse them.
 
 Run config validation before restore so a path typo fails before any data is
 imported:

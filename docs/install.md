@@ -108,10 +108,11 @@ helm install trstctl deploy/helm/trstctl \
 ```
 
 Create `trstctl-nats-auth` in the namespace with the NATS client `nkey.seed`
-file before installing. Configure the broker to trust that public NKey and to
-require TLS. The chart mounts the seed from the Secret; never put credentials
-in `nats.url`. For a private broker CA, add its PEM to the Secret and set
-`nats.caKey=ca.crt`.
+and a stable random 32-byte `event-auth.key` before installing. Keep a separate
+recovery copy of the event key; the broker must not receive it. Configure the
+broker to trust the public NKey and require TLS. The chart mounts the seed from
+the Secret; never put credentials in `nats.url`. For a private broker CA, add
+its PEM to the Secret and set `nats.caKey=ca.crt`.
 
 For a single-replica evaluation only, the co-resident authorizer is an explicit
 weaker topology. It is accepted only together with single-replica NATS:

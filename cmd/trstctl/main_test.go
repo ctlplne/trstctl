@@ -661,7 +661,9 @@ func TestRun_CheckConfigExternalTargets(t *testing.T) {
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://trstctl:s3cretpw@db.example.com:5432/trstctl?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
-		"TRSTCTL_NATS_URL":                            "nats://nats.example.com:4222",
+		"TRSTCTL_NATS_URL":                            "tls://nats.example.com:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE":                 "/run/secrets/test-nats.seed",
+		"TRSTCTL_NATS_EVENT_AUTH_KEY_FILE":            "/run/secrets/test-event-auth.key",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 	})

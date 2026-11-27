@@ -462,6 +462,7 @@ export TRSTCTL_FEDERATION_PEER_ID=us-east-primary
 export TRSTCTL_FEDERATION_PEER_REGION=us-east-1
 export TRSTCTL_FEDERATION_PEER_NATS_URL=tls://nats.us-east.example:4222
 export TRSTCTL_FEDERATION_PEER_NATS_NKEY_SEED_FILE=/etc/trstctl/federation/nkey.seed
+export TRSTCTL_FEDERATION_PEER_NATS_EVENT_AUTH_KEY_FILE=/etc/trstctl/federation/event-auth.key
 export TRSTCTL_FEDERATION_INTERVAL=1s
 export TRSTCTL_FEDERATION_RPO=5s
 export TRSTCTL_FEDERATION_RTO=30s

@@ -17,6 +17,7 @@ func TestC0012ExternalNATSRequiresTLSAndOutOfBandIdentity(t *testing.T) {
 	base.NATS.URL = "nats://broker.example:4222"
 	base.NATS.Replicas = 3
 	base.NATS.NKeySeedFile = "/run/secrets/nats.seed"
+	base.NATS.EventAuthKeyFile = "/run/secrets/event-auth.key"
 	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "tls://") {
 		t.Fatalf("plaintext external NATS was accepted: %v", err)
 	}
@@ -34,6 +35,11 @@ func TestC0012ExternalNATSRequiresTLSAndOutOfBandIdentity(t *testing.T) {
 	if err := base.Validate(); err != nil {
 		t.Fatalf("TLS plus NKey seed file was refused: %v", err)
 	}
+	base.NATS.EventAuthKeyFile = ""
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "event_auth_key_file") {
+		t.Fatalf("production external NATS without event authentication was accepted: %v", err)
+	}
+	base.NATS.EventAuthKeyFile = "/run/secrets/event-auth.key"
 	base.NATS.URL = "nats://broker.example:4222"
 	base.NATS.AllowPlaintextDev = true
 	if err := base.Validate(); err != nil {

@@ -177,6 +177,7 @@ services:
       TRSTCTL_NATS_MODE: external
       TRSTCTL_NATS_URL: "nats://nats:4222"
       TRSTCTL_NATS_NKEY_SEED_FILE: /data/natsauth/nats.seed
+      TRSTCTL_NATS_EVENT_AUTH_KEY_FILE: /data/natsauth/event-auth.key
       TRSTCTL_NATS_ALLOW_PLAINTEXT_DEV: "true"
       # EVAL ONLY — this Compose stack is a single NATS server, so it explicitly
       # opts into one JetStream replica. Production external NATS must stay

@@ -19,6 +19,7 @@ import (
 
 	"trstctl.com/trstctl/internal/codesigningref"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/eventauth"
 	"trstctl.com/trstctl/internal/privacyref"
 )
 
@@ -1738,6 +1739,10 @@ func TestPseudonymizeSubjectEmptyStreamStillPreparesAgainstActiveGeneration(t *t
 
 func TestPseudonymizeSubjectExternalPreparationReadsFrozenCanonicalGeneration(t *testing.T) {
 	ctx := context.Background()
+	authPath := t.TempDir() + "/event-auth.key"
+	if err := eventauth.Provision(authPath); err != nil {
+		t.Fatal(err)
+	}
 	const (
 		tenantID = "11111111-1111-1111-1111-111111111111"
 		subject  = "alice@example.com"
@@ -1745,7 +1750,7 @@ func TestPseudonymizeSubjectExternalPreparationReadsFrozenCanonicalGeneration(t 
 	)
 	coordinator := newPrivacyPreparationTestCoordinator()
 	log, err := openFixture(ctx, config.NATS{
-		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), EventAuthKeyFile: authPath,
 	},
 		WithHistoryRewriteCoordinator(coordinator),
 		WithHistoryRewriteContinuityVerifier(rewriteTestContinuityVerifier),

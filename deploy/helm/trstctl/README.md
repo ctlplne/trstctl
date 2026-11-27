@@ -64,7 +64,7 @@ helm install trstctl deploy/helm/trstctl \
 ```
 
 Before installing, create `trstctl-nats-auth` in that namespace with a
-`nkey.seed` key (or select `nats.identity=credentials` with `user.creds`, or
+`nkey.seed` and `event-auth.key` keys (or select `nats.identity=credentials` with `user.creds`, or
 `nats.identity=mtls` with `tls.crt` and `tls.key`). Authorize that client on the
 broker and require server-authenticated TLS there. The URL contains no secret;
 the chart mounts the identity read-only from the Secret. Set `nats.caKey=ca.crt`

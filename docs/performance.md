@@ -135,6 +135,7 @@ PERF/RUNOPS can run the same harness against external capacity profiles:
 export TRSTCTL_POSTGRES_DSN='postgres://trstctl:...@perf-db:5432/trstctl?sslmode=require'
 export TRSTCTL_NATS_URL='tls://perf-nats:4222'
 export TRSTCTL_NATS_NKEY_SEED_FILE=/etc/trstctl/nats/nkey.seed
+export TRSTCTL_NATS_EVENT_AUTH_KEY_FILE=/etc/trstctl/nats/event-auth.key
 export TRSTCTL_NATS_REPLICAS=3
 SPINE_BURST_PROFILE=cap-medium make spine-burst
 SPINE_BURST_PROFILE=cap-large make spine-burst

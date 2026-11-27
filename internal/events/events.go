@@ -20,6 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/eventauth"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/eventprotect"
 	"trstctl.com/trstctl/internal/eventspec"
@@ -87,6 +88,7 @@ type storedEvent struct {
 	Actor                *Actor                      `json:"actor,omitempty"`
 	Protection           *eventspec.ProtectedPayload `json:"protection,omitempty"`
 	PayloadSchemaVersion int                         `json:"payload_v,omitempty"`
+	Authentication       []byte                      `json:"auth,omitempty"`
 }
 
 // EnvelopeDecodeError identifies a malformed event-log record before it can
@@ -165,6 +167,7 @@ type Log struct {
 	// discovers an unsupported schema only after the mutation was accepted.
 	requirePrivacyEventPolicies bool
 	eventProtection             *EventProtection
+	eventAuth                   *eventauth.File
 	// rejectLegacySchedulerRuns is installed only after startup sanitation. It
 	// closes every normal live/federated ingress path while the restore-only path
 	// remains able to stage an authenticated pre-patch artifact for sanitation.
@@ -375,6 +378,13 @@ func WithAppendObserver(observe func(time.Duration)) OpenOption {
 // Open opens the event log according to cfg and ensures one active generation
 // owns events.>. opts is variadic to keep existing callers source-compatible.
 func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error) {
+	var authenticator *eventauth.File
+	if cfg.EventAuthKeyFile != "" {
+		authenticator = &eventauth.File{Path: cfg.EventAuthKeyFile}
+		if err := authenticator.Validate(); err != nil {
+			return nil, fmt.Errorf("events: event authentication key: %w", err)
+		}
+	}
 	var (
 		srv *natsserver.Server
 		nc  *nats.Conn
@@ -397,7 +407,7 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: jetstream: %w", err)
 	}
-	l := &Log{srv: srv, nc: nc, js: js, mode: cfg.Mode, duplicateWindow: eventDedupWindow}
+	l := &Log{srv: srv, nc: nc, js: js, mode: cfg.Mode, duplicateWindow: eventDedupWindow, eventAuth: authenticator}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(l)
@@ -453,6 +463,13 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 // federation. It does not create or mutate the peer stream; it just connects to the
 // already-running peer's JetStream and returns a Log value that can Replay/Close it.
 func OpenExternalSource(ctx context.Context, cfg config.NATS) (*Log, error) {
+	var authenticator *eventauth.File
+	if cfg.EventAuthKeyFile != "" {
+		authenticator = &eventauth.File{Path: cfg.EventAuthKeyFile}
+		if err := authenticator.Validate(); err != nil {
+			return nil, fmt.Errorf("events: external source authentication key: %w", err)
+		}
+	}
 	nc, err := dialExternalNATS(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("events: connect external source: %w", err)
@@ -472,7 +489,7 @@ func OpenExternalSource(ctx context.Context, cfg config.NATS) (*Log, error) {
 		shutdown(nil, nc)
 		return nil, fmt.Errorf("events: open external source stream %q: %w", name, err)
 	}
-	return &Log{nc: nc, js: js, stream: stream, activeName: name, mode: config.NATSExternal}, nil
+	return &Log{nc: nc, js: js, stream: stream, activeName: name, mode: config.NATSExternal, eventAuth: authenticator}, nil
 }
 
 // jsErrCodeStreamReplicasNotSupported is JetStream's error_code for "replicas > 1
@@ -746,7 +763,7 @@ func (l *Log) publishPreparedEvent(ctx context.Context, e Event) (Event, error) 
 	if err != nil {
 		return Event{}, err
 	}
-	payload, err := json.Marshal(stored)
+	payload, err := l.marshalStored(stored)
 	if err != nil {
 		return Event{}, err
 	}
@@ -844,7 +861,7 @@ func (l *Log) PreflightAppendCapacity(e Event) error {
 	if err != nil {
 		return err
 	}
-	payload, err := json.Marshal(stored)
+	payload, err := l.marshalStored(stored)
 	if err != nil {
 		return err
 	}
@@ -868,7 +885,7 @@ func (l *Log) acknowledgedCanonicalRaw(ctx context.Context, streamName string,
 	if err != nil {
 		return Event{}, "", fmt.Errorf("events: read acknowledged canonical event: %w", err)
 	}
-	canonical, err := decodeStored(raw.Data, raw.Sequence)
+	canonical, err := l.decodeStored(raw.Data, raw.Sequence)
 	if err != nil {
 		return Event{}, "", err
 	}
@@ -945,7 +962,7 @@ func (l *Log) rawEventByIDPinned(ctx context.Context, eventID string) (Event, bo
 			l.idIndexMu.Unlock()
 			return err
 		}
-		covered, _, err := readEventIDCursor(ctx, index, epoch)
+		covered, _, err := readEventIDCursor(ctx, index, epoch, l.eventAuth)
 		if err != nil {
 			l.idIndexMu.Unlock()
 			return err
@@ -971,7 +988,7 @@ func (l *Log) rawEventByIDPinned(ctx context.Context, eventID string) (Event, bo
 			l.idIndexMu.Unlock()
 			return fmt.Errorf("%w: covered %d of %d", ErrEventIDIndexBehind, covered, head)
 		}
-		entry, _, indexed, err := readEventIDEntry(ctx, index, epoch, eventID)
+		entry, _, indexed, err := readEventIDEntry(ctx, index, epoch, eventID, l.eventAuth)
 		l.idIndexMu.Unlock()
 		if err != nil {
 			return err
@@ -990,7 +1007,7 @@ func (l *Log) rawEventByIDPinned(ctx context.Context, eventID string) (Event, bo
 			if crypto.SHA256Hex(raw.Data) != entry.Digest {
 				return errors.New("events: indexed canonical envelope differs from retained source")
 			}
-			canonical, err = decodeStored(raw.Data, entry.Sequence)
+			canonical, err = l.decodeStored(raw.Data, entry.Sequence)
 			if err != nil {
 				return err
 			}
@@ -1003,7 +1020,7 @@ func (l *Log) rawEventByIDPinned(ctx context.Context, eventID string) (Event, bo
 		if err != nil {
 			return err
 		}
-		if !appendOnlySince(state, after) || eventIDSourceEpoch(state) != eventIDSourceEpoch(after) {
+		if !appendOnlySince(state, after) || l.eventIDIndexEpoch(state) != l.eventIDIndexEpoch(after) {
 			return ErrGenerationChanged
 		}
 		if entry.Conflict {
@@ -1043,8 +1060,11 @@ func (l *Log) EventAtSequence(ctx context.Context, sequence uint64) (Event, bool
 		if err != nil {
 			return fmt.Errorf("events: get seq %d: %w", sequence, err)
 		}
-		event, err = decodeStored(raw.Data, raw.Sequence)
+		event, err = l.decodeStored(raw.Data, raw.Sequence)
 		if err != nil {
+			return err
+		}
+		if err := l.verifyAuthenticatedPosition(readCtx, event); err != nil {
 			return err
 		}
 		event, err = l.openProtectedEvent(readCtx, event)
@@ -1156,12 +1176,15 @@ func (l *Log) replayResolved(
 		from = 1
 	}
 	if err := readRetainedEventsThrough(ctx, stream, from, through, func(event Event) error {
+		if err := l.verifyAuthenticatedPosition(ctx, event); err != nil {
+			return err
+		}
 		opened, err := l.openProtectedEvent(ctx, event)
 		if err != nil {
 			return err
 		}
 		return fn(opened)
-	}); err != nil {
+	}, l.decodeStored); err != nil {
 		return err
 	}
 	current, err := l.activeStreamName(ctx)
@@ -1282,7 +1305,7 @@ func (l *Log) PruneTenantThroughCheckpoint(
 				if err != nil {
 					return fmt.Errorf("events: inspect retention seq %d: %w", seq, err)
 				}
-				event, err := decodeStored(raw.Data, raw.Sequence)
+				event, err := l.decodeStored(raw.Data, raw.Sequence)
 				if err != nil {
 					return fmt.Errorf("events: decode retention seq %d: %w", seq, err)
 				}
@@ -1663,10 +1686,14 @@ func (l *Log) tailFrom(
 						_ = msg.Nak()
 						return fmt.Errorf("events: tail metadata: %w", metadataErr)
 					}
-					ev, decodeErr := decodeStored(msg.Data(), md.Sequence.Stream)
+					ev, decodeErr := l.decodeStored(msg.Data(), md.Sequence.Stream)
 					if decodeErr != nil {
 						_ = msg.Nak()
 						return decodeErr
+					}
+					if err := l.verifyAuthenticatedPosition(readCtx, ev); err != nil {
+						_ = msg.Nak()
+						return err
 					}
 					ev, decodeErr = l.openProtectedEvent(readCtx, ev)
 					if decodeErr != nil {

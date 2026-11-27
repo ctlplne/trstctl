@@ -875,6 +875,7 @@ func TestProductionSignerAuthTokenCommandRendersLoadableConfig(t *testing.T) {
 	// The Deployment mounts this Secret-backed identity as an env var; the
 	// ConfigMap deliberately does not carry the private seed path or material.
 	env["TRSTCTL_NATS_NKEY_SEED_FILE"] = "/etc/trstctl/nats/nkey.seed"
+	env["TRSTCTL_NATS_EVENT_AUTH_KEY_FILE"] = "/etc/trstctl/nats/event-auth.key"
 	cfg, err := config.Load(func(key string) string { return env[key] })
 	if err != nil {
 		t.Fatalf("rendered production signer token config should load: %v", err)

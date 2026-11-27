@@ -3688,8 +3688,9 @@ func TestSCIMProvisioningIsServedAndDisclosed(t *testing.T) {
 		}
 	}
 	server := read(t, "../internal/server/server.go")
-	if !strings.Contains(server, `mux.Handle("/scim/", apiHandler)`) {
-		t.Error("internal/server/server.go should forward /scim/ to the served API handler")
+	if !strings.Contains(server, `mux.Handle("/scim/", publicHandler)`) ||
+		!strings.Contains(server, `publicHandler := publicLimit.wrap(bulkheadHandler(s.bulk, bulkhead.SubsystemPublicHTTP, a))`) {
+		t.Error("internal/server/server.go should forward /scim/ to the served API through its bounded public HTTP pool")
 	}
 	if !strings.Contains(read(t, "../ee/enterpriseauth/scim_config.go"), "buildSCIMConfig") {
 		t.Error("ee/enterpriseauth/scim_config.go should load tenant-bound SCIM token files")

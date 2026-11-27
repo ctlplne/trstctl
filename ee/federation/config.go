@@ -54,7 +54,7 @@ func ConfigFromConfig(ctx context.Context, cfg config.Federation) (Config, error
 		source, err := events.OpenExternalSource(ctx, config.NATS{
 			Mode: config.NATSExternal, URL: p.NATSURL,
 			TLSCAFile: p.NATSTLSCAFile, CredentialsFile: p.NATSCredentialsFile,
-			NKeySeedFile: p.NATSNKeySeedFile, TLSCertFile: p.NATSTLSCertFile,
+			NKeySeedFile: p.NATSNKeySeedFile, EventAuthKeyFile: p.NATSEventAuthKeyFile, TLSCertFile: p.NATSTLSCertFile,
 			TLSKeyFile: p.NATSTLSKeyFile, AllowPlaintextDev: p.AllowPlaintextDev,
 		})
 		if err != nil {

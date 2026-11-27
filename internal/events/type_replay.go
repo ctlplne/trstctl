@@ -93,7 +93,7 @@ func (l *Log) replayTypesThrough(ctx context.Context, tenantID string, from, thr
 					break
 				}
 				cursor := &cursors[pick]
-				event, err := decodeStored(cursor.raw.Data, cursor.raw.Sequence)
+				event, err := l.decodeStored(cursor.raw.Data, cursor.raw.Sequence)
 				if err != nil {
 					return err
 				}
@@ -101,6 +101,9 @@ func (l *Log) replayTypesThrough(ctx context.Context, tenantID string, from, thr
 					return fmt.Errorf("events: typed replay subject and retained envelope differ at sequence %d", event.Sequence)
 				}
 				if (tenantID == "" || event.TenantID == tenantID) && seen[event.Type] {
+					if err := l.verifyAuthenticatedPosition(ctx, event); err != nil {
+						return err
+					}
 					event, err = l.openProtectedEvent(ctx, event)
 					if err != nil {
 						return err

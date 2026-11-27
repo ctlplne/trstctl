@@ -164,7 +164,7 @@ func (l *Log) indexTenantEventsThrough(ctx context.Context, source jetstream.Str
 		from = state.FirstSequence
 	}
 	err = readRetainedThrough(ctx, source, from, through, func(raw *jetstream.RawStreamMsg) error {
-		event, err := decodeStored(raw.Data, raw.Sequence)
+		event, err := l.decodeStored(raw.Data, raw.Sequence)
 		if err != nil {
 			return err
 		}
@@ -316,12 +316,15 @@ func (l *Log) ReplayTenantThrough(ctx context.Context, tenantID string, from, th
 					if crypto.SHA256Hex(rawSource.Data) != entry.Digest {
 						return errors.New("events: tenant projection differs from retained source")
 					}
-					event, err := decodeStored(rawSource.Data, entry.SourceSequence)
+					event, err := l.decodeStored(rawSource.Data, entry.SourceSequence)
 					if err != nil {
 						return err
 					}
 					if normalizedTenantScope(event.TenantID) != tenantID {
 						return errors.New("events: tenant projection selected a different tenant")
+					}
+					if err := l.verifyAuthenticatedPosition(readCtx, event); err != nil {
+						return err
 					}
 					event, err = l.openProtectedEvent(readCtx, event)
 					if err != nil {

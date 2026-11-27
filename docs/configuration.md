@@ -124,6 +124,7 @@ data directory. The socket directory is removed after a clean stop.
 | `TRSTCTL_NATS_TLS_CA_FILE` | — | Optional private CA bundle for the broker TLS certificate. |
 | `TRSTCTL_NATS_TLS_CERT_FILE`, `TRSTCTL_NATS_TLS_KEY_FILE` | — | Client certificate and key for mTLS; both paths are required together. |
 | `TRSTCTL_NATS_CREDENTIALS_FILE`, `TRSTCTL_NATS_NKEY_SEED_FILE` | — | Exactly one client identity file for external NATS, unless mTLS is used. Mount it as a protected Secret. |
+| `TRSTCTL_NATS_EVENT_AUTH_KEY_FILE` | — | Stable 32-byte event-envelope MAC key, separate from the broker identity. Required for production external NATS; all control-plane replicas and trusted federation readers need the same key. Losing it makes retained events unreadable. |
 | `TRSTCTL_NATS_ALLOW_PLAINTEXT_DEV` | `false` | Explicit evaluation escape hatch for a plaintext or anonymous external broker. Never enable in production. |
 | `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore. |
 | `TRSTCTL_NATS_REPLICAS` | `3` in external, `1` embedded | Required JetStream replicas for the source-of-truth event stream. External startup/readiness fail if NATS cannot honor the requested count. |
@@ -142,8 +143,24 @@ export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmo
 export TRSTCTL_NATS_MODE=external
 export TRSTCTL_NATS_URL='tls://nats.internal:4222'
 export TRSTCTL_NATS_NKEY_SEED_FILE=/etc/trstctl/nats/nkey.seed
+export TRSTCTL_NATS_EVENT_AUTH_KEY_FILE=/etc/trstctl/nats/event-auth.key
 export TRSTCTL_NATS_REPLICAS=3
 ```
+
+Create the event authentication key once, outside the broker, with 32 random
+bytes and owner-only file permissions. For example, run
+`(umask 077; openssl rand -out /etc/trstctl/nats/event-auth.key 32)` on a
+trusted provisioning host, then place the same key in the control-plane Secret
+for every replica. Keep a separately protected recovery copy with the datastore
+backup. The NATS broker needs the client identity, but must never receive this
+event key. A key change makes old events fail authentication.
+
+An existing stream written before event authentication has unsigned history.
+Adding a new key to that stream makes startup stop at the first unsigned event;
+it does not rewrite or delete the history. Do not switch a live cluster to the
+new key until a trusted-history migration is prepared. Review and preserve an
+independently verified backup of the old stream first: applying a MAC to
+unreviewed old history would give any prior forgery a false seal of trust.
 
 When a mode is `external`, its connection string is mandatory; trstctl refuses to
 start without it. PostgreSQL TLS checks the peer's CA chain against `sslrootcert`
@@ -5664,7 +5681,7 @@ environment variables override file values, which override defaults.
 {
   "server": { "addr": ":8443" },
   "postgres": { "mode": "external", "dsn": "postgres://..." },
-  "nats": { "mode": "external", "url": "tls://nats.internal:4222", "nkey_seed_file": "/etc/trstctl/nats/nkey.seed" },
+  "nats": { "mode": "external", "url": "tls://nats.internal:4222", "nkey_seed_file": "/etc/trstctl/nats/nkey.seed", "event_auth_key_file": "/etc/trstctl/nats/event-auth.key" },
   "telemetry": { "enabled": false, "instance_id_file": "data/telemetry/instance-id" }
 }
 ```

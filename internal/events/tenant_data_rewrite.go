@@ -326,14 +326,15 @@ type TenantDataAuditView struct {
 	Report TenantDataRewriteReport
 	source jetstream.Stream
 	target jetstream.Stream
+	decode func([]byte, uint64) (Event, error)
 }
 
 func (v TenantDataAuditView) ReplaySource(ctx context.Context, fn func(Event) error) error {
-	return replayStreamThrough(ctx, v.source, v.Report.SourceCutSequence, fn)
+	return replayStreamThrough(ctx, v.source, v.Report.SourceCutSequence, fn, v.decode)
 }
 
 func (v TenantDataAuditView) ReplayTarget(ctx context.Context, fn func(Event) error) error {
-	return replayStreamThrough(ctx, v.target, v.Report.SourceCutSequence, fn)
+	return replayStreamThrough(ctx, v.target, v.Report.SourceCutSequence, fn, v.decode)
 }
 
 // TenantDataAuditContinuityProvider supplies the current retention seed while the
@@ -936,7 +937,7 @@ func (l *Log) rewriteStoredGeneration(
 				}
 				proceeded = true
 				auditView := TenantDataAuditView{
-					Report: report, source: source, target: target,
+					Report: report, source: source, target: target, decode: l.decodeStored,
 				}
 				checkpoint, err := opts.audit(ctx, auditView)
 				if err != nil {
@@ -1145,12 +1146,15 @@ func (l *Log) copyRewriteMessage(
 	validate storedEventPairValidator,
 ) (bool, error) {
 	if existing, err := target.GetMsg(ctx, sourceRaw.Sequence); err == nil {
-		return validateRewritePair(sourceRaw, existing, validate)
+		return l.validateRewritePair(sourceRaw, existing, validate)
 	} else if !errors.Is(err, jetstream.ErrMsgNotFound) {
 		return false, fmt.Errorf("events: read staged seq %d: %w", sourceRaw.Sequence, err)
 	}
 
 	var sourceEvent storedEvent
+	if err := l.authenticateStored(sourceRaw.Data, sourceRaw.Sequence); err != nil {
+		return false, err
+	}
 	if err := json.Unmarshal(sourceRaw.Data, &sourceEvent); err != nil {
 		return false, fmt.Errorf("events: decode rewrite source seq %d: %w", sourceRaw.Sequence, err)
 	}
@@ -1176,6 +1180,10 @@ func (l *Log) copyRewriteMessage(
 		if err != nil {
 			return false, fmt.Errorf("events: rewrite transformed event %q envelope: %w", sourceEvent.ID, err)
 		}
+		targetData, err = l.resignStored(targetData)
+		if err != nil {
+			return false, fmt.Errorf("events: authenticate transformed event %q: %w", sourceEvent.ID, err)
+		}
 	}
 
 	publishOpts := []jetstream.PublishOpt{
@@ -1188,7 +1196,7 @@ func (l *Log) copyRewriteMessage(
 	)
 	if err != nil {
 		if existing, getErr := target.GetMsg(ctx, sourceRaw.Sequence); getErr == nil {
-			return validateRewritePair(sourceRaw, existing, validate)
+			return l.validateRewritePair(sourceRaw, existing, validate)
 		}
 		return false, fmt.Errorf("events: stage rewrite seq %d: %w", sourceRaw.Sequence, err)
 	}
@@ -1278,7 +1286,7 @@ func (l *Log) reconcileAndReport(
 		if targetErr != nil {
 			return TenantDataRewriteReport{}, fmt.Errorf("events: reconcile target seq %d: %w", seq, targetErr)
 		}
-		wasChanged, err := validateRewritePair(sourceRaw, targetRaw, validate)
+		wasChanged, err := l.validateRewritePair(sourceRaw, targetRaw, validate)
 		if err != nil {
 			return TenantDataRewriteReport{}, err
 		}
@@ -1376,10 +1384,16 @@ func rewriteInvariantFor(raw *jetstream.RawStreamMsg) (rewriteInvariant, error) 
 	}, nil
 }
 
-func validateRewritePair(
+func (l *Log) validateRewritePair(
 	sourceRaw, targetRaw *jetstream.RawStreamMsg,
 	validate storedEventPairValidator,
 ) (bool, error) {
+	if err := l.authenticateStored(sourceRaw.Data, sourceRaw.Sequence); err != nil {
+		return false, err
+	}
+	if err := l.authenticateStored(targetRaw.Data, targetRaw.Sequence); err != nil {
+		return false, err
+	}
 	beforeInvariant, err := rewriteInvariantFor(sourceRaw)
 	if err != nil {
 		return false, err
@@ -1409,6 +1423,9 @@ func validateRewritePair(
 	if err := json.Unmarshal(targetRaw.Data, &after); err != nil {
 		return false, err
 	}
+	// The MAC changes when an authorized privacy rewrite changes the payload.
+	// Pair validators compare the event meaning, after both raw tags are checked.
+	before.Authentication, after.Authentication = nil, nil
 	if err := validate(before, after); err != nil {
 		return false, fmt.Errorf("events: validate staged pair event %q: %w", before.ID, err)
 	}
@@ -1416,6 +1433,10 @@ func validateRewritePair(
 		exact, err := RewriteStoredEnvelopeDataExact(sourceRaw.Data, before.Data, after.Data)
 		if err != nil {
 			return false, fmt.Errorf("events: reconstruct exact staged pair event %q: %w", before.ID, err)
+		}
+		exact, err = l.resignStored(exact)
+		if err != nil {
+			return false, err
 		}
 		if !bytes.Equal(exact, targetRaw.Data) {
 			return false, fmt.Errorf(
@@ -1472,13 +1493,13 @@ func deriveAuditContinuity(
 	checkpoint TenantDataAuditCheckpoint,
 ) (TenantDataAuditContinuity, error) {
 	sourceRecords, err := auditRecordsForGeneration(
-		ctx, view.source, view.Report.TenantID, view.Report.SourceCutSequence, checkpoint,
+		ctx, view.source, view.Report.TenantID, view.Report.SourceCutSequence, checkpoint, view.decode,
 	)
 	if err != nil {
 		return TenantDataAuditContinuity{}, err
 	}
 	targetRecords, err := auditRecordsForGeneration(
-		ctx, view.target, view.Report.TenantID, view.Report.SourceCutSequence, checkpoint,
+		ctx, view.target, view.Report.TenantID, view.Report.SourceCutSequence, checkpoint, view.decode,
 	)
 	if err != nil {
 		return TenantDataAuditContinuity{}, err
@@ -1502,7 +1523,12 @@ func auditRecordsForGeneration(
 	tenantID string,
 	last uint64,
 	checkpoint TenantDataAuditCheckpoint,
+	authenticated ...func([]byte, uint64) (Event, error),
 ) ([]auditchain.Record, error) {
+	decode := decodeStored
+	if len(authenticated) != 0 && authenticated[0] != nil {
+		decode = authenticated[0]
+	}
 	first := checkpoint.BoundarySequence + 1
 	if first == 0 {
 		first = 1
@@ -1517,7 +1543,7 @@ func auditRecordsForGeneration(
 		if err != nil {
 			return nil, fmt.Errorf("events: read audit generation seq %d: %w", seq, err)
 		}
-		event, err := decodeStored(raw.Data, raw.Sequence)
+		event, err := decode(raw.Data, raw.Sequence)
 		if err != nil {
 			return nil, err
 		}
@@ -1539,7 +1565,12 @@ func replayStreamThrough(
 	stream jetstream.Stream,
 	last uint64,
 	fn func(Event) error,
+	authenticated ...func([]byte, uint64) (Event, error),
 ) error {
+	decode := decodeStored
+	if len(authenticated) != 0 && authenticated[0] != nil {
+		decode = authenticated[0]
+	}
 	info := stream.CachedInfo()
 	first := uint64(1)
 	if info != nil && info.State.FirstSeq != 0 {
@@ -1553,7 +1584,7 @@ func replayStreamThrough(
 		if err != nil {
 			return fmt.Errorf("events: replay pinned generation seq %d: %w", seq, err)
 		}
-		event, err := decodeStored(raw.Data, raw.Sequence)
+		event, err := decode(raw.Data, raw.Sequence)
 		if err != nil {
 			return err
 		}
@@ -1577,7 +1608,7 @@ func (l *Log) appendRewriteReceipt(
 	if receipt.SchemaVersion == 0 {
 		receipt.SchemaVersion = DefaultSchemaVersion
 	}
-	payload, err := json.Marshal(storedEvent{
+	payload, err := l.marshalStored(storedEvent{
 		ID: receipt.ID, Type: receipt.Type, TenantID: receipt.TenantID, Time: receipt.Time,
 		SchemaVersion: receipt.SchemaVersion, Data: receipt.Data, Actor: receipt.Actor,
 	})
@@ -2346,7 +2377,7 @@ func (l *Log) verifyTargetContinuity(
 	if crypto.SHA256Hex(raw.Data) != metadata[rewriteMetadataReceiptSum] {
 		return errors.New("events: active rewrite receipt digest does not match durable metadata")
 	}
-	receipt, err := decodeStored(raw.Data, raw.Sequence)
+	receipt, err := l.decodeStored(raw.Data, raw.Sequence)
 	if err != nil {
 		return err
 	}
@@ -2400,7 +2431,7 @@ func (l *Log) verifyTargetContinuity(
 			return sourceErr
 		}
 	}
-	if err := validateRecoveredRewriteHistory(ctx, source, target, report); err != nil {
+	if err := l.validateRecoveredRewriteHistory(ctx, source, target, report); err != nil {
 		return err
 	}
 	return nil
@@ -2495,7 +2526,7 @@ func validateRecoveredRewriteReport(
 	return nil
 }
 
-func validateRecoveredRewriteHistory(
+func (l *Log) validateRecoveredRewriteHistory(
 	ctx context.Context,
 	source, target jetstream.Stream,
 	report TenantDataRewriteReport,
@@ -2515,6 +2546,9 @@ func validateRecoveredRewriteHistory(
 		} else if targetErr != nil {
 			return fmt.Errorf("events: verify target content seq %d: %w", seq, targetErr)
 		} else {
+			if err := l.authenticateStored(targetRaw.Data, targetRaw.Sequence); err != nil {
+				return err
+			}
 			targetContentDigest = digestTargetContent(targetContentDigest, targetRaw)
 		}
 		if source == nil {
@@ -2559,6 +2593,9 @@ func validateRecoveredRewriteHistory(
 		}
 		if sourceErr != nil {
 			return fmt.Errorf("events: verify frozen source seq %d: %w", seq, sourceErr)
+		}
+		if err := l.authenticateStored(sourceRaw.Data, sourceRaw.Sequence); err != nil {
+			return err
 		}
 		if targetErr != nil {
 			return fmt.Errorf("events: verify active target seq %d: %w", seq, targetErr)
@@ -2608,7 +2645,7 @@ func validateRecoveredRewriteHistory(
 		return errors.New("events: recovered generation mapping/count does not match signed report")
 	}
 	targetRecords, err := auditRecordsForGeneration(
-		ctx, target, report.TenantID, report.SourceCutSequence, report.AuditCheckpoint,
+		ctx, target, report.TenantID, report.SourceCutSequence, report.AuditCheckpoint, l.decodeStored,
 	)
 	if err != nil {
 		return err
@@ -2619,7 +2656,7 @@ func validateRecoveredRewriteHistory(
 	}
 	if sourceComplete {
 		sourceRecords, err := auditRecordsForGeneration(
-			ctx, source, report.TenantID, report.SourceCutSequence, report.AuditCheckpoint,
+			ctx, source, report.TenantID, report.SourceCutSequence, report.AuditCheckpoint, l.decodeStored,
 		)
 		if err != nil {
 			return err

@@ -21,6 +21,7 @@ import (
 func TestC0012EvaluationBrokerRequiresProvisionedNKey(t *testing.T) {
 	dir := t.TempDir()
 	seedPath, configPath := filepath.Join(dir, "nats.seed"), filepath.Join(dir, "nats.conf")
+	authPath := filepath.Join(dir, "event-auth.key")
 	if err := runNATSKey([]string{"provision", seedPath, configPath}, io.Discard); err != nil {
 		t.Fatal(err)
 	}
@@ -29,6 +30,11 @@ func TestC0012EvaluationBrokerRequiresProvisionedNKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer secret.Wipe(firstSeed)
+	firstAuth, err := os.ReadFile(authPath) // #nosec G304 -- task-owned event MAC fixture (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(firstAuth)
 	if err := runNATSKey([]string{"provision", seedPath, configPath}, io.Discard); err != nil {
 		t.Fatalf("repeated setup changed the evaluation identity: %v", err)
 	}
@@ -37,6 +43,11 @@ func TestC0012EvaluationBrokerRequiresProvisionedNKey(t *testing.T) {
 	if err != nil || !bytes.Equal(firstSeed, again) {
 		t.Fatalf("NATS identity changed on restart: %v", err)
 	}
+	againAuth, err := os.ReadFile(authPath) // #nosec G304 -- task-owned event MAC fixture (CWE-22)
+	if err != nil || !bytes.Equal(firstAuth, againAuth) {
+		t.Fatalf("event authentication key changed on restart: %v", err)
+	}
+	defer secret.Wipe(againAuth)
 	options, err := natsserver.ProcessConfigFile(configPath)
 	if err != nil {
 		t.Fatalf("generated NATS authorization config: %v", err)
@@ -58,6 +69,7 @@ func TestC0012EvaluationBrokerRequiresProvisionedNKey(t *testing.T) {
 	log, err := eventstest.OpenFixture(t.Context(), config.NATS{
 		Mode: config.NATSExternal, URL: srv.ClientURL(), Replicas: 1,
 		AllowSingleReplica: true, AllowPlaintextDev: true, NKeySeedFile: seedPath,
+		EventAuthKeyFile: authPath,
 	})
 	if err != nil {
 		t.Fatalf("NKey-authenticated control plane could not connect: %v", err)

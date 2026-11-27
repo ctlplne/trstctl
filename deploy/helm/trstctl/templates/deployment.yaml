@@ -161,6 +161,8 @@ spec:
                   name: {{ include "trstctl.dbSecretName" . }}
                   key: {{ .Values.postgres.existingSecretKey }}
             {{- if and .Values.nats .Values.nats.existingSecret }}
+            - name: TRSTCTL_NATS_EVENT_AUTH_KEY_FILE
+              value: /etc/trstctl/nats/{{ .Values.nats.eventAuthKey }}
             {{- if eq .Values.nats.identity "nkey" }}
             - name: TRSTCTL_NATS_NKEY_SEED_FILE
               value: /etc/trstctl/nats/{{ .Values.nats.nkeySeedKey }}

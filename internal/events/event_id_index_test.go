@@ -53,7 +53,7 @@ func TestEventIDIndexColdReplayAndDeletionUseExactGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if covered, _, err := readEventIDCursor(ctx, index, epoch); err != nil || covered != second.Sequence {
+	if covered, _, err := readEventIDCursor(ctx, index, epoch, nil); err != nil || covered != second.Sequence {
 		t.Fatalf("cold cursor = %d, %v, want %d", covered, err, second.Sequence)
 	}
 	if err := reopened.nc.Flush(); err != nil {
@@ -129,7 +129,7 @@ func TestEventIDIndexCrashBetweenEntryAndCursorReplaysWithoutConflict(t *testing
 	if err := log.indexEventID(ctx, source, index, epoch, first); err != nil {
 		t.Fatal(err)
 	}
-	if covered, _, err := readEventIDCursor(ctx, index, epoch); err != nil || covered != 0 {
+	if covered, _, err := readEventIDCursor(ctx, index, epoch, nil); err != nil || covered != 0 {
 		t.Fatalf("pre-crash cursor = %d, %v, want zero", covered, err)
 	}
 	if err := log.Close(); err != nil {
@@ -154,7 +154,7 @@ func TestEventIDIndexCrashBetweenEntryAndCursorReplaysWithoutConflict(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if covered, _, err := readEventIDCursor(ctx, index, epoch); err != nil || covered != 2 {
+	if covered, _, err := readEventIDCursor(ctx, index, epoch, nil); err != nil || covered != 2 {
 		t.Fatalf("recovered cursor = %d, %v, want 2", covered, err)
 	}
 }
@@ -179,7 +179,7 @@ func TestEventIDIndexLargeLagFailsClosedAndAdvancesByBoundedPages(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if covered, _, err := readEventIDCursor(ctx, index, epoch); err != nil || covered != eventIDIndexReadLimit {
+	if covered, _, err := readEventIDCursor(ctx, index, epoch, nil); err != nil || covered != eventIDIndexReadLimit {
 		t.Fatalf("bounded cursor = %d, %v, want %d", covered, err, eventIDIndexReadLimit)
 	}
 	if got, found, err := log.EventByID(ctx, "lag-0"); err != nil || !found || got.Sequence != 1 {

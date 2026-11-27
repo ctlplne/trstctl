@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3669 annotated sites across 35 rules. Each row is
+3671 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -73,9 +73,9 @@ not this file.
 | `deploy/demo/demo_test.go:244` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/demo/demo_test.go:370` | fixture paths name files; no credential value is embedded. |
 | `deploy/demo/demo_test.go:1910` | env: reference names mapped to integration kinds; no credential value (CWE-798) |
-| `deploy/deploycheck_test.go:1587` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1589` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1609` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1590` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1592` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1612` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/docker/dist_test.go:463` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/elastic/content_test.go:94` | a test batch naming an env: reference, not a credential (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -83,17 +83,17 @@ not this file.
 | `deploy/helm/helm_test.go:805` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:814` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:830` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:893` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:957` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1081` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1161` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1264` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1272` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1574` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1609` | fabricated credential tests URL-secret rejection (CWE-798) |
-| `deploy/helm/helm_test.go:1624` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1625` | fixture names the Secret, never embeds a credential (CWE-798) |
-| `deploy/helm/helm_test.go:1626` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:894` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:958` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1082` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1265` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1273` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1575` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1610` | fabricated credential tests URL-secret rejection (CWE-798) |
+| `deploy/helm/helm_test.go:1625` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1626` | fixture names the Secret, never embeds a credential (CWE-798) |
+| `deploy/helm/helm_test.go:1627` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/auth_kerberos_served_test.go:35` | fabricated fixture credential; the keytab is minted in-process (CWE-798) |
 | `ee/enterpriseauth/cr1003_scim_nul_served_test.go:28` | fabricated fixture credential/identifier |
 | `ee/enterpriseauth/cr831_scim_scope_served_test.go:25` | fabricated test credential (CWE-798) |
@@ -252,13 +252,13 @@ not this file.
 | `internal/cloudauth/gcp_token_source_test.go:53` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/config/ai_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/audit_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/audit_test.go:81` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/audit_test.go:105` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/audit_test.go:68` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/audit_test.go:83` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/audit_test.go:108` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
-| `internal/config/config.go:3872` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4741` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3874` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4745` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -316,14 +316,14 @@ not this file.
 | `internal/config/managed_keys_gcp_workload_test.go:47` | a pool audience, a service account and a token path, no credential value (CWE-798) |
 | `internal/config/managed_keys_providers_test.go:78` | fabricated fixture values; nothing here is real (CWE-798) |
 | `internal/config/migrate_config_test.go:24` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/migrate_config_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/migrate_config_test.go:47` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/ntlm_test.go:8` | fabricated fixture paths and identifiers; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/oidc_test.go:13` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/oidc_test.go:114` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/outbound_env_credential_bindings_test.go:32` | reference names only; no credential value (CWE-798) |
 | `internal/config/provider_identity_aud58_test.go:43` | values are configuration names and file paths, never secret bytes (CWE-798). |
 | `internal/config/ratelimit_test.go:30` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/ratelimit_test.go:57` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/ratelimit_test.go:58` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/saml_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/scim_group_roles_test.go:14` | fixture file path, not a credential value (CWE-798) |
 | `internal/config/scim_test.go:10` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -344,17 +344,17 @@ not this file.
 | `internal/config/secret_integrations_test.go:1500` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/secret_integrations_test.go:1506` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/secrets_config_test.go:25` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secrets_config_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secrets_config_test.go:87` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
-| `internal/config/secrets_config_test.go:112` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secrets_config_test.go:47` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secrets_config_test.go:89` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
+| `internal/config/secrets_config_test.go:115` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/servicenow_cmdb_binding_test.go:12` | reference name only; no credential value (CWE-798) |
 | `internal/config/servicenow_cmdb_binding_test.go:39` | reference name only; no credential value (CWE-798) |
 | `internal/config/servicenow_cmdb_binding_test.go:40` | variable name only; no credential value (CWE-798) |
 | `internal/config/servicenow_cmdb_binding_test.go:41` | reference name only; no credential value (CWE-798) |
 | `internal/config/signer_config_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/signer_config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/signer_config_test.go:125` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/signer_config_test.go:134` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/signer_config_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/signer_config_test.go:127` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/signer_config_test.go:137` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/acm/acm_test.go:20` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/azurekv/token_test.go:20` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/azurekv/token_test.go:63` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1161,7 +1161,7 @@ not this file.
 | `clients/signing/ksp/module.go:722` | a signature length fits 32 bits |
 | `cmd/trstctl-agent/main.go:642` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
-| `deploy/helm/helm_test.go:1803` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `deploy/helm/helm_test.go:1804` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:281` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/governance/misuse/incident.go:100` | bounded by MaxInt64 above. |
 | `ee/governance/misuse/misuse.go:150` | event sequences fit int64 (CWE-190) |
@@ -1804,7 +1804,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/events/privacy_erasure_test.go:1555` | test goroutine lifecycle is managed by the test (CWE-664) |
+| `internal/events/privacy_erasure_test.go:1556` | test goroutine lifecycle is managed by the test (CWE-664) |
 | `internal/server/agenthttprenewal.go:72` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 | `internal/server/estmtls.go:183` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 
@@ -1962,7 +1962,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:232` | fixed stock checksum command over test-owned archive names. |
 | `deploy/helm/helm_docs_commands_test.go:48` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_docs_commands_test.go:114` | executes the repo's own documented helm command under test (CWE-78) |
-| `deploy/helm/helm_test.go:1191` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/helm/helm_test.go:1192` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/signer_hsm_test.go:54` | the chart test's own helm template invocation (CWE-78) |
 | `deploy/helm/signer_serviceaccount_test.go:31` | the chart test's own helm template invocation (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:445` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2536,7 +2536,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (856 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (858 sites)
 
 | Location | Reason |
 |---|---|
@@ -2634,10 +2634,10 @@ not this file.
 | `cmd/trstctl/main.go:499` | the configured public certificate of this process's own listener (CWE-22) |
 | `cmd/trstctl/main_test.go:42` | the path is constructed from this test's private temporary directory |
 | `cmd/trstctl/main_test.go:55` | read back the same test-owned key path to prove no overwrite occurred |
-| `cmd/trstctl/nats_key.go:26` | exact operator-selected evaluation broker config path (CWE-22) |
-| `cmd/trstctl/nats_key.go:36` | exact operator-selected evaluation path with exclusive create (CWE-22) |
-| `cmd/trstctl/nats_key_test.go:27` | read the test-owned secret path to prove restart stability (CWE-22) |
-| `cmd/trstctl/nats_key_test.go:35` | read the same test-owned secret path (CWE-22) |
+| `cmd/trstctl/nats_key_test.go:28` | read the test-owned secret path to prove restart stability (CWE-22) |
+| `cmd/trstctl/nats_key_test.go:33` | task-owned event MAC fixture (CWE-22) |
+| `cmd/trstctl/nats_key_test.go:41` | read the same test-owned secret path (CWE-22) |
+| `cmd/trstctl/nats_key_test.go:46` | task-owned event MAC fixture (CWE-22) |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:59` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2659,7 +2659,7 @@ not this file.
 | `deploy/deploycheck_test.go:1156` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1246` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1429` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1673` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1676` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/alpine_packages_test.go:189` | the test's own temp directory (CWE-22) |
 | `deploy/docker/context_size_test.go:28` | fixed filename below this test's private t.TempDir (CWE-22). |
 | `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2675,8 +2675,8 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:294` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/airgap_bundle_test.go:340` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/helm_docs_commands_test.go:131` | reads the repo's own docs pages from a walked list (CWE-22) |
-| `deploy/helm/helm_test.go:1153` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/helm/helm_test.go:1214` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/helm_test.go:1154` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/helm_test.go:1215` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/signer_hsm_test.go:153` | the test's own golden file (CWE-22) |
 | `deploy/iac/iac_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:506` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2946,9 +2946,9 @@ not this file.
 | `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3967` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:5401` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5420` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3969` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:5405` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5424` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:340` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -2958,6 +2958,8 @@ not this file.
 | `internal/connector/wasm/host/host_test.go:51` | the file this test just built (CWE-22). |
 | `internal/connector/wasm/host/host_test.go:293` | this repository's own connector sources (CWE-22). |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/crypto/eventauth/eventauth_test.go:21` | test-owned protected key path (CWE-22) |
+| `internal/crypto/eventauth/eventauth_test.go:32` | same test-owned key path (CWE-22) |
 | `internal/crypto/fsatomic/syncdir_other.go:10` | the caller's own state directory (CWE-22) |
 | `internal/crypto/jks/jceks_test.go:27` | the test reads its own fixture (CWE-22) |
 | `internal/crypto/jose/jsf_test.go:133` | the repository's own fixture (CWE-22) |
@@ -3816,8 +3818,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/cli/pcas_succession_approval_test.go:58` | test writes under t.TempDir |
 | `internal/cli/pcas_succession_approval_test.go:129` | test writes under t.TempDir |
-| `internal/config/config.go:5401` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5420` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5405` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5424` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |

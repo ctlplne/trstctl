@@ -15,7 +15,11 @@ import (
 // decoded public payloads add at most one page to the existing memory bound.
 const retainedDecodeWorkers = 4
 
-func readRetainedEventsThrough(ctx context.Context, stream jetstream.Stream, from, through uint64, visit func(Event) error) error {
+func readRetainedEventsThrough(ctx context.Context, stream jetstream.Stream, from, through uint64, visit func(Event) error, authenticated ...func([]byte, uint64) (Event, error)) error {
+	decode := decodeStored
+	if len(authenticated) != 0 {
+		decode = authenticated[0]
+	}
 	if from == 0 {
 		from = 1
 	}
@@ -26,11 +30,11 @@ func readRetainedEventsThrough(ctx context.Context, stream jetstream.Stream, fro
 		readRetainedPages(context.Context, uint64, uint64, func([]*jetstream.RawStreamMsg) error) error
 	}); ok {
 		return paged.readRetainedPages(ctx, from, through, func(page []*jetstream.RawStreamMsg) error {
-			return visitDecodedRetainedPage(ctx, page, visit)
+			return visitDecodedRetainedPage(ctx, page, visit, decode)
 		})
 	}
 	return readRetainedThrough(ctx, stream, from, through, func(raw *jetstream.RawStreamMsg) error {
-		event, err := decodeStored(raw.Data, raw.Sequence)
+		event, err := decode(raw.Data, raw.Sequence)
 		if err != nil {
 			return err
 		}
@@ -38,7 +42,11 @@ func readRetainedEventsThrough(ctx context.Context, stream jetstream.Stream, fro
 	})
 }
 
-func visitDecodedRetainedPage(ctx context.Context, page []*jetstream.RawStreamMsg, visit func(Event) error) error {
+func visitDecodedRetainedPage(ctx context.Context, page []*jetstream.RawStreamMsg, visit func(Event) error, authenticated ...func([]byte, uint64) (Event, error)) error {
+	decodeStoredRecord := decodeStored
+	if len(authenticated) != 0 {
+		decodeStoredRecord = authenticated[0]
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -53,7 +61,7 @@ func visitDecodedRetainedPage(ctx context.Context, page []*jetstream.RawStreamMs
 			if ctx.Err() != nil {
 				return
 			}
-			decoded[i].event, decoded[i].err = decodeStored(page[i].Data, page[i].Sequence)
+			decoded[i].event, decoded[i].err = decodeStoredRecord(page[i].Data, page[i].Sequence)
 		}
 	}
 	if workers == 1 {

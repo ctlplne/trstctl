@@ -138,12 +138,15 @@ func (l *Log) ReplayTenantMetadataTypesThrough(ctx context.Context, tenantID str
 					if crypto.SHA256Hex(raw.Data) != entry.Digest {
 						return errors.New("events: metadata index differs from source")
 					}
-					event, err := decodeStored(raw.Data, entry.SourceSequence)
+					event, err := l.decodeStored(raw.Data, entry.SourceSequence)
 					if err != nil {
 						return err
 					}
 					if normalizedTenantScope(event.TenantID) != tenantID || !selected[event.Type] || cursor.raw.Subject != tenantIndexTypedEventSubject(epoch, tenantID, event.Type) {
 						return errors.New("events: metadata index selected another scope")
+					}
+					if err := l.verifyAuthenticatedPosition(readCtx, event); err != nil {
+						return err
 					}
 					if err := visit(envelopeMetadata(event)); err != nil {
 						return err

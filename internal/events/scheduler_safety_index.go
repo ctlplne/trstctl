@@ -94,7 +94,7 @@ func (l *Log) preflightSchedulerPrefix(ctx context.Context, stream jetstream.Str
 			return schedulerhistory.ErrSanitationRequired
 		}
 		return nil
-	}); err != nil {
+	}, l.decodeStored); err != nil {
 		l.legacySafetyPresent = false
 		return err
 	}

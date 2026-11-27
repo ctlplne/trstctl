@@ -76,7 +76,7 @@ func TestValidateRewritePairRejectsSemanticallyEqualEnvelopeReserialization(t *t
 		}
 		return nil
 	}
-	if _, err := validateRewritePair(source, target, validate); err == nil {
+	if _, err := (&Log{}).validateRewritePair(source, target, validate); err == nil {
 		t.Fatal("rewrite pair accepted a target that dropped unknown/raw envelope bytes")
 	}
 
@@ -85,7 +85,7 @@ func TestValidateRewritePairRejectsSemanticallyEqualEnvelopeReserialization(t *t
 		t.Fatal(err)
 	}
 	target.Data = exact
-	changed, err := validateRewritePair(source, target, validate)
+	changed, err := (&Log{}).validateRewritePair(source, target, validate)
 	if err != nil {
 		t.Fatalf("exact surgical pair rejected: %v", err)
 	}

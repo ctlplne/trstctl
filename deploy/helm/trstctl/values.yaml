@@ -235,6 +235,7 @@ nats:
   existingSecret: ""
   identity: nkey # nkey | credentials | mtls
   nkeySeedKey: nkey.seed
+  eventAuthKey: event-auth.key
   credentialsKey: user.creds
   caKey: "" # optional private CA PEM key in the same Secret
   certKey: tls.crt
