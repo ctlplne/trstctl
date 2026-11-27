@@ -516,10 +516,10 @@ type Deps struct {
 
 	// ExternalCAs configures the served upstream-CA registry (CLM-03/F4): each entry
 	// is a built-in CA plugin instance (Let's Encrypt/ACME, DigiCert, Sectigo, AD CS,
-	// AWS PCA, GCP CAS, EJBCA, smallstep, ...), and the running binary exposes it
-	// under /api/v1/external-cas. Upstream credentials live in these process
-	// configs/plugins as []byte where secret, never in tenant JSON. Empty leaves the
-	// surface fail-closed.
+	// AWS PCA, GCP CAS, EJBCA, smallstep, ...), each bound to one tenant, and the
+	// running binary exposes it under /api/v1/external-cas. Upstream credentials
+	// live in these process configs/plugins as []byte where secret, never in tenant
+	// JSON. Empty leaves the surface fail-closed.
 	ExternalCAs []ExternalCA
 
 	// UpstreamDV carries the unattended domain-validation seam for ACME

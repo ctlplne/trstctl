@@ -51,7 +51,7 @@ func (d *issuanceDispatcher) deliverExternalCAARI(ctx context.Context, m orchest
 	}
 	entry, found := d.externalCAs.byID[command.AuthorityID]
 	if !found || entry.meta.Type != "letsencrypt" || entry.ariFetch == nil ||
-		(entry.tenantID != "" && entry.tenantID != m.TenantID) {
+		!entry.boundTo(m.TenantID) {
 		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI authority is not configured for tenant"))
 	}
 	provenance, ok := projections.NormalizeACMEUpstreamARIProvenance(command.Provenance)

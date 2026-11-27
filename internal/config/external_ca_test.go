@@ -8,6 +8,20 @@ import (
 	"time"
 )
 
+const externalCATestTenantID = "d0d00000-0000-4000-8000-000000000101"
+
+func TestExternalCAConfigRequiresTenantBinding(t *testing.T) {
+	for _, tenantID := range []string{"", "not-a-uuid", "00000000-0000-0000-0000-000000000000"} {
+		err := ValidateExternalCAs([]ExternalCAConfig{{
+			ID: "upstream", Type: "digicert", Name: "Upstream", TenantID: tenantID,
+			Endpoint: "https://ca.example", APIKeyRef: upstreamDVFixtureSecretRef,
+		}})
+		if err == nil || !strings.Contains(err.Error(), "tenant_id") {
+			t.Fatalf("tenant binding %q error=%v, want tenant_id validation", tenantID, err)
+		}
+	}
+}
+
 func TestValidateExternalCAsAcceptsEveryCompiledProvider(t *testing.T) {
 	const secretRef = "file:/var/lib/trstctl/secrets/upstream" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	mtls := ExternalCANetworkConfig{
@@ -30,6 +44,11 @@ func TestValidateExternalCAsAcceptsEveryCompiledProvider(t *testing.T) {
 		{ID: "smallstep", Type: "smallstep", Name: "Smallstep", Endpoint: "https://step-ca.example:9000", ProvisionerName: "trstctl", ProvisionerKeyRef: secretRef},
 		{ID: "vaultpki", Type: "vaultpki", Name: "Vault PKI", Endpoint: "https://vault.example:8200", BearerTokenRef: secretRef, Mount: "pki", Role: "workload"},
 		{ID: "venafi", Type: "venafi", Name: "Venafi", Endpoint: "https://tpp.example", AccessTokenRef: secretRef, PolicyDN: `\VED\Policy\trstctl`},
+	}
+	for i := range items {
+		if items[i].TenantID == "" {
+			items[i].TenantID = externalCATestTenantID
+		}
 	}
 	if err := ValidateExternalCAs(items); err != nil {
 		t.Fatalf("ValidateExternalCAs: %v", err)
@@ -83,7 +102,7 @@ func TestValidateExternalCAsFailsClosed(t *testing.T) {
 
 func TestValidateExternalCAsAllowsExplicitLoopbackHTTPEmulator(t *testing.T) {
 	err := ValidateExternalCAs([]ExternalCAConfig{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		ID: "d", Type: "digicert", Name: "d", Endpoint: "http://127.0.0.1:18080", APIKeyRef: "file:/safe/key",
+		ID: "d", Type: "digicert", Name: "d", TenantID: externalCATestTenantID, Endpoint: "http://127.0.0.1:18080", APIKeyRef: "file:/safe/key",
 		Network: ExternalCANetworkConfig{AllowInsecureHTTP: true},
 	}})
 	if err != nil {
@@ -117,7 +136,7 @@ const upstreamDVFixtureSecretRef = "file:/var/lib/trstctl/secrets/upstream" // #
 // check's "this is a bug, not a supported state" comment true.
 func TestUpstreamDNS01RequiresTheAuthoritysCAAIssuer(t *testing.T) {
 	err := ValidateExternalCAs([]ExternalCAConfig{{
-		ID: "le", Type: "letsencrypt", Name: "Let's Encrypt",
+		ID: "le", Type: "letsencrypt", Name: "Let's Encrypt", TenantID: externalCATestTenantID,
 		DirectoryURL:  "https://acme-v02.api.letsencrypt.org/directory",
 		UpstreamDNS01: true,
 	}})
@@ -130,7 +149,7 @@ func TestUpstreamDNS01RequiresTheAuthoritysCAAIssuer(t *testing.T) {
 	}
 
 	ok := ValidateExternalCAs([]ExternalCAConfig{{
-		ID: "le", Type: "letsencrypt", Name: "Let's Encrypt",
+		ID: "le", Type: "letsencrypt", Name: "Let's Encrypt", TenantID: externalCATestTenantID,
 		DirectoryURL:  "https://acme-v02.api.letsencrypt.org/directory",
 		UpstreamDNS01: true, CAAIssuerDomain: "letsencrypt.org",
 	}})
@@ -167,8 +186,8 @@ func TestUpstreamDNS01IsRefusedOnAuthoritiesThatCannotDoIt(t *testing.T) {
 // CAA identifier.
 func TestUpstreamDNS01IsAcceptedForVendorsWithDNSValidation(t *testing.T) {
 	vendors := map[string]ExternalCAConfig{
-		"digicert": {ID: "dc", Type: "digicert", Name: "DigiCert", Endpoint: "https://example.test", APIKeyRef: upstreamDVFixtureSecretRef},
-		"sectigo": {ID: "sc", Type: "sectigo", Name: "Sectigo", Endpoint: "https://example.test", Login: "scm", PasswordRef: upstreamDVFixtureSecretRef,
+		"digicert": {ID: "dc", Type: "digicert", Name: "DigiCert", TenantID: externalCATestTenantID, Endpoint: "https://example.test", APIKeyRef: upstreamDVFixtureSecretRef},
+		"sectigo": {ID: "sc", Type: "sectigo", Name: "Sectigo", TenantID: externalCATestTenantID, Endpoint: "https://example.test", Login: "scm", PasswordRef: upstreamDVFixtureSecretRef,
 			CustomerURI: "corp", OrgID: 1, CertType: 2},
 	}
 	for kind, item := range vendors {
@@ -187,7 +206,7 @@ func TestUpstreamDNS01IsAcceptedForVendorsWithDNSValidation(t *testing.T) {
 // its DNS validation: a duration from 10s to 1h, only with upstream_dns01 on
 // those two.
 func TestDCVTimeoutIsBoundedAndScopedA165L4(t *testing.T) {
-	base := ExternalCAConfig{ID: "dc", Type: "digicert", Name: "DigiCert", Endpoint: "https://example.test", APIKeyRef: upstreamDVFixtureSecretRef,
+	base := ExternalCAConfig{ID: "dc", Type: "digicert", Name: "DigiCert", TenantID: externalCATestTenantID, Endpoint: "https://example.test", APIKeyRef: upstreamDVFixtureSecretRef,
 		UpstreamDNS01: true, CAAIssuerDomain: "digicert.com", DCVTimeout: "15m"}
 	if err := ValidateExternalCAs([]ExternalCAConfig{base}); err != nil {
 		t.Fatalf("a 15m dcv_timeout: %v", err)

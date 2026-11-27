@@ -245,7 +245,7 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 				// repoints that module; old leaves still revoke on their own CA.
 				origin = retained
 			} else if d.externalCAs != nil {
-				if entry, ok := d.externalCAs.byID[externalID]; ok {
+				if entry, ok := d.externalCAs.byID[externalID]; ok && entry.boundTo(tenantID) {
 					if plugin, ok := entry.revocationCA.(*wasmCA); ok {
 						if plugin.binding.TenantID != tenantID {
 							return errors.New("server: plugin CA revocation tenant differs from its binding")
@@ -318,7 +318,7 @@ func (d *issuanceDispatcher) revokeExternalCertificate(ctx context.Context, tena
 		return errors.New("server: recorded external revocation authority is unavailable; no CA was substituted")
 	}
 	entry, ok := d.externalCAs.byID[authorityID]
-	if !ok || entry.tenantID != "" && entry.tenantID != tenantID {
+	if !ok || !entry.boundTo(tenantID) {
 		return errors.New("server: recorded external revocation authority is unavailable for this tenant; no CA was substituted")
 	}
 	if entry.revocationCA == nil {

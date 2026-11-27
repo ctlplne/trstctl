@@ -34,7 +34,7 @@ func (s *Server) adcsDecisionRoute(tenantID, issuerID string) (ADCSRevocationRel
 		return ADCSRevocationRelay{}, api.ErrADCSDecisionUnavailable
 	}
 	entry, ok := s.externalCAs.byID[strings.TrimSpace(issuerID)]
-	if !ok || (entry.tenantID != "" && entry.tenantID != tenantID) || entry.adcsRevocation.Relay == "" ||
+	if !ok || !entry.boundTo(tenantID) || entry.adcsRevocation.Relay == "" ||
 		!relay.ValidCAConfig(entry.adcsRevocation.CAConfig) {
 		return ADCSRevocationRelay{}, api.ErrADCSDecisionUnavailable
 	}

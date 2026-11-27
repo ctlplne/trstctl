@@ -329,7 +329,9 @@ claims it the operation stays queued rather than running on the control plane.
 
 External-CA credentials use `file:/absolute/path` references. Files are loaded into
 locked memory for one outbox attempt and wiped afterward. Network policy, private
-CIDRs, custom roots, and mTLS identities are operator-owned:
+CIDRs, custom roots, and mTLS identities are operator-owned. Every entry requires
+the non-zero UUID of the one tenant allowed to use that upstream identity. Create
+a separate entry and credential or account for each tenant:
 
 ```json
 {
@@ -337,6 +339,7 @@ CIDRs, custom roots, and mTLS identities are operator-owned:
     "id": "aws-pca-prod",
     "type": "awspca",
     "name": "Production AWS Private CA",
+    "tenant_id": "11111111-1111-4111-8111-111111111111",
     "endpoint": "https://acm-pca.us-east-1.amazonaws.com",
     "region": "us-east-1",
     "certificate_authority_arn": "arn:aws:acm-pca:us-east-1:123456789012:certificate-authority/UUID",
@@ -356,6 +359,7 @@ CIDRs, custom roots, and mTLS identities are operator-owned:
     "id": "entrust-prod",
     "type": "entrust",
     "name": "Entrust CA Gateway",
+    "tenant_id": "11111111-1111-4111-8111-111111111111",
     "endpoint": "https://entrust-ca.internal",
     "ca_id": "production-ca",
     "network": {
@@ -369,11 +373,13 @@ CIDRs, custom roots, and mTLS identities are operator-owned:
     "id": "letsencrypt-prod",
     "type": "letsencrypt",
     "name": "Let's Encrypt",
+    "tenant_id": "11111111-1111-4111-8111-111111111111",
     "directory_url": "https://acme-v02.api.letsencrypt.org/directory"
   }, {
     "id": "harica-tcs",
     "type": "letsencrypt",
     "name": "HARICA (GÉANT TCS)",
+    "tenant_id": "11111111-1111-4111-8111-111111111111",
     "directory_url": "https://acme.harica.gr/acme/directory",
     "eab_key_id": "kid-issued-by-the-ca",
     "eab_hmac_key_ref": "file:/run/secrets/harica-eab-hmac",
@@ -383,6 +389,7 @@ CIDRs, custom roots, and mTLS identities are operator-owned:
     "id": "shell-ca-prod",
     "type": "shellca",
     "name": "Isolated Shell CA",
+    "tenant_id": "11111111-1111-4111-8111-111111111111",
     "command": "/usr/local/libexec/trstctl-shell-ca",
     "args": ["--profile", "production"],
     "env_refs": {"CA_TOKEN": "file:/run/secrets/shell-ca-token"},

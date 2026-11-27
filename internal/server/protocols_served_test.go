@@ -241,6 +241,12 @@ func newServedHarnessWithOwnedStore(t *testing.T, protocols config.Protocols, ev
 	for _, o := range opts {
 		o(&deps)
 	}
+	// Bind single-tenant fixture authorities to the served tenant.
+	for i := range deps.ExternalCAs {
+		if deps.ExternalCAs[i].TenantID == "" {
+			deps.ExternalCAs[i].TenantID = servedTestTenant
+		}
+	}
 	if deps.TenantCrypto != nil {
 		admissionAccess = deps.TenantCrypto
 	} else if deps.KEK != nil {

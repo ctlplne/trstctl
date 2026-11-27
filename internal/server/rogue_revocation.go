@@ -56,7 +56,7 @@ func (d *issuanceDispatcher) handleRogueCertificateRevocation(ctx context.Contex
 	}
 	entry, ok := d.externalCAs.byID[requested.AuthorityID]
 	kind := strings.ToLower(entry.meta.Type)
-	if ok && (entry.tenantID == "" || entry.tenantID == m.TenantID) && ca.RevokesByCertificate(kind) && entry.canRevoke() {
+	if ok && entry.boundTo(m.TenantID) && ca.RevokesByCertificate(kind) && entry.canRevoke() {
 		// N10: an ACME authority identifies the certificate by its bytes, which
 		// trstctl never held: read them back from the CT log, then prove
 		// control of every name before asking.
@@ -73,7 +73,7 @@ func (d *issuanceDispatcher) handleRogueCertificateRevocation(ctx context.Contex
 		}
 		return d.orch.RecordRogueCertificateRevokedAtIssuer(ctx, m.TenantID, resultID, result)
 	}
-	if ok && (entry.tenantID == "" || entry.tenantID == m.TenantID) && entry.adcsRevocation.Relay != "" {
+	if ok && entry.boundTo(m.TenantID) && entry.adcsRevocation.Relay != "" {
 		// A163-L1: an AD CS authority revokes the serial through its
 		// revocation relay, as an inventory certificate does (A162): certutil
 		// revokes, publishes a CRL and reads the row back, and only that
@@ -85,7 +85,7 @@ func (d *issuanceDispatcher) handleRogueCertificateRevocation(ctx context.Contex
 		}
 		return d.orch.RecordRogueCertificateRevokedAtIssuer(ctx, m.TenantID, resultID, result)
 	}
-	if !ok || entry.tenantID != "" && entry.tenantID != m.TenantID || !ca.RevokesBySerial(kind) || !entry.canRevoke() {
+	if !ok || !entry.boundTo(m.TenantID) || !ca.RevokesBySerial(kind) || !entry.canRevoke() {
 		return errors.New("server: the named authority is not one this tenant can revoke a serial at")
 	}
 	if err := ca.RevokeThrough(ctx, entry.revocationCA, ca.RevokeRequest{

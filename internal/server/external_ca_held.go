@@ -26,7 +26,7 @@ const externalCAHeldIssueListLimit = 200
 func (r *externalCARegistry) entryFor(tenantID, id string) (externalCAEntry, error) {
 	id = strings.TrimSpace(id)
 	entry, ok := r.byID[id]
-	if !ok || (entry.tenantID != "" && entry.tenantID != tenantID) {
+	if !ok || !entry.boundTo(tenantID) {
 		return externalCAEntry{}, fmt.Errorf("%w: %s", api.ErrExternalCANotFound, id)
 	}
 	if tenantID == "" {

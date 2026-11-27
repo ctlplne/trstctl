@@ -125,7 +125,7 @@ func (s *Server) matchDiscoveredLeafToAuthority(tenantID string, candidate store
 	}
 	for _, authorityID := range declaring {
 		entry := s.externalCAs.byID[authorityID]
-		if entry.tenantID != "" && entry.tenantID != tenantID {
+		if !entry.boundTo(tenantID) {
 			continue
 		}
 		if entry.matchesARIIssuer(leaf.AuthorityKeyID) {

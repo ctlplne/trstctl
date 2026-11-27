@@ -14,7 +14,7 @@ import (
 // pass validation (which lower-cased its own copy) and then fail at issuance
 // ("unsupported external CA type").
 func TestExternalCATypeIsCanonicalWhenConfigLoads(t *testing.T) {
-	raw := []byte(`{"external_cas":[{"id":"le","type":" LetsEncrypt ","name":"Let's Encrypt","directory_url":"https://acme-v02.api.letsencrypt.org/directory"}]}`)
+	raw := []byte(`{"external_cas":[{"id":"le","type":" LetsEncrypt ","name":"Let's Encrypt","tenant_id":"d0d00000-0000-4000-8000-000000000101","directory_url":"https://acme-v02.api.letsencrypt.org/directory"}]}`)
 	parsed, err := Parse(raw)
 	if err != nil {
 		t.Fatal(err)

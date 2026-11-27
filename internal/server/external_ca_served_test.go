@@ -33,6 +33,27 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+func TestServedExternalCARegistryKeepsAuthorityWithinTenant(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ExternalCAs = []ExternalCA{{
+			ID: "tenant-bound-ca", Type: "digicert", Name: "Tenant Bound CA",
+			TenantID: servedTestTenant, CA: factoryTestCA{},
+		}}
+	})
+	const otherTenant = "22222222-2222-4222-8222-222222222222"
+	registerServedTenantID(t, h, otherTenant, "Other tenant")
+	token := seedScopedToken(t, h.store, otherTenant, "issuers:read", "certs:issue")
+	status, body := secretsReqKey(t, h, http.MethodGet, "/api/v1/external-cas", token, "", nil)
+	if status != http.StatusOK || bytes.Contains(body, []byte("tenant-bound-ca")) {
+		t.Fatalf("other tenant external CA catalog: status=%d body=%s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/external-cas/tenant-bound-ca/issue",
+		token, "tenant-bound-ca-request", externalCAIssueRequestBody(t, "other.served.test"))
+	if status != http.StatusNotFound {
+		t.Fatalf("other tenant external CA issue: status=%d body=%s", status, body)
+	}
+}
+
 // TestServedExternalCARegistryIssuesViaConfiguredBackends is the CLM-03 acceptance
 // test: the running control-plane binary exposes a served external-CA registry and
 // routes issuance through configured upstream CA plugins. The calls are HTTP API

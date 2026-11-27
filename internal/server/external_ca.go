@@ -158,6 +158,10 @@ type externalCAEntry struct {
 	adcsRevocation ADCSRevocationRelay
 }
 
+func (e externalCAEntry) boundTo(tenantID string) bool {
+	return tenantID != "" && e.tenantID == tenantID
+}
+
 // matchesARIIssuer reports whether a leaf's Authority Key Identifier names one
 // of this authority's declared issuing intermediates.
 func (e externalCAEntry) matchesARIIssuer(authorityKeyID string) bool {
@@ -214,6 +218,9 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 		}
 		if _, exists := reg.byID[id]; exists {
 			return nil, fmt.Errorf("server: duplicate external CA id %q", id)
+		}
+		if strings.TrimSpace(cfg.TenantID) == "" {
+			return nil, fmt.Errorf("server: external CA %q requires a tenant binding", id)
 		}
 		implementation := cfg.CA
 		name := strings.TrimSpace(cfg.Name)
@@ -287,7 +294,7 @@ func (r *externalCARegistry) ListExternalCAs(_ context.Context, tenantID string)
 	out := make([]api.ExternalCA, 0, len(r.items))
 	for _, item := range r.items {
 		entry := r.byID[item.ID]
-		if entry.tenantID == "" || entry.tenantID == tenantID {
+		if entry.boundTo(tenantID) {
 			out = append(out, item)
 		}
 	}
@@ -300,7 +307,7 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 	if !ok {
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %s", api.ErrExternalCANotFound, id)
 	}
-	if entry.tenantID != "" && entry.tenantID != tenantID {
+	if !entry.boundTo(tenantID) {
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %s", api.ErrExternalCANotFound, id)
 	}
 	if tenantID == "" {
@@ -372,7 +379,7 @@ func (r *externalCARegistry) DeliverExternalCAIssue(ctx context.Context, m orche
 	if !ok {
 		return fmt.Errorf("server: external CA outbox authority %q is not configured", payload.AuthorityID)
 	}
-	if entry.tenantID != "" && entry.tenantID != m.TenantID {
+	if !entry.boundTo(m.TenantID) {
 		return fmt.Errorf("server: external CA outbox tenant is not bound to authority %q", payload.AuthorityID)
 	}
 	ctx = context.WithValue(ctx, externalCAOperationRefContextKey{}, m.IdempotencyKey)

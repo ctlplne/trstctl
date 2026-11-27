@@ -86,6 +86,44 @@ func rogueIssuerRevocationOf(t *testing.T, h *servedHarness, token, findingID st
 // reads revoked at the issuer, a redelivery calls the vendor no second time, an
 // authority that cannot revoke by serial is refused, and a serial the authority
 // never issued is not reported revoked.
+func TestServedRogueRevocationKeepsAuthorityWithinTenant(t *testing.T) {
+	const otherTenant = "22222222-2222-4222-8222-222222222222"
+	dc, err := digicertfake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(dc.Close)
+	digi := digicert.New("tenant-bound", dc.URL(), []byte(dc.APIKey()),
+		digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ExternalCAs = []ExternalCA{{
+			ID: "tenant-bound-ca", Type: "digicert", Name: "Tenant Bound CA",
+			TenantID: otherTenant, CA: digi,
+		}}
+	})
+	registerServedTenant(t, h, "Finding tenant")
+	registerServedTenantID(t, h, otherTenant, "Authority tenant")
+	issued, err := digi.Issue(t.Context(), ca.IssueRequest{TenantID: otherTenant,
+		CSR: serverTestCSR(t, "other.corp.example", nil), DNSNames: []string{"other.corp.example"},
+		TTL: 24 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := certinfo.Inspect(issued.CertificatePEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	findingID := seedRogueCTFinding(t, h, info)
+	token := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "identities:write")
+	status, body := secretsReqKey(t, h, http.MethodPost,
+		"/api/v1/revocation/rogue-certificates/revoke", token, "tenant-bound-revocation",
+		map[string]any{"discovery_id": findingID, "authority_id": "tenant-bound-ca", "reason": "keyCompromise"})
+	if status != http.StatusNotFound || len(dc.Revocations()) != 0 {
+		t.Fatalf("other tenant authority revocation: status=%d body=%s revocations=%d",
+			status, body, len(dc.Revocations()))
+	}
+}
+
 func TestServedRogueCertificateIsRevokedAtItsIssuer(t *testing.T) {
 	dc, err := digicertfake.NewServer()
 	if err != nil {

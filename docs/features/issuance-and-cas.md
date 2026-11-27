@@ -96,8 +96,9 @@ Missing recordings still recover in order, under the tenant and privacy barriers
 Recovery still reads retained history, so its cost grows with that history; this
 does not establish a fixed recording-latency guarantee.
 
-Upstream CA credentials are configured by the control-plane operator, not tenant
-JSON: file references load into locked byte buffers for one outbox attempt and are
+Upstream CA credentials are configured by the control-plane operator and bound
+to one tenant per authority, not supplied as tenant JSON. File references load
+into locked byte buffers for one outbox attempt and are
 wiped afterward. Azure CA private-key operations and Let's Encrypt account JWS
 signatures stay in the isolated signer, and the API exposes only the non-secret
 registry row (`id`, `type`, `name`, `status`). A reused idempotency key after completion returns

@@ -11,7 +11,7 @@ import (
 // word: the CA authenticated with Basic and the realm, principal, KDCs or SPN
 // the operator wrote had no effect.
 func TestADCSKerberosSettingsNeedAKeytab(t *testing.T) {
-	base := ExternalCAConfig{ID: "a", Type: "adcs", Name: "a", Endpoint: "https://adcs.example/certsrv", CAConfig: `HOST\CA`, Template: "WebServer"}
+	base := ExternalCAConfig{ID: "a", Type: "adcs", Name: "a", TenantID: externalCATestTenantID, Endpoint: "https://adcs.example/certsrv", CAConfig: `HOST\CA`, Template: "WebServer"}
 	for field, set := range map[string]func(*ExternalCAConfig){
 		"kerberos_realm":     func(c *ExternalCAConfig) { c.KerberosRealm = "CORP.EXAMPLE" },
 		"kerberos_principal": func(c *ExternalCAConfig) { c.KerberosPrincipal = "svc-trstctl" },

@@ -128,7 +128,7 @@ func TestFactoryExternalCACleansFailurePaths(t *testing.T) {
 func TestExternalCAConfigRegistryDoesNotLoadCredentialsAtStartup(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "not-created")
 	items, err := externalCAsFromConfig(context.Background(), []config.ExternalCAConfig{{
-		ID: "digicert", Type: "digicert", Name: "DigiCert", Endpoint: "https://www.digicert.com", APIKeyRef: "file:" + missing,
+		ID: "digicert", Type: "digicert", Name: "DigiCert", TenantID: servedTestTenant, Endpoint: "https://www.digicert.com", APIKeyRef: "file:" + missing,
 	}}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("construct registry: %v", err)
@@ -156,7 +156,7 @@ func TestExternalCAReceiverIdempotencyClassificationIsConservative(t *testing.T)
 
 func TestExternalCAConfigRejectsACMEWithoutIsolatedSigner(t *testing.T) {
 	_, err := externalCAsFromConfig(context.Background(), []config.ExternalCAConfig{{
-		ID: "letsencrypt", Type: "letsencrypt", Name: "Let's Encrypt",
+		ID: "letsencrypt", Type: "letsencrypt", Name: "Let's Encrypt", TenantID: servedTestTenant,
 		DirectoryURL: "https://acme.example/directory",
 	}}, nil, nil, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "isolated signing service is required") {
@@ -181,6 +181,23 @@ func TestExternalCARegistryHidesTenantBoundAuthority(t *testing.T) {
 	}
 	if _, err := registry.IssueExternalCA(context.Background(), "tenant-b", "azure", "idempotent", "binding", api.ExternalCAIssueRequest{}); !errors.Is(err, api.ErrExternalCANotFound) {
 		t.Fatalf("cross-tenant issue error = %v, want not found", err)
+	}
+}
+
+func TestExternalCARegistryRequiresExactTenantBinding(t *testing.T) {
+	registry := &externalCARegistry{
+		items: []api.ExternalCA{{ID: "upstream", Type: "digicert", Name: "Upstream", Status: "available"}},
+		byID: map[string]externalCAEntry{
+			"upstream": {meta: api.ExternalCA{ID: "upstream"}},
+		},
+	}
+	listed, err := registry.ListExternalCAs(context.Background(), "tenant-a")
+	if err != nil || len(listed) != 0 {
+		t.Fatalf("unbound authority listed=%+v, err=%v", listed, err)
+	}
+	_, err = registry.IssueExternalCA(context.Background(), "tenant-a", "upstream", "request", "binding", api.ExternalCAIssueRequest{})
+	if !errors.Is(err, api.ErrExternalCANotFound) {
+		t.Fatalf("unbound authority issue error=%v, want not found", err)
 	}
 }
 
@@ -228,7 +245,7 @@ func TestExternalCASecretSetLocksAndDestroysFileBytes(t *testing.T) {
 func TestExternalCAFactoryErrorsDoNotEchoCredentialPathContents(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing-secret-value")
 	items, err := externalCAsFromConfig(context.Background(), []config.ExternalCAConfig{{
-		ID: "gcp", Type: "gcpcas", Name: "GCP", Endpoint: "https://privateca.googleapis.com",
+		ID: "gcp", Type: "gcpcas", Name: "GCP", TenantID: servedTestTenant, Endpoint: "https://privateca.googleapis.com",
 		CAPool: "projects/p/locations/l/caPools/pool", BearerTokenRef: "file:" + path,
 	}}, nil, nil, nil, nil)
 	if err != nil {

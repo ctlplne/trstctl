@@ -288,26 +288,26 @@ not this file.
 | `internal/config/deny_credential_test.go:17` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/deny_credential_test.go:19` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/deny_credential_test.go:49` | test-only file reference paths, no credential values (CWE-798) |
-| `internal/config/external_ca_test.go:12` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:19` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:49` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:50` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:52` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:53` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:54` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
-| `internal/config/external_ca_test.go:55` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:58` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:60` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:61` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:62` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:63` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
-| `internal/config/external_ca_test.go:64` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:68` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:85` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:109` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:33` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:68` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:69` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:70` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:71` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:72` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:73` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
+| `internal/config/external_ca_test.go:74` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:77` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:80` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:81` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:82` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
+| `internal/config/external_ca_test.go:83` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:87` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:104` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:128` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/kerberos_test.go:8` | fabricated fixture paths and identifiers; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/ldap_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/managed_keys_azure_workload_test.go:15` | fixture tenant/client UUIDs and a token path, no credential value (CWE-798) |
@@ -785,15 +785,15 @@ not this file.
 | `internal/server/protocols_certbot_aud73_test.go:18` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:59` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:198` | fabricated secret reference, never raw credential material (CWE-798) |
-| `internal/server/protocols_served_test.go:377` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/protocols_served_test.go:441` | opaque fake secret reference used only by the local test provider (CWE-798). |
-| `internal/server/protocols_served_test.go:685` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/protocols_served_test.go:790` | fabricated secret reference, never raw credential material (CWE-798) |
-| `internal/server/protocols_served_test.go:936` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/protocols_served_test.go:973` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/protocols_served_test.go:1045` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/protocols_served_test.go:1127` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/protocols_served_test.go:1330` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:383` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:447` | opaque fake secret reference used only by the local test provider (CWE-798). |
+| `internal/server/protocols_served_test.go:691` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:796` | fabricated secret reference, never raw credential material (CWE-798) |
+| `internal/server/protocols_served_test.go:942` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:979` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:1051` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:1133` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:1336` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/provider_billing_gradient_served_test.go:121` | a test-only value (CWE-798) |
 | `internal/server/provider_billing_halopsa_served_test.go:40` | a test-only value (CWE-798) |
 | `internal/server/provider_billing_pax8_served_test.go:24` | test-only values (CWE-798) |
@@ -2507,7 +2507,7 @@ not this file.
 | `internal/server/crypto_risk_report_served_test.go:39` | owner execute is required to traverse this private test directory. |
 | `internal/server/customer_assurance_report_served_test.go:59` | owner execute is required to traverse this private test directory. |
 | `internal/server/evidence_reports_served_test.go:39` | owner execute is required to traverse this private test directory. |
-| `internal/server/external_ca_config_test.go:189` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/external_ca_config_test.go:206` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/managed_key_signer_config.go:27` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/server/private_workload_socket_test.go:30` | deliberately unsafe directory tests fail-closed startup |
 | `internal/server/private_workload_socket_test.go:33` | restore owner-only test directory for cleanup |

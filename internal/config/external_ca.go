@@ -39,7 +39,7 @@ type ExternalCAConfig struct {
 	ID       string `json:"id"`
 	Type     string `json:"type"`
 	Name     string `json:"name,omitempty"`
-	TenantID string `json:"tenant_id,omitempty"`
+	TenantID string `json:"tenant_id"`
 
 	Endpoint string `json:"endpoint,omitempty"`
 
@@ -52,7 +52,7 @@ type ExternalCAConfig struct {
 	Template string `json:"template,omitempty"`
 	// RevocationRelay is the enrolled common name of the domain-joined network
 	// relay that revokes this issuer's certificates with certutil (A162). It
-	// needs tenant_id: the relay is one tenant's agent.
+	// The relay belongs to the same tenant as this authority.
 	RevocationRelay string `json:"revocation_relay,omitempty"`
 
 	// AWS Private CA.
@@ -330,6 +330,9 @@ func validateExternalCAs(items []ExternalCAConfig) []error {
 		}
 		if strings.TrimSpace(item.Name) == "" {
 			errs = append(errs, fmt.Errorf("%s.name is required", where))
+		}
+		if tenantID, err := uuid.Parse(strings.TrimSpace(item.TenantID)); err != nil || tenantID == uuid.Nil {
+			errs = append(errs, fmt.Errorf("%s.tenant_id must name a non-zero tenant UUID", where))
 		}
 		errs = append(errs, validateExternalCANetwork(where, item)...)
 		errs = append(errs, validateExternalCAProvider(where, item)...)
