@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: trstctl
+  name: trstctl-agents
   labels:
     app.kubernetes.io/name: trstctl-agent
     app.kubernetes.io/part-of: trstctl

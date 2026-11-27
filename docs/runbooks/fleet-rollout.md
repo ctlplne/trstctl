@@ -20,8 +20,8 @@ Use [fleet rollback](fleet-rollback.md) if any abort criterion trips.
 helm upgrade --install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
   --set agentChannel.enabled=true \
-  --set agentChannel.publicAddress=trstctl:9443 \
-  --set agentChannel.serverName=trstctl
+  --set agentChannel.publicAddress=trstctl.trstctl.svc:9443 \
+  --set agentChannel.serverName=trstctl.trstctl.svc
 ```
 
 - The bootstrap CA bundle exists as `ConfigMap/trstctl-ca-bundle` and matches the
@@ -55,16 +55,16 @@ kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
     jq -nc --arg allowed_identity "$node" '{allowed_identity:$allowed_identity}' |
       trstctl-cli agents enroll-token -f - | jq -r .token > "$bootstrap_token_dir/$node"
   done
-kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
+kubectl -n trstctl-agents create secret generic trstctl-agent-bootstrap \
   --from-file="$bootstrap_token_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n trstctl create configmap trstctl-ca-bundle \
+kubectl -n trstctl-agents create configmap trstctl-ca-bundle \
   --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/kubernetes/rbac.yaml
 scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$rendered_agent_daemonset"
 kubectl apply -f "$rendered_agent_daemonset"
-kubectl -n trstctl rollout status daemonset/trstctl-agent --timeout=10m
+kubectl -n trstctl-agents rollout status daemonset/trstctl-agent --timeout=10m
 ```
 
 The Secret key names must exactly match node `metadata.name` values. The
@@ -205,7 +205,7 @@ For Kubernetes, undo the DaemonSet or pause before it reaches more nodes:
 ```sh
 kubectl -n trstctl rollout pause daemonset/trstctl-agent
 kubectl -n trstctl rollout undo daemonset/trstctl-agent
-kubectl -n trstctl rollout status daemonset/trstctl-agent --timeout=10m
+kubectl -n trstctl-agents rollout status daemonset/trstctl-agent --timeout=10m
 ```
 
 For Windows, stop and uninstall the service on the canary host:

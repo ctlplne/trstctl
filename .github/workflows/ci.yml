@@ -3434,6 +3434,7 @@ jobs:
 
       - name: Provision agent RBAC and an admin token for fixtures
         run: |
+          kubectl create namespace trstctl --dry-run=client -o yaml | kubectl apply -f -
           kubectl apply -f deploy/kubernetes/namespace.yaml
           kubectl apply -f deploy/kubernetes/certmanager-issuer-crds.yaml
           kubectl apply -f deploy/kubernetes/rbac.yaml
@@ -3447,14 +3448,14 @@ jobs:
           ca_bundle="$(mktemp)"
           rendered_agent_daemonset="$(mktemp)"
           kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 --decode > "$ca_bundle"
-          kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
+          kubectl -n trstctl-agents create secret generic trstctl-agent-bootstrap \
             --from-literal=token=ci-dry-run-token \
             --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
-          kubectl -n trstctl create configmap trstctl-ca-bundle \
+          kubectl -n trstctl-agents create configmap trstctl-ca-bundle \
             --from-file=ca-bundle.pem="$ca_bundle" \
             --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
-          kubectl -n trstctl create secret generic trstctl-cert-manager-issuer \
-            --from-literal=signer-url=https://trstctl:8443/api/v1/ca/authorities/e2e/issue \
+          kubectl -n trstctl-agents create secret generic trstctl-cert-manager-issuer \
+            --from-literal=signer-url=https://trstctl.trstctl.svc:8443/api/v1/ca/authorities/e2e/issue \
             --from-literal=token=ci-dry-run-token \
             --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
           scripts/release/render-kubernetes-agent-daemonset.sh \
@@ -3484,13 +3485,13 @@ jobs:
           # not masked by export's exit status (shellcheck SC2155).
           K8S_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
           # Agent token: the restricted identity the code under test uses.
-          K8S_TOKEN="$(kubectl -n trstctl create token trstctl-agent --duration=1h)"
+          K8S_TOKEN="$(kubectl -n trstctl-agents create token trstctl-agent --duration=1h)"
           # Admin token: test fixtures and verification (the agent SA cannot
           # create CertificateRequests, by design).
           K8S_ADMIN_TOKEN="$(kubectl -n trstctl create token trstctl-e2e-admin --duration=1h)"
           K8S_CA_FILE="$(mktemp)"
           kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 --decode > "$K8S_CA_FILE"
-          K8S_NAMESPACE="trstctl"
+          K8S_NAMESPACE="trstctl-agents"
           K8S_TRUST_CSI_IMAGE="trstctl-agent-csi:ci"
           export K8S_SERVER K8S_TOKEN K8S_ADMIN_TOKEN K8S_CA_FILE K8S_NAMESPACE K8S_TRUST_CSI_IMAGE
           go test -tags e2e -count=1 -v ./test/e2e/kubernetes/...

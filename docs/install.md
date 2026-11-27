@@ -246,8 +246,8 @@ live under `deploy/kubernetes` (namespace, RBAC, and the DaemonSet):
 helm upgrade --install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
   --set agentChannel.enabled=true \
-  --set agentChannel.publicAddress=trstctl:9443 \
-  --set agentChannel.serverName=trstctl
+  --set agentChannel.publicAddress=trstctl.trstctl.svc:9443 \
+  --set agentChannel.serverName=trstctl.trstctl.svc
 
 export TRSTCTL_AGENT_IMAGE='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 
@@ -263,14 +263,14 @@ kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
     jq -nc --arg allowed_identity "$node" '{allowed_identity:$allowed_identity}' |
       trstctl-cli agents enroll-token -f - | jq -r .token > "$bootstrap_token_dir/$node"
   done
-kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
+kubectl -n trstctl-agents create secret generic trstctl-agent-bootstrap \
   --from-file="$bootstrap_token_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n trstctl create secret generic trstctl-cert-manager-issuer \
-  --from-literal=signer-url="https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue" \
+kubectl -n trstctl-agents create secret generic trstctl-cert-manager-issuer \
+  --from-literal=signer-url="https://trstctl.trstctl.svc:8443/api/v1/ca/authorities/<ca-authority-id>/issue" \
   --from-literal=token="$TRSTCTL_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n trstctl create configmap trstctl-ca-bundle \
+kubectl -n trstctl-agents create configmap trstctl-ca-bundle \
   --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/kubernetes/certmanager-issuer-crds.yaml
@@ -279,15 +279,23 @@ scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$
 kubectl apply -f "$rendered_agent_daemonset"
 ```
 
-The DaemonSet points at the in-namespace `trstctl` Service and reads a
+The DaemonSet runs in `trstctl-agents`, connects to the `trstctl` Service in the
+control-plane namespace, and reads a
 single-use bootstrap token from `Secret/trstctl-agent-bootstrap`. That Secret
 must have one key per node, with each key named exactly like the node's
 `metadata.name`; the DaemonSet mounts only the matching key with
 `subPathExpr: $(NODE_NAME)`. The minted token is pinned to that same node name
 with `allowed_identity`, and enrollment rejects any CSR whose common name or
 identity SANs ask for a different agent identity. The DaemonSet also sets
-`--server-name=trstctl`, so the Helm value above is required for the
+`--server-name=trstctl.trstctl.svc`, so the Helm value above is required for the
 agent-channel certificate SAN.
+
+Keep the control-plane Helm release and its KEK, database, signer-authorization,
+and serving-key Secrets in `trstctl`. The node agent's default Secret Role is
+confined to `trstctl-agents`; placing control-plane Secrets there would expose
+them to every node agent. Workload Secret targets outside `trstctl-agents`
+require an explicit namespace grant, and the control-plane namespace must not
+receive that grant.
 `TRSTCTL_AGENT_IMAGE` must be an immutable
 `.../trstctl@sha256:<release-image-digest>` reference; the render script refuses
 tags and the all-zero placeholder. Create `ConfigMap/trstctl-ca-bundle` with

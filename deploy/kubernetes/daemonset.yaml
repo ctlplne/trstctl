@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: trstctl-agent
-  namespace: trstctl
+  namespace: trstctl-agents
   labels:
     app.kubernetes.io/name: trstctl-agent
     app.kubernetes.io/part-of: trstctl
@@ -66,7 +66,7 @@ spec:
             - "--name=$(NODE_NAME)"
             - "--key=/var/lib/trstctl-agent/agent.key"
             - "--cert=/var/lib/trstctl-agent/agent.crt"
-            - "--k8s-secret=trstctl/$(NODE_NAME)-tls"
+            - "--k8s-secret=trstctl-agents/$(NODE_NAME)-tls"
             - "--cert-manager-controller"
             - "--k8s-trust-rollouts=false"
             - "--k8s-trust-namespaces="
@@ -85,11 +85,11 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: TRSTCTL_ENROLL_URL
-              value: "https://trstctl:8443"
+              value: "https://trstctl.trstctl.svc:8443"
             - name: TRSTCTL_SERVER
-              value: "trstctl:9443"
+              value: "trstctl.trstctl.svc:9443"
             - name: TRSTCTL_SERVER_NAME
-              value: "trstctl"
+              value: "trstctl.trstctl.svc"
             - name: TRSTCTL_BRIDGE_SIGNER_URL
               valueFrom:
                 secretKeyRef:

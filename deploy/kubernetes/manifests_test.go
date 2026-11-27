@@ -208,6 +208,68 @@ func TestAgentRBACAllowsTrustBundleDistribution(t *testing.T) {
 	}
 }
 
+// The node agent's service-account token is exposed on every worker node. It
+// must not have Secret permissions in the control-plane/signer namespace.
+func TestAgentSecretRoleIsOutsideControlPlaneNamespace(t *testing.T) {
+	const controlPlaneNamespace = "trstctl"
+	ds := daemonSet(t)
+	agentNamespace, _ := nestedString(ds, "metadata", "namespace")
+	if agentNamespace == "" || agentNamespace == controlPlaneNamespace {
+		t.Fatalf("agent DaemonSet namespace %q can share control-plane Secrets", agentNamespace)
+	}
+	for _, kind := range []string{"Namespace", "ServiceAccount", "Role", "RoleBinding"} {
+		name := "trstctl-agent"
+		if kind == "Namespace" {
+			name = agentNamespace
+		}
+		object := namedDoc(t, kind, name)
+		if kind != "Namespace" {
+			got, _ := nestedString(object, "metadata", "namespace")
+			if got != agentNamespace {
+				t.Fatalf("%s %s is in %q, want isolated agent namespace %q", kind, name, got, agentNamespace)
+			}
+		}
+	}
+	role := namedDoc(t, "Role", "trstctl-agent")
+	for _, verb := range []string{"list", "watch"} {
+		if hasClusterRoleRule(role, "", "secrets", verb) {
+			t.Fatalf("default agent Role grants Secret %s over the whole agent namespace", verb)
+		}
+	}
+	for _, verb := range []string{"get", "list", "watch", "create", "update", "patch", "delete"} {
+		if hasClusterRoleRule(clusterRole(t), "", "secrets", verb) {
+			t.Fatalf("default agent ClusterRole grants Secret %s across control-plane namespaces", verb)
+		}
+	}
+	containers := asMaps(ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)["containers"])
+	if len(containers) != 1 {
+		t.Fatalf("agent DaemonSet containers = %d", len(containers))
+	}
+	env := envValues(containers[0]["env"])
+	for name, want := range map[string]string{
+		"TRSTCTL_ENROLL_URL":  "https://trstctl.trstctl.svc:8443",
+		"TRSTCTL_SERVER":      "trstctl.trstctl.svc:9443",
+		"TRSTCTL_SERVER_NAME": "trstctl.trstctl.svc",
+	} {
+		if env[name] != want {
+			t.Errorf("%s = %q, want cross-namespace control-plane Service %q", name, env[name], want)
+		}
+	}
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{
+		"kubectl -n trstctl delete daemonset trstctl-agent",
+		"kubectl -n trstctl delete rolebinding trstctl-agent",
+		"kubectl -n trstctl delete serviceaccount trstctl-agent",
+	} {
+		if !strings.Contains(string(readme), marker) {
+			t.Errorf("existing co-located installations have no migration step %q", marker)
+		}
+	}
+}
+
 // TestDaemonSetRunsAgentAsServiceAccount: the DaemonSet runs the trstctl-agent
 // image in --k8s mode under the dedicated service account.
 func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
@@ -301,13 +363,13 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 	}
 
 	env := envValues(c["env"])
-	if got := env["TRSTCTL_ENROLL_URL"]; got != "https://trstctl:8443" {
+	if got := env["TRSTCTL_ENROLL_URL"]; got != "https://trstctl.trstctl.svc:8443" {
 		t.Errorf("TRSTCTL_ENROLL_URL = %q, want control-plane base URL without duplicated /enroll", got)
 	}
-	if got := env["TRSTCTL_SERVER"]; got != "trstctl:9443" {
+	if got := env["TRSTCTL_SERVER"]; got != "trstctl.trstctl.svc:9443" {
 		t.Errorf("TRSTCTL_SERVER = %q, want agent-channel service endpoint", got)
 	}
-	if got := env["TRSTCTL_SERVER_NAME"]; got != "trstctl" {
+	if got := env["TRSTCTL_SERVER_NAME"]; got != "trstctl.trstctl.svc" {
 		t.Errorf("TRSTCTL_SERVER_NAME = %q, want DNS SAN configured on Helm agentChannel.serverName", got)
 	}
 	if !hasEnvFromSecret(c, "TRSTCTL_BRIDGE_SIGNER_URL", "trstctl-cert-manager-issuer", "signer-url") {
@@ -481,7 +543,7 @@ func TestAgentBootstrapDocsMintSecretAndEnableChannel(t *testing.T) {
 		"--from-file=\"$bootstrap_token_dir\"",
 		"subPathExpr: $(NODE_NAME)",
 		"agentChannel.enabled=true",
-		"agentChannel.serverName=trstctl",
+		"agentChannel.serverName=trstctl.trstctl.svc",
 		"TRSTCTL_AGENT_IMAGE",
 		"scripts/release/render-kubernetes-agent-daemonset.sh",
 		"kubectl apply -f \"$rendered_agent_daemonset\"",

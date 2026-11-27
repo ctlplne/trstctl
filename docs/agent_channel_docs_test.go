@@ -67,7 +67,7 @@ func TestGettingStartedAgentChannelMatchesBlankCompose(t *testing.T) {
 		{"install.md", install},
 		{"runbooks/fleet-rollout.md", rollout},
 	} {
-		if !containsAll(doc.body, []string{"--set agentChannel.enabled=true", "--set agentChannel.publicAddress=trstctl:9443", "--set agentChannel.serverName=trstctl"}) {
+		if !containsAll(doc.body, []string{"--set agentChannel.enabled=true", "--set agentChannel.publicAddress=trstctl.trstctl.svc:9443", "--set agentChannel.serverName=trstctl.trstctl.svc"}) {
 			t.Errorf("%s must show the explicit Helm opt-in for live agent-channel rollout", doc.name)
 		}
 	}

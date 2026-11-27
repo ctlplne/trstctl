@@ -39,7 +39,7 @@ Kubernetes DaemonSet:
 
 ```sh
 kubectl -n trstctl rollout undo daemonset/trstctl-agent
-kubectl -n trstctl rollout status daemonset/trstctl-agent --timeout=10m
+kubectl -n trstctl-agents rollout status daemonset/trstctl-agent --timeout=10m
 ```
 
 If the problem came from the Helm agent-channel configuration instead of the
@@ -80,11 +80,11 @@ for node in $FAILED_NODES; do
   jq -nc --arg allowed_identity "$node" '{allowed_identity:$allowed_identity}' |
     trstctl-cli agents enroll-token -f - | jq -r .token > "$bootstrap_token_dir/$node"
 done
-kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
+kubectl -n trstctl-agents create secret generic trstctl-agent-bootstrap \
   --from-file="$bootstrap_token_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
 for node in $FAILED_NODES; do
-  kubectl -n trstctl delete pod \
+  kubectl -n trstctl-agents delete pod \
     -l app.kubernetes.io/name=trstctl-agent \
     --field-selector spec.nodeName="$node"
 done

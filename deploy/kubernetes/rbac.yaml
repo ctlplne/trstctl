@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: trstctl-agent
-  namespace: trstctl
+  namespace: trstctl-agents
   labels:
     app.kubernetes.io/name: trstctl-agent
 ---
@@ -21,23 +21,25 @@ metadata:
 # --inventory-k8s-namespaces, whose read-only cluster grant lives in the
 # separate rbac-inventory-namespaces.yaml and is never applied by default.
 #
-# Public trust-bundle ConfigMap writes stay in this namespace. Other target
+# The shipped agent namespace is trstctl-agents, separate from the Helm chart's
+# trstctl namespace, where KEK, database, signer, and serving-key Secrets live.
+# Public trust-bundle ConfigMap writes stay in the agent namespace. Other target
 # namespaces need an explicit Role + RoleBinding, not the default ClusterRole.
 #
-# Deployments that fulfill certificates in additional namespaces should copy this
-# Role + RoleBinding into each of those namespaces rather than promoting it back
-# to cluster scope.
+# Deployments that fulfill certificates in additional workload namespaces must
+# grant those namespaces explicitly. Never copy the agent Secret grant into the
+# control-plane namespace or promote it to cluster scope.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: trstctl-agent
-  namespace: trstctl
+  namespace: trstctl-agents
   labels:
     app.kubernetes.io/name: trstctl-agent
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
+    verbs: ["get", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "create", "update", "patch"]
@@ -46,7 +48,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: trstctl-agent
-  namespace: trstctl
+  namespace: trstctl-agents
   labels:
     app.kubernetes.io/name: trstctl-agent
 roleRef:
@@ -56,7 +58,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: trstctl-agent
-    namespace: trstctl
+    namespace: trstctl-agents
 ---
 # The agent acts as a cert-manager external issuer, fulfills trstctl-native
 # Certificate resources, signs approved native Kubernetes
@@ -134,4 +136,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: trstctl-agent
-    namespace: trstctl
+    namespace: trstctl-agents

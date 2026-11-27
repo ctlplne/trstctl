@@ -13,10 +13,11 @@ in-cluster CA — no `client-go` dependency.
 
 ## Files in this directory
 
-- `namespace.yaml` — creates the `trstctl` namespace.
+- `namespace.yaml` — creates the isolated `trstctl-agents` namespace; the Helm
+  release remains in `trstctl`.
 - `certmanager-issuer-crds.yaml` — the trstctl `Issuer`, `ClusterIssuer`,
   `Certificate`, and `TrustBundle` CRDs.
-- `rbac.yaml` — the agent's `ServiceAccount`, a `trstctl` namespace Role for
+- `rbac.yaml` — the agent's `ServiceAccount`, a `trstctl-agents` Role for
   Secret and ConfigMap writes, and a ClusterRole for controller reads and
   status updates. The default ClusterRole cannot write ConfigMaps.
 - `rbac-trust-configmaps.yaml` — opt-in namespaced Role and RoleBinding for
@@ -47,15 +48,16 @@ in-cluster CA — no `client-go` dependency.
 ## Deploy
 
 First make the control plane publish the agent steady-state channel. The packaged
-DaemonSet connects to the in-namespace `trstctl` Service on `:9443`, so the chart
-must enable that port and mint the channel certificate with `trstctl` as a DNS SAN:
+DaemonSet runs in `trstctl-agents` and connects to the `trstctl` Service in the
+control-plane namespace on `:9443`. The chart must mint the channel certificate
+with `trstctl.trstctl.svc` as a DNS SAN:
 
 ```sh
 helm upgrade --install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
   --set agentChannel.enabled=true \
-  --set agentChannel.publicAddress=trstctl:9443 \
-  --set agentChannel.serverName=trstctl
+  --set agentChannel.publicAddress=trstctl.trstctl.svc:9443 \
+  --set agentChannel.serverName=trstctl.trstctl.svc
 ```
 
 Then choose the immutable release image, mint one bootstrap token per
@@ -80,14 +82,14 @@ kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
     jq -nc --arg allowed_identity "$node" '{allowed_identity:$allowed_identity}' |
       trstctl-cli agents enroll-token -f - | jq -r .token > "$bootstrap_token_dir/$node"
   done
-kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
+kubectl -n trstctl-agents create secret generic trstctl-agent-bootstrap \
   --from-file="$bootstrap_token_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n trstctl create secret generic trstctl-cert-manager-issuer \
-  --from-literal=signer-url="https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue" \
+kubectl -n trstctl-agents create secret generic trstctl-cert-manager-issuer \
+  --from-literal=signer-url="https://trstctl.trstctl.svc:8443/api/v1/ca/authorities/<ca-authority-id>/issue" \
   --from-literal=token="$TRSTCTL_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n trstctl create configmap trstctl-ca-bundle \
+kubectl -n trstctl-agents create configmap trstctl-ca-bundle \
   --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/kubernetes/certmanager-issuer-crds.yaml
@@ -95,6 +97,31 @@ kubectl apply -f deploy/kubernetes/rbac.yaml
 scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$rendered_agent_daemonset"
 kubectl apply -f "$rendered_agent_daemonset"
 ```
+
+Keep the Helm release and its KEK, database, signer-authorization, and serving-key
+Secrets in `trstctl`. The node agent's service account has Secret permissions
+only in `trstctl-agents`; putting control-plane Secrets in that namespace would
+give every node agent access to them. Moving an existing installation requires
+new agent-namespace bootstrap/issuer Secrets, the CA bundle ConfigMap, and an
+agent-channel certificate with the cross-namespace DNS SAN. The old and new
+DaemonSets share each node's identity directory, so stop the old one before
+starting the new one. For an existing installation, run the install block above
+through the RBAC apply while retaining its rendered manifest, but defer its
+final DaemonSet apply. Then retire only the old agent objects:
+
+```sh
+kubectl -n trstctl delete daemonset trstctl-agent
+kubectl -n trstctl wait --for=delete pod -l app.kubernetes.io/name=trstctl-agent --timeout=5m
+kubectl -n trstctl delete rolebinding trstctl-agent
+kubectl -n trstctl delete role trstctl-agent
+kubectl -n trstctl delete serviceaccount trstctl-agent
+kubectl apply -f "$rendered_agent_daemonset"
+```
+
+This causes a brief agent pause while the new pods start. Verify node heartbeat,
+certificate renewal, and each workload Secret target before removing old
+per-node TLS Secrets by exact name. Keep the `trstctl` namespace: it contains
+the control plane and signer.
 
 Each bootstrap token is single-use and short-lived. The Secret must contain one
 key per node, and each key name must exactly match that node's
@@ -105,7 +132,7 @@ Each token is pinned to the same node name through `allowed_identity`, so
 `/enroll/bootstrap` rejects a CSR whose common name or identity SANs ask for a
 different agent identity.
 The enrollment URL must be an `https://` control-plane base URL
-(`https://trstctl:8443`); the agent appends `/enroll/bootstrap` itself.
+(`https://trstctl.trstctl.svc:8443`); the agent appends `/enroll/bootstrap` itself.
 
 `TRSTCTL_AGENT_IMAGE` must be a real `.../trstctl@sha256:<64-hex-digest>` release
 image; the render script rejects tags, short digests, and the all-zero placeholder.
@@ -123,7 +150,7 @@ Delete that host directory only when you intend to force re-enrollment for the n
 Create `Secret/trstctl-cert-manager-issuer` with:
 
 - `signer-url`: the served trstctl issuance endpoint that accepts a PEM CSR, for
-  example `https://trstctl:8443/api/v1/ca/authorities/{id}/issue`. It must match
+  example `https://trstctl.trstctl.svc:8443/api/v1/ca/authorities/{id}/issue`. It must match
   each Issuer or ClusterIssuer `spec.signerURL` exactly; a mismatch is NotReady
   and cannot sign;
 - `token`: an API token with permission to issue through that endpoint.
@@ -134,7 +161,7 @@ put on the command line or in an environment variable. The agent sends a stable
 certificates.
 
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and
-validated in tests. The `trstctl` namespace Role permits the agent to write its
+validated in tests. The `trstctl-agents` namespace Role permits the agent to write its
 local Secrets and public trust-bundle ConfigMaps. The ClusterRole permits it to
 read cert-manager `CertificateRequest`s, native Kubernetes
 `CertificateSigningRequest`s, and trstctl `Issuer`/`ClusterIssuer`/`Certificate`
