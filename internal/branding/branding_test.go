@@ -4,8 +4,24 @@ package branding
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
+
+func TestNormalizeHostBoundsResolverKeyLength(t *testing.T) {
+	if got := NormalizeHost(strings.Repeat("a", 300)); got != "" {
+		t.Fatalf("oversized host normalized to %d bytes, want empty", len(got))
+	}
+	if got := NormalizeHost(strings.Repeat("a", 254)); got != "" {
+		t.Fatalf("host above the DNS byte limit normalized to %d bytes, want empty", len(got))
+	}
+	if got := NormalizeHost(strings.Repeat("a", 253) + ":65535"); len(got) != 253 {
+		t.Fatalf("host at the DNS byte limit normalized to %d bytes", len(got))
+	}
+	if got := NormalizeHost("LOGIN.ACME.EXAMPLE:443"); got != "login.acme.example" {
+		t.Fatalf("ordinary host normalized to %q", got)
+	}
+}
 
 type fakeSource struct {
 	byHost map[string]string

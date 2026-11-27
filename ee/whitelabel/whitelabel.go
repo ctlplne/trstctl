@@ -36,8 +36,9 @@ type Resolver struct {
 	ttl   time.Duration
 	now   func() time.Time
 
-	mu    sync.Mutex
-	cache map[string]cachedRecord
+	mu        sync.Mutex
+	cache     map[string]cachedRecord
+	lastSweep time.Time
 }
 
 type cachedRecord struct {
@@ -55,6 +56,7 @@ func NewResolver(store Store, ttl time.Duration) *Resolver {
 func (r *Resolver) Invalidate() {
 	r.mu.Lock()
 	r.cache = map[string]cachedRecord{}
+	r.lastSweep = time.Time{}
 	r.mu.Unlock()
 }
 
@@ -133,13 +135,19 @@ func (r *Resolver) lookup(ctx context.Context, key string, fetch func(context.Co
 // algorithm (F2/V28): expired entries first (free), then the least recently
 // fetched. Callers hold r.mu.
 func (r *Resolver) evictLocked() {
-	ttlmap.MakeRoom(r.cache, r.now(), ttlmap.Policy[cachedRecord]{
-		Capacity: maxBrandCacheEntries,
+	now := r.now()
+	sweep := now.Sub(r.lastSweep) >= r.ttl
+	ttlmap.MakeRoom(r.cache, now, ttlmap.Policy[cachedRecord]{
+		Capacity:           maxBrandCacheEntries,
+		SweepBelowCapacity: sweep,
 		Expired: func(e cachedRecord, now time.Time) bool {
 			return now.Sub(e.fetched) >= r.ttl
 		},
 		Rank: func(e cachedRecord) time.Time { return e.fetched },
 	})
+	if sweep {
+		r.lastSweep = now
+	}
 }
 
 func merge(tenant, master *Record) branding.Brand {

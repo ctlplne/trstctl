@@ -94,9 +94,18 @@ func TenantForHost(ctx context.Context, host string) string {
 }
 
 func NormalizeHost(host string) string {
+	// A DNS name is at most 253 bytes. Bound the input before lowercasing so
+	// a large request value cannot create a large cache key or copy.
+	if len(host) > 260 { // DNS name, optional trailing dot, colon and five-digit port
+		return ""
+	}
 	host = strings.ToLower(strings.TrimSpace(host))
 	if i := strings.LastIndexByte(host, ':'); i > 0 && !strings.Contains(host[i:], "]") {
 		host = host[:i]
 	}
-	return strings.TrimSuffix(host, ".")
+	host = strings.TrimSuffix(host, ".")
+	if len(host) > 253 {
+		return ""
+	}
+	return host
 }

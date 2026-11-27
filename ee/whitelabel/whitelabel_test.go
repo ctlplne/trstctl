@@ -71,6 +71,38 @@ func TestResolverCacheNeverBleedsAcrossTenantOrHost(t *testing.T) {
 	}
 }
 
+func TestResolverKeepsHostCacheKeysBounded(t *testing.T) {
+	resolver := NewResolver(NewMemStore(), time.Minute)
+	ctx := context.Background()
+	host := strings.Repeat("a", 300)
+	if brand := resolver.Resolve(ctx, host, ""); brand.ProductName != branding.Default().ProductName {
+		t.Fatalf("oversized host brand = %+v", brand)
+	}
+	if tenant := resolver.TenantForHost(ctx, host); tenant != "" {
+		t.Fatalf("oversized host resolved tenant %q", tenant)
+	}
+	for key := range resolver.cache {
+		if len(key) > 253 {
+			t.Fatalf("cache retained %d-byte key", len(key))
+		}
+	}
+}
+
+func TestResolverSweepsExpiredEntriesBelowCapacity(t *testing.T) {
+	resolver := NewResolver(NewMemStore(), time.Second)
+	now := time.Now()
+	resolver.now = func() time.Time { return now }
+	resolver.Resolve(context.Background(), "first.example", "")
+	if _, ok := resolver.cache["h:first.example"]; !ok {
+		t.Fatal("initial host was not cached")
+	}
+	now = now.Add(2 * time.Second)
+	resolver.Resolve(context.Background(), "second.example", "")
+	if _, ok := resolver.cache["h:first.example"]; ok {
+		t.Fatal("expired host remained cached after a later lookup")
+	}
+}
+
 func TestCustomDomainLoginResolvesTenantBrand(t *testing.T) {
 	_, resolver := seededResolver(t)
 	ctx := context.Background()
