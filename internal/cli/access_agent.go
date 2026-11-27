@@ -65,6 +65,7 @@ func accessAgentUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "loopback tunnel to each session's gateway and instructions for reaching them (TRSTCTL_ACCESS_INSTRUCTIONS). The")
 	_, _ = fmt.Fprintln(w, "command gets no credential: your token is removed from its environment and the gateway signs in for it. Its sessions")
 	_, _ = fmt.Fprintln(w, "are revoked when it exits unless --keep is given. METHOD and FILE are the attestation the sessions are opened with.")
+	_, _ = fmt.Fprintln(w, "On Linux, the launcher also blocks the command from reading its process environment. On other systems, use only commands trusted as your OS user.")
 	_, _ = fmt.Fprintln(w, "\nExample: trstctl access agent --account postgres/orders-db:readonly --reason \"nightly report\" \\")
 	_, _ = fmt.Fprintln(w, "           --method github_oidc --payload-file \"$OIDC_TOKEN_FILE\" -- ./report-agent")
 }
@@ -114,7 +115,7 @@ func runAccessAgent(ctx context.Context, args []string, env Env, stdin io.Reader
 		return 2
 	}
 	if server == "" || token == "" {
-		_, _ = fmt.Fprintln(stderr, "error: --server and --token (or TRSTCTL_SERVER and TRSTCTL_TOKEN) are required")
+		_, _ = fmt.Fprintln(stderr, "error: --server (or TRSTCTL_SERVER) and TRSTCTL_TOKEN are required")
 		return 2
 	}
 	if *confine && !netconfine.Supported {
@@ -133,6 +134,14 @@ func runAccessAgent(ctx context.Context, args []string, env Env, stdin io.Reader
 			return 2
 		}
 		accounts = append(accounts, account)
+	}
+	protected, err := protectLauncherProcess()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: protect launcher process: %v\n", err)
+		return 1
+	}
+	if !protected {
+		_, _ = fmt.Fprintln(stderr, "warning: this system cannot hide the launcher's process environment from a command running as the same OS user")
 	}
 	raw, err := os.ReadFile(*payloadFile) // #nosec G304 -- the operator names their own attestation payload file (CWE-22)
 	if err != nil {

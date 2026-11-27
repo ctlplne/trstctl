@@ -48,7 +48,8 @@ diagnostic, and timestamp references.
 
 ## Global flags
 
-Every command accepts these, each with a `TRSTCTL_*` environment fallback:
+Commands use these global flags and `TRSTCTL_*` environment fallbacks. `access run`
+and `access agent` require the environment form of `TRSTCTL_TOKEN`:
 
 | Flag                | Env                       | Meaning                                                   |
 | ------------------- | ------------------------- | --------------------------------------------------------- |
@@ -678,6 +679,15 @@ revoke and is never passed to the child; the child gets the run's token as
 `TRSTCTL_TOKEN`, with `TRSTCTL_SERVER` and `TRSTCTL_CA_FILE` set to what the CLI used.
 The run's token is never printed. The run's authority is derived again from your
 grants at every request, so removing a grant or deleting a bundle stops it at once.
+
+Set the caller credential with `TRSTCTL_TOKEN` for `access run` and `access agent`.
+These two commands reject the global `--token` flag because command-line arguments
+are visible to other processes. On Linux, the launcher makes its process
+non-dumpable before it contacts the control plane or starts the command; an
+ordinary command running as the same OS user cannot read the launcher's
+`/proc/<pid>/environ`. A process with `CAP_SYS_PTRACE` can bypass that boundary.
+On other operating systems the CLI warns that it cannot enforce this same-user
+process boundary, so run only commands trusted with the caller's OS user.
 
 ```bash
 # A CI job whose own token holds only access:bundle.run.

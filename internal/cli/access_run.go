@@ -43,6 +43,7 @@ func accessRunUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "Usage: trstctl access run --bundle NAME_OR_ID [--bundle ...] [--permission P ...] [--ttl 10m] [--label TEXT] [--keep] -- <cmd> [args]")
 	_, _ = fmt.Fprintln(w, "\nMints a short-lived run credential under your live grants of the bundles, runs the command with it as TRSTCTL_TOKEN")
 	_, _ = fmt.Fprintln(w, "(your own token is not passed on), and revokes the run when the command exits unless --keep is given.")
+	_, _ = fmt.Fprintln(w, "On Linux, the launcher also blocks the command from reading its process environment. On other systems, use only commands trusted as your OS user.")
 	_, _ = fmt.Fprintln(w, "\nExample: trstctl access run --bundle deploy --ttl 10m --label \"job 42\" -- ./deploy.sh")
 }
 
@@ -71,6 +72,14 @@ func runAccessRun(ctx context.Context, args []string, env Env, stdin io.Reader, 
 	if *ttl < 0 || (*ttl > 0 && *ttl%time.Second != 0) {
 		_, _ = fmt.Fprintln(stderr, "error: --ttl must be a whole number of seconds")
 		return 2
+	}
+	protected, err := protectLauncherProcess()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: protect launcher process: %v\n", err)
+		return 1
+	}
+	if !protected {
+		_, _ = fmt.Fprintln(stderr, "warning: this system cannot hide the launcher's process environment from a command running as the same OS user")
 	}
 	httpClient, err := httpClientForEnv(env, caFile)
 	if err != nil {

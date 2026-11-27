@@ -73,6 +73,17 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		return 2
 	}
 	rest := fs.Args()
+	callerTokenInArguments := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "token" {
+			callerTokenInArguments = true
+		}
+	})
+	if callerTokenInArguments && len(rest) >= 2 && rest[0] == "access" &&
+		(rest[1] == "agent" || rest[1] == "run") {
+		_, _ = fmt.Fprintln(stderr, "error: access agent and access run require TRSTCTL_TOKEN from the environment; --token exposes the caller credential in process arguments")
+		return 2
+	}
 	if showVersion {
 		_, _ = fmt.Fprintln(stdout, buildinfo.String("trstctl-cli"))
 		return 0
