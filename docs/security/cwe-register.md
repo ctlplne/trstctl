@@ -4002,8 +4002,8 @@ not this file.
 | `internal/scanannotate/registry_stock_test.go:43` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
 | `internal/scanannotate/registry_stock_test.go:66` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
 | `internal/scanannotate/registry_stock_test.go:68` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
-| `internal/server/access_admin_served_test.go:339` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
-| `internal/server/access_admin_served_test.go:350` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/access_admin_served_test.go:344` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/access_admin_served_test.go:355` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
 | `internal/server/audit_feed_index_template_lab_test.go:33` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_index_template_lab_test.go:38` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:54` | the runner's own lab search engine (CWE-918) |
