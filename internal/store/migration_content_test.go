@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	527: true, // TestMigrationDataContentBackfills/0527_member_recovery_state_starts_clear
 	518: true, // TestMigrationDataContentBackfills/0518_external_observer_configurer_starts_unknown
 	517: true, // TestMigrationDataContentBackfills/0517_ticket_intake_configurer_starts_unknown
 	516: true, // TestMigrationDataContentBackfills/0516_deployment_target_configurers_start_unknown
@@ -2389,10 +2390,73 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 	}
 }
 
+func testMigration0527MemberRecoveryStateStartsClear(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 527)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect pre-0527 database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	cases := []struct {
+		name, insert, stable string
+	}{
+		{"upsert", `INSERT INTO tenant_member_upsert_commands
+			(tenant_id, subject_ref, event_id, event_time, event_schema_version, event_payload, payload_sha256)
+			VALUES ($1, $2, $3, now(), 1, convert_to('{}', 'UTF8'), $4),
+			       ($5, $6, $7, now(), 1, convert_to('{}', 'UTF8'), $8)`,
+			`SELECT tenant_id::text, subject_ref::text, event_id::text, encode(event_payload, 'hex'),
+			        payload_sha256::text, status FROM tenant_member_upsert_commands ORDER BY tenant_id`},
+		{"offboard", `INSERT INTO tenant_member_offboard_commands
+			(tenant_id, subject_ref, event_id, event_time, event_schema_version, event_payload, payload_sha256)
+			VALUES ($1, $2, $3, now(), 1, convert_to('{}', 'UTF8'), $4),
+			       ($5, $6, $7, now(), 1, convert_to('{}', 'UTF8'), $8)`,
+			`SELECT tenant_id::text, subject_ref::text, event_id::text, encode(event_payload, 'hex'),
+			        payload_sha256::text, status FROM tenant_member_offboard_commands ORDER BY tenant_id`},
+	}
+	type contentDigest struct {
+		count  int
+		digest string
+	}
+	before := make(map[string]contentDigest, len(cases))
+	for _, tc := range cases {
+		if _, err := pool.Exec(ctx, tc.insert,
+			tenantA, strings.Repeat("a", 64), "52700000-0000-4000-8000-000000000001", strings.Repeat("a", 64),
+			tenantB, strings.Repeat("b", 64), "52700000-0000-4000-8000-000000000002", strings.Repeat("b", 64),
+		); err != nil {
+			t.Fatalf("seed pre-0527 %s commands: %v", tc.name, err)
+		}
+		beforeCount, beforeDigest := checksumQuery(t, ctx, pool, tc.stable)
+		if beforeCount != 2 {
+			t.Fatalf("pre-0527 %s rows=%d, want 2", tc.name, beforeCount)
+		}
+		before[tc.name] = contentDigest{beforeCount, beforeDigest}
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	for _, tc := range cases {
+		afterCount, afterDigest := checksumQuery(t, ctx, pool, tc.stable)
+		if afterCount != before[tc.name].count || afterDigest != before[tc.name].digest {
+			t.Fatalf("0527 changed existing %s command evidence", tc.name)
+		}
+	}
+	for _, query := range []string{
+		`SELECT count(*) FROM tenant_member_upsert_commands WHERE recovery_blocked_reason = ''`,
+		`SELECT count(*) FROM tenant_member_offboard_commands WHERE recovery_blocked_reason = ''`,
+	} {
+		var clear int
+		if err := pool.QueryRow(ctx, query).Scan(&clear); err != nil || clear != 2 {
+			t.Fatalf("0527 recovery state clear rows=%d, err=%v", clear, err)
+		}
+	}
+}
+
 // TestMigrationDataContentBackfills is the SCHEMA-002 acceptance: migrations that
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0527_member_recovery_state_starts_clear", testMigration0527MemberRecoveryStateStartsClear)
 	t.Run("0518_external_observer_configurer_starts_unknown", testMigration0518ExternalObserverConfigurerStartsUnknown)
 	t.Run("0517_ticket_intake_configurer_starts_unknown", testMigration0517TicketIntakeConfigurerStartsUnknown)
 	t.Run("0516_deployment_target_configurers_start_unknown", testMigration0516DeploymentTargetConfigurersStartUnknown)
