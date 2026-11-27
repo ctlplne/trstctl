@@ -30,8 +30,9 @@ import (
 // failures are quarantined;
 // transport, custody, and unknown projection errors still stop replay.
 type tenantPoisonQuarantine struct {
-	store *store.Store
-	known map[string]bool
+	store                    *store.Store
+	known                    map[string]bool
+	lastAppliedEventSequence uint64
 }
 
 func newTenantPoisonQuarantine(st *store.Store) *tenantPoisonQuarantine {
@@ -42,7 +43,16 @@ func (q *tenantPoisonQuarantine) skip(ctx context.Context, e events.Event) (bool
 	return q.skipWithReplayTx(ctx, e, nil)
 }
 
+func (q *tenantPoisonQuarantine) skipForExtensions(ctx context.Context, e events.Event) (bool, error) {
+	skip, err := q.skip(ctx, e)
+	if err == nil && q.lastAppliedEventSequence == e.Sequence && e.Sequence != 0 {
+		return false, nil
+	}
+	return skip, err
+}
+
 func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.Event, tx pgx.Tx) (bool, error) {
+	q.lastAppliedEventSequence = 0
 	// Historical Provider audit has a textual pre-UUID partition. It is not a
 	// customer tenant and must keep its existing replay path. There is no
 	// tenant-scoped quarantine row to write for this legacy scope.
@@ -173,6 +183,21 @@ func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.
 		}
 		if err != nil || owner == "" || owner == source.ID {
 			return false, err
+		}
+		var applied bool
+		if tx == nil {
+			applied, err = q.store.ProjectionAppliedEventReceipt(ctx, e.TenantID, e.ID, e.Sequence)
+		} else {
+			applied, err = q.store.ProjectionAppliedEventReceiptTx(ctx, tx, e.TenantID, e.ID, e.Sequence)
+		}
+		if err != nil {
+			return false, err
+		}
+		if applied {
+			// This exact core event committed before the target changed. Its
+			// extension projections still receive the replayed envelope.
+			q.lastAppliedEventSequence = e.Sequence
+			return true, nil
 		}
 		if err := q.record(ctx, tx, e.TenantID, e.Sequence, "workload_source_target_conflict"); err != nil {
 			return false, err

@@ -16,7 +16,8 @@ var ErrSecretSyncWorkloadIdentitySourceNotFound = errors.New("store: secret-sync
 // SecretSyncWorkloadIdentitySourceTargetOwner returns the ID currently occupying
 // the tenant/provider/target uniqueness coordinate. Disabled sources still own
 // that coordinate. The API checks it under a target-scoped admission fence
-// before publishing an event; replay uses it to identify old poison events.
+// before publishing an event; replay uses it to detect a conflicting target
+// after checking whether the exact earlier event already projected.
 func (s *Store) SecretSyncWorkloadIdentitySourceTargetOwner(ctx context.Context, tenantID, provider, targetID string) (string, error) {
 	var owner string
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {

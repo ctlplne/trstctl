@@ -5813,7 +5813,7 @@ func (p *Projector) rebuildEventProjectionsThrough(
 		return nil
 	}
 	return replayProjectionThrough(ctx, log, 0, replayHead, func(e events.Event) error {
-		if skip, err := quarantine.skip(ctx, e); err != nil {
+		if skip, err := quarantine.skipForExtensions(ctx, e); err != nil {
 			return err
 		} else if skip {
 			return nil
@@ -11796,6 +11796,9 @@ func (p *Projector) projectFromPlannedHistory(ctx context.Context, log *events.L
 			return err
 		}
 		if quarantined {
+			if quarantine.lastAppliedEventSequence == e.Sequence && e.Sequence != 0 {
+				return quarantine.apply(ctx, e, func() error { return p.applyEventProjections(ctx, e) })
+			}
 			return nil
 		}
 		skip, err := secretAuthority.skip(e)

@@ -187,6 +187,13 @@ func (w *TailWorker) Run(ctx context.Context) error {
 						return w.persistFailure(ownerCtx, e.Sequence, err)
 					}
 					if quarantined {
+						if quarantine.lastAppliedEventSequence == e.Sequence && e.Sequence != 0 {
+							if err := retryWhileBusy(ownerCtx, func() error {
+								return w.proj.applyEventProjections(ownerCtx, e)
+							}); err != nil {
+								return w.persistFailure(ownerCtx, e.Sequence, err)
+							}
+						}
 						if err := advance(ownerCtx, e); err != nil {
 							return w.persistFailure(ownerCtx, e.Sequence, err)
 						}

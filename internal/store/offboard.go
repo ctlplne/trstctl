@@ -109,6 +109,7 @@ var TenantScopedTables = []string{
 	// This operational denial belongs to the tenant's lifecycle and must be
 	// erased before a later registration can start a fresh epoch for the UUID.
 	"projection_tenant_quarantines",
+	"projection_applied_event_receipts",
 	"attestations",
 	"discovery_coverage",
 	"discovery_findings",

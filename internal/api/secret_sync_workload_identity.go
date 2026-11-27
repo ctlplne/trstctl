@@ -357,7 +357,12 @@ func (a *API) appendAndProjectSecretSyncWorkloadIdentitySource(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	return projections.New(a.store).Apply(ctx, event)
+	// Once append is acknowledged, complete the read-model step under the
+	// target fence even if the client disconnects. A bounded independent
+	// context keeps the next admission from reading behind this event.
+	projectionCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
+	return projections.New(a.store).Apply(projectionCtx, event)
 }
 
 func toSecretSyncWorkloadIdentitySourceResponse(source store.SecretSyncWorkloadIdentitySource) secretSyncWorkloadIdentitySourceResponse {

@@ -115,6 +115,9 @@ func TestSnapshotCaptureIncludesEveryRestoreTableAndTenantRows(t *testing.T) {
 			}); err != nil {
 				return err
 			}
+			if err := s.RecordProjectionAppliedEventReceiptTx(ctx, tx, tenantID, uuid(tenantID, 9107), 45); err != nil {
+				return err
+			}
 			rows, err := tx.Query(ctx, `
 SELECT 'notification_routing_policies', to_jsonb(t.*)
 FROM notification_routing_policies t WHERE tenant_id = $1
@@ -130,6 +133,9 @@ FROM breakglass_issue_receipts t WHERE tenant_id = $1
 UNION ALL
 SELECT 'breakglass_authority_receipts', to_jsonb(t.*)
 FROM breakglass_authority_receipts t WHERE tenant_id = $1
+UNION ALL
+SELECT 'projection_applied_event_receipts', to_jsonb(t.*)
+FROM projection_applied_event_receipts t WHERE tenant_id = $1
 UNION ALL
 SELECT 'agent_certificate_bindings', to_jsonb(t.*)
 FROM agent_certificate_bindings t WHERE tenant_id = $1`, tenantID)
@@ -156,8 +162,8 @@ FROM agent_certificate_bindings t WHERE tenant_id = $1`, tenantID)
 		}); err != nil {
 			t.Fatalf("seed tenant-scoped capture fixtures: %v", err)
 		}
-		if len(expected[tenantID]) != 6 {
-			t.Fatalf("fixture inventory for %s = %d, want six nonempty tables", tenantID, len(expected[tenantID]))
+		if len(expected[tenantID]) != 7 {
+			t.Fatalf("fixture inventory for %s = %d, want seven nonempty tables", tenantID, len(expected[tenantID]))
 		}
 	}
 	if count, err := s.WriteReadModelSnapshots(ctx); err != nil || count != 2 {

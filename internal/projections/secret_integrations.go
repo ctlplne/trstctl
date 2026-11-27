@@ -1056,6 +1056,12 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		}
 		return true, err
 	case EventSecretSyncWorkloadIdentityUpserted:
+		if e.ID != "" && e.Sequence != 0 {
+			applied, err := p.store.ProjectionAppliedEventReceiptTx(ctx, tx, e.TenantID, e.ID, e.Sequence)
+			if err != nil || applied {
+				return true, err
+			}
+		}
 		var payload SecretSyncWorkloadIdentitySourceUpserted
 		if err := decode(e, &payload); err != nil {
 			return true, err
@@ -1093,7 +1099,7 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 			status = store.SecretSyncWorkloadIdentityDisabled
 			reason = "disabled_by_operator"
 		}
-		return true, p.store.ApplySecretSyncWorkloadIdentitySourceUpsertedTx(ctx, tx, store.SecretSyncWorkloadIdentitySource{
+		if err := p.store.ApplySecretSyncWorkloadIdentitySourceUpsertedTx(ctx, tx, store.SecretSyncWorkloadIdentitySource{
 			ID: payload.ID, TenantID: e.TenantID, Name: payload.Name, Provider: payload.Provider,
 			RoleARN: payload.RoleARN, ServiceAccount: payload.ServiceAccount,
 			AzureTenantID: payload.AzureTenantID, ClientID: payload.ClientID, TargetScope: payload.TargetScope,
@@ -1102,7 +1108,10 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 			WorkloadProofRef: payload.WorkloadProofRef, TrustSourceID: payload.TrustSourceID,
 			Enabled: payload.Enabled, Status: status, StatusReason: reason,
 			CreatedAt: e.Time, UpdatedAt: e.Time,
-		})
+		}); err != nil {
+			return true, err
+		}
+		return true, p.store.RecordProjectionAppliedEventReceiptTx(ctx, tx, e.TenantID, e.ID, e.Sequence)
 	case EventSecretSyncWorkloadIdentityStatus:
 		var payload SecretSyncWorkloadIdentitySourceStatus
 		if err := decode(e, &payload); err != nil {
