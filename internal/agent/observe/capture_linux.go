@@ -59,7 +59,9 @@ func Capture(ctx context.Context, iface string, ports []uint16, snaplen int, a *
 		if ll, ok := from.(*unix.SockaddrLinklayer); ok && ll.Pkttype == unix.PACKET_OUTGOING {
 			continue
 		}
-		a.Frame(buf[:n], time.Now())
+		if err := feedCapturedFrame(a, buf[:n], time.Now()); err != nil {
+			return err
+		}
 	}
 	return nil
 }

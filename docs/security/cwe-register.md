@@ -1222,7 +1222,7 @@ not this file.
 | `internal/agent/observe/fragments_test.go:202` | fixture ids fit (CWE-190) |
 | `internal/agent/observe/fragments_test.go:265` | small loop index (CWE-190) |
 | `internal/agent/observe/pcap_test.go:79` | bounded test fixture length (CWE-190) |
-| `internal/agent/observe/pcapng.go:209` | sec is bounded above and nsec is under 1e9 (CWE-190) |
+| `internal/agent/observe/pcapng.go:213` | sec is bounded above and nsec is under 1e9 (CWE-190) |
 | `internal/agent/observe/pcapng_test.go:111` | a bounded test block (CWE-190) |
 | `internal/agent/observe/pcapng_test.go:113` | a bounded test block (CWE-190) |
 | `internal/agent/observe/pcapng_test.go:126` | a bounded test frame (CWE-190) |
@@ -2588,7 +2588,7 @@ not this file.
 | `cmd/trstctl-agent/inventory_hostcrypto.go:78` | operator-configured keystore password file (CWE-22) |
 | `cmd/trstctl-agent/main.go:1399` | operator-supplied PIN file path, read at their instruction (CWE-22) |
 | `cmd/trstctl-agent/main.go:2069` | operator-named key file (CWE-22) |
-| `cmd/trstctl-agent/observe.go:104` | the operator names the capture file on the command line (CWE-22) |
+| `cmd/trstctl-agent/observe.go:105` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:504` | operator-supplied public issuer certificate (CWE-22) |

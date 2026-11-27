@@ -114,3 +114,34 @@ func TestParsePlaintextLoginsX1L4(t *testing.T) {
 		t.Fatal("a mail client decided before the greeting")
 	}
 }
+
+func TestC0001SplitMySQLSSLRequestWaitsForTheFullPacket(t *testing.T) {
+	greeting := mysqlGreetingPacket()
+	request := mysqlClientPacket(mysqlClientSSL, 32)
+	for n := 8; n < len(request); n++ {
+		obs, ok, done := Parse(request[:n], greeting)
+		if ok || done || obs.Protocol != "" {
+			t.Fatalf("%d-byte SSLRequest was classified before its 36-byte packet arrived: %+v ok=%t done=%t", n, obs, ok, done)
+		}
+	}
+	for _, offset := range []int{-1, len(request) + 1} {
+		obs, ok, done := upgradedTLS(request, greeting, offset, len(greeting), UpgradeMySQL)
+		if ok || done || obs.Protocol != "" {
+			t.Fatalf("invalid TLS offset %d was classified: %+v ok=%t done=%t", offset, obs, ok, done)
+		}
+	}
+}
+
+func FuzzParseIndependentTruncations(f *testing.F) {
+	greeting := mysqlGreetingPacket()
+	request := mysqlClientPacket(mysqlClientSSL, 32)
+	f.Add(request[:8], greeting)
+	f.Add(request[:35], greeting)
+	f.Add(request, greeting)
+	f.Fuzz(func(t *testing.T, client, server []byte) {
+		if len(client) > MaxDirectionBytes || len(server) > MaxDirectionBytes {
+			t.Skip()
+		}
+		Parse(client, server)
+	})
+}

@@ -71,6 +71,7 @@ func startObserver(ctx context.Context, a *agent.Agent, ch agent.ChannelClient) 
 	go func() {
 		err := observe.Capture(ctx, iface, ports, 2048, asm)
 		if err != nil {
+			cancel() // do not report a possibly interrupted assembler
 			fmt.Fprintln(os.Stderr, "trstctl-agent: observer stopped:", err)
 		}
 	}()

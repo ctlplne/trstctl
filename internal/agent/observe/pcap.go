@@ -89,7 +89,9 @@ func ReplayPcap(r io.Reader, a *Assembler) (int, error) {
 			nsec *= int64(time.Microsecond)
 		}
 		at := time.Unix(int64(sec), nsec).UTC()
-		a.Frame(frame, at)
+		if err := feedCapturedFrame(a, frame, at); err != nil {
+			return packets, err
+		}
 	}
 }
 

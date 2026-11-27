@@ -135,7 +135,9 @@ func replayPcapNG(br *bufio.Reader, a *Assembler) (int, error) {
 			ticks := uint64(order.Uint32(body[4:8]))<<32 | uint64(order.Uint32(body[8:12]))
 			at := pcapngTime(ticks, iface.perSecond)
 			if frame := ethernetFrame(iface.link, body[20:20+captured]); frame != nil {
-				a.Frame(frame, at)
+				if err := feedCapturedFrame(a, frame, at); err != nil {
+					return packets, err
+				}
 			}
 		case pcapngSimplePacket:
 			// No timestamp and the first interface; the original length
@@ -150,7 +152,9 @@ func replayPcapNG(br *bufio.Reader, a *Assembler) (int, error) {
 				data = data[:original]
 			}
 			if frame := ethernetFrame(ifaces[0].link, data); frame != nil {
-				a.Frame(frame, time.Time{})
+				if err := feedCapturedFrame(a, frame, time.Time{}); err != nil {
+					return packets, err
+				}
 			}
 		}
 	}

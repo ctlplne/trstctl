@@ -40,6 +40,9 @@ func isTLSRecord(b []byte) bool {
 // upgradedTLS reads the TLS that starts at client[cOff:] and server[sOff:]
 // (sOff < 0: the server's TLS has not been seen yet).
 func upgradedTLS(client, server []byte, cOff, sOff int, upgrade string) (Observation, bool, bool) {
+	if cOff < 0 || cOff > len(client) {
+		return Observation{}, false, false
+	}
 	clientTLS := client[cOff:]
 	if len(clientTLS) < 3 {
 		return Observation{}, false, false
@@ -257,6 +260,9 @@ func parseMySQL(client, server []byte, greeting int) (Observation, bool, bool) {
 	}
 	capabilities := binary.LittleEndian.Uint32(client[4:8])
 	if capabilities&mysqlClientSSL != 0 && length == 32 {
+		if len(client) < 4+length {
+			return Observation{}, false, false
+		}
 		return upgradedTLS(client, server, 4+length, greeting, UpgradeMySQL)
 	}
 	return Observation{Protocol: "mysql", Plaintext: true, PlaintextKind: "mysql-login"}, true, true
