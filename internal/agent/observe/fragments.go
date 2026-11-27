@@ -3,8 +3,10 @@
 package observe
 
 import (
+	"cmp"
 	"encoding/binary"
 	"net/netip"
+	"slices"
 	"time"
 )
 
@@ -214,7 +216,7 @@ func (r *reassembler) add(pkt ipPacket, now time.Time, st *Stats) (ipPacket, boo
 	f := pkt.frag
 	key := fragmentKey{src: pkt.src, dst: pkt.dst, proto: pkt.proto, v6: f.v6, id: f.id}
 	end := f.offset + len(pkt.payload)
-	if (f.more && len(pkt.payload)%8 != 0) || end > maxReassembledBytes {
+	if len(pkt.payload) == 0 || (f.more && len(pkt.payload)%8 != 0) || end > maxReassembledBytes {
 		r.drop(key, st)
 		return ipPacket{}, false
 	}
@@ -280,15 +282,17 @@ func maxEnd(ranges []fragmentRange) int {
 }
 
 // covered is how many bytes from offset 0 the ranges cover without a gap.
-// Ranges never overlap (add refuses an overlap).
+// Ranges never overlap (add refuses an overlap). Sort once so an empty or
+// out-of-order range cannot make the scan revisit the same offset forever.
 func covered(ranges []fragmentRange) int {
+	slices.SortFunc(ranges, func(a, b fragmentRange) int { return cmp.Compare(a.start, b.start) })
 	n := 0
-	for progress := true; progress; {
-		progress = false
-		for _, r := range ranges {
-			if r.start == n {
-				n, progress = r.end, true
-			}
+	for _, r := range ranges {
+		if r.start > n {
+			break
+		}
+		if r.end > n {
+			n = r.end
 		}
 	}
 	return n

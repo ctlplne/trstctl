@@ -286,6 +286,55 @@ func TestReassemblyIsBoundedX1L2R(t *testing.T) {
 	}
 }
 
+// M0004: a final fragment with no payload must not spin under Assembler.mu.
+// Keep the deadline in the test so the vulnerable implementation fails instead
+// of pinning the test process until the suite's global timeout.
+func TestM0004EmptyFinalFragmentTerminates(t *testing.T) {
+	type result struct {
+		completed bool
+		dropped   uint64
+		pending   int
+		covered   int
+		assembler Stats
+	}
+	finished := make(chan result, 1)
+	go func() {
+		r := newReassembler()
+		st := &Stats{}
+		now := time.Unix(1_900_000_000, 0)
+		first := ipPacket{proto: 6, payload: make([]byte, 8), frag: &ipFragment{id: 77, more: true}}
+		last := ipPacket{proto: 6, frag: &ipFragment{id: 77, offset: 8}}
+		r.add(first, now, st)
+		_, completed := r.add(last, now, st)
+		firstFrame := make([]byte, 14+20+8)
+		binary.BigEndian.PutUint16(firstFrame[12:14], 0x0800)
+		ip := firstFrame[14:]
+		ip[0], ip[8], ip[9] = 0x45, 64, 6
+		binary.BigEndian.PutUint16(ip[2:4], 28)
+		binary.BigEndian.PutUint16(ip[4:6], 77)
+		binary.BigEndian.PutUint16(ip[6:8], 0x2000)
+		copy(ip[12:16], []byte{10, 0, 0, 1})
+		copy(ip[16:20], []byte{10, 0, 0, 2})
+		lastFrame := append([]byte(nil), firstFrame[:14+20]...)
+		binary.BigEndian.PutUint16(lastFrame[14+2:14+4], 20)
+		binary.BigEndian.PutUint16(lastFrame[14+6:14+8], 1)
+		a := NewAssembler([]uint16{443}, 8, time.Minute, nil)
+		a.Frame(firstFrame, now)
+		a.Frame(lastFrame, now)
+		finished <- result{completed: completed, dropped: st.FragmentsDropped, pending: len(r.pending),
+			covered: covered([]fragmentRange{{0, 8}, {8, 8}}), assembler: a.Stats()}
+	}()
+	select {
+	case got := <-finished:
+		if got.completed || got.dropped != 1 || got.pending != 0 || got.covered != 8 ||
+			got.assembler.Fragments != 2 || got.assembler.FragmentsDropped != 1 {
+			t.Fatalf("zero-length final fragment = %+v, want dropped and coverage 8", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("zero-length final fragment or empty range did not terminate")
+	}
+}
+
 // TestKernelFragmentedDTLSCapturesYieldTheHandshakeX1L2R: real DTLS 1.2
 // handshakes (OpenSSL 3.5.9's s_server and s_client, an RSA-4096
 // certificate, datagrams up to 4000 bytes) captured with tcpdump 4.99.6 on a
