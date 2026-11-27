@@ -2,7 +2,6 @@
 package events
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"sync"
@@ -20,48 +19,9 @@ type ingressProducerScope struct {
 	mu           sync.Mutex
 	digest       []byte
 	explicitTime bool
-	imported     bool
 	active       bool
 	history      *Log
 	historyCalls sync.WaitGroup
-}
-
-// IngressIsImport distinguishes retained source history from a live producer
-// command while the normalized append admission is active.
-func IngressIsImport(ctx context.Context) bool {
-	scope, _ := ctx.Value(ingressProducerContextKey{}).(*ingressProducerScope)
-	if scope == nil {
-		return false
-	}
-	scope.mu.Lock()
-	defer scope.mu.Unlock()
-	return scope.active && scope.imported
-}
-
-// IngressEventAlreadyPublished preserves an exact producer retry when the
-// current read model has changed since the original event projected.
-func IngressEventAlreadyPublished(ctx context.Context, candidate Event) (bool, error) {
-	scope, _ := ctx.Value(ingressProducerContextKey{}).(*ingressProducerScope)
-	if scope == nil || candidate.ID == "" {
-		return false, ErrAppendAdmissionUnavailable
-	}
-	var found bool
-	err := WithIngressHistoryRead(ctx, func(readCtx context.Context) error {
-		scope.mu.Lock()
-		log := scope.history
-		explicitTime := scope.explicitTime
-		scope.mu.Unlock()
-		if log == nil {
-			return ErrAppendAdmissionUnavailable
-		}
-		canonical, exists, err := log.EventByID(readCtx, candidate.ID)
-		found = exists && canonical.TenantID == candidate.TenantID && canonical.Type == candidate.Type &&
-			canonical.SchemaVersion == candidate.SchemaVersion && bytes.Equal(canonical.Data, candidate.Data) &&
-			sameProtectedActorEncoding(canonical.Actor, candidate.Actor) &&
-			(!explicitTime || canonical.Time.Equal(candidate.Time))
-		return err
-	})
-	return found, err
 }
 
 type ingressHistoryReadContextKey struct{}
