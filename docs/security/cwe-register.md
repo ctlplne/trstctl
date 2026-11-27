@@ -2590,9 +2590,9 @@ not this file.
 | `cmd/trstctl-agent/main.go:2071` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/observe.go:105` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:479` | operator-supplied runtime configuration path (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:506` | operator-supplied public issuer certificate (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:536` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:487` | operator-supplied runtime configuration path (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:514` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:544` | operator-supplied public issuer certificate (CWE-22) |
 | `cmd/trstctl-agent/relayloop.go:212` | explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22). |
 | `cmd/trstctl-agent/role_grant_renewal_test.go:149` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/secretrender.go:23` | the operator's --secret-render-config (CWE-22) |

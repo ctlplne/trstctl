@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -279,4 +280,246 @@ func TestManagerRefusesWrongIssuerOCSPAndDuplicateLocalRoutesAUD39(t *testing.T)
 		t.Fatal("duplicate local revocation routes were accepted")
 	}
 	_ = fmt.Sprint(err)
+}
+
+func TestManagerRejectsLargeOCSPBodyBeforeUpstream(t *testing.T) {
+	issuer := newAUD39Issuer(t, "request-size issuer")
+	var upstreamCalls int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls++
+	}))
+	t.Cleanup(upstream.Close)
+	manager, err := revcache.NewManager(revcache.ManagerConfig{Segment: "plant-size", Issuers: []revcache.IssuerConfig{{
+		ID: "issuer", IssuerDER: issuer.der,
+		OCSP: &revcache.OCSPConfig{UpstreamURL: upstream.URL, LocalPath: "/ocsp/issuer"},
+	}}}, revcache.ManagerOptions{Client: upstream.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "http://relay.local/ocsp/issuer", bytes.NewReader(bytes.Repeat([]byte("x"), (8<<10)+1)))
+	req.Header.Set("Content-Type", "application/ocsp-request")
+	manager.ServeHTTP(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge || upstreamCalls != 0 {
+		t.Fatalf("oversized OCSP request status=%d upstream calls=%d, want local 413", rec.Code, upstreamCalls)
+	}
+	if rows := manager.Statuses(); len(rows) != 1 || rows[0].Status != revcacheposture.StatusEmpty || rows[0].DetailCode != "" || rows[0].RefusedRequests != 1 {
+		t.Fatalf("client-owned oversized body fabricated upstream cache failure: %+v", rows)
+	}
+}
+
+func TestUnknownOCSPSerialCannotFillTheResponseCache(t *testing.T) {
+	issuer := newAUD39Issuer(t, "unknown serial issuer")
+	now := time.Now().UTC().Round(time.Second)
+	var upstreamCalls int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls++
+		body, _ := io.ReadAll(r.Body)
+		serial, err := crypto.ParseOCSPRequestSerial(body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		der, err := crypto.SignOCSPResponseWithNonce(issuer.der, issuer.key, crypto.OCSPUnknown, serial,
+			now.Add(-time.Minute), now.Add(time.Hour), time.Time{}, 0, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/ocsp-response")
+		_, _ = w.Write(der)
+	}))
+	t.Cleanup(upstream.Close)
+	manager, err := revcache.NewManager(revcache.ManagerConfig{Segment: "plant-unknown", Issuers: []revcache.IssuerConfig{{
+		ID: "issuer", IssuerDER: issuer.der,
+		OCSP: &revcache.OCSPConfig{UpstreamURL: upstream.URL, LocalPath: "/ocsp/issuer"},
+	}}}, revcache.ManagerOptions{Client: upstream.Client(), Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := crypto.BuildOCSPRequestForSerial(issuer.der, "44")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "http://relay.local/ocsp/issuer", bytes.NewReader(request))
+		req.Header.Set("Content-Type", "application/ocsp-request")
+		manager.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("unknown serial response status=%d", rec.Code)
+		}
+	}
+	if upstreamCalls != 2 {
+		t.Fatalf("unknown serial was cached after %d upstream calls; attacker can evict valid cached responses", upstreamCalls)
+	}
+}
+
+func TestConcurrentIdenticalOCSPRequestsShareOneUpstreamFetch(t *testing.T) {
+	issuer := newAUD39Issuer(t, "singleflight issuer")
+	now := time.Now().UTC().Round(time.Second)
+	var calls atomic.Int32
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			close(entered)
+		}
+		<-release
+		body, _ := io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/ocsp-response")
+		_, _ = w.Write(issuer.ocsp(t, body, now))
+	}))
+	t.Cleanup(upstream.Close)
+	manager, err := revcache.NewManager(revcache.ManagerConfig{Segment: "plant-flight", Issuers: []revcache.IssuerConfig{{
+		ID: "issuer", IssuerDER: issuer.der,
+		OCSP: &revcache.OCSPConfig{UpstreamURL: upstream.URL, LocalPath: "/ocsp/issuer"},
+	}}}, revcache.ManagerOptions{Client: upstream.Client(), Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := crypto.BuildOCSPRequestForSerial(issuer.der, "42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const workers = 12
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	results := make(chan int, workers)
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "http://relay.local/ocsp/issuer", bytes.NewReader(request))
+			req.Header.Set("Content-Type", "application/ocsp-request")
+			manager.ServeHTTP(rec, req)
+			results <- rec.Code
+		}()
+	}
+	close(start)
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("no upstream fetch started")
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	close(results)
+	for code := range results {
+		if code != http.StatusOK {
+			t.Fatalf("concurrent OCSP request status=%d", code)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("%d identical OCSP requests generated %d upstream fetches, want one", workers, got)
+	}
+}
+
+func TestNonceOCSPRequestsHaveABoundedUpstreamRate(t *testing.T) {
+	issuer := newAUD39Issuer(t, "nonce-rate issuer")
+	now := time.Now().UTC().Round(time.Second)
+	var calls int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		body, _ := io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/ocsp-response")
+		_, _ = w.Write(issuer.ocsp(t, body, now))
+	}))
+	t.Cleanup(upstream.Close)
+	manager, err := revcache.NewManager(revcache.ManagerConfig{Segment: "plant-nonce-rate", Issuers: []revcache.IssuerConfig{{
+		ID: "issuer", IssuerDER: issuer.der,
+		OCSP: &revcache.OCSPConfig{UpstreamURL: upstream.URL, LocalPath: "/ocsp/issuer"},
+	}}}, revcache.ManagerOptions{Client: upstream.Client(), Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := crypto.BuildOCSPRequestForSerialWithNonce(issuer.der, "42", []byte("client-nonce"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 65; i++ {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "http://relay.local/ocsp/issuer", bytes.NewReader(request))
+		req.Header.Set("Content-Type", "application/ocsp-request")
+		manager.ServeHTTP(rec, req)
+		want := http.StatusOK
+		if i == 64 {
+			want = http.StatusTooManyRequests
+		}
+		if rec.Code != want {
+			t.Fatalf("nonce request %d status=%d, want %d", i+1, rec.Code, want)
+		}
+	}
+	if calls != 64 {
+		t.Fatalf("nonce flood forwarded %d requests, want bounded 64", calls)
+	}
+}
+
+func TestOCSPFetchPoolRejectsWhenSixteenDifferentUpstreamsAreInFlight(t *testing.T) {
+	issuer := newAUD39Issuer(t, "bounded-fetch issuer")
+	now := time.Now().UTC().Round(time.Second)
+	entered := make(chan struct{}, 17)
+	release := make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		entered <- struct{}{}
+		<-release
+		w.Header().Set("Content-Type", "application/ocsp-response")
+		_, _ = w.Write(issuer.ocsp(t, body, now))
+	}))
+	t.Cleanup(upstream.Close)
+	manager, err := revcache.NewManager(revcache.ManagerConfig{Segment: "plant-fetch-limit", Issuers: []revcache.IssuerConfig{{
+		ID: "issuer", IssuerDER: issuer.der,
+		OCSP: &revcache.OCSPConfig{UpstreamURL: upstream.URL, LocalPath: "/ocsp/issuer"},
+	}}}, revcache.ManagerOptions{Client: upstream.Client(), Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := func(serial string) int {
+		der, err := crypto.BuildOCSPRequestForSerial(issuer.der, serial)
+		if err != nil {
+			t.Error(err)
+			return 0
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "http://relay.local/ocsp/issuer", bytes.NewReader(der))
+		req.Header.Set("Content-Type", "application/ocsp-request")
+		manager.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	results := make(chan int, 16)
+	for i := 1; i <= 16; i++ {
+		serial := fmt.Sprintf("%x", i)
+		go func() { results <- request(serial) }()
+	}
+	for range 16 {
+		select {
+		case <-entered:
+		case <-time.After(2 * time.Second):
+			close(release)
+			t.Fatal("sixteen unique OCSP fetches did not enter the upstream")
+		}
+	}
+	extra := make(chan int, 1)
+	go func() { extra <- request("11") }()
+	select {
+	case status := <-extra:
+		if status != http.StatusServiceUnavailable {
+			close(release)
+			t.Fatalf("seventeenth unique fetch status=%d, want fast 503", status)
+		}
+	case <-time.After(time.Second):
+		close(release)
+		t.Fatal("seventeenth unique fetch blocked instead of rejecting fast")
+	}
+	close(release)
+	for range 16 {
+		if code := <-results; code != http.StatusOK {
+			t.Fatalf("admitted fetch status=%d", code)
+		}
+	}
 }

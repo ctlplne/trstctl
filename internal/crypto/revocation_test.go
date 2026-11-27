@@ -5,6 +5,8 @@ package crypto
 import (
 	stdcrypto "crypto"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"errors"
 	"math/big"
 	"reflect"
@@ -255,6 +257,100 @@ func TestValidateOCSPRequestForIssuerPreservesRequestHashAlgorithmAUD39(t *testi
 	serial, err := ValidateOCSPRequestForIssuer(reqDER, caDER)
 	if err != nil || serial != "42" {
 		t.Fatalf("SHA-256 issuer-bound request serial=%q err=%v", serial, err)
+	}
+}
+
+func TestOCSPRelayRequestRejectsMultipleCertIDsAndUnknownExtensions(t *testing.T) {
+	issuerDER, _ := caForRevocation(t)
+	base, err := BuildOCSPRequestForSerial(issuerDER, "42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutate := func(change func(*asn1.RawValue)) []byte {
+		t.Helper()
+		var outer, tbs asn1.RawValue
+		if _, err := asn1.Unmarshal(base, &outer); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := asn1.Unmarshal(outer.Bytes, &tbs); err != nil {
+			t.Fatal(err)
+		}
+		change(&tbs)
+		tbs.FullBytes = nil
+		tbsDER, err := asn1.Marshal(tbs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outer.Bytes, outer.FullBytes = tbsDER, nil
+		der, err := asn1.Marshal(outer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return der
+	}
+	multiple := mutate(func(tbs *asn1.RawValue) {
+		var list, request asn1.RawValue
+		if _, err := asn1.Unmarshal(tbs.Bytes, &list); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := asn1.Unmarshal(list.Bytes, &request); err != nil {
+			t.Fatal(err)
+		}
+		list.Bytes = append(append([]byte(nil), request.FullBytes...), request.FullBytes...)
+		list.FullBytes = nil
+		listDER, err := asn1.Marshal(list)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tbs.Bytes = listDER
+	})
+	unknownExtension := mutate(func(tbs *asn1.RawValue) {
+		extsDER, err := asn1.Marshal([]pkix.Extension{{Id: asn1.ObjectIdentifier{1, 2, 3}, Value: []byte{4, 1, 0}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		wrapped, err := asn1.Marshal(asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 2, IsCompound: true, Bytes: extsDER})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tbs.Bytes = append(tbs.Bytes, wrapped...)
+	})
+	for name, der := range map[string][]byte{"multiple CertIDs": multiple, "unknown extension": unknownExtension} {
+		if _, err := ValidateOCSPRequestForIssuer(der, issuerDER); !errors.Is(err, ErrMalformedOCSPRequest) {
+			t.Fatalf("%s accepted: %v", name, err)
+		}
+	}
+}
+
+func TestOCSPCacheKeyNamesTheCertIDAndHashAlgorithm(t *testing.T) {
+	issuerDER, _ := caForRevocation(t)
+	sha1Request, err := BuildOCSPRequestForSerial(issuerDER, "42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := x509.ParseCertificate(issuerDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha256Request, err := ocsp.CreateRequest(&x509.Certificate{SerialNumber: big.NewInt(66)}, issuer,
+		&ocsp.RequestOptions{Hash: stdcrypto.SHA256})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := OCSPRequestCacheKey(sha1Request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := OCSPRequestCacheKey(append([]byte(nil), sha1Request...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := OCSPRequestCacheKey(sha256Request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != again || first == other || len(first) != 64 {
+		t.Fatalf("semantic cache keys: sha1=%q repeat=%q sha256=%q", first, again, other)
 	}
 }
 

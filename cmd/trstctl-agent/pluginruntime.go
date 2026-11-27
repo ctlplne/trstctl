@@ -321,12 +321,8 @@ func startEnrollProxy(ctx context.Context, o agentOptions, client *http.Client) 
 		fmt.Fprintln(os.Stderr, "trstctl-agent: enrollment proxy cannot bind:", err)
 		return notServing, func() {}
 	}
-	srv := &http.Server{
-		Handler:           pool,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		MaxHeaderBytes:    16 << 10,
-	}
+	srv := newRelayHTTPServer(pool, 15*time.Second, 2*time.Minute)
+	listener = netsec.LimitListenerBySource(listener, 128, 32)
 	done := make(chan struct{})
 	var serving atomic.Bool
 	serving.Store(true)
@@ -369,6 +365,17 @@ func startEnrollProxy(ctx context.Context, o agentOptions, client *http.Client) 
 
 // enrollProxyPool holds the running pool so the heartbeat can report its health.
 var enrollProxyPool atomic.Pointer[enrollproxy.Pool]
+
+func newRelayHTTPServer(handler http.Handler, readTimeout, writeTimeout time.Duration) *http.Server {
+	return &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       15 * time.Second,
+		MaxHeaderBytes:    16 << 10,
+	}
+}
 
 // revocationCacheFile is the operator-owned multi-issuer runtime description.
 // IssuerFile contains only a public certificate. Upstream URLs may be internal,
@@ -435,7 +442,8 @@ func startRevocationCache(ctx context.Context, o agentOptions) (func() []revcach
 			return nil, func() {}
 		}
 	}
-	srv := &http.Server{Handler: manager, ReadHeaderTimeout: 10 * time.Second}
+	srv := newRelayHTTPServer(manager, 10*time.Second, 35*time.Second)
+	listener = netsec.LimitListenerBySource(listener, 128, 32)
 	refreshCtx, cancelRefresh := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {

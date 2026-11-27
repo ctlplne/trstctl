@@ -574,6 +574,9 @@ func ParseOCSPRequestSerial(reqDER []byte) (string, error) {
 // enough: two issuers can issue the same serial, and a relay route must never
 // forward one issuer's request to another issuer's responder.
 func ValidateOCSPRequestForIssuer(reqDER, issuerDER []byte) (string, error) {
+	if err := validateOCSPRequestShape(reqDER); err != nil {
+		return "", err
+	}
 	req, err := ocsp.ParseRequest(reqDER)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrMalformedOCSPRequest, err)
@@ -602,6 +605,65 @@ func ValidateOCSPRequestForIssuer(reqDER, issuerDER []byte) (string, error) {
 	return req.SerialNumber.Text(16), nil
 }
 
+// OCSPRequestCacheKey names the semantic CertID, so alternate DER encodings
+// cannot consume separate relay cache slots for the same certificate. Callers
+// first validate the request shape and configured issuer.
+func OCSPRequestCacheKey(reqDER []byte) (string, error) {
+	req, err := ocsp.ParseRequest(reqDER)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrMalformedOCSPRequest, err)
+	}
+	identity := fmt.Sprintf("%d:%x:%x:%s", req.HashAlgorithm, req.IssuerNameHash, req.IssuerKeyHash, req.SerialNumber.Text(16))
+	return SHA256Hex([]byte(identity)), nil
+}
+
+// validateOCSPRequestShape allows one CertID and at most one non-critical nonce
+// extension. The relay neither validates request signatures nor implements
+// per-request extensions, so accepting extras would make its cache key and
+// upstream response refer to only part of what the client actually sent.
+func validateOCSPRequestShape(reqDER []byte) error {
+	bad := func() error {
+		return fmt.Errorf("%w: request must contain one CertID and only an optional nonce", ErrMalformedOCSPRequest)
+	}
+	var outer, tbs, list, request, certID asn1.RawValue
+	rest, err := asn1.Unmarshal(reqDER, &outer)
+	if err != nil || len(rest) != 0 || outer.Class != asn1.ClassUniversal || outer.Tag != asn1.TagSequence {
+		return bad()
+	}
+	rest, err = asn1.Unmarshal(outer.Bytes, &tbs)
+	if err != nil || len(rest) != 0 || tbs.Class != asn1.ClassUniversal || tbs.Tag != asn1.TagSequence {
+		return bad()
+	}
+	rest, err = asn1.Unmarshal(tbs.Bytes, &list)
+	if err != nil || list.Class != asn1.ClassUniversal || list.Tag != asn1.TagSequence {
+		return bad()
+	}
+	if len(rest) != 0 {
+		var extensions asn1.RawValue
+		tail, err := asn1.Unmarshal(rest, &extensions)
+		if err != nil || len(tail) != 0 || extensions.Class != asn1.ClassContextSpecific || extensions.Tag != 2 {
+			return bad()
+		}
+		var parsed []pkix.Extension
+		tail, err = asn1.Unmarshal(extensions.Bytes, &parsed)
+		if err != nil || len(tail) != 0 || len(parsed) != 1 || !parsed[0].Id.Equal(oidOCSPNonce) || parsed[0].Critical {
+			return bad()
+		}
+		if _, _, err := parseOCSPNonceFromParsedExtensions(parsed); err != nil {
+			return bad()
+		}
+	}
+	rest, err = asn1.Unmarshal(list.Bytes, &request)
+	if err != nil || len(rest) != 0 || request.Class != asn1.ClassUniversal || request.Tag != asn1.TagSequence {
+		return bad()
+	}
+	rest, err = asn1.Unmarshal(request.Bytes, &certID)
+	if err != nil || len(rest) != 0 || certID.Class != asn1.ClassUniversal || certID.Tag != asn1.TagSequence {
+		return bad()
+	}
+	return nil
+}
+
 // RFC 5280 limits certificate serial numbers to positive values of at most
 // 20 DER octets. A 160-bit positive integer needs an extra sign octet, so the
 // largest valid positive value has 159 bits. Enforcing the same bound at both
@@ -619,6 +681,9 @@ func validateOCSPRequestSerial(serial *big.Int) error {
 // absent. If present, the nonce must be a non-empty DER OCTET STRING no larger
 // than MaxOCSPNonceLength.
 func ParseOCSPRequestNonce(reqDER []byte) ([]byte, bool, error) {
+	if err := validateOCSPRequestShape(reqDER); err != nil {
+		return nil, false, err
+	}
 	var outer asn1.RawValue
 	if rest, err := asn1.Unmarshal(reqDER, &outer); err != nil || len(rest) != 0 {
 		return nil, false, fmt.Errorf("%w: %w", ErrMalformedOCSPRequest, err)

@@ -17,14 +17,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/revcacheposture"
 	"trstctl.com/trstctl/internal/ttlmap"
 )
 
 const (
-	ocspResponseLimit     = 1 << 20
-	maxOCSPCacheResponses = 4096
+	ocspRequestLimit          = 8 << 10
+	ocspResponseLimit         = 1 << 20
+	maxOCSPCacheResponses     = 4096
+	maxConcurrentOCSPFetches  = 16
+	maxNonceRequestsPerSecond = 64
 )
 
 // ManagerConfig describes every issuer whose signed revocation objects are
@@ -59,12 +63,13 @@ type ManagerOptions struct {
 }
 
 type Manager struct {
-	segment string
-	client  *http.Client
-	now     func() time.Time
-	routes  map[string]http.HandlerFunc
-	crls    []*managedCRL
-	ocsps   []*managedOCSP
+	segment    string
+	client     *http.Client
+	now        func() time.Time
+	fetchSlots chan struct{}
+	routes     map[string]http.HandlerFunc
+	crls       []*managedCRL
+	ocsps      []*managedOCSP
 }
 
 type managedCRL struct {
@@ -78,8 +83,15 @@ type managedCRL struct {
 type ocspCachedResponse struct {
 	der                    []byte
 	serial                 string
+	status                 string
 	thisUpdate, nextUpdate time.Time
 	validatedAt            time.Time
+}
+
+type ocspFetchResult struct {
+	row        ocspCachedResponse
+	detailCode string
+	err        error
 }
 
 type managedOCSP struct {
@@ -90,6 +102,11 @@ type managedOCSP struct {
 	served, refused                                     atomic.Int64
 	mu                                                  sync.RWMutex
 	responses                                           map[string]ocspCachedResponse
+	flight                                              singleflight.Group
+	fetchSlots                                          chan struct{}
+	nonceMu                                             sync.Mutex
+	nonceTokens                                         float64
+	nonceLast                                           time.Time
 	lastThisUpdate, lastNextUpdate, lastValidatedAt     time.Time
 	lastSignatureVerified                               bool
 	detailCode                                          string
@@ -112,7 +129,8 @@ func NewManager(cfg ManagerConfig, opts ManagerOptions) (*Manager, error) {
 	if now == nil {
 		now = time.Now
 	}
-	m := &Manager{segment: segment, client: opts.Client, now: now, routes: map[string]http.HandlerFunc{}}
+	m := &Manager{segment: segment, client: opts.Client, now: now, routes: map[string]http.HandlerFunc{},
+		fetchSlots: make(chan struct{}, maxConcurrentOCSPFetches)}
 	issuerIDs := map[string]bool{}
 	for _, cfgIssuer := range cfg.Issuers {
 		id := strings.TrimSpace(cfgIssuer.ID)
@@ -151,7 +169,7 @@ func NewManager(cfg ManagerConfig, opts ManagerOptions) (*Manager, error) {
 			row := &managedOCSP{id: id, segment: segment, upstream: strings.TrimSpace(cfgIssuer.OCSP.UpstreamURL),
 				localPath: cfgIssuer.OCSP.LocalPath, issuerFingerprint: fingerprint,
 				issuerDER: append([]byte(nil), cfgIssuer.IssuerDER...), client: opts.Client, now: now,
-				responses: map[string]ocspCachedResponse{}}
+				responses: map[string]ocspCachedResponse{}, fetchSlots: m.fetchSlots}
 			if row.upstream == "" {
 				return nil, fmt.Errorf("revcache: issuer %q OCSP has no upstream", id)
 			}
@@ -239,40 +257,77 @@ func (c *managedCRL) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (o *managedOCSP) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		o.refuse(w, http.StatusMethodNotAllowed, "method_not_allowed", "OCSP cache accepts POST only")
+		o.refuse(w, http.StatusMethodNotAllowed, "OCSP cache accepts POST only")
 		return
 	}
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/ocsp-request" {
-		o.refuse(w, http.StatusBadRequest, "invalid_content_type", "expected application/ocsp-request")
+		o.refuse(w, http.StatusBadRequest, "expected application/ocsp-request")
 		return
 	}
-	requestDER, err := io.ReadAll(io.LimitReader(r.Body, ocspResponseLimit+1))
-	if err != nil || len(requestDER) == 0 || len(requestDER) > ocspResponseLimit {
-		o.refuse(w, http.StatusBadRequest, "invalid_request", "OCSP request is empty, unreadable, or oversized")
+	requestDER, err := io.ReadAll(http.MaxBytesReader(w, r.Body, ocspRequestLimit))
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		o.refuse(w, http.StatusRequestEntityTooLarge, "OCSP request exceeds the 8 KiB limit")
+		return
+	}
+	if err != nil || len(requestDER) == 0 {
+		o.refuse(w, http.StatusBadRequest, "OCSP request is empty or unreadable")
 		return
 	}
 	serial, err := crypto.ValidateOCSPRequestForIssuer(requestDER, o.issuerDER)
 	if err != nil {
-		o.refuse(w, http.StatusBadRequest, "invalid_request", "OCSP request is malformed")
+		o.refuse(w, http.StatusBadRequest, "OCSP request is malformed")
 		return
 	}
 	nonce, noncePresent, err := crypto.ParseOCSPRequestNonce(requestDER)
 	if err != nil {
-		o.refuse(w, http.StatusBadRequest, "invalid_nonce", "OCSP request nonce is malformed")
+		o.refuse(w, http.StatusBadRequest, "OCSP request nonce is malformed")
 		return
 	}
-	key := crypto.SHA256Hex(requestDER)
+	if noncePresent && !o.allowNonceRequest() {
+		w.Header().Set("Retry-After", "1")
+		o.refuse(w, http.StatusTooManyRequests, "OCSP nonce request rate exceeded")
+		return
+	}
+	key, err := crypto.OCSPRequestCacheKey(requestDER)
+	if err != nil {
+		o.refuse(w, http.StatusBadRequest, "OCSP request identity is malformed")
+		return
+	}
 	if !noncePresent {
 		if cached, ok := o.cached(key); ok {
 			o.writeResponse(w, cached.der)
 			return
 		}
 	}
-	validated, detailCode, err := o.fetch(r.Context(), requestDER, serial, nonce, noncePresent)
-	if err != nil {
+	var result ocspFetchResult
+	if noncePresent {
+		result.row, result.detailCode, result.err = o.fetch(r.Context(), requestDER, serial, nonce, true)
+	} else {
+		shared := o.flight.DoChan(key, func() (any, error) {
+			if cached, ok := o.cached(key); ok {
+				return ocspFetchResult{row: cached}, nil
+			}
+			row, detail, fetchErr := o.fetch(r.Context(), requestDER, serial, nil, false)
+			if fetchErr == nil && row.status != crypto.OCSPUnknown {
+				o.mu.Lock()
+				o.makeCacheRoomLocked()
+				o.responses[key] = row
+				o.mu.Unlock()
+			}
+			return ocspFetchResult{row: row, detailCode: detail, err: fetchErr}, nil
+		})
+		select {
+		case <-r.Context().Done():
+			return
+		case sharedResult := <-shared:
+			result = sharedResult.Val.(ocspFetchResult)
+		}
+	}
+	if result.err != nil {
 		o.mu.Lock()
-		o.detailCode = detailCode
+		o.detailCode = result.detailCode
 		if len(o.responses) == 0 {
 			o.lastSignatureVerified = false
 		}
@@ -281,13 +336,25 @@ func (o *managedOCSP) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no valid fresh OCSP response is available from this relay", http.StatusServiceUnavailable)
 		return
 	}
-	if !noncePresent {
-		o.mu.Lock()
-		o.makeCacheRoomLocked()
-		o.responses[key] = validated
-		o.mu.Unlock()
+	o.writeResponse(w, result.row.der)
+}
+
+func (o *managedOCSP) allowNonceRequest() bool {
+	o.nonceMu.Lock()
+	defer o.nonceMu.Unlock()
+	now := o.now().UTC()
+	if o.nonceLast.IsZero() {
+		o.nonceTokens = maxNonceRequestsPerSecond
+		o.nonceLast = now
+	} else if now.After(o.nonceLast) {
+		o.nonceTokens = min(maxNonceRequestsPerSecond, o.nonceTokens+now.Sub(o.nonceLast).Seconds()*maxNonceRequestsPerSecond)
+		o.nonceLast = now
 	}
-	o.writeResponse(w, validated.der)
+	if o.nonceTokens < 1 {
+		return false
+	}
+	o.nonceTokens--
+	return true
 }
 
 func (o *managedOCSP) cached(key string) (ocspCachedResponse, bool) {
@@ -298,6 +365,14 @@ func (o *managedOCSP) cached(key string) (ocspCachedResponse, bool) {
 }
 
 func (o *managedOCSP) fetch(ctx context.Context, requestDER []byte, serial string, nonce []byte, noncePresent bool) (ocspCachedResponse, string, error) {
+	select {
+	case <-ctx.Done():
+		return ocspCachedResponse{}, "upstream_unreachable", ctx.Err()
+	case o.fetchSlots <- struct{}{}:
+		defer func() { <-o.fetchSlots }()
+	default:
+		return ocspCachedResponse{}, "upstream_busy", errors.New("OCSP upstream fetch pool is full")
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.upstream, bytes.NewReader(requestDER))
 	if err != nil {
 		return ocspCachedResponse{}, "upstream_request_failed", err
@@ -334,7 +409,7 @@ func (o *managedOCSP) fetch(ctx context.Context, requestDER []byte, serial strin
 	if info.ThisUpdate.IsZero() || info.ThisUpdate.After(now.Add(5*time.Minute)) || info.NextUpdate.IsZero() || now.After(info.NextUpdate) {
 		return ocspCachedResponse{}, "stale_response", errors.New("OCSP response is not inside its signed freshness window")
 	}
-	row := ocspCachedResponse{der: append([]byte(nil), responseDER...), serial: info.Serial,
+	row := ocspCachedResponse{der: append([]byte(nil), responseDER...), serial: info.Serial, status: info.Status,
 		thisUpdate: info.ThisUpdate.UTC(), nextUpdate: info.NextUpdate.UTC(), validatedAt: now}
 	o.mu.Lock()
 	o.lastThisUpdate, o.lastNextUpdate, o.lastValidatedAt = row.thisUpdate, row.nextUpdate, row.validatedAt
@@ -393,11 +468,8 @@ func (o *managedOCSP) writeResponse(w http.ResponseWriter, der []byte) {
 	_, _ = w.Write(der)
 }
 
-func (o *managedOCSP) refuse(w http.ResponseWriter, code int, detailCode, detail string) {
+func (o *managedOCSP) refuse(w http.ResponseWriter, code int, detail string) {
 	o.refused.Add(1)
-	o.mu.Lock()
-	o.detailCode = detailCode
-	o.mu.Unlock()
 	http.Error(w, detail, code)
 }
 

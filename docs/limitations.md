@@ -1022,15 +1022,28 @@ never live in the API process. What you can do end to end against the running bi
   before caching, which is not the relay adding trust — a relying party checks the
   signature regardless — but the relay declining to store what no client would
   accept, such as a captive portal's login page.
-  The OCSP path accepts only bounded `application/ocsp-request` POST bodies. It
+  The OCSP path accepts only `application/ocsp-request` POST bodies up to 8 KiB.
+  It requires exactly one CertID and allows only a non-critical nonce extension,
   proves that the request's issuer hashes match the configured issuer, forwards the
   exact request, and accepts a response only after the issuer/responder signature,
   requested serial, nonce equality, `thisUpdate`, and `nextUpdate` all validate.
-  Nonce-free responses are cached in a 4,096-entry per-issuer bound; nonce-bearing
-  responses are never reused because a nonce binds one response to one request.
+  Known-serial nonce-free responses are cached by semantic CertID in a 4,096-entry
+  per-issuer bound; signed `unknown` responses are served but do not consume cache
+  slots. Identical concurrent cache misses share one upstream fetch. At most 16
+  OCSP fetches run at once across the relay; excess requests fail fast. Nonce-bearing
+  responses are never reused because a nonce binds one response to one request,
+  and each issuer rate-limits nonce requests to 64 per second with a burst of 64.
   Expired entries are evicted first. The relay returns 503 with no OCSP response
   bytes when the upstream is unreachable or its answer is stale, malformed, for a
   different issuer/serial, or incorrectly signed.
+  Both LAN relay listeners cap open sockets at 128 total and 32 per socket peer
+  IP, independent of client-supplied forwarding headers. Each sets a 10-second
+  header deadline, a 15-second idle deadline, and a 16 KiB header limit. The
+  revocation cache has a 10-second whole-request read deadline and a 35-second
+  response write deadline; the enrollment proxy uses 15 seconds for reads and
+  two minutes for writes to allow bounded multi-upstream failover.
+  Client-side OCSP refusals increment the refusal count without changing cache
+  health or claiming an upstream failure.
 
   IT FAILS CLOSED ON STALENESS, and that is the property the feature exists for. A
   stale CRL is dangerous precisely BECAUSE it still verifies: nextUpdate has passed
