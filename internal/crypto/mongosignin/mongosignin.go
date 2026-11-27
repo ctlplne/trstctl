@@ -288,11 +288,22 @@ func command(conn net.Conn, doc []E) ([]byte, error) {
 		return nil, errors.New("mongosignin: the server's reply has no body section")
 	}
 	reply := payload[5:]
-	if binary.LittleEndian.Uint32(payload)&FlagChecksumPresent != 0 && len(reply) >= 4 {
+	if binary.LittleEndian.Uint32(payload)&FlagChecksumPresent != 0 {
+		if len(reply) < 4 {
+			return nil, errors.New("mongosignin: the server's reply checksum is incomplete")
+		}
 		reply = reply[:len(reply)-4]
 	}
-	if n := int(binary.LittleEndian.Uint32(reply)); n <= len(reply) {
-		reply = reply[:n]
+	if len(reply) < 5 {
+		return nil, errors.New("mongosignin: the server's reply document is incomplete")
+	}
+	n := int(binary.LittleEndian.Uint32(reply))
+	if n < 5 || n > len(reply) {
+		return nil, errors.New("mongosignin: the server's reply document length is invalid")
+	}
+	reply = reply[:n]
+	if _, err := Elements(reply); err != nil {
+		return nil, fmt.Errorf("mongosignin: the server's reply document is invalid: %w", err)
 	}
 	if ok, found := Lookup(reply, "ok"); found {
 		if v, _ := ok.Number(); v != 1 {

@@ -2,7 +2,10 @@
 
 package mongosignin
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 // FuzzParseURI: no credential panics the parser, and a parsed one has hosts,
 // a user, a password and an auth database.
@@ -43,5 +46,20 @@ func FuzzElements(f *testing.F) {
 		if total != len(doc) {
 			t.Fatalf("elements cover %d of %d bytes", total, len(doc))
 		}
+	})
+}
+
+// FuzzCommandReply checks that sign-in frames either return a complete BSON
+// document or an error.
+func FuzzCommandReply(f *testing.F) {
+	f.Add(commandPayload(0, Encode([]E{{"ok", float64(1)}})))
+	f.Add(commandPayload(0, nil))
+	f.Add(commandPayload(FlagChecksumPresent, []byte{1, 2, 3}))
+	f.Fuzz(func(t *testing.T, payload []byte) {
+		if len(payload) > maxSignInMessage-16 {
+			return
+		}
+		conn := &commandFrameConn{reply: bytes.NewReader(commandFrame(payload))}
+		_, _ = command(conn, []E{{"hello", int32(1)}})
 	})
 }

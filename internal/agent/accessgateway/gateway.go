@@ -504,6 +504,12 @@ func (g *Gateway) lookup(ctx context.Context, id string) *session {
 // serve admits one client connection: the preface names the session and
 // carries its ticket; nothing else is read before the ticket matches.
 func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
+	defer func() {
+		if failure := recover(); failure != nil {
+			_ = conn.Close()
+			g.cfg.Logf("accessgateway: connection handler stopped unexpectedly (%T)", failure)
+		}
+	}()
 	_ = conn.SetDeadline(time.Now().Add(15 * time.Second))
 	line, err := readPreface(conn)
 	if err != nil {
