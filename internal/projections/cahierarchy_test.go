@@ -207,10 +207,10 @@ func TestInternalCAConstraintViolationRejected(t *testing.T) {
 		t.Fatalf("CreateRoot: %v", err)
 	}
 
-	if _, err := m.IssueEndEntity(ctx, tenantA, root.ID, caHierCSR(t, "ok", []string{"ok.corp.internal"}), time.Hour, crypto.LeafProfile{}); err != nil {
+	if _, err := m.IssueEndEntity(ctx, tenantA, root.ID, caHierCSR(t, "ok.corp.internal", []string{"ok.corp.internal"}), time.Hour, crypto.LeafProfile{}); err != nil {
 		t.Errorf("a permitted issuance was rejected: %v", err)
 	}
-	if _, err := m.IssueEndEntity(ctx, tenantA, root.ID, caHierCSR(t, "evil", []string{"evil.example.com"}), time.Hour, crypto.LeafProfile{}); err == nil {
+	if _, err := m.IssueEndEntity(ctx, tenantA, root.ID, caHierCSR(t, "outside.example.com", []string{"outside.example.com"}), time.Hour, crypto.LeafProfile{}); err == nil {
 		t.Error("an issuance violating the name constraints was accepted")
 	}
 }
