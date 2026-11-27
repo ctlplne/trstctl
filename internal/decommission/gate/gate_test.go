@@ -5,6 +5,10 @@ package gate
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +17,35 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/signing"
 )
+
+func TestRefusalArtifactBoundsNamedDependents(t *testing.T) {
+	deps := make([]depstate.Dependent, 200)
+	for i := range deps {
+		deps[i] = depstate.Dependent{Class: depstate.DependentCredential, ID: fmt.Sprintf("certificate-%04d", i)}
+	}
+	g := newTestGate(t, NewMemorySink())
+	req := signing.GatedDestroyRequest{TenantID: testTenant, SubjectRef: testKey, LedgerPosition: 1, AssertedFinalEpoch: testEpoch}
+	artifact, _, err := g.signRefusal(req, depstate.KeyState{Registered: deps}, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if artifact.Body.UnaccountedCount != len(deps) || artifact.Body.UnaccountedDigest != hex.EncodeToString(dependentSetDigest(deps)) {
+		t.Fatalf("full refusal count and digest changed: count=%d digest=%q", artifact.Body.UnaccountedCount, artifact.Body.UnaccountedDigest)
+	}
+	if len(artifact.Body.Unaccounted) != maxRefusalNamedDependents || artifact.Body.Unaccounted[0] != deps[0] {
+		t.Fatalf("named refusal sample has %d entries, want first %d sorted entries", len(artifact.Body.Unaccounted), maxRefusalNamedDependents)
+	}
+	named, err := json.Marshal(artifact.Body.Unaccounted)
+	if err != nil || len(named) > maxRefusalNamedBytes {
+		t.Fatalf("named refusal bytes = %d, %v; ceiling %d", len(named), err, maxRefusalNamedBytes)
+	}
+	if err := artifact.Verify(map[string]crypto.PublicKey{artifact.KeyID: {Algorithm: artifact.Algorithm, DER: artifact.PublicKeyDER}}); err != nil {
+		t.Fatalf("bounded refusal signature: %v", err)
+	}
+	if got := namedRefusalDependents([]depstate.Dependent{{Class: depstate.DependentCredential, ID: strings.Repeat("x", maxRefusalNamedBytes)}}); len(got) != 0 {
+		t.Fatalf("large identity added %d named dependents above the byte ceiling", len(got))
+	}
+}
 
 const (
 	testTenant = "tenant-a"

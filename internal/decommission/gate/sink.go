@@ -4,11 +4,13 @@ package gate
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,14 +166,29 @@ func countJSONLines(path string) (uint64, error) {
 	}
 	defer func() { _ = f.Close() }()
 	var n uint64
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		if strings.TrimSpace(scanner.Text()) != "" {
+	reader := bufio.NewReader(f)
+	nonblank := false
+	for {
+		part, readErr := reader.ReadSlice('\n')
+		if len(bytes.TrimSpace(part)) != 0 {
+			nonblank = true
+		}
+		if errors.Is(readErr, bufio.ErrBufferFull) {
+			continue
+		}
+		if nonblank {
+			if n == ^uint64(0) {
+				return 0, fmt.Errorf("vdec gate: refusal sequence exhausted")
+			}
 			n++
 		}
+		if readErr == nil {
+			nonblank = false
+			continue
+		}
+		if errors.Is(readErr, io.EOF) {
+			return n, nil
+		}
+		return 0, fmt.Errorf("vdec gate: read refusal sink: %w", readErr)
 	}
-	if err := scanner.Err(); err != nil {
-		return 0, fmt.Errorf("vdec gate: scan refusal sink: %w", err)
-	}
-	return n, nil
 }

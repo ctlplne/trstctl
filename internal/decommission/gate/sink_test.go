@@ -3,6 +3,7 @@
 package gate
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -42,6 +43,27 @@ func TestFileSink_ResumesSequenceFromExistingLog(t *testing.T) {
 	}
 	if ev.Sequence != 3 {
 		t.Fatalf("sequence after reopen = %d, want 3", ev.Sequence)
+	}
+}
+
+func TestFileSinkResumesAfterLargeRecord(t *testing.T) {
+	path := filepath.Join(t.TempDir(), refusalLogFile)
+	first, err := NewFileSink(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.Append(t.Context(), eventspec.Event{
+		Type: "vdec.refused", TenantID: testTenant, Data: bytes.Repeat([]byte("evidence"), 12_000),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewFileSink(path)
+	if err != nil {
+		t.Fatalf("reopen with large record: %v", err)
+	}
+	appended, err := second.Append(t.Context(), eventspec.Event{Type: "vdec.refused", TenantID: testTenant})
+	if err != nil || appended.Sequence != 2 {
+		t.Fatalf("next refusal sequence = %d, %v; want 2", appended.Sequence, err)
 	}
 }
 

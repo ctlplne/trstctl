@@ -43,6 +43,29 @@ type RefusalArtifact struct {
 	Signature    []byte           `json:"signature"`
 }
 
+const (
+	maxRefusalNamedDependents = 64
+	maxRefusalNamedBytes      = 16 << 10
+)
+
+func namedRefusalDependents(all []depstate.Dependent) []depstate.Dependent {
+	sorted := sortedDependents(all)
+	named := make([]depstate.Dependent, 0, min(len(sorted), maxRefusalNamedDependents))
+	used := 1
+	for _, dependent := range sorted {
+		if len(named) == maxRefusalNamedDependents {
+			break
+		}
+		raw, _ := json.Marshal(dependent)
+		if len(raw)+used+1 > maxRefusalNamedBytes {
+			break
+		}
+		used += len(raw) + 1
+		named = append(named, dependent)
+	}
+	return named
+}
+
 func (b RefusalBody) CanonicalBytes() ([]byte, error) {
 	if strings.TrimSpace(b.TenantID) == "" || strings.TrimSpace(b.SubjectRef) == "" || b.LedgerPosition == 0 || b.AssertedFinalEpoch == 0 {
 		return nil, ErrInvalidEvidence
@@ -107,7 +130,7 @@ func (g *Gate) signRefusal(req signing.GatedDestroyRequest, state depstate.KeySt
 		RegisteredCount:    len(state.Registered),
 		AccountedCount:     accountedCount(state),
 		UnaccountedCount:   len(unaccounted),
-		Unaccounted:        sortedDependents(unaccounted),
+		Unaccounted:        namedRefusalDependents(unaccounted),
 		UnaccountedDigest:  hex.EncodeToString(dependentSetDigest(unaccounted)),
 		ViolatedConstraint: refusalConstraint,
 		Reason:             "registered set minus accounted set is not empty",

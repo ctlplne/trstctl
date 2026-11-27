@@ -5144,6 +5144,8 @@ than sending an operator looking for a credential that was never there.
   and rebuild the tenant-RLS
   projection after restart. The console displays signed refusals and downloads the
   complete destruction record for offline verification.
+  A refusal names up to 64 unaccounted dependents within a 16 KiB JSON sample;
+  its signed count and digest still cover the complete unaccounted set.
   VDEC attaches in every build and remains fail-closed on missing evidence.
   The checklist now derives its CA-key dependents from the original immutable
   managed-leaf, PKI-secret, child-CA, re-key and public cross-sign events. It does
