@@ -79,9 +79,10 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 			callerTokenInArguments = true
 		}
 	})
-	if callerTokenInArguments && len(rest) >= 2 && rest[0] == "access" &&
-		(rest[1] == "agent" || rest[1] == "run") {
-		_, _ = fmt.Fprintln(stderr, "error: access agent and access run require TRSTCTL_TOKEN from the environment; --token exposes the caller credential in process arguments")
+	delegatedCommand := len(rest) > 0 && (rest[0] == "run" ||
+		(len(rest) >= 2 && rest[0] == "access" && (rest[1] == "agent" || rest[1] == "run")))
+	if callerTokenInArguments && delegatedCommand {
+		_, _ = fmt.Fprintln(stderr, "error: commands that launch a child require TRSTCTL_TOKEN from the environment; --token exposes the caller credential in process arguments")
 		return 2
 	}
 	if showVersion {
@@ -359,6 +360,14 @@ func runWithSecrets(ctx context.Context, args []string, env Env, stdin io.Reader
 		}
 		seen[mapping.EnvVar] = true
 		mappings = append(mappings, mapping)
+	}
+	protected, err := protectLauncherProcess()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: protect launcher process: %v\n", err)
+		return 1
+	}
+	if !protected {
+		_, _ = fmt.Fprintln(stderr, "warning: this system cannot hide the launcher's process environment from a command running as the same OS user")
 	}
 
 	httpClient, err := httpClientForEnv(env, caFile)
@@ -885,6 +894,7 @@ func commandExample(cmd Command) string {
 }
 
 func runUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Usage: trstctl [--server URL] [--token TOKEN] [--tenant ID] run --secret ENV=secret/path [--secret ENV2=path] [--resolve] -- <cmd> [args]")
+	_, _ = fmt.Fprintln(w, "Usage: trstctl [--server URL] [--tenant ID] run --secret ENV=secret/path [--secret ENV2=path] [--resolve] -- <cmd> [args]")
 	_, _ = fmt.Fprintln(w, "\nFetches named secrets from /api/v1/secrets/store/{name} and injects them only into the child process environment.")
+	_, _ = fmt.Fprintln(w, "Use TRSTCTL_TOKEN for the caller credential. On Linux the launcher blocks the command from reading its process environment; on other systems, use only commands trusted as your OS user.")
 }

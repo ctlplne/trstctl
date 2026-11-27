@@ -48,8 +48,8 @@ diagnostic, and timestamp references.
 
 ## Global flags
 
-Commands use these global flags and `TRSTCTL_*` environment fallbacks. `access run`
-and `access agent` require the environment form of `TRSTCTL_TOKEN`:
+Commands use these global flags and `TRSTCTL_*` environment fallbacks. `run`,
+`access run`, and `access agent` require the environment form of `TRSTCTL_TOKEN`:
 
 | Flag                | Env                       | Meaning                                                   |
 | ------------------- | ------------------------- | --------------------------------------------------------- |
@@ -541,6 +541,10 @@ trstctl-cli run --resolve --secret DATABASE_URL=app/db/dsn -- ./payments-api
 - `run` uses `TRSTCTL_TOKEN` to fetch the requested secrets but does not pass that
   API bearer to the child. If the application needs its own credential, map a
   separately scoped stored secret to an environment variable explicitly.
+- `run` rejects the global `--token` flag. On Linux the launcher blocks a command
+  running as its OS user from reading the launcher's environment. On other systems
+  it warns that this boundary cannot be enforced; use a command trusted with the
+  caller's OS user.
 - trstctl never logs injected values and wipes its byte-backed fetched copies after
   the child exits. The operating-system environment is still a string boundary, so
   use this with trusted commands and avoid debug commands that print all env vars

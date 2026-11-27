@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-func TestDelegatedAccessRejectsCallerTokenInArguments(t *testing.T) {
-	for _, command := range [][]string{{"access", "run"}, {"access", "agent"}} {
+func TestCLICommandExecutionRejectsCallerTokenInArguments(t *testing.T) {
+	for _, command := range [][]string{{"access", "run"}, {"access", "agent"}, {"run"}} {
 		args := append([]string{"--token", "caller-token-fixture"}, command...)
 		var stdout, stderr bytes.Buffer
 		code := Run(context.Background(), args, Env{}, nil, &stdout, &stderr)
