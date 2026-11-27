@@ -220,9 +220,15 @@ type Federation struct {
 
 // FederationPeer is one source cluster this cluster imports from.
 type FederationPeer struct {
-	ID      string `json:"id,omitempty"`
-	Region  string `json:"region,omitempty"`
-	NATSURL string `json:"nats_url,omitempty"`
+	ID                  string `json:"id,omitempty"`
+	Region              string `json:"region,omitempty"`
+	NATSURL             string `json:"nats_url,omitempty"`
+	NATSTLSCAFile       string `json:"nats_tls_ca_file,omitempty"`
+	NATSCredentialsFile string `json:"nats_credentials_file,omitempty"`
+	NATSNKeySeedFile    string `json:"nats_nkey_seed_file,omitempty"`
+	NATSTLSCertFile     string `json:"nats_tls_cert_file,omitempty"`
+	NATSTLSKeyFile      string `json:"nats_tls_key_file,omitempty"`
+	AllowPlaintextDev   bool   `json:"allow_plaintext_dev,omitempty"`
 }
 
 // PCAS configures optional workers for core credential algorithm succession.
@@ -1647,6 +1653,14 @@ type NATS struct {
 	Mode     string `json:"mode"`      // embedded | external
 	URL      string `json:"url"`       // required when external
 	StoreDir string `json:"store_dir"` // used when embedded
+	// External links require authenticated TLS. Credentials and NKey seeds are
+	// read from files mounted as secrets; URL userinfo is always refused.
+	TLSCAFile         string `json:"tls_ca_file,omitempty"`
+	TLSCertFile       string `json:"tls_cert_file,omitempty"`
+	TLSKeyFile        string `json:"tls_key_file,omitempty"`
+	CredentialsFile   string `json:"credentials_file,omitempty"`
+	NKeySeedFile      string `json:"nkey_seed_file,omitempty"`
+	AllowPlaintextDev bool   `json:"allow_plaintext_dev,omitempty"`
 
 	// Replicas is the JetStream replication factor for the event stream — the
 	// source of truth (AN-2). In external (clustered) mode the default is 3, so a
@@ -4131,6 +4145,12 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_FEDERATION_PEER_ID", &peer.ID)
 	setString(getenv, "TRSTCTL_FEDERATION_PEER_REGION", &peer.Region)
 	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_URL", &peer.NATSURL)
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_TLS_CA_FILE", &peer.NATSTLSCAFile)
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_CREDENTIALS_FILE", &peer.NATSCredentialsFile)
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_NKEY_SEED_FILE", &peer.NATSNKeySeedFile)
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_TLS_CERT_FILE", &peer.NATSTLSCertFile)
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_TLS_KEY_FILE", &peer.NATSTLSKeyFile)
+	setBool(getenv, "TRSTCTL_FEDERATION_PEER_ALLOW_PLAINTEXT_DEV", &peer.AllowPlaintextDev)
 	if peer.ID != "" || peer.Region != "" || peer.NATSURL != "" {
 		c.Federation.Peers = []FederationPeer{peer}
 	}
@@ -4271,6 +4291,12 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setInt(getenv, "TRSTCTL_POSTGRES_PORT", &c.Postgres.Port)
 	setString(getenv, "TRSTCTL_NATS_MODE", &c.NATS.Mode)
 	setString(getenv, "TRSTCTL_NATS_URL", &c.NATS.URL)
+	setString(getenv, "TRSTCTL_NATS_TLS_CA_FILE", &c.NATS.TLSCAFile)
+	setString(getenv, "TRSTCTL_NATS_TLS_CERT_FILE", &c.NATS.TLSCertFile)
+	setString(getenv, "TRSTCTL_NATS_TLS_KEY_FILE", &c.NATS.TLSKeyFile)
+	setString(getenv, "TRSTCTL_NATS_CREDENTIALS_FILE", &c.NATS.CredentialsFile)
+	setString(getenv, "TRSTCTL_NATS_NKEY_SEED_FILE", &c.NATS.NKeySeedFile)
+	setBool(getenv, "TRSTCTL_NATS_ALLOW_PLAINTEXT_DEV", &c.NATS.AllowPlaintextDev)
 	setString(getenv, "TRSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
 	setInt(getenv, "TRSTCTL_NATS_REPLICAS", &c.NATS.Replicas)
 	setBool(getenv, "TRSTCTL_NATS_ALLOW_SINGLE_REPLICA", &c.NATS.AllowSingleReplica)
@@ -5098,6 +5124,8 @@ func validateDatastores(c *Config) []error {
 	case NATSExternal:
 		if c.NATS.URL == "" {
 			errs = append(errs, errors.New("nats.url is required when nats.mode is external"))
+		} else if err := c.NATS.ValidateExternalSecurity(); err != nil {
+			errs = append(errs, err)
 		}
 	default:
 		errs = append(errs, fmt.Errorf("nats.mode %q is invalid (want %q or %q)", c.NATS.Mode, NATSEmbedded, NATSExternal))
@@ -6512,6 +6540,11 @@ func validateFederationConfig(c *Config) []error {
 		}
 		if strings.TrimSpace(peer.NATSURL) == "" {
 			errs = append(errs, fmt.Errorf("federation.peers[%d].nats_url is required", i))
+		} else if err := (NATS{Mode: NATSExternal, URL: peer.NATSURL,
+			TLSCAFile: peer.NATSTLSCAFile, CredentialsFile: peer.NATSCredentialsFile,
+			NKeySeedFile: peer.NATSNKeySeedFile, TLSCertFile: peer.NATSTLSCertFile,
+			TLSKeyFile: peer.NATSTLSKeyFile, AllowPlaintextDev: peer.AllowPlaintextDev}).ValidateExternalSecurity(); err != nil {
+			errs = append(errs, fmt.Errorf("federation.peers[%d]: %w", i, err))
 		}
 	}
 	for _, d := range []struct {

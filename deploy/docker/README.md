@@ -147,12 +147,14 @@ managed datastores, set the connection variables and drop the bundled services:
 export TRSTCTL_POSTGRES_MODE=external
 export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmode=require'
 export TRSTCTL_NATS_MODE=external
-export TRSTCTL_NATS_URL='nats://nats.internal:4222'
+export TRSTCTL_NATS_URL='tls://nats.internal:4222'
+export TRSTCTL_NATS_NKEY_SEED_FILE=/etc/trstctl/nats/nkey.seed
 export TRSTCTL_NATS_REPLICAS=3
 export TRSTCTL_IMAGE_REF='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 
 docker run --rm -e TRSTCTL_POSTGRES_MODE -e TRSTCTL_POSTGRES_DSN \
-  -e TRSTCTL_NATS_MODE -e TRSTCTL_NATS_URL -e TRSTCTL_NATS_REPLICAS -p 8443:8443 \
+  -e TRSTCTL_NATS_MODE -e TRSTCTL_NATS_URL -e TRSTCTL_NATS_NKEY_SEED_FILE \
+  -e TRSTCTL_NATS_REPLICAS -v /secure/nats:/etc/trstctl/nats:ro -p 8443:8443 \
   "$TRSTCTL_IMAGE_REF"
 ```
 

@@ -812,7 +812,7 @@ func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
 			name: "kek missing",
 			values: map[string]any{
 				"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-				"nats":     map[string]any{"url": "nats://nats:4222"},
+				"nats":     map[string]any{"url": "nats://nats:4222", "allowPlaintextDev": true},
 				"kek":      map[string]any{"existingSecret": "", "generate": false},
 			},
 			want: "kek.existingSecret or kek.generate=true",
@@ -828,7 +828,7 @@ func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
 
 	err := renderRequiredInputsGuard(t, map[string]any{
 		"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		"nats":     map[string]any{"url": "nats://nats:4222", "allowSingleReplica": true},
+		"nats":     map[string]any{"url": "nats://nats:4222", "allowSingleReplica": true, "allowPlaintextDev": true},
 		"kek":      map[string]any{"existingSecret": "", "generate": true},
 	})
 	if err != nil {
@@ -872,6 +872,9 @@ func TestProductionSignerAuthTokenCommandRendersLoadableConfig(t *testing.T) {
 		env[k] = v
 	}
 	env["TRSTCTL_POSTGRES_DSN"] = "postgres://u:p@pg:5432/trstctl?sslmode=require"
+	// The Deployment mounts this Secret-backed identity as an env var; the
+	// ConfigMap deliberately does not carry the private seed path or material.
+	env["TRSTCTL_NATS_NKEY_SEED_FILE"] = "/etc/trstctl/nats/nkey.seed"
 	cfg, err := config.Load(func(key string) string { return env[key] })
 	if err != nil {
 		t.Fatalf("rendered production signer token config should load: %v", err)
@@ -888,7 +891,7 @@ func TestEvalSignerCoResidentAuthorizerRequiresEvalShape(t *testing.T) {
 	eval := defaultishValues()
 	eval["replicaCount"] = 1
 	eval["postgres"] = map[string]any{"mode": "external", "dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": "", "existingSecretKey": "dsn"} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-	eval["nats"] = map[string]any{"mode": "external", "url": "nats://nats:4222", "replicas": 1, "allowSingleReplica": true}
+	eval["nats"] = map[string]any{"mode": "external", "url": "nats://nats:4222", "replicas": 1, "allowSingleReplica": true, "allowPlaintextDev": true}
 	eval["kek"] = map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": true}
 	signer := eval["signer"].(map[string]any)
 	auth := signer["auth"].(map[string]any)
@@ -1536,14 +1539,17 @@ func defaultishValues() map[string]any {
 		"tls":    map[string]any{"mode": "internal", "existingSecret": "", "allowPlaintextDev": false},
 		"airGap": map[string]any{"enabled": false, "allowPrivate": true, "allowHosts": []any{}, "allowCIDRs": []any{}},
 		"bulkheads": map[string]any{
-			"api":         map[string]any{"workers": 8, "queue": 256},
-			"projections": map[string]any{"workers": 2, "queue": 128},
-			"outbox":      map[string]any{"workers": 4, "queue": 256},
-			"signing":     map[string]any{"workers": 4, "queue": 64},
-			"query":       map[string]any{"workers": 4, "queue": 64},
-			"policy":      map[string]any{"workers": 4, "queue": 64},
-			"protocols":   map[string]any{"workers": 8, "queue": 256},
-			"agent":       map[string]any{"workers": 16, "queue": 1024},
+			"api":             map[string]any{"workers": 8, "queue": 256},
+			"projections":     map[string]any{"workers": 2, "queue": 128},
+			"outbox":          map[string]any{"workers": 4, "queue": 256},
+			"signing":         map[string]any{"workers": 4, "queue": 64},
+			"query":           map[string]any{"workers": 4, "queue": 64},
+			"policy":          map[string]any{"workers": 4, "queue": 64},
+			"protocols":       map[string]any{"workers": 8, "queue": 256},
+			"protocol_http":   map[string]any{"workers": 8, "queue": 256},
+			"public_http":     map[string]any{"workers": 8, "queue": 256},
+			"revocation_http": map[string]any{"workers": 8, "queue": 256},
+			"agent":           map[string]any{"workers": 16, "queue": 1024},
 		},
 		"postgres": map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
 		"nats":     map[string]any{"mode": "external", "url": "", "replicas": 3, "allowSingleReplica": false},
@@ -1594,11 +1600,30 @@ func defaultishValues() map[string]any {
 	}
 }
 
+func TestC0012ProductionChartRejectsUnauthenticatedBroker(t *testing.T) {
+	for _, tc := range []struct {
+		name, url, secret, want string
+	}{
+		{"plaintext", "nats://nats:4222", "trstctl-nats", "tls://"},
+		{"anonymous", "tls://nats:4222", "", "nats.existingSecret"},
+		{"URL credentials", "tls://user:secret@nats:4222", "trstctl-nats", "cannot contain credentials"}, // #nosec G101 -- fabricated credential tests URL-secret rejection (CWE-798)
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			values := productionishValues()
+			nats := values["nats"].(map[string]any)
+			nats["url"], nats["existingSecret"] = tc.url, tc.secret
+			if err := renderRequiredInputsGuard(t, values); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("chart guard = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func productionishValues() map[string]any {
 	v := defaultishValues()
-	v["postgres"] = map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-postgres", "existingSecretKey": "dsn"} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-	v["nats"] = map[string]any{"mode": "external", "url": "nats://nats:4222", "replicas": 3, "allowSingleReplica": false}
-	v["kek"] = map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+	v["postgres"] = map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-postgres", "existingSecretKey": "dsn"}                                            // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+	v["nats"] = map[string]any{"mode": "external", "url": "tls://nats:4222", "replicas": 3, "allowSingleReplica": false, "existingSecret": "trstctl-nats", "identity": "nkey"} // #nosec G101 -- fixture names the Secret, never embeds a credential (CWE-798)
+	v["kek"] = map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false}                                                              // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	signer := v["signer"].(map[string]any)
 	auth := signer["auth"].(map[string]any)
 	auth["tokenCommand"] = "/usr/local/bin/trstctl-sign-approve"

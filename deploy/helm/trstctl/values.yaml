@@ -229,6 +229,16 @@ nats:
   url: ""
   replicas: 3
   allowSingleReplica: false
+  # Production requires tls:// and an existing Secret containing one client
+  # identity. Only an explicit evaluation install may use plaintext/anonymous.
+  allowPlaintextDev: false
+  existingSecret: ""
+  identity: nkey # nkey | credentials | mtls
+  nkeySeedKey: nkey.seed
+  credentialsKey: user.creds
+  caKey: "" # optional private CA PEM key in the same Secret
+  certKey: tls.crt
+  keyKey: tls.key
 
 # Deployment KEK (envelope-encryption key, R3.1/R3.2). REQUIRED and STABLE:
 # losing it makes the sealed CA key unrecoverable. Supply your own Secret in

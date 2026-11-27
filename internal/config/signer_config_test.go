@@ -52,7 +52,8 @@ func TestSignerExternalRequiresSocket(t *testing.T) {
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
-		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_NATS_URL":                            "tls://h:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE":                 "/run/secrets/test-nats.seed",
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 	}
@@ -77,7 +78,8 @@ func TestSignerCoResidentAuthorizerIsEvalOnly(t *testing.T) {
 	prod.Postgres.Mode = config.PostgresExternal
 	prod.Postgres.DSN = "postgres://u:p@h:5432/db?sslmode=require"
 	prod.NATS.Mode = config.NATSExternal
-	prod.NATS.URL = "nats://h:4222"
+	prod.NATS.URL = "tls://h:4222"
+	prod.NATS.NKeySeedFile = "/run/secrets/test-nats.seed"
 	prod.NATS.Replicas = config.DefaultExternalReplicas
 	prod.NATS.AllowSingleReplica = false
 	prod.Signer.Mode = config.SignerExternal
@@ -124,7 +126,8 @@ func TestSignerExternalMTLSValidation(t *testing.T) {
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
-		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_NATS_URL":                            "tls://h:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE":                 "/run/secrets/test-nats.seed",
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 	}

@@ -101,10 +101,17 @@ helm install trstctl deploy/helm/trstctl \
   --set image.repository='registry.example/trstctl-with-auth-client' \
   --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
-  --set nats.url='nats://nats-host:4222' \
+  --set nats.url='tls://nats-host:4222' \
+  --set nats.existingSecret=trstctl-nats-auth \
   --set kek.existingSecret=trstctl-kek \
   --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider
 ```
+
+Create `trstctl-nats-auth` in the namespace with the NATS client `nkey.seed`
+file before installing. Configure the broker to trust that public NKey and to
+require TLS. The chart mounts the seed from the Secret; never put credentials
+in `nats.url`. For a private broker CA, add its PEM to the Secret and set
+`nats.caKey=ca.crt`.
 
 For a single-replica evaluation only, the co-resident authorizer is an explicit
 weaker topology. It is accepted only together with single-replica NATS:
@@ -116,6 +123,7 @@ helm install trstctl-eval deploy/helm/trstctl \
   --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
+  --set nats.allowPlaintextDev=true \
   --set nats.replicas=1 \
   --set nats.allowSingleReplica=true \
   --set kek.generate=true \

@@ -27,6 +27,19 @@
 name: trstctl
 
 services:
+  # One stable NKey seed in the protected deployment volume. The broker sees
+  # only its public key; another container on the network cannot publish.
+  nats-key:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: release
+    image: trstctl-eval:local
+    command: ["nats-key", "provision", "/data/natsauth/nats.seed", "/data/natsconf/nats.conf"]
+    volumes:
+      - natsauth:/data/natsauth
+      - natsconf:/data/natsconf
+
   postgres:
     # Built locally from the exact upstream 16.15 Alpine digest. The small
     # derivative removes upstream's unused vulnerable gosu helper, then starts
@@ -57,9 +70,13 @@ services:
       dockerfile: deploy/docker/Dockerfile.nats
     image: trstctl-nats-hardened:local
     # JetStream is the event spine (AN-2), file-backed under /data.
-    command: ["--jetstream", "--store_dir=/data", "--http_port=8222"]
+    command: ["--config=/data/natsconf/nats.conf", "--jetstream", "--store_dir=/data", "--http_port=8222"]
+    depends_on:
+      nats-key:
+        condition: service_completed_successfully
     volumes:
       - natsdata:/data
+      - natsconf:/data/natsconf:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
       interval: 5s
@@ -159,6 +176,8 @@ services:
       TRSTCTL_POSTGRES_DSN: "postgres://trstctl:trstctl@postgres:5432/trstctl?sslmode=disable"
       TRSTCTL_NATS_MODE: external
       TRSTCTL_NATS_URL: "nats://nats:4222"
+      TRSTCTL_NATS_NKEY_SEED_FILE: /data/natsauth/nats.seed
+      TRSTCTL_NATS_ALLOW_PLAINTEXT_DEV: "true"
       # EVAL ONLY — this Compose stack is a single NATS server, so it explicitly
       # opts into one JetStream replica. Production external NATS must stay
       # replicated (default 3) and will fail readiness/startup if under-replicated.
@@ -246,6 +265,7 @@ services:
       - signersock:/run/trstctl   # reach the signer over the shared UDS
       - spiffesock:/run/trstctl-spiffe # mount this volume into a workload container to use the SPIFFE Workload API
       - secrets:/data/secrets:ro  # signer owns the deployment KEK and socket auth
+      - natsauth:/data/natsauth:ro # private NKey seed; the broker mounts only natsconf
       - trstctldata:/data         # CA cert + audit key persistence
       - publictrust:/public-trust # certificate-only trust publication; no private TLS state
       - evaloidcpublic:/local-oidc-public:ro # public JWKS only; the IdP private volume is not mounted here
@@ -336,6 +356,8 @@ services:
 volumes:
   pgdata:
   natsdata:
+  natsauth:
+  natsconf:
   signersock:
   spiffesock:
   signerkeys:

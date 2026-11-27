@@ -126,7 +126,7 @@ RUN if [ "${GOFIPS140}" != "off" ]; then \
 # 0700 keeps the secret-bearing dirs owner-only; signer and control plane share the
 # same uid, so they can both read the shared KEK and reach the UDS.
 RUN install -d -m 0700 -o 65532 -g 65532 \
-      /mnt-skel/data /mnt-skel/data/secrets /mnt-skel/data/signer /mnt-skel/data/ca /mnt-skel/data/tls \
+      /mnt-skel/data /mnt-skel/data/secrets /mnt-skel/data/natsauth /mnt-skel/data/natsconf /mnt-skel/data/signer /mnt-skel/data/ca /mnt-skel/data/tls \
       /mnt-skel/run/trstctl /mnt-skel/run/trstctl-spiffe
 RUN install -d -m 0750 -o 65532 -g 65532 /mnt-skel/public-trust
 

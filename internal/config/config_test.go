@@ -544,7 +544,8 @@ func TestExternalModesValidWithConnection(t *testing.T) {
 	c.Postgres.Mode = "external"
 	c.Postgres.DSN = "postgres://u:p@host:5432/db"
 	c.NATS.Mode = "external"
-	c.NATS.URL = "nats://host:4222"
+	c.NATS.URL = "tls://host:4222"
+	c.NATS.NKeySeedFile = "/run/secrets/test-nats.seed"
 	c.Signer.AllowCoResidentAuthorizer = false
 	c.Signer.AuthTokenCommand = "/usr/local/bin/trstctl-sign-approve"
 	if err := c.Validate(); err != nil {
@@ -959,15 +960,16 @@ func TestEventStreamReplicasConfigurable(t *testing.T) {
 
 func TestFederationEnvOverridesAndValidation(t *testing.T) {
 	env := map[string]string{
-		"TRSTCTL_FEDERATION_ENABLED":       "true",
-		"TRSTCTL_FEDERATION_CLUSTER_ID":    "us-west-passive",
-		"TRSTCTL_FEDERATION_REGION":        "us-west-2",
-		"TRSTCTL_FEDERATION_PEER_ID":       "us-east-primary",
-		"TRSTCTL_FEDERATION_PEER_REGION":   "us-east-1",
-		"TRSTCTL_FEDERATION_PEER_NATS_URL": "nats://nats.us-east.example:4222",
-		"TRSTCTL_FEDERATION_INTERVAL":      "2s",
-		"TRSTCTL_FEDERATION_RPO":           "5s",
-		"TRSTCTL_FEDERATION_RTO":           "30s",
+		"TRSTCTL_FEDERATION_ENABLED":                  "true",
+		"TRSTCTL_FEDERATION_CLUSTER_ID":               "us-west-passive",
+		"TRSTCTL_FEDERATION_REGION":                   "us-west-2",
+		"TRSTCTL_FEDERATION_PEER_ID":                  "us-east-primary",
+		"TRSTCTL_FEDERATION_PEER_REGION":              "us-east-1",
+		"TRSTCTL_FEDERATION_PEER_NATS_URL":            "tls://nats.us-east.example:4222",
+		"TRSTCTL_FEDERATION_PEER_NATS_NKEY_SEED_FILE": "/run/secrets/peer-nats.seed",
+		"TRSTCTL_FEDERATION_INTERVAL":                 "2s",
+		"TRSTCTL_FEDERATION_RPO":                      "5s",
+		"TRSTCTL_FEDERATION_RTO":                      "30s",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {

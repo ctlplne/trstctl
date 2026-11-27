@@ -51,7 +51,12 @@ func ConfigFromConfig(ctx context.Context, cfg config.Federation) (Config, error
 		Interval: interval, RPO: rpo, RTO: rto,
 	}
 	for _, p := range cfg.Peers {
-		source, err := events.OpenExternalSource(ctx, p.NATSURL)
+		source, err := events.OpenExternalSource(ctx, config.NATS{
+			Mode: config.NATSExternal, URL: p.NATSURL,
+			TLSCAFile: p.NATSTLSCAFile, CredentialsFile: p.NATSCredentialsFile,
+			NKeySeedFile: p.NATSNKeySeedFile, TLSCertFile: p.NATSTLSCertFile,
+			TLSKeyFile: p.NATSTLSKeyFile, AllowPlaintextDev: p.AllowPlaintextDev,
+		})
 		if err != nil {
 			closeOwnedPeers(out)
 			return Config{}, fmt.Errorf("open federation peer %q: %w", p.ID, err)

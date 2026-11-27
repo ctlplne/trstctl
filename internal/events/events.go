@@ -384,10 +384,7 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 	case config.NATSEmbedded:
 		srv, nc, err = openEmbedded(cfg)
 	case config.NATSExternal:
-		if cfg.URL == "" {
-			return nil, errors.New("events: external nats requires a url")
-		}
-		nc, err = nats.Connect(cfg.URL)
+		nc, err = dialExternalNATS(cfg)
 	default:
 		return nil, fmt.Errorf("events: invalid nats mode %q", cfg.Mode)
 	}
@@ -455,11 +452,8 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 // OpenExternalSource opens an existing external trstctl event stream for read-only
 // federation. It does not create or mutate the peer stream; it just connects to the
 // already-running peer's JetStream and returns a Log value that can Replay/Close it.
-func OpenExternalSource(ctx context.Context, url string) (*Log, error) {
-	if url == "" {
-		return nil, errors.New("events: external source nats url is required")
-	}
-	nc, err := nats.Connect(url)
+func OpenExternalSource(ctx context.Context, cfg config.NATS) (*Log, error) {
+	nc, err := dialExternalNATS(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("events: connect external source: %w", err)
 	}

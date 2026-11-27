@@ -57,10 +57,18 @@ helm install trstctl deploy/helm/trstctl \
   --set image.repository='registry.example/trstctl-with-auth-client' \
   --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
-  --set nats.url='nats://nats-host:4222' \
+  --set nats.url='tls://nats-host:4222' \
+  --set nats.existingSecret=trstctl-nats-auth \
   --set kek.existingSecret=trstctl-kek \
   --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider
 ```
+
+Before installing, create `trstctl-nats-auth` in that namespace with a
+`nkey.seed` key (or select `nats.identity=credentials` with `user.creds`, or
+`nats.identity=mtls` with `tls.crt` and `tls.key`). Authorize that client on the
+broker and require server-authenticated TLS there. The URL contains no secret;
+the chart mounts the identity read-only from the Secret. Set `nats.caKey=ca.crt`
+when the broker uses a private CA and include that PEM in the same Secret.
 
 For a single-replica evaluation only, opt into both single-replica NATS and the
 co-resident signer authorizer:
@@ -72,6 +80,7 @@ helm install trstctl-eval deploy/helm/trstctl \
   --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
+  --set nats.allowPlaintextDev=true \
   --set nats.replicas=1 \
   --set nats.allowSingleReplica=true \
   --set kek.generate=true \
@@ -94,7 +103,9 @@ turn off certificate verification to force a localhost port-forward to work.
 |---|---|---|
 | `image.digest` | `""` | Production image digest. When set, pods render `image.repository@sha256:...` and ignore `image.tag`. |
 | `postgres.dsn` / `postgres.existingSecret` | `""` | External PostgreSQL (required). |
-| `nats.url` | `""` | External NATS JetStream (required). |
+| `nats.url` | `""` | External NATS JetStream endpoint; production requires `tls://` and rejects URL credentials. |
+| `nats.existingSecret` | `""` | Production client identity Secret. `nats.identity=nkey` reads `nkey.seed` by default; `credentials` reads `user.creds`; `mtls` reads `tls.crt` and `tls.key`. Optional `nats.caKey` selects a private CA PEM key in the same Secret. |
+| `nats.allowPlaintextDev` | `false` | Explicit evaluation-only opt-in for a plaintext or anonymous broker; production refuses it. |
 | `nats.replicas` | `3` | Required JetStream replicas for the source-of-truth event stream. Startup/readiness fail if NATS cannot honor it. |
 | `nats.allowSingleReplica` | `false` | Eval-only opt-in for `nats.replicas=1`; leave false for production. |
 | `kek.existingSecret` / `kek.generate` | `""` / `false` | Deployment KEK (R3.1/R3.2). **Stable & required.** |

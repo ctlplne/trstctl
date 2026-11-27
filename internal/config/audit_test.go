@@ -32,7 +32,8 @@ func TestAuditEnvOverrides(t *testing.T) {
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
-		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_NATS_URL":                            "tls://h:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE":                 "/run/secrets/test-nats.seed",
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 		"TRSTCTL_AUDIT_SIGNING_KEY_FILE":              "/var/lib/trstctl/audit.pem",
@@ -64,11 +65,12 @@ func TestAuditEnvOverrides(t *testing.T) {
 // TestAuditRetentionValidated: a malformed retention duration fails fast.
 func TestAuditRetentionValidated(t *testing.T) {
 	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		"TRSTCTL_POSTGRES_MODE":   "external",
-		"TRSTCTL_POSTGRES_DSN":    "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":       "external",
-		"TRSTCTL_NATS_URL":        "nats://h:4222",
-		"TRSTCTL_AUDIT_RETENTION": "not-a-duration",
+		"TRSTCTL_POSTGRES_MODE":       "external",
+		"TRSTCTL_POSTGRES_DSN":        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":           "external",
+		"TRSTCTL_NATS_URL":            "tls://h:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE": "/run/secrets/test-nats.seed",
+		"TRSTCTL_AUDIT_RETENTION":     "not-a-duration",
 	}
 	if _, err := config.Load(func(k string) string { return env[k] }); err == nil {
 		t.Fatal("Load accepted a malformed audit.retention")
@@ -80,7 +82,8 @@ func TestPrivacyRetentionValidated(t *testing.T) {
 		"TRSTCTL_POSTGRES_MODE":              "external",
 		"TRSTCTL_POSTGRES_DSN":               "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                  "external",
-		"TRSTCTL_NATS_URL":                   "nats://h:4222",
+		"TRSTCTL_NATS_URL":                   "tls://h:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE":        "/run/secrets/test-nats.seed",
 		"TRSTCTL_PRIVACY_RETENTION_INTERVAL": "not-a-duration",
 	}
 	if _, err := config.Load(func(k string) string { return env[k] }); err == nil {
@@ -100,10 +103,11 @@ func TestAuditAnchorIntervalDefaultsHourlyAndIsBounded(t *testing.T) {
 		t.Fatalf("default anchor interval = %v, %v", d, err)
 	}
 	base := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		"TRSTCTL_POSTGRES_MODE": "external",
-		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":     "external",
-		"TRSTCTL_NATS_URL":      "nats://h:4222",
+		"TRSTCTL_POSTGRES_MODE":       "external",
+		"TRSTCTL_POSTGRES_DSN":        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":           "external",
+		"TRSTCTL_NATS_URL":            "tls://h:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE": "/run/secrets/test-nats.seed",
 
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",

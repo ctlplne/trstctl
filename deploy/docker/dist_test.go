@@ -295,8 +295,8 @@ func TestProductionImageEntrypointsSelectCleanReleaseTarget(t *testing.T) {
 	}
 
 	compose := readArtifact(t, "docker-compose.yml")
-	if got := strings.Count(compose, "target: release"); got != 2 {
-		t.Fatalf("evaluation Compose production target selections = %d, want 2 (signer and trstctl)", got)
+	if got := strings.Count(compose, "target: release"); got != 3 {
+		t.Fatalf("evaluation Compose production target selections = %d, want 3 (NATS key provisioner, signer, and trstctl)", got)
 	}
 
 	makefile := repoFile(t, "Makefile")
@@ -311,6 +311,41 @@ func TestProductionImageEntrypointsSelectCleanReleaseTarget(t *testing.T) {
 
 	securityWorkflow := repoFile(t, ".github", "workflows", "security.yml")
 	mustContainAll(t, "security image scan production target", securityWorkflow, "--target release")
+}
+
+// The evaluation broker must not mount the NKey seed volume. A network peer
+// denied by NATS authentication must not recover that credential from the
+// broker's own filesystem.
+func TestC0012BrokerMountContainsOnlyPublicNKeyConfig(t *testing.T) {
+	var compose struct {
+		Services map[string]struct {
+			Volumes []string `yaml:"volumes"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal([]byte(readArtifact(t, "docker-compose.yml")), &compose); err != nil {
+		t.Fatal(err)
+	}
+	for name, wantPrivate := range map[string]bool{"nats": false, "nats-key": true, "trstctl": true} {
+		service, ok := compose.Services[name]
+		if !ok {
+			t.Fatalf("missing %s service", name)
+		}
+		private, public := false, false
+		for _, mount := range service.Volumes {
+			if strings.HasPrefix(mount, "natsauth:") {
+				private = true
+			}
+			if strings.HasPrefix(mount, "natsconf:") {
+				public = true
+			}
+		}
+		if private != wantPrivate {
+			t.Errorf("%s private NKey mount = %t, want %t", name, private, wantPrivate)
+		}
+		if name == "nats" && !public {
+			t.Error("broker needs the public-only NKey config mount")
+		}
+	}
 }
 
 func TestEvaluationComposeEnablesTheAgentJobsItsConsoleOffers(t *testing.T) {

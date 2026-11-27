@@ -31,7 +31,8 @@ func TestRateLimitEnvOverrides(t *testing.T) {
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
-		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_NATS_URL":                            "tls://h:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE":                 "/run/secrets/test-nats.seed",
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 		"TRSTCTL_RATE_LIMIT_ENABLED":                  "false",
@@ -54,10 +55,11 @@ func TestRateLimitEnvOverrides(t *testing.T) {
 // fast.
 func TestRateLimitValidated(t *testing.T) {
 	base := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		"TRSTCTL_POSTGRES_MODE": "external",
-		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":     "external",
-		"TRSTCTL_NATS_URL":      "nats://h:4222",
+		"TRSTCTL_POSTGRES_MODE":       "external",
+		"TRSTCTL_POSTGRES_DSN":        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":           "external",
+		"TRSTCTL_NATS_URL":            "tls://h:4222",
+		"TRSTCTL_NATS_NKEY_SEED_FILE": "/run/secrets/test-nats.seed",
 	}
 	bad := map[string]string{"TRSTCTL_RATE_LIMIT_WINDOW": "not-a-duration"}
 	if _, err := config.Load(envFunc(base, bad)); err == nil {

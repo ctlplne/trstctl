@@ -160,6 +160,24 @@ spec:
                 secretKeyRef:
                   name: {{ include "trstctl.dbSecretName" . }}
                   key: {{ .Values.postgres.existingSecretKey }}
+            {{- if and .Values.nats .Values.nats.existingSecret }}
+            {{- if eq .Values.nats.identity "nkey" }}
+            - name: TRSTCTL_NATS_NKEY_SEED_FILE
+              value: /etc/trstctl/nats/{{ .Values.nats.nkeySeedKey }}
+            {{- else if eq .Values.nats.identity "credentials" }}
+            - name: TRSTCTL_NATS_CREDENTIALS_FILE
+              value: /etc/trstctl/nats/{{ .Values.nats.credentialsKey }}
+            {{- else if eq .Values.nats.identity "mtls" }}
+            - name: TRSTCTL_NATS_TLS_CERT_FILE
+              value: /etc/trstctl/nats/{{ .Values.nats.certKey }}
+            - name: TRSTCTL_NATS_TLS_KEY_FILE
+              value: /etc/trstctl/nats/{{ .Values.nats.keyKey }}
+            {{- end }}
+            {{- if .Values.nats.caKey }}
+            - name: TRSTCTL_NATS_TLS_CA_FILE
+              value: /etc/trstctl/nats/{{ .Values.nats.caKey }}
+            {{- end }}
+            {{- end }}
             {{- if eq .Values.signer.mode "isolated" }}
             - name: TRSTCTL_SIGNER_MTLS_PEER_PIN
               valueFrom:
@@ -202,6 +220,11 @@ spec:
             - name: kek
               mountPath: /etc/trstctl/kek
               readOnly: true
+            {{- if and .Values.nats .Values.nats.existingSecret }}
+            - name: nats-auth
+              mountPath: /etc/trstctl/nats
+              readOnly: true
+            {{- end }}
             {{- if .Values.signer.auth.allowCoResidentAuthorizer }}
             - name: signer-auth
               mountPath: /etc/trstctl/signer-auth
@@ -244,6 +267,12 @@ spec:
           secret:
             secretName: {{ include "trstctl.kekSecretName" . }}
             defaultMode: 0440
+        {{- if and .Values.nats .Values.nats.existingSecret }}
+        - name: nats-auth
+          secret:
+            secretName: {{ .Values.nats.existingSecret }}
+            defaultMode: 0440
+        {{- end }}
         {{- if eq .Values.signer.mode "sidecar" }}
         - name: signer-auth
           secret:

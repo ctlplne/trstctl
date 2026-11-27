@@ -208,6 +208,18 @@ startup because their Secret references were never rendered.
 {{- if not .Values.nats.url -}}
 {{- fail "OPS-003: nats.url is required. Set it to the external NATS JetStream URL before installing." -}}
 {{- end -}}
+{{- if contains "@" .Values.nats.url -}}
+{{- fail "C0012: nats.url cannot contain credentials; put the client identity in nats.existingSecret." -}}
+{{- end -}}
+{{- if and (not .Values.nats.allowPlaintextDev) (not (hasPrefix "tls://" .Values.nats.url)) -}}
+{{- fail "C0012: production nats.url must use tls://; nats.allowPlaintextDev is evaluation only." -}}
+{{- end -}}
+{{- if and (not .Values.nats.allowPlaintextDev) (not .Values.nats.existingSecret) -}}
+{{- fail "C0012: nats.existingSecret with an NKey, credentials file, or mTLS certificate is required for production." -}}
+{{- end -}}
+{{- if and .Values.nats.existingSecret (ne .Values.nats.identity "nkey") (ne .Values.nats.identity "credentials") (ne .Values.nats.identity "mtls") -}}
+{{- fail "C0012: nats.identity must be nkey, credentials, or mtls." -}}
+{{- end -}}
 {{- if not (or .Values.kek.existingSecret .Values.kek.generate) -}}
 {{- fail "OPS-003: kek.existingSecret or kek.generate=true is required. Use kek.existingSecret for production; set kek.generate=true only for evaluation so Helm creates and preserves a random KEK Secret." -}}
 {{- end -}}

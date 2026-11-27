@@ -120,7 +120,11 @@ data directory. The socket directory is removed after a clean stop.
 | `TRSTCTL_POSTGRES_LOCK_CONNS` | `8` | Lock pool: sessions holding the projection advisory lock while a command runs (`postgres.lock_conns`). |
 | `TRSTCTL_POSTGRES_RESTORE_CONNS` | `8` | Restore admission sessions for mutations, projection, backup and maintenance (`postgres.restore_conns`). The six pools total 40 connections per replica by default; see the connection budget in [operations](operations.md). |
 | `TRSTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream for single-node eval) or `external` (NATS cluster; recommended for production). |
-| `TRSTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
+| `TRSTCTL_NATS_URL` | — | External NATS endpoints; production requires `tls://` with verified server identity. URL credentials are rejected. |
+| `TRSTCTL_NATS_TLS_CA_FILE` | — | Optional private CA bundle for the broker TLS certificate. |
+| `TRSTCTL_NATS_TLS_CERT_FILE`, `TRSTCTL_NATS_TLS_KEY_FILE` | — | Client certificate and key for mTLS; both paths are required together. |
+| `TRSTCTL_NATS_CREDENTIALS_FILE`, `TRSTCTL_NATS_NKEY_SEED_FILE` | — | Exactly one client identity file for external NATS, unless mTLS is used. Mount it as a protected Secret. |
+| `TRSTCTL_NATS_ALLOW_PLAINTEXT_DEV` | `false` | Explicit evaluation escape hatch for a plaintext or anonymous external broker. Never enable in production. |
 | `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore. |
 | `TRSTCTL_NATS_REPLICAS` | `3` in external, `1` embedded | Required JetStream replicas for the source-of-truth event stream. External startup/readiness fail if NATS cannot honor the requested count. |
 | `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA` | `false` | Eval-only opt-in that permits `TRSTCTL_NATS_REPLICAS=1` in external mode. Do not enable it for production HA/RPO. |
@@ -136,7 +140,8 @@ supply their connection strings:
 export TRSTCTL_POSTGRES_MODE=external
 export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmode=verify-full&sslrootcert=/etc/trstctl/pg-ca.pem'
 export TRSTCTL_NATS_MODE=external
-export TRSTCTL_NATS_URL='nats://nats.internal:4222'
+export TRSTCTL_NATS_URL='tls://nats.internal:4222'
+export TRSTCTL_NATS_NKEY_SEED_FILE=/etc/trstctl/nats/nkey.seed
 export TRSTCTL_NATS_REPLICAS=3
 ```
 
@@ -5659,7 +5664,7 @@ environment variables override file values, which override defaults.
 {
   "server": { "addr": ":8443" },
   "postgres": { "mode": "external", "dsn": "postgres://..." },
-  "nats": { "mode": "external", "url": "nats://..." },
+  "nats": { "mode": "external", "url": "tls://nats.internal:4222", "nkey_seed_file": "/etc/trstctl/nats/nkey.seed" },
   "telemetry": { "enabled": false, "instance_id_file": "data/telemetry/instance-id" }
 }
 ```

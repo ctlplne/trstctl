@@ -79,6 +79,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if len(args) > 0 && args[0] == "journal-key" {
 		return runJournalKey(args[1:], getenv, stderr)
 	}
+	if len(args) > 0 && args[0] == "nats-key" {
+		return runNATSKey(args[1:], stderr)
+	}
 	if len(args) > 0 && args[0] == "connector" {
 		return runConnector(ctx, args[1:], getenv, stdout, stderr)
 	}

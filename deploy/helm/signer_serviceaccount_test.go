@@ -23,7 +23,8 @@ func TestIsolatedSignerServiceAccountCarriesItsCloudIdentityA200L1(t *testing.T)
 			"--set", "signer.mode=isolated",
 			"--set", "signer.mtls.serverName=trstctl-signer.trstctl.svc",
 			"--set", "postgres.existingSecret=trstctl-postgres",
-			"--set", "nats.url=nats://nats.internal:4222",
+			"--set", "nats.url=tls://nats.internal:4222",
+			"--set", "nats.existingSecret=trstctl-nats",
 			"--set", "kek.existingSecret=trstctl-kek",
 			"--set", "signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider",
 		}, extra...)
