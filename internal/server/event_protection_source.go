@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -176,6 +177,9 @@ func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tena
 	return func(admitCtx context.Context, event events.Event,
 		publish func(context.Context) (events.Event, error),
 	) (events.Event, error) {
+		if err := projections.ValidateSchemaVersion(event); err != nil {
+			return events.Event{}, err
+		}
 		var published events.Event
 		err := st.WithRestoreEventIngress(admitCtx, event.TenantID, event.ID, event.Type,
 			func(ownerCtx context.Context) error {
@@ -220,6 +224,9 @@ func restoreEventIngressOptionsWithJournal(st *store.Store, access func() tenant
 		events.WithAppendAdmission(func(admitCtx context.Context, event events.Event,
 			publish func(context.Context) (events.Event, error),
 		) (events.Event, error) {
+			if err := projections.ValidateSchemaVersion(event); err != nil {
+				return events.Event{}, err
+			}
 			if st.HasKeyStateOwnerContext(admitCtx) && !events.IngressHistoryReadPreheld(admitCtx) {
 				return events.Event{}, store.ErrKeyStateOwnerUnavailable
 			}

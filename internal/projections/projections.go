@@ -5819,14 +5819,15 @@ func (p *Projector) rebuildEventProjectionsThrough(
 			return nil
 		}
 		if isTenantLifecycleEventType(e.Type) {
-			return p.replayRetainedTenantLifecycleEventProjections(ctx, e)
+			return quarantine.apply(ctx, e, func() error { return p.replayRetainedTenantLifecycleEventProjections(ctx, e) })
 		}
 		for _, proj := range p.eventProjections {
 			if proj == nil {
 				continue
 			}
 			if err := proj.Apply(ctx, e); err != nil {
-				return fmt.Errorf("projections: replay extension %s seq %d: %w", proj.Name(), e.Sequence, err)
+				return quarantine.finishApply(ctx, e,
+					fmt.Errorf("projections: replay extension %s seq %d: %w", proj.Name(), e.Sequence, err))
 			}
 		}
 		return nil
@@ -11807,15 +11808,17 @@ func (p *Projector) projectFromPlannedHistory(ctx context.Context, log *events.L
 		}
 		skip = skip || skipDynamicSecret
 		if skip {
-			if err := ValidateSchemaVersion(e); err != nil {
-				return err
-			}
-			return p.applyEventProjections(ctx, e)
+			return quarantine.apply(ctx, e, func() error {
+				if err := ValidateSchemaVersion(e); err != nil {
+					return err
+				}
+				return p.applyEventProjections(ctx, e)
+			})
 		}
 		if isTenantLifecycleEventType(e.Type) {
-			return p.ApplyRetainedTenantLifecycle(ctx, e)
+			return quarantine.apply(ctx, e, func() error { return p.ApplyRetainedTenantLifecycle(ctx, e) })
 		}
-		return p.Apply(governanceDecisionHistoryReplay(ctx), e)
+		return quarantine.apply(ctx, e, func() error { return p.Apply(governanceDecisionHistoryReplay(ctx), e) })
 	}); err != nil {
 		return err
 	}
@@ -12006,7 +12009,9 @@ func (p *Projector) projectCatchUpFromPlannedHistory(ctx context.Context, log *e
 						}
 						skip = skip || skipDynamicSecret
 						if !skip {
-							if err := p.applyCore(governanceDecisionHistoryReplay(readCtx), e); err != nil {
+							if err := quarantine.apply(readCtx, e, func() error {
+								return p.applyCore(governanceDecisionHistoryReplay(readCtx), e)
+							}); err != nil {
 								return err
 							}
 						}
@@ -12225,22 +12230,63 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 				// registration of the same tenant UUID is classified independently.
 				_, skipOffboardedSecretTarget := secretAuthority.skipSequences[e.Sequence]
 				_, skipOffboardedDynamicSecret := dynamicSecretAuthority.skipSequences[e.Sequence]
+				if isKeyStateMutationEventType(e.Type) {
+					// Key-state projection owns the rebuild transaction itself and
+					// must never be skipped after a failed custody transition.
+					if skipOffboardedSecretTarget || skipOffboardedDynamicSecret {
+						if err := ValidateSchemaVersion(e); err != nil {
+							return err
+						}
+					} else {
+						if err := p.applyForRebuild(applyCtx, tx, e); err != nil {
+							return fmt.Errorf("projections: rebuild apply %s event %s at sequence %d: %w",
+								e.Type, e.ID, e.Sequence, err)
+						}
+						if err := crlReplay.observe(e); err != nil {
+							return err
+						}
+					}
+					return p.applyEventProjectionsTx(applyCtx, tx, e)
+				}
+				// Each event uses a savepoint so a rejected tenant row cannot
+				// abort the rebuild transaction for unrelated tenants.
+				eventTx, err := tx.Begin(applyCtx)
+				if err != nil {
+					return err
+				}
+				var applyErr error
 				if skipOffboardedSecretTarget || skipOffboardedDynamicSecret {
-					if err := ValidateSchemaVersion(e); err != nil {
-						return err
-					}
+					applyErr = ValidateSchemaVersion(e)
 				} else {
-					if err := p.applyForRebuild(applyCtx, tx, e); err != nil {
-						return fmt.Errorf(
+					if err := p.applyForRebuild(applyCtx, eventTx, e); err != nil {
+						applyErr = fmt.Errorf(
 							"projections: rebuild apply %s event %s at sequence %d: %w",
-							e.Type, e.ID, e.Sequence, err,
-						)
-					}
-					if err := crlReplay.observe(e); err != nil {
-						return err
+							e.Type, e.ID, e.Sequence, err)
 					}
 				}
-				return p.applyEventProjectionsTx(applyCtx, tx, e)
+				if applyErr != nil {
+					if err := eventTx.Rollback(applyCtx); err != nil {
+						return errors.Join(applyErr, err)
+					}
+					confined, err := quarantine.confineApplyFailure(applyCtx, tx, e, applyErr)
+					if err != nil {
+						return errors.Join(applyErr, err)
+					}
+					if confined {
+						return nil
+					}
+					return applyErr
+				}
+				if err := p.applyEventProjectionsTx(applyCtx, eventTx, e); err != nil {
+					return errors.Join(err, eventTx.Rollback(applyCtx))
+				}
+				if err := eventTx.Commit(applyCtx); err != nil {
+					return err
+				}
+				if !skipOffboardedSecretTarget && !skipOffboardedDynamicSecret {
+					return crlReplay.observe(e)
+				}
+				return nil
 			}); err != nil {
 				return err
 			}

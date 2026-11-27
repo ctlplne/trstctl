@@ -8,9 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/inputtext"
@@ -205,4 +208,60 @@ func (q *tenantPoisonQuarantine) record(ctx context.Context, tx pgx.Tx, tenantID
 		return q.store.RecordProjectionTenantQuarantineTx(ctx, tx, tenantID, seq, reasonCode)
 	}
 	return q.store.RecordProjectionTenantQuarantine(ctx, tenantID, seq, reasonCode)
+}
+
+// confineApplyFailure records a deterministic read-model rejection under the
+// event's tenant. Transport, datastore availability, and key-custody failures
+// still stop replay so they cannot be mistaken for tenant data errors.
+func (q *tenantPoisonQuarantine) confineApplyFailure(ctx context.Context, tx pgx.Tx, e events.Event, applyErr error) (bool, error) {
+	var networkErr net.Error
+	if isKeyStateMutationEventType(e.Type) || events.IsLegacyProviderGlobalAudit(e) ||
+		uuid.Validate(e.TenantID) != nil || e.Sequence == 0 ||
+		errors.Is(applyErr, context.Canceled) || errors.Is(applyErr, context.DeadlineExceeded) ||
+		errors.Is(applyErr, io.EOF) || errors.Is(applyErr, io.ErrUnexpectedEOF) ||
+		errors.Is(applyErr, pgx.ErrTxClosed) || errors.As(applyErr, &networkErr) ||
+		errors.Is(applyErr, store.ErrDatastoreBusy) ||
+		errors.Is(applyErr, store.ErrRestoreInProgress) ||
+		errors.Is(applyErr, store.ErrRestoreActivityUnresolved) ||
+		errors.Is(applyErr, store.ErrRestoreAdmissionLost) ||
+		errors.Is(applyErr, store.ErrKeyStateOwnerUnavailable) ||
+		errors.Is(applyErr, ErrCanonicalEventRequired) {
+		return false, nil
+	}
+	var pgErr *pgconn.PgError
+	var typeErr *json.UnmarshalTypeError
+	var syntaxErr *json.SyntaxError
+	projectableDataError := errors.As(applyErr, &typeErr) || errors.As(applyErr, &syntaxErr)
+	if errors.As(applyErr, &pgErr) {
+		// Data exceptions and integrity constraints are stable for the same
+		// event and read-model state. Connection, resource, and transaction
+		// failures remain retryable and must stop the ordered replay.
+		projectableDataError = len(pgErr.Code) >= 2 && (pgErr.Code[:2] == "22" || pgErr.Code[:2] == "23")
+	}
+	if !projectableDataError {
+		return false, nil
+	}
+	if err := q.record(ctx, tx, e.TenantID, e.Sequence, "projection_rejected"); err != nil {
+		return false, err
+	}
+	q.known[e.TenantID] = true
+	return true, nil
+}
+
+func (q *tenantPoisonQuarantine) apply(ctx context.Context, e events.Event, step func() error) error {
+	return q.finishApply(ctx, e, step())
+}
+
+func (q *tenantPoisonQuarantine) finishApply(ctx context.Context, e events.Event, applyErr error) error {
+	if applyErr == nil {
+		return nil
+	}
+	confined, err := q.confineApplyFailure(ctx, nil, e, applyErr)
+	if err != nil {
+		return errors.Join(applyErr, err)
+	}
+	if confined {
+		return nil
+	}
+	return applyErr
 }

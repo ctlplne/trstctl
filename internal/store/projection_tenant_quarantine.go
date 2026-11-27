@@ -84,5 +84,6 @@ func validProjectionTenantQuarantine(tenantID string, seq uint64, reasonCode str
 			reasonCode == "agent_heartbeat_invalid" || reasonCode == "native_failure_receipt_invalid" ||
 			reasonCode == "migration_approval_duplicate_start" ||
 			reasonCode == "migration_restore_inconsistent" ||
-			reasonCode == "attester_trust_source_referenced" || reasonCode == "secret_sync_trust_source_missing")
+			reasonCode == "attester_trust_source_referenced" || reasonCode == "secret_sync_trust_source_missing" ||
+			reasonCode == "projection_rejected")
 }

@@ -218,7 +218,13 @@ func (w *TailWorker) Run(ctx context.Context) error {
 							return w.proj.Apply(governanceDecisionHistoryReplay(ownerCtx), e)
 						}
 					}); err != nil {
-						return w.persistFailure(ownerCtx, e.Sequence, err)
+						confined, quarantineErr := quarantine.confineApplyFailure(ownerCtx, nil, e, err)
+						if quarantineErr != nil {
+							return w.persistFailure(ownerCtx, e.Sequence, errors.Join(err, quarantineErr))
+						}
+						if !confined {
+							return w.persistFailure(ownerCtx, e.Sequence, err)
+						}
 					}
 					// Advance the projection checkpoint as the tail applies out-of-band events
 					// (SPINE-007), so the boot catch-up watermark stays current and a restart
