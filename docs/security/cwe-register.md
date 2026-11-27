@@ -257,8 +257,8 @@ not this file.
 | `internal/config/audit_test.go:108` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
-| `internal/config/config.go:3874` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4745` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3881` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4766` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -279,12 +279,12 @@ not this file.
 | `internal/config/config_provider_billing_sync_test.go:581` | an env: reference, not a value (CWE-798) |
 | `internal/config/config_provider_billing_sync_test.go:629` | an env: reference, not a value (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config_test.go:416` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config_test.go:422` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config_test.go:425` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config_test.go:428` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config_test.go:431` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/config_test.go:186` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/config_test.go:429` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/config_test.go:435` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/config_test.go:438` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/config_test.go:441` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/config_test.go:444` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/deny_credential_test.go:17` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/deny_credential_test.go:19` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/deny_credential_test.go:49` | test-only file reference paths, no credential values (CWE-798) |
@@ -1490,8 +1490,8 @@ not this file.
 | `internal/server/pam_gateway_private_ca_served_test.go:71` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_health.go:100` | a positive interval in nanoseconds, never negative (CWE-190) |
 | `internal/server/pam_served_test.go:749` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/protocol_mounts.go:1046` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
-| `internal/server/protocol_mounts.go:1048` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:1051` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:1053` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:174` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/restore_outbox_pairs.go:105` | positive int64 is representable. |
 | `internal/server/restore_outbox_pairs.go:109` | positive int64 is representable. |
@@ -2945,9 +2945,9 @@ not this file.
 | `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3969` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:5405` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5424` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3983` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:5426` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5445` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:340` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -3193,10 +3193,10 @@ not this file.
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:97` | the repository's own fixture (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:117` | the repository's own fixture (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/protocol_mounts.go:766` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:881` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:998` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1419` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:764` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:886` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:1003` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:1424` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:602` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:240` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:244` | test reads its own tempdir fixture (CWE-22) |
@@ -3822,8 +3822,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/cli/pcas_succession_approval_test.go:58` | test writes under t.TempDir |
 | `internal/cli/pcas_succession_approval_test.go:129` | test writes under t.TempDir |
-| `internal/config/config.go:5405` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5424` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5426` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5445` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
