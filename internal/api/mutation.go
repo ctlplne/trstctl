@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -57,6 +58,28 @@ func writeCachedResponseContentType(w http.ResponseWriter, contentType string) e
 
 type secretResponse interface {
 	wipeSecrets()
+}
+
+// allowHTTPIdempotencyKey reserves colon-separated recorder keys for internal
+// receivers. A completed or pending pre-upgrade HTTP claim with the same exact
+// authenticated binding remains replayable; an unclaimed or foreign claim never
+// reaches the recorder. The latter two cases have one response, so callers
+// cannot probe whether an internal receiver key exists.
+func (a *API) allowHTTPIdempotencyKey(w http.ResponseWriter, r *http.Request, tenantID, key, binding string) bool {
+	if !strings.Contains(key, ":") || strings.TrimSpace(r.Header.Get("Idempotency-Key")) != key {
+		return true
+	}
+	_, err := a.idem.BoundResultCompleted(r.Context(), tenantID, key, binding)
+	switch {
+	case err == nil, errors.Is(err, orchestrator.ErrInProgress), errors.Is(err, orchestrator.ErrEffectIndeterminate):
+		return true
+	case errors.Is(err, orchestrator.ErrIdempotencyNotFound), errors.Is(err, orchestrator.ErrIdempotencyConflict):
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key uses a reserved internal format; use a key without ':'"))
+		return false
+	default:
+		a.writeError(w, err)
+		return false
+	}
 }
 
 // mutate runs a mutating operation under an idempotency key (AN-5): a replay
@@ -145,6 +168,9 @@ func (a *API) mutatePreparedDurableBound(
 	}
 	if binding == "" || prepare == nil || verifyTerminal == nil || fn == nil {
 		a.writeError(w, errors.New("api: prepared durable mutation is missing exact authority"))
+		return
+	}
+	if !a.allowHTTPIdempotencyKey(w, r, tenantID, idempotencyKey, binding) {
 		return
 	}
 	recordResult := func(ctx context.Context) ([]byte, error) {
@@ -260,6 +286,9 @@ func (a *API) mutateWithRecorderLimit(w http.ResponseWriter, r *http.Request, id
 			a.writeError(w, err)
 			return
 		}
+	}
+	if !a.allowHTTPIdempotencyKey(w, r, tenantID, idempotencyKey, binding) {
+		return
 	}
 
 	recordResult := func(ctx context.Context) ([]byte, error) {

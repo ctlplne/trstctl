@@ -478,14 +478,23 @@ func (p *protocolIssuer) revokeProtocolLeaf(ctx context.Context, tenantID, proto
 		}
 	}
 	key := "protocol-revoke:" + protocolName + ":" + fingerprint
-	_, err := p.idem.Do(ctx, tenantID, key, func(ctx context.Context) ([]byte, error) {
+	revoke := func(ctx context.Context) ([]byte, error) {
 		now := time.Now()
 		if err := p.orch.RevokeCertificateForCA(ctx, tenantID, fingerprint, serial, p.caID, reason, reasonCode, now); err != nil {
 			return nil, err
 		}
 		p.auditRevoked(ctx, tenantID, protocolName, serial, reasonCode)
 		return []byte("revoked:" + serial), nil
-	})
+	}
+	_, err := p.idem.Do(ctx, tenantID, key, revoke)
+	if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+		// An old HTTP mutation could claim this public, predictable slot with
+		// a bound response. An unbound protocol claim never conflicts with its
+		// own completed result; only a foreign bound claim reaches this path.
+		// Continue under a distinct internal slot instead of leaving the
+		// compromised certificate valid until idempotency retention expires.
+		_, err = p.idem.Do(ctx, tenantID, "protocol-revoke-recovery:v1:"+protocolName+":"+fingerprint, revoke)
+	}
 	if err != nil {
 		return err
 	}

@@ -210,6 +210,9 @@ func (a *API) sealTenantKeyDomain(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "tenant key-domain lifecycle is not configured"))
 		return
 	}
+	if !a.allowHTTPIdempotencyKey(w, r, tenantID, idempotencyKey, binding) {
+		return
+	}
 
 	recordResult := func(ctx context.Context) ([]byte, error) {
 		domain, err := a.tenantKeyDomains.RequestSeal(ctx, tenantID, idempotencyKey, binding)

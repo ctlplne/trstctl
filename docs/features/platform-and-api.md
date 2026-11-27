@@ -40,6 +40,12 @@ route checks RBAC first; when `auth.abac.enabled` is configured, a deny-only ABA
 overlay can then block the request using route, actor, environment, and time attributes.
 **Served.**
 
+Choose a stable, opaque `Idempotency-Key` without a colon (`:`), for example a UUID.
+Colon-separated keys are reserved for internal jobs such as certificate revocation
+and agent renewal; a new HTTP request using one returns `400` before it can claim
+that job's retry slot. An exact retry of a colon key recorded before this rule
+still returns its original result when its authenticated request binding matches.
+
 REST JSON request strings and URL path values must be valid UTF-8 without U+0000.
 An invalid value returns `400` before a mutation is appended to the event log;
 other control characters remain subject to each route's own field rules.

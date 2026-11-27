@@ -164,6 +164,9 @@ func (a *API) mutateSealedDynamicLease(w http.ResponseWriter, r *http.Request, i
 		a.writeProblem(w, problem.New(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
 		return
 	}
+	if !a.allowHTTPIdempotencyKey(w, r, tenantID, idempotencyKey, binding) {
+		return
+	}
 	if a.secrets == nil || a.secrets.be.KEK == nil {
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "dynamic secret lease response sealing is not configured"))
 		return

@@ -313,6 +313,7 @@ The property that doing an operation twice has the same effect as doing it once.
 client that retries a dropped request must not accidentally create two certificates.
 trstctl enforces this with an **idempotency key** on every state-changing request
 (non-negotiable **AN-5**).
+Use an opaque HTTP key without `:`; colon-separated keys belong to internal jobs.
 
 ### Event sourcing
 

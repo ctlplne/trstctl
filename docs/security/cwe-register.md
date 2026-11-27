@@ -198,7 +198,7 @@ not this file.
 | `internal/api/decoy_kubernetes.go:42` | a Kubernetes user name, not a credential (CWE-798) |
 | `internal/api/discovery_secret_move.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/dynamic_secret_preview.go:19` | public MAC domain, not a credential |
-| `internal/api/idempotency_binding_test.go:21` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/api/idempotency_binding_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/itsm_test.go:13` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/itsm_test.go:19` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/itsm_test.go:28` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

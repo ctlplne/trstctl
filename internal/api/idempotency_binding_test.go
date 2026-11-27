@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -19,6 +20,57 @@ import (
 )
 
 const mutationBindingSecretSentinel = "credential-sentinel-must-never-cross-binding" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+
+func TestC0005PreviouslyClaimedColonKeyReplaysOnlyItsExactRequest(t *testing.T) {
+	const (
+		tenant = "11111111-1111-1111-1111-111111111111"
+		key    = "client:legacy-retry"
+	)
+	idem := orchestrator.NewMemoryIdempotency()
+	a := New(nil, idem, nil)
+	request := func(subject string) *http.Request {
+		r := mutationBindingRequestWithBody(subject, http.MethodPost, "/test/mutations/owners", `{"name":"payments"}`)
+		r.Header.Set("Idempotency-Key", key)
+		return r
+	}
+	first := request("operator-a")
+	binding, _, err := mutationRequestBindingLimit(first, "operator-a", defaultRESTJSONBodyLimit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldResponse, err := json.Marshal(cachedResponse{Status: http.StatusCreated, Body: json.RawMessage(`{"owner":"payments"}`), Binding: binding})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := idem.DoBound(t.Context(), tenant, key, binding, func(context.Context) ([]byte, error) { return oldResponse, nil }); err != nil {
+		t.Fatal(err)
+	}
+	replay := httptest.NewRecorder()
+	a.mutate(replay, request("operator-a"), key, func(context.Context, string) (int, any, error) {
+		t.Fatal("legacy replay executed the mutation again")
+		return 0, nil, nil
+	})
+	if replay.Code != http.StatusCreated || !strings.Contains(replay.Body.String(), `"owner":"payments"`) {
+		t.Fatalf("legacy replay = %d %s", replay.Code, replay.Body.String())
+	}
+	for _, tc := range []struct{ name, key, subject string }{
+		{"unclaimed", "protocol-revoke:acme:new", "operator-a"},
+		{"foreign-claim", key, "operator-b"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := request(tc.subject)
+			r.Header.Set("Idempotency-Key", tc.key)
+			out := httptest.NewRecorder()
+			a.mutate(out, r, tc.key, func(context.Context, string) (int, any, error) {
+				t.Fatal("reserved key reached the mutation")
+				return 0, nil, nil
+			})
+			if out.Code != http.StatusBadRequest || !strings.Contains(out.Body.String(), "reserved internal format") {
+				t.Fatalf("%s = %d %s", tc.name, out.Code, out.Body.String())
+			}
+		})
+	}
+}
 
 func mutationBindingRequest(subject, method, path string) *http.Request {
 	const tenantID = "11111111-1111-1111-1111-111111111111"

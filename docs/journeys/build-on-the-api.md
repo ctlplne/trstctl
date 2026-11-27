@@ -72,7 +72,8 @@ in lockstep.
 
 4. Call a mutation with your own idempotency key. Every state-changing request
    takes an `Idempotency-Key`; a retry with the same key returns the original result
-   instead of acting twice. The CLI exposes it as a flag:
+   instead of acting twice. Use an opaque key without `:` because that separator
+   is reserved for internal jobs. The CLI exposes the key as a flag:
 
    ```sh
    echo '{"kind":"workload","name":"payments"}' \
