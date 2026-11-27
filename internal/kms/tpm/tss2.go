@@ -8,6 +8,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // TSS2 private key files (TPM-O1). A host endpoint key the TPM generated is
@@ -67,6 +69,9 @@ func EncodeTSS2PrivateKey(parent uint32, public, private []byte) ([]byte, error)
 // the public and private areas without their TPM2B sizes.
 func DecodeTSS2PrivateKey(file []byte) (parent uint32, public, private []byte, err error) {
 	block, rest := pem.Decode(file)
+	if block != nil {
+		defer secret.Wipe(block.Bytes)
+	}
 	if block == nil || block.Type != TSS2PEMType || len(block.Headers) != 0 || len(trimSpace(rest)) != 0 {
 		return 0, nil, nil, errors.New("tpm: not one TSS2 PRIVATE KEY PEM block")
 	}

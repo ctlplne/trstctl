@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -1569,6 +1570,15 @@ func parseDeploymentTargetRequest(raw json.RawMessage) (deploymentTargetRequest,
 	}
 	if _, ok := cfg.(map[string]any); !ok {
 		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "config must be a JSON object")
+	}
+	if req.Connector == "haproxy" {
+		config := cfg.(map[string]any)
+		crtPath, _ := config["crt_path"].(string)
+		configPath, _ := config["config_path"].(string)
+		if crtPath != "" && configPath != "" && path.Clean(crtPath) == path.Clean(configPath) {
+			return deploymentTargetRequest{}, errStatus(http.StatusUnprocessableEntity,
+				"haproxy crt_path must differ from config_path")
+		}
 	}
 	return req, nil
 }

@@ -129,20 +129,21 @@ func clusterProfile(namespaces ...string) connector.LocalOpsConfig {
 // only when the cluster holds the certificate it was given.
 func TestKubernetesSecretInstallWritesTheServingChainAndReadsItBack(t *testing.T) {
 	api := newFakeKubeSecrets(t)
+	cert, key, chain, fingerprint := hostServerCredentialWithChain(t, "web.example.test")
 	material := relay.Material{
-		"credential.cert_pem":  []byte("LEAF\n"),
-		"credential.chain_pem": []byte("ISSUER\n"),
-		"credential.key_pem":   []byte("CLUSTER-GENERATED-KEY"),
+		"credential.cert_pem":  cert,
+		"credential.chain_pem": chain,
+		"credential.key_pem":   key,
 	}
 	if _, err := relay.ExecuteOnHost(context.Background(), clusterProfile("payments"), relay.DeployIntent{
-		Connector: "k8s_secret", Target: "web", TargetConfig: kubernetesSecretTarget(t, "payments", "web-tls"),
+		Connector: "k8s_secret", Target: "web", TargetConfig: kubernetesSecretTarget(t, "payments", "web-tls"), Fingerprint: fingerprint,
 	}, material); err != nil {
 		t.Fatalf("ExecuteOnHost: %v", err)
 	}
-	if got := api.data(t, "payments", "web-tls", "tls.crt"); string(got) != "LEAF\nISSUER\n" {
+	if got := api.data(t, "payments", "web-tls", "tls.crt"); !bytes.Equal(got, append(append([]byte(nil), cert...), chain...)) {
 		t.Fatalf("tls.crt = %q, want the leaf and its issuer", got)
 	}
-	if got := api.data(t, "payments", "web-tls", "tls.key"); string(got) != "CLUSTER-GENERATED-KEY" {
+	if got := api.data(t, "payments", "web-tls", "tls.key"); !bytes.Equal(got, key) {
 		t.Fatalf("tls.key = %q, want the key generated in the cluster", got)
 	}
 }
@@ -151,9 +152,10 @@ func TestKubernetesSecretInstallWritesTheServingChainAndReadsItBack(t *testing.T
 // profile does not list is refused before anything is written.
 func TestKubernetesSecretInstallRefusesANamespaceOutsideTheProfile(t *testing.T) {
 	api := newFakeKubeSecrets(t)
+	cert, key, fingerprint := hostTestCredential(t)
 	_, err := relay.ExecuteOnHost(context.Background(), clusterProfile("payments"), relay.DeployIntent{
-		Connector: "k8s_secret", Target: "dns", TargetConfig: kubernetesSecretTarget(t, "kube-system", "dns-tls"),
-	}, relay.Material{"credential.cert_pem": []byte("LEAF"), "credential.key_pem": []byte("KEY")})
+		Connector: "k8s_secret", Target: "dns", TargetConfig: kubernetesSecretTarget(t, "kube-system", "dns-tls"), Fingerprint: fingerprint,
+	}, relay.Material{"credential.cert_pem": cert, "credential.key_pem": key})
 	if err == nil || !strings.Contains(err.Error(), "kube-system") {
 		t.Fatalf("ExecuteOnHost outside the profile = %v, want a refusal naming the namespace", err)
 	}
@@ -167,9 +169,10 @@ func TestKubernetesSecretInstallRefusesANamespaceOutsideTheProfile(t *testing.T)
 func TestKubernetesSecretInstallFailsWhenTheClusterHoldsAnotherCertificate(t *testing.T) {
 	api := newFakeKubeSecrets(t)
 	api.staleRead = true
+	cert, key, fingerprint := hostTestCredential(t)
 	_, err := relay.ExecuteOnHost(context.Background(), clusterProfile("payments"), relay.DeployIntent{
-		Connector: "k8s_secret", Target: "web", TargetConfig: kubernetesSecretTarget(t, "payments", "web-tls"),
-	}, relay.Material{"credential.cert_pem": []byte("LEAF"), "credential.key_pem": []byte("KEY")})
+		Connector: "k8s_secret", Target: "web", TargetConfig: kubernetesSecretTarget(t, "payments", "web-tls"), Fingerprint: fingerprint,
+	}, relay.Material{"credential.cert_pem": cert, "credential.key_pem": key})
 	if err == nil || !strings.Contains(err.Error(), "does not hold") {
 		t.Fatalf("ExecuteOnHost with a different certificate read back = %v, want a failed install", err)
 	}
@@ -217,7 +220,7 @@ func TestKubernetesSecretRenewalWritesTheClusterGeneratedKey(t *testing.T) {
 	if ch.signCalls != 1 || len(ch.signed) != 1 {
 		t.Fatalf("signCalls = %d, want one CSR", ch.signCalls)
 	}
-	if got := api.data(t, "payments", "web-tls", "tls.crt"); string(got) != "ISSUED-LEAF\nISSUER\n" {
+	if got := api.data(t, "payments", "web-tls", "tls.crt"); !bytes.Equal(got, append(append([]byte(nil), ch.certPEM...), ch.chainPEM...)) {
 		t.Fatalf("tls.crt = %q", got)
 	}
 	key := api.data(t, "payments", "web-tls", "tls.key")

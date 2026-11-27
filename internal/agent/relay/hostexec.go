@@ -3,6 +3,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -243,8 +244,12 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 	}
 	actions := make([]connector.LocalAction, 0, len(profile.Actions))
 	for _, action := range profile.Actions {
-		if strings.TrimSpace(action.LogicalName) == "" || strings.TrimSpace(action.Command) == "" {
+		action.LogicalName = strings.TrimSpace(action.LogicalName)
+		if action.LogicalName == "" || strings.TrimSpace(action.Command) == "" {
 			return connector.LocalOpsConfig{}, errors.New("relay: every host profile action needs a logical name and a command")
+		}
+		if action.LogicalName == "haproxy" && !pinnedHAProxyArgs(action.LogicalArgs) {
+			return connector.LocalOpsConfig{}, errors.New("relay: haproxy action needs pinned logical_args [-c, -f, absolute config path]")
 		}
 		timeout := time.Duration(action.TimeoutSecs) * time.Second
 		actions = append(actions, connector.LocalAction{
@@ -332,25 +337,44 @@ func ExecuteOnHost(
 	if !ExecutesOnHost(intent.Connector) {
 		return connector.Stats{}, fmt.Errorf("relay: connector %q is not host-executable", intent.Connector)
 	}
-	servingCertPEM, err := servingCertificatePEM(material)
-	if err != nil {
-		return connector.Stats{}, err
-	}
-	keyPEM, ok := material["credential.key_pem"]
-	if !ok || len(keyPEM) == 0 {
-		return connector.Stats{}, errors.New("relay: redeemed material carries no private key")
-	}
-
-	if intent.Connector == KubernetesSecretConnector {
-		return installKubernetesSecret(ctx, profile, intent, servingCertPEM, keyPEM)
-	}
-
 	var target HostTargetConfig
 	if len(intent.TargetConfig) > 0 {
 		if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {
 			return connector.Stats{}, fmt.Errorf("relay: decode host target config: %w", err)
 		}
 	}
+	if intent.Connector == "haproxy" {
+		if err := requirePinnedHAProxyConfig(profile, target.ConfigPath); err != nil {
+			return connector.Stats{}, err
+		}
+		if filepath.Clean(target.CRTPath) == filepath.Clean(target.ConfigPath) {
+			return connector.Stats{}, errors.New("relay: haproxy certificate bundle cannot overwrite its config")
+		}
+	}
+	// Rollback records retain the provider key file but the rollback intent has
+	// no custody field. Recognize only the TPM format on a TPM-capable service;
+	// validation below still loads that file through this host's TPM and checks
+	// its public key against the certificate before any write or re-exec.
+	if intent.KeyCustody == "" && bytes.HasPrefix(bytes.TrimSpace(material["credential.key_pem"]), []byte("-----BEGIN "+"TSS2 PRIVATE KEY-----")) {
+		if !slices.Contains(tpmHostKeyConnectors, intent.Connector) {
+			return connector.Stats{}, errors.New("relay: this connector cannot restore a TPM host key")
+		}
+		intent.KeyCustody = HostKeyCustodyTPM
+	}
+	if intent.KeyCustody == HostKeyCustodyTPM && !slices.Contains(tpmHostKeyConnectors, intent.Connector) {
+		return connector.Stats{}, errors.New("relay: this connector cannot install a TPM host key")
+	}
+	servingCertPEM, keyBuffer, err := validateHostMaterial(profile, intent, material)
+	if err != nil {
+		return connector.Stats{}, err
+	}
+	defer keyBuffer.Destroy()
+	keyPEM := keyBuffer.Bytes()
+
+	if intent.Connector == KubernetesSecretConnector {
+		return installKubernetesSecret(ctx, profile, intent, servingCertPEM, keyPEM)
+	}
+
 	target, err = hostTargetForKeyCustody(intent, target)
 	if err != nil {
 		return connector.Stats{}, err
@@ -385,6 +409,23 @@ func ExecuteOnHost(
 		KeyPEM:      keyPEM,
 		Fingerprint: intent.Fingerprint,
 	})
+}
+
+func pinnedHAProxyArgs(args []string) bool {
+	return len(args) == 3 && args[0] == "-c" && args[1] == "-f" && filepath.IsAbs(args[2]) && filepath.Clean(args[2]) == args[2]
+}
+
+func requirePinnedHAProxyConfig(profile connector.LocalOpsConfig, configPath string) error {
+	for _, action := range profile.Actions {
+		if action.LogicalName != "haproxy" {
+			continue
+		}
+		if !pinnedHAProxyArgs(action.LogicalArgs) || configPath != action.LogicalArgs[2] {
+			return errors.New("relay: haproxy config_path is not pinned by the host profile")
+		}
+		return nil
+	}
+	return errors.New("relay: haproxy config action is not pinned by the host profile")
 }
 
 // servingCertificatePEM turns the wire representation into the bytes a TLS
@@ -461,6 +502,17 @@ func DryRunOnHost(
 				Name: "target-config", Status: StepFailed,
 				Detail: "host target configuration did not decode: " + err.Error(),
 			})
+			return plan, nil
+		}
+	}
+	if intent.Connector == "haproxy" {
+		if err := requirePinnedHAProxyConfig(profile, target.ConfigPath); err != nil {
+			plan.Steps = append(plan.Steps, PlanStep{Name: "target-config", Status: StepFailed, Detail: err.Error()})
+			return plan, nil
+		}
+		if filepath.Clean(target.CRTPath) == filepath.Clean(target.ConfigPath) {
+			plan.Steps = append(plan.Steps, PlanStep{Name: "target-config", Status: StepFailed,
+				Detail: "haproxy certificate bundle cannot overwrite its config"})
 			return plan, nil
 		}
 	}

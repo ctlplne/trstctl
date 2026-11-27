@@ -19,20 +19,16 @@ import (
 // the slot is stale: the next host-generated job for the target must be able
 // to generate a fresh key instead of being refused as "another job's key".
 func TestRollingBackAFailedSuccessorFreesThePendingHostKey(t *testing.T) {
-	predecessor, err := tlsprobe.NewServingTestServer("rollback.example.test")
+	predCert, predKey, predFingerprint := hostServerCredential(t, "rollback.example.test")
+	predDER, err := certinfo.LeafDER(predCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	predecessor, err := tlsprobe.NewServingTestServerChain([][]byte{predDER}, predKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer predecessor.Close()
-	successor, err := tlsprobe.NewServingTestServer("rollback.example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer successor.Close()
-	successorInfo, err := certinfo.Inspect(successor.LeafPEM)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	root := t.TempDir()
 	state, err := relay.NewHostRollbackStore(filepath.Join(root, "rollback-state"), "tenant-a")
@@ -46,9 +42,9 @@ func TestRollingBackAFailedSuccessorFreesThePendingHostKey(t *testing.T) {
 	})
 	deploy := &fakeChannel{
 		jobs: []relay.Job{intentJob(t, 10, relay.DeployIntent{
-			Connector: "nginx", Target: "edge", TargetID: "target-a", TargetConfig: config, Fingerprint: "first",
+			Connector: "nginx", Target: "edge", TargetID: "target-a", TargetConfig: config, Fingerprint: predFingerprint,
 		})},
-		material: map[string][]byte{"credential.cert_pem": predecessor.LeafPEM, "credential.key_pem": []byte(testKeyPEM)},
+		material: map[string][]byte{"credential.cert_pem": predCert, "credential.key_pem": predKey},
 	}
 	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), deploy, http.DefaultClient, profile, nil, nil, state, 1, 30); err != nil {
 		t.Fatal(err)
@@ -63,7 +59,7 @@ func TestRollingBackAFailedSuccessorFreesThePendingHostKey(t *testing.T) {
 	}
 	// The listener keeps serving the predecessor, so the signed successor fails
 	// its live gate and its sealed key stays pending for job 11.
-	failed := &renewChannel{certPEM: successor.LeafPEM, fpr: successorInfo.SHA256Fingerprint}
+	failed := &renewChannel{certPEM: []byte("ISSUED-LEAF\n")}
 	failed.jobs = []relay.Job{renewal(11)}
 	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), failed, http.DefaultClient, profile, nil, nil, state, 1, 30); err != nil {
 		t.Fatal(err)
@@ -71,10 +67,14 @@ func TestRollingBackAFailedSuccessorFreesThePendingHostKey(t *testing.T) {
 	if failed.signCalls != 1 || len(failed.reports) != 1 || failed.reports[0].outcome != transport.OutcomeVerifyFailed {
 		t.Fatalf("failed successor: signs=%d reports=%+v; want one verify_failed report", failed.signCalls, failed.reports)
 	}
+	successorInfo, err := certinfo.Inspect(failed.certPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	rollback := &fakeChannel{jobs: []relay.Job{rollbackJob(t, 12, relay.RollbackIntent{
 		Connector: "nginx", Target: "edge", TargetID: "target-a", TargetConfig: config,
-		PredecessorFingerprint: "first", SuccessorFingerprint: successorInfo.SHA256Fingerprint,
+		PredecessorFingerprint: predFingerprint, SuccessorFingerprint: successorInfo.SHA256Fingerprint,
 		VerifyAddress: predecessor.Addr, VerifyServerName: "rollback.example.test",
 	})}}
 	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), rollback, http.DefaultClient, profile, nil, nil, state, 1, 30); err != nil {

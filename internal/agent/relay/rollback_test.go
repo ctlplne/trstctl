@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/sshtrustfleet"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 )
 
@@ -158,16 +159,17 @@ func TestRollbackIntentCannotCarryKeyMaterial(t *testing.T) {
 // runs the connector's reload path, and proves the listener serves the old
 // certificate before signing a verified result.
 func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T) {
-	predecessor, err := tlsprobe.NewServingTestServer("rollback.example.test")
+	predCert, predKey, firstIssuer, predFingerprint := hostServerCredentialWithChain(t, "rollback.example.test")
+	predDER, err := certinfo.LeafDER(predCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	predecessor, err := tlsprobe.NewServingTestServerChain([][]byte{predDER}, predKey)
 	if err != nil {
 		t.Fatalf("start predecessor listener: %v", err)
 	}
 	defer predecessor.Close()
-	successor, err := tlsprobe.NewServingTestServer("successor.example.test")
-	if err != nil {
-		t.Fatalf("mint successor: %v", err)
-	}
-	defer successor.Close()
+	succCert, succKey, succIssuer, succFingerprint := hostServerCredentialWithChain(t, "successor.example.test")
 
 	root := t.TempDir()
 	state, err := relay.NewHostRollbackStore(filepath.Join(root, "rollback-state"), "tenant-a")
@@ -179,8 +181,7 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 		"cert_path": filepath.Join(root, "server.crt"),
 		"key_path":  filepath.Join(root, "server.key"),
 	})
-	firstIssuer := []byte("-----BEGIN CERTIFICATE-----\npredecessor-issuer-evidence\n-----END CERTIFICATE-----\n")
-	deploy := func(jobID int64, fingerprint string, certPEM, chainPEM []byte) {
+	deploy := func(jobID int64, fingerprint string, certPEM, keyPEM, chainPEM []byte) {
 		t.Helper()
 		ch := &fakeChannel{
 			jobs: []relay.Job{intentJob(t, jobID, relay.DeployIntent{
@@ -190,7 +191,7 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 			material: map[string][]byte{
 				"credential.cert_pem":  certPEM,
 				"credential.chain_pem": chainPEM,
-				"credential.key_pem":   []byte(testKeyPEM + fingerprint),
+				"credential.key_pem":   keyPEM,
 			},
 		}
 		if _, runErr := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), ch,
@@ -201,12 +202,12 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 			t.Fatalf("deploy %s reports = %+v", fingerprint, ch.reports)
 		}
 	}
-	deploy(10, "first", predecessor.LeafPEM, firstIssuer)
-	deploy(11, "second", successor.LeafPEM, []byte("successor-issuer-evidence"))
+	deploy(10, predFingerprint, predCert, predKey, firstIssuer)
+	deploy(11, succFingerprint, succCert, succKey, succIssuer)
 
 	rollback := &fakeChannel{jobs: []relay.Job{rollbackJob(t, 12, relay.RollbackIntent{
 		Connector: "nginx", Target: "edge", TargetID: "target-a", TargetConfig: config,
-		PredecessorFingerprint: "first", VerifyAddress: predecessor.Addr,
+		PredecessorFingerprint: predFingerprint, VerifyAddress: predecessor.Addr,
 	})}}
 	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), rollback,
 		http.DefaultClient, profile, nil, nil, state, 1, 30); err != nil {

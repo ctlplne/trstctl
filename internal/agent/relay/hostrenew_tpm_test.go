@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/kms/tpm"
 )
@@ -80,6 +81,78 @@ func (d *softwareHostKeyTPM) HostKeyPublicDER(file []byte) ([]byte, error) {
 		return nil, err
 	}
 	return append([]byte(nil), signer.Public().DER...), nil
+}
+
+func TestHostExecutorRefusesTPMKeyFromAnotherCertificateBeforeWrite(t *testing.T) {
+	dev := &softwareHostKeyTPM{}
+	restore := relay.SetHostKeyTPMForTest(dev, nil)
+	defer restore()
+	keyFile, _, err := dev.CreateHostKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(keyFile)
+	cert, _, fingerprint := hostTestCredential(t)
+	root := t.TempDir()
+	certPath := filepath.Join(root, "cert.pem")
+	profile := connector.LocalOpsConfig{AllowedRoots: []string{root},
+		HostKeyTPM: &connector.HostKeyTPMConfig{AttestationKey: filepath.Join(root, "ak.json"), AttestationCertChain: filepath.Join(root, "ak.pem")}}
+	_, err = relay.ExecuteOnHost(context.Background(), profile, relay.DeployIntent{
+		Connector: "nginx", Target: "host", KeyCustody: relay.HostKeyCustodyTPM,
+		TargetConfig: renewTargetConfig(t, certPath, filepath.Join(root, "key.pem")), Fingerprint: fingerprint,
+	}, relay.Material{"credential.cert_pem": cert, "credential.key_pem": keyFile})
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("TPM key from another certificate accepted: %v", err)
+	}
+	if _, err := os.Stat(certPath); !os.IsNotExist(err) {
+		t.Fatalf("rejected TPM key wrote a certificate: %v", err)
+	}
+}
+
+func TestHostExecutorRestoresTPMKeyWithoutCustodyLabelUsingReexec(t *testing.T) {
+	dev := &softwareHostKeyTPM{}
+	restore := relay.SetHostKeyTPMForTest(dev, nil)
+	defer restore()
+	keyFile, publicDER, err := dev.CreateHostKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(keyFile)
+	csr, err := crypto.CreateHostSubjectCSR(crypto.CertificateRequestTemplate{
+		CommonName: "rollback.example.test", DNSNames: []string{"rollback.example.test"},
+	}, tpm.HostKeySigner(dev, keyFile, publicDER))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, chain, fingerprint, err := signHostCSRForTest(csr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	profile := tpmRenewProfile(t, root, true)
+	_, err = relay.ExecuteOnHost(context.Background(), profile, relay.DeployIntent{
+		Connector: "nginx", Target: "host", Fingerprint: fingerprint,
+		TargetConfig: renewTargetConfig(t, filepath.Join(root, "cert.pem"), filepath.Join(root, "key.pem")),
+	}, relay.Material{"credential.cert_pem": cert, "credential.chain_pem": chain, "credential.key_pem": keyFile})
+	if err != nil {
+		t.Fatalf("TPM predecessor without custody label was not restored: %v", err)
+	}
+	actions, err := os.ReadFile(filepath.Join(root, "actions.log")) // #nosec G304 -- owned fixture log (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(actions, []byte("nginx-upgrade")) || bytes.Contains(actions, []byte("nginx -s reload")) {
+		t.Fatalf("TPM restore did not reexecute nginx: %s", actions)
+	}
+}
+
+func TestHostExecutorRefusesTPMKeyOnUnsupportedConnector(t *testing.T) {
+	_, err := relay.ExecuteOnHost(context.Background(), connector.LocalOpsConfig{}, relay.DeployIntent{
+		Connector: "apache", KeyCustody: relay.HostKeyCustodyTPM,
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "cannot install a TPM host key") {
+		t.Fatalf("unsupported TPM connector was accepted: %v", err)
+	}
 }
 
 // attestedRenewChannel is a renewChannel that also takes the TPM's
@@ -417,7 +490,11 @@ func tpmServiceProfile(t *testing.T, dir string, names ...string) connector.Loca
 	profile := connector.LocalOpsConfig{AllowedRoots: []string{dir},
 		HostKeyTPM: &connector.HostKeyTPMConfig{AttestationKey: filepath.Join(dir, "ak.json"), AttestationCertChain: filepath.Join(dir, "ak.pem")}}
 	for _, name := range names {
-		profile.Actions = append(profile.Actions, connector.LocalAction{LogicalName: name, Command: tpmActionFixture(t, dir, name), PassArgs: true})
+		action := connector.LocalAction{LogicalName: name, Command: tpmActionFixture(t, dir, name), PassArgs: true}
+		if name == "haproxy" {
+			action.LogicalArgs = []string{"-c", "-f", filepath.Join(dir, "haproxy.cfg")}
+		}
+		profile.Actions = append(profile.Actions, action)
 	}
 	return profile
 }

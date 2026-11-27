@@ -356,7 +356,7 @@ frontend fe
 		profile := connector.LocalOpsConfig{
 			AllowedRoots: []string{dir},
 			Actions: []connector.LocalAction{
-				{LogicalName: "haproxy", Command: wrapper, PassArgs: true, Timeout: time.Minute},
+				{LogicalName: "haproxy", LogicalArgs: []string{"-c", "-f", cfgPath}, Command: wrapper, PassArgs: true, Timeout: time.Minute},
 				{LogicalName: "systemctl", Command: reload, PassArgs: true, Timeout: time.Minute},
 			},
 			HostKeyTPM: &connector.HostKeyTPMConfig{Path: lab.rmSock, AttestationKey: lab.aikPath, AttestationCertChain: lab.chainPath},

@@ -44,6 +44,13 @@ func (r *renewChannel) SignJobCSR(_ context.Context, _ int64, _ int, csrDER []by
 	if r.signErr != nil {
 		return nil, nil, "", r.signErr
 	}
+	if bytes.Equal(r.certPEM, []byte("ISSUED-LEAF\n")) {
+		cert, chain, fingerprint, err := signHostCSRForTest(csrDER)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		r.certPEM, r.chainPEM, r.fpr = cert, chain, fingerprint
+	}
 	return r.certPEM, r.chainPEM, r.fpr, nil
 }
 

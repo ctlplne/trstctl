@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3668 annotated sites across 35 rules. Each row is
+3670 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -161,10 +161,10 @@ not this file.
 | `internal/agent/relay/relay_appliance_e2e_test.go:259` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:332` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:370` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
-| `internal/agent/relay/relay_test.go:244` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:286` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:441` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:499` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:246` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:288` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:443` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:501` | reference NAME (CWE-798) |
 | `internal/agent/relay/revocation_ldap_failure_test.go:59` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/revocation_ldap_test.go:77` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/revocation_ldap_test.go:146` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
@@ -1408,7 +1408,7 @@ not this file.
 | `internal/kms/tpm/tpm_test.go:95` | deliberate byte packing of a bounded TPM handle in a test helper (CWE-190) |
 | `internal/kms/tpm/tpm_test.go:96` | deliberate byte packing of a bounded TPM handle in a test helper (CWE-190) |
 | `internal/kms/tpm/tpm_test.go:245` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/kms/tpm/tss2.go:95` | bounded below 64 KiB by the caller (CWE-190) |
+| `internal/kms/tpm/tss2.go:100` | bounded below 64 KiB by the caller (CWE-190) |
 | `internal/kms/wrapadapter/adapter.go:328` | bounded by the check above (CWE-190) |
 | `internal/leader/leader_test.go:36` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/mdm/challenge/challenge.go:79` | unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190) |
@@ -2007,7 +2007,7 @@ not this file.
 | `internal/agent/relay/adcs_restrictions_windows.go:46` | CWE-78: the Windows SDK supplies System32, certutil.exe and command switches are fixed, and the bounded validated CA selector is one argv value; no shell or credentials are used. |
 | `internal/agent/relay/adcsdatabase.go:314` | reviewed SEC-005 argv: fixed action flags built here; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
 | `internal/agent/relay/adcsdatabase.go:322` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
-| `internal/agent/relay/hostrenew_tpm_test.go:119` | fixed Go tool compiles this test's owned source and output (CWE-78) |
+| `internal/agent/relay/hostrenew_tpm_test.go:192` | fixed Go tool compiles this test's owned source and output (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
 | `internal/agent/relay/swtpm_host_key_journey_test.go:198` | fixed tool and arguments (CWE-78) |
@@ -2536,7 +2536,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (855 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (857 sites)
 
 | Location | Reason |
 |---|---|
@@ -2765,14 +2765,16 @@ not this file.
 | `internal/agent/relay/host_pqc_predecessor_test.go:47` | test-owned directory (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:144` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
-| `internal/agent/relay/hostexec.go:180` | operator-supplied profile path, read at their instruction (CWE-22) |
+| `internal/agent/relay/hostexec.go:181` | operator-supplied profile path, read at their instruction (CWE-22) |
+| `internal/agent/relay/hostexec_haproxy_guard_test.go:199` | private test directory and fixed path (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
-| `internal/agent/relay/hostrenew_tpm_test.go:197` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:365` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:488` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:489` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:506` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:511` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:140` | owned fixture log (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:270` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:438` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:565` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:566` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:583` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:588` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/hostrollback.go:915` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
@@ -2786,9 +2788,9 @@ not this file.
 | `internal/agent/relay/plugins.go:276` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/postgresql_verification_test.go:158` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/recovery_check.go:278` | the host operator's own pinned executable from the host profile (CWE-22) |
-| `internal/agent/relay/relay_test.go:772` | certPath is created beneath this test's private t.TempDir, |
-| `internal/agent/relay/relay_test.go:1203` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
-| `internal/agent/relay/rollback_test.go:224` | test-owned temporary path (CWE-22) |
+| `internal/agent/relay/relay_test.go:774` | certPath is created beneath this test's private t.TempDir, |
+| `internal/agent/relay/relay_test.go:1211` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
+| `internal/agent/relay/rollback_test.go:225` | test-owned temporary path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:83` | test reads its own temp fixture (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:129` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:195` | test reads its own tempdir fixture path (CWE-22) |

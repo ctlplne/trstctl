@@ -351,6 +351,28 @@ rows select a logical profile name but cannot add a root, executable, or argumen
 }
 ```
 
+For HAProxy, pin the configuration check to the host's operator-owned file:
+
+```json
+{
+  "allowed_roots": ["/etc/haproxy/certs"],
+  "actions": [{
+    "logical_name": "haproxy",
+    "logical_args": ["-c", "-f", "/etc/haproxy/haproxy.cfg"],
+    "command": "/usr/sbin/haproxy",
+    "pass_args": true,
+    "timeout_seconds": 15
+  }]
+}
+```
+
+The target's `config_path` must equal the pinned path. The certificate bundle
+path must be a different file within an approved write root. Before any host
+connector writes or calls a service, the agent parses the leaf and issuer PEM,
+checks that the private key belongs to the leaf, and compares the leaf SHA-256
+fingerprint with the claimed job identity. It installs normalized PEM. A TPM
+renewal checks the public key in the provider key file through the host TPM.
+
 The containment and combined key-compromise previews return 503 with the exact
 missing job kind when the channel is absent or `endpoint.contain` is disabled.
 

@@ -23,6 +23,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // The relay executor's contract (epic A3). What matters here is not that a
@@ -153,6 +154,7 @@ func TestShortHostDeployLeaseAction(t *testing.T) {
 // The server refuses terminal receipts after expiry, even if the effect landed.
 func TestHostDeployMaintainsClaimThroughSlowReload(t *testing.T) {
 	root := t.TempDir()
+	cert, key, fingerprint := hostTestCredential(t)
 	certPath, keyPath := filepath.Join(root, "site.crt"), filepath.Join(root, "site.key")
 	exe, err := os.Executable()
 	if err != nil {
@@ -161,9 +163,9 @@ func TestHostDeployMaintainsClaimThroughSlowReload(t *testing.T) {
 	ch := &shortHostLeaseChannel{fakeChannel: fakeChannel{
 		jobs: []relay.Job{intentJob(t, 91, relay.DeployIntent{
 			Connector: "nginx", Target: "host", CredentialRefs: []string{"credential.cert_pem", "credential.key_pem"},
-			TargetConfig: mustJSON(t, map[string]string{"cert_path": certPath, "key_path": keyPath}),
+			TargetConfig: mustJSON(t, map[string]string{"cert_path": certPath, "key_path": keyPath}), Fingerprint: fingerprint,
 		})},
-		material: map[string][]byte{"credential.cert_pem": []byte(testCertPEM), "credential.key_pem": []byte(testKeyPEM)},
+		material: map[string][]byte{"credential.cert_pem": cert, "credential.key_pem": key},
 	}}
 	profile := connector.LocalOpsConfig{AllowedRoots: []string{root}, Actions: []connector.LocalAction{{
 		LogicalName: "nginx", Command: exe, Args: []string{"-test.run=^TestShortHostDeployLeaseAction$"}, Timeout: 2 * time.Second,
@@ -749,6 +751,8 @@ func TestHostExecutorRefusesWorkItCannotDo(t *testing.T) {
 // standards-compliant client still rejects the listener as an incomplete chain.
 func TestHostExecutorInstallsIssuerChainWithLeaf(t *testing.T) {
 	dir := t.TempDir()
+	leaf, key, fingerprint := hostTestCredential(t)
+	issuer, _, _ := hostTestCredential(t)
 	certPath, keyPath := filepath.Join(dir, "server.crt"), filepath.Join(dir, "server.key")
 	targetConfig, err := json.Marshal(map[string]string{"cert_path": certPath, "key_path": keyPath})
 	if err != nil {
@@ -758,14 +762,12 @@ func TestHostExecutorInstallsIssuerChainWithLeaf(t *testing.T) {
 		AllowedRoots: []string{dir},
 		Actions:      []connector.LocalAction{trueAction("apachectl", true)},
 	}
-	leaf := []byte(testCertPEM + "\n")
-	issuer := []byte(testCertPEM + "\n")
 	if _, err := relay.ExecuteOnHost(context.Background(), profile, relay.DeployIntent{
-		Connector: "apache", Target: "web01", TargetConfig: targetConfig,
+		Connector: "apache", Target: "web01", TargetConfig: targetConfig, Fingerprint: fingerprint,
 	}, map[string][]byte{
 		"credential.cert_pem":  leaf,
 		"credential.chain_pem": issuer,
-		"credential.key_pem":   []byte(testKeyPEM),
+		"credential.key_pem":   key,
 	}); err != nil {
 		t.Fatalf("ExecuteOnHost(apache): %v", err)
 	}
@@ -807,6 +809,7 @@ func TestE1DispositionMatchesTheAgentExecutorsThatActuallyShip(t *testing.T) {
 // carries that fourteenth constructor and uses its own client without asking
 // for an unrelated filesystem/exec grant.
 func TestHostExecutorDeploysToCoResidentEnvoy(t *testing.T) {
+	cert, key, fingerprint := hostTestCredential(t)
 	puts := 0
 	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		status := http.StatusNotFound
@@ -825,10 +828,10 @@ func TestHostExecutorDeploysToCoResidentEnvoy(t *testing.T) {
 		t.Fatal(err)
 	}
 	stats, err := relay.ExecuteOnHost(context.Background(), connector.LocalOpsConfig{}, relay.DeployIntent{
-		Connector: "envoy", Target: "edge", TargetConfig: config, Fingerprint: "sha256:edge",
+		Connector: "envoy", Target: "edge", TargetConfig: config, Fingerprint: fingerprint,
 	}, map[string][]byte{
-		"credential.cert_pem": []byte(testCertPEM),
-		"credential.key_pem":  []byte(testKeyPEM),
+		"credential.cert_pem": cert,
+		"credential.key_pem":  key,
 	}, client)
 	if err != nil {
 		t.Fatalf("ExecuteOnHost(envoy): %v", err)
@@ -839,6 +842,7 @@ func TestHostExecutorDeploysToCoResidentEnvoy(t *testing.T) {
 }
 
 func TestHostExecutorRefusesNonLoopbackEnvoyEndpointBeforeIO(t *testing.T) {
+	cert, key, fingerprint := hostTestCredential(t)
 	requests := 0
 	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		requests++
@@ -849,10 +853,10 @@ func TestHostExecutorRefusesNonLoopbackEnvoyEndpointBeforeIO(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = relay.ExecuteOnHost(context.Background(), connector.LocalOpsConfig{}, relay.DeployIntent{
-		Connector: "envoy", Target: "edge", TargetConfig: config,
+		Connector: "envoy", Target: "edge", TargetConfig: config, Fingerprint: fingerprint,
 	}, map[string][]byte{
-		"credential.cert_pem": []byte(testCertPEM),
-		"credential.key_pem":  []byte(testKeyPEM),
+		"credential.cert_pem": cert,
+		"credential.key_pem":  key,
 	}, client)
 	if err == nil || !strings.Contains(err.Error(), "loopback") {
 		t.Fatalf("ExecuteOnHost(remote envoy) error = %v, want loopback refusal", err)
@@ -1048,13 +1052,8 @@ func TestAKilledReloadIsCaughtByPostDeployVerification(t *testing.T) {
 	}
 	defer stale.Close()
 
-	// The certificate the deploy delivers. A different one for the same name —
-	// which is what a renewal produces.
-	fresh, err := tlsprobe.NewServingTestServer("api.example.test")
-	if err != nil {
-		t.Fatalf("mint the deployed certificate: %v", err)
-	}
-	defer fresh.Close()
+	// The certificate the deploy delivers differs from what the listener serves.
+	freshCert, freshKey, freshFingerprint := hostTestCredential(t)
 
 	dir := t.TempDir()
 	ch := &fakeChannel{
@@ -1069,10 +1068,11 @@ func TestAKilledReloadIsCaughtByPostDeployVerification(t *testing.T) {
 			// The operator told us where the listener is. Without this there is
 			// no verification at all — and no claim of one.
 			VerifyAddress: stale.Addr,
+			Fingerprint:   freshFingerprint,
 		})},
 		material: map[string][]byte{
-			"credential.cert_pem": fresh.LeafPEM,
-			"credential.key_pem":  []byte(testKeyPEM),
+			"credential.cert_pem": freshCert,
+			"credential.key_pem":  freshKey,
 		},
 	}
 
@@ -1106,7 +1106,12 @@ func TestAKilledReloadIsCaughtByPostDeployVerification(t *testing.T) {
 // The same deploy against a listener that DID reload verifies, and says so with
 // evidence behind it.
 func TestAReloadedListenerVerifiesWithEvidence(t *testing.T) {
-	served, err := tlsprobe.NewServingTestServer("api.example.test")
+	cert, key, fingerprint := hostTestCredential(t)
+	der, err := certinfo.LeafDER(cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, err := tlsprobe.NewServingTestServerChain([][]byte{der}, key)
 	if err != nil {
 		t.Fatalf("start listener: %v", err)
 	}
@@ -1123,11 +1128,12 @@ func TestAReloadedListenerVerifiesWithEvidence(t *testing.T) {
 				"key_path":  filepath.Join(dir, "server.key"),
 			}),
 			VerifyAddress: served.Addr,
+			Fingerprint:   fingerprint,
 		})},
 		material: map[string][]byte{
 			// The listener is serving exactly this.
-			"credential.cert_pem": served.LeafPEM,
-			"credential.key_pem":  []byte(testKeyPEM),
+			"credential.cert_pem": cert,
+			"credential.key_pem":  key,
 		},
 	}
 
@@ -1154,6 +1160,7 @@ func TestAReloadedListenerVerifiesWithEvidence(t *testing.T) {
 // to check and therefore fine, is the same overclaim the epic exists to remove.
 func TestNoListenerAddressYieldsNoVerificationClaim(t *testing.T) {
 	dir := t.TempDir()
+	cert, key, fingerprint := hostTestCredential(t)
 	ch := &fakeChannel{
 		jobs: []relay.Job{intentJob(t, 3, relay.DeployIntent{
 			Connector:      "nginx",
@@ -1163,10 +1170,11 @@ func TestNoListenerAddressYieldsNoVerificationClaim(t *testing.T) {
 				"cert_path": filepath.Join(dir, "server.crt"),
 				"key_path":  filepath.Join(dir, "server.key"),
 			}),
+			Fingerprint: fingerprint,
 		})},
 		material: map[string][]byte{
-			"credential.cert_pem": []byte(testCertPEM),
-			"credential.key_pem":  []byte(testKeyPEM),
+			"credential.cert_pem": cert,
+			"credential.key_pem":  key,
 		},
 	}
 

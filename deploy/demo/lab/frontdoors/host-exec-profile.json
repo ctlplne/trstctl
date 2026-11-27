@@ -4,7 +4,7 @@
   "actions": [
     { "logical_name": "apachectl", "command": "/usr/local/apache2/bin/apachectl", "pass_args": true, "timeout_seconds": 15 },
     { "logical_name": "nginx", "command": "/usr/sbin/nginx", "pass_args": true, "timeout_seconds": 15 },
-    { "logical_name": "haproxy", "command": "/usr/sbin/haproxy", "pass_args": true, "timeout_seconds": 15 },
+    { "logical_name": "haproxy", "logical_args": ["-c", "-f", "/lab/haproxy.cfg"], "command": "/usr/sbin/haproxy", "pass_args": true, "timeout_seconds": 15 },
     { "logical_name": "systemctl", "logical_args": ["reload", "haproxy"], "command": "/lab/reload-haproxy", "timeout_seconds": 15 },
     {
       "logical_name": "caddy",
