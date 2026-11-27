@@ -377,6 +377,9 @@ type Principal struct {
 	// authenticated, as the sign-in proved it. It is zero for API tokens and
 	// for sign-ins that cannot say, which never count as a fresh sign-in.
 	AuthTime time.Time
+	// TokenExpiresAt bounds the lifetime of a successor minted with this
+	// bearer. It is zero for browser sessions and non-expiring credentials.
+	TokenExpiresAt time.Time
 }
 
 // Can reports whether the principal may perform perm on a target scope. It

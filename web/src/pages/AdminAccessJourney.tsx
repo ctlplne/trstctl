@@ -151,6 +151,11 @@ export function AdminAccess() {
 
   const [addPersonOpen, setAddPersonOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [memberTokens, setMemberTokens] = useState<APIToken[]>([]);
+  const memberTokensEpoch = useRef(0);
+  const [memberTokensCursor, setMemberTokensCursor] = useState<string | undefined>();
+  const [memberTokensLoading, setMemberTokensLoading] = useState(false);
+  const [memberTokensError, setMemberTokensError] = useState<string | null>(null);
   const editMemberTriggerRef = useRef<HTMLButtonElement | null>(null);
   const customRoleTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [customRoleOpen, setCustomRoleOpen] = useState(false);
@@ -172,6 +177,49 @@ export function AdminAccess() {
   const [tokenScopes, setTokenScopes] = useState("access:read");
   const [offboardSubject, setOffboardSubject] = useState("");
   const [offboardReason, setOffboardReason] = useState("");
+
+  useEffect(() => {
+    const epoch = ++memberTokensEpoch.current;
+    if (!editingMember) return;
+    let current = true;
+    setMemberTokens([]);
+    setMemberTokensCursor(undefined);
+    setMemberTokensError(null);
+    setMemberTokensLoading(true);
+    api
+      .apiTokens({ subject: editingMember.subject, limit: 50 })
+      .then((page) => {
+        if (!current || memberTokensEpoch.current !== epoch) return;
+        setMemberTokens(page.items ?? []);
+        setMemberTokensCursor(page.next_cursor);
+      })
+      .catch((err: unknown) => {
+        if (current && memberTokensEpoch.current === epoch) setMemberTokensError(accessProblemMessage(err, tRef.current("admin.access.sessionsFailed")));
+      })
+      .finally(() => {
+        if (current && memberTokensEpoch.current === epoch) setMemberTokensLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [editingMember]);
+
+  async function loadMoreMemberTokens() {
+    if (!editingMember || !memberTokensCursor || memberTokensLoading) return;
+    const epoch = memberTokensEpoch.current;
+    setMemberTokensLoading(true);
+    setMemberTokensError(null);
+    try {
+      const page = await api.apiTokens({ subject: editingMember.subject, limit: 50, cursor: memberTokensCursor });
+      if (memberTokensEpoch.current !== epoch) return;
+      setMemberTokens((current) => [...current, ...(page.items ?? [])]);
+      setMemberTokensCursor(page.next_cursor);
+    } catch (err) {
+      if (memberTokensEpoch.current === epoch) setMemberTokensError(accessProblemMessage(err, t("admin.access.sessionsFailed")));
+    } finally {
+      if (memberTokensEpoch.current === epoch) setMemberTokensLoading(false);
+    }
+  }
 
   const [pamDetail, setPAMDetail] = useState<PAMSession | null>(null);
   // A275: a risk alert links a session's recording as ?session=<id>.
@@ -1111,6 +1159,46 @@ export function AdminAccess() {
                 </p>
               )}
             </fieldset>
+            {editingMember ? (
+              <section
+                aria-label={t("admin.access.memberKeysHeading", { subject: editingMember.subject })}
+                className="grid gap-2 rounded-control border border-border p-3"
+              >
+                <h3 className="text-sm font-medium">{t("admin.access.memberKeysHeading", { subject: editingMember.subject })}</h3>
+                <p className="text-xs text-muted-foreground">{t("admin.access.memberKeysRoleNote")}</p>
+                {memberTokensError ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    {memberTokensError}
+                  </p>
+                ) : null}
+                {memberTokensLoading && memberTokens.length === 0 ? (
+                  <p role="status" className="text-sm">
+                    {t("admin.access.memberKeysLoading")}
+                  </p>
+                ) : null}
+                {!memberTokensLoading && !memberTokensError && memberTokens.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t("admin.access.memberKeysEmpty")}</p>
+                ) : null}
+                {memberTokens.length > 0 ? (
+                  <ul className="grid gap-2 text-xs">
+                    {memberTokens.map((token) => (
+                      <li key={token.id} className="break-all rounded-control border border-border p-2">
+                        <span className="font-mono">{token.id}</span>
+                        <span className="block">{token.scopes.join(", ")}</span>
+                        <span className="block">
+                          {t("admin.access.expires")}: {formatOptionalDate(token.expires_at, formatPolicy)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {memberTokensCursor ? (
+                  <Button type="button" variant="outline" size="sm" disabled={memberTokensLoading} onClick={() => void loadMoreMemberTokens()}>
+                    {t("admin.access.memberKeysNext")}
+                  </Button>
+                ) : null}
+              </section>
+            ) : null}
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="ghost" onClick={closeAddPersonDialog}>
                 {translateNow("source.cancel.19766ed6cc")}

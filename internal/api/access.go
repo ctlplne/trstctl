@@ -455,6 +455,15 @@ func (a *API) createAPIToken(w http.ResponseWriter, r *http.Request) {
 		if err := a.authorizeTokenScopeGrant(ctx, tenantID, req.Scopes); err != nil {
 			return 0, nil, err
 		}
+		if !principal.TokenExpiresAt.IsZero() {
+			if req.ExpiresAt == nil {
+				expiry := principal.TokenExpiresAt
+				req.ExpiresAt = &expiry
+			} else if req.ExpiresAt.After(principal.TokenExpiresAt) {
+				return 0, nil, errStatus(http.StatusUnprocessableEntity,
+					"expires_at is later than the calling API token's expiry")
+			}
+		}
 		// A served token expires (F267): without expires_at it gets the deployment's
 		// maximum lifetime, and a later expiry is refused.
 		if limit := a.apiTokenMaxLifetime; limit > 0 {

@@ -1804,6 +1804,12 @@ never live in the API process. What you can do end to end against the running bi
   scoping as an API token, with each user mapped to its real tenant. API-token
   auth remains the default when SSO is disabled. OIDC stays core; tenant SAML
   and LDAP require Enterprise SSO, inherited by Provider.
+  For a subject with a tenant member record, an API token's effective permissions
+  are the intersection of its stored scopes and that member's current roles;
+  a pending member update temporarily denies that token. Service subjects
+  without a member record retain their token scopes. A token-minted successor
+  cannot expire later than its calling token. The member role editor lists that
+  member's active token IDs, scopes, and expiry with paginated reads.
 - SCIM 2.0 provisioning requires Enterprise SSO and `auth.scim.enabled` — see
   "SCIM 2.0 provisioning" below for the route and event detail.
 - Transport security (TLS), idempotency and the outbox, observability

@@ -276,6 +276,7 @@ func (s *Store) ListAPITokensPage(ctx context.Context, tenantID, afterID, subjec
 			    AND id > $2
 			    AND ($3 = '' OR subject = $3)
 			    AND ($4 OR revoked_at IS NULL)
+			    AND ($4 OR expires_at IS NULL OR expires_at > now())
 			  ORDER BY api_tokens.id LIMIT $5`,
 			tenantID, afterID, subject, includeRevoked, limit)
 		if err != nil {

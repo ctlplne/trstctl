@@ -1974,8 +1974,15 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 				a.noteAPITokenUse(r, rec)
 				return principal, nil
 			}
+			principal, err := a.currentMemberTokenPrincipal(r.Context(), rec)
+			if err != nil {
+				return authz.Principal{}, err
+			}
+			if rec.ExpiresAt != nil {
+				principal.TokenExpiresAt = *rec.ExpiresAt
+			}
 			a.noteAPITokenUse(r, rec)
-			return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes, Delegated: rec.Delegated}.Principal(), nil
+			return principal, nil
 		}
 		// A84: a bearer that is not an API token may be a workload's own
 		// attestation proof, accepted on the attested-issuance routes alone

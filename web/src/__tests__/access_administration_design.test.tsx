@@ -541,6 +541,27 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(screen.queryByRole("dialog", { name: "Edit person's roles" })).not.toBeInTheDocument();
   });
 
+  it("shows a member's live access keys while editing roles", async () => {
+    const user = userEvent.setup();
+    apiMock.apiTokens
+      .mockResolvedValueOnce({
+        items: [{ id: "member-key-1", subject: member.subject, scopes: ["certs:read"], expires_at: "2026-12-01T00:00:00Z" }],
+        next_cursor: "next-key",
+      })
+      .mockResolvedValueOnce({ items: [{ id: "member-key-2", subject: member.subject, scopes: ["access:read"] }] });
+    renderPage();
+    await user.click(screen.getByText("SSO groups and role bindings", { exact: true }));
+    const roster = await screen.findByRole("region", { name: "People and role bindings table" });
+    await user.click(within(roster).getByRole("button", { name: `Edit roles for ${member.subject}` }));
+    const dialog = screen.getByRole("dialog", { name: "Edit person's roles" });
+    await waitFor(() => expect(apiMock.apiTokens).toHaveBeenCalledWith({ subject: member.subject, limit: 50 }));
+    expect(await within(dialog).findByText("member-key-1")).toBeInTheDocument();
+    expect(within(dialog).getByText("certs:read")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Load more access keys" }));
+    await waitFor(() => expect(apiMock.apiTokens).toHaveBeenCalledWith({ subject: member.subject, limit: 50, cursor: "next-key" }));
+    expect(await within(dialog).findByText("member-key-2")).toBeInTheDocument();
+  });
+
   it("uses the full foreground token for small Add person labels and role guidance", async () => {
     const user = userEvent.setup();
     renderPage();

@@ -8389,6 +8389,14 @@ export const messages = {
   "admin.access.createAccessKey": { defaultMessage: "Create access key", description: "Secondary action and dialog title for an API token." },
   "admin.access.noAccessKeys": { defaultMessage: "No access-key metadata is available.", description: "Empty access-key state." },
   "admin.access.keyId": { defaultMessage: "Key ID", description: "Access-key metadata identifier label." },
+  "admin.access.memberKeysHeading": { defaultMessage: "Active access keys for {subject}", description: "Live token list in the member role editor." },
+  "admin.access.memberKeysLoading": { defaultMessage: "Loading active access keys…", description: "Loading state in the member role editor." },
+  "admin.access.memberKeysEmpty": { defaultMessage: "This member has no active access keys.", description: "Empty token list in the member role editor." },
+  "admin.access.memberKeysNext": { defaultMessage: "Load more access keys", description: "Next token page in the member role editor." },
+  "admin.access.memberKeysRoleNote": {
+    defaultMessage: "Role changes limit these keys on their next request. A key can use only scopes still allowed by this member's roles.",
+    description: "How member roles affect existing access keys.",
+  },
   "admin.access.certificationSummary": { defaultMessage: "Certification history", description: "Progressive disclosure for access-review and change history." },
   "admin.access.certificationBody": {
     defaultMessage: "Access reviews record who certified machine access. Change history records who added, changed, or offboarded a person.",
