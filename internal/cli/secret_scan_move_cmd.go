@@ -66,7 +66,7 @@ func runSecretScanMove(ctx context.Context, args []string, env Env, stdout, stde
 	repo := fs.String("repo", "", "your checkout of the scanned repository (its top-level directory)")
 	export := fs.String("export", "", "your copy of the scanned third-party export: the directory or file the scan read")
 	name := fs.String("name", "", "the native secret to create, for example payments/slack-bot-token")
-	gitleaksBin := fs.String("gitleaks-bin", "", "the pinned gitleaks binary (default: TRSTCTL_GITLEAKS_BIN, tools/bin/gitleaks, PATH)")
+	gitleaksBin := fs.String("gitleaks-bin", "", "the pinned gitleaks binary outside the scan root (default: TRSTCTL_GITLEAKS_BIN, tools/bin/gitleaks, PATH)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}

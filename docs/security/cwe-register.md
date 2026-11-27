@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3670 annotated sites across 35 rules. Each row is
+3674 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2128,7 +2128,7 @@ not this file.
 | `internal/rpverify/verifier_test.go:369` | fixed argv, no user input (CWE-78) |
 | `internal/secretscan/gitdiff.go:169` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/gitdiff_test.go:93` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/secretscan/gitleaks.go:343` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
+| `internal/secretscan/gitleaks.go:344` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/installer_retry_test.go:96` | the test's own script, against its own server (CWE-78) |
 | `internal/secretscan/installer_retry_test.go:192` | the shipped wrapper around the test's own stand-in (CWE-78) |
 | `internal/secretscan/move.go:147` | the pinned gitleaks binary over the operator's own checkout (CWE-78) |
@@ -3085,7 +3085,7 @@ not this file.
 | `internal/safefile/regular.go:146` | agent-owned path; the opened descriptor is regular/size checked before reading |
 | `internal/scancollect/scancollect.go:206` | a path inside the collection directory, checked by w.path (CWE-22) |
 | `internal/scancollect/scancollect_test.go:27` | the test's own temp directory (CWE-22) |
-| `internal/secretscan/gitleaks.go:355` | reads the report file this process asked gitleaks to write in its own tempdir (CWE-22) |
+| `internal/secretscan/gitleaks.go:356` | reads the report file this process asked gitleaks to write in its own tempdir (CWE-22) |
 | `internal/secretscan/gitleaks_options_test.go:221` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/secretscan/installer_retry_test.go:107` | the test's own temporary file (CWE-22) |
 | `internal/secretscan/installer_retry_test.go:203` | the test's own temporary file (CWE-22) |
@@ -3398,7 +3398,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (146 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (150 sites)
 
 | Location | Reason |
 |---|---|
@@ -3489,6 +3489,10 @@ not this file.
 | `internal/reconcile/kmipsource_pykmip_test.go:90` | test server configuration (CWE-276) |
 | `internal/secrets/vault_test.go:147` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/secrets/vault_test.go:180` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/secretscan/gitleaks_binary_test.go:20` | executable is an isolated test fixture |
+| `internal/secretscan/gitleaks_binary_test.go:32` | executable is an isolated test fixture |
+| `internal/secretscan/gitleaks_binary_test.go:64` | executable is an isolated test fixture |
+| `internal/secretscan/gitleaks_binary_test.go:71` | executable is an isolated test fixture |
 | `internal/secretscan/gitleaks_options_test.go:73` | executable is an isolated test fixture |
 | `internal/secretscan/gitleaks_options_test.go:213` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/secretscan/installer_retry_test.go:183` | a test-owned executable stand-in (CWE-276). |
@@ -3846,8 +3850,8 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/scep/sscep_client_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/reconcile/kmipsource_pykmip_test.go:67` | test-named files in the test's temp dir, readable by the container's server user (CWE-22, CWE-276) |
-| `internal/secretscan/gitleaks.go:536` | locates the pinned gitleaks binary in known tool dirs (CWE-22) |
-| `internal/secretscan/gitleaks.go:720` | the scan target's own config file, under an allowed root (CWE-22) |
+| `internal/secretscan/gitleaks.go:566` | scanner path is resolved before it is used |
+| `internal/secretscan/gitleaks.go:754` | the scan target's own config file, under an allowed root (CWE-22) |
 | `internal/secretscan/move_test.go:38` | locates the pinned gitleaks binary in known tool dirs (CWE-22) |
 | `internal/secretscan/thirdparty_signature_test.go:51` | test-owned temp path |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |

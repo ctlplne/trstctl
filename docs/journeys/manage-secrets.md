@@ -542,8 +542,9 @@ today (see [Current limitations](../limitations.md) and
 12. Scan a repository or CI workspace for committed secrets. Run
     `tools/gitleaks/install.sh` during image build or host provisioning to install the
     checksum-verified Gitleaks `v8.27.2` release tarball, then set
-    `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary. The served scan uses the pinned
-    default rule set (`213` rules), redacts the match, and records only
+    `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary's absolute path outside every
+    scan root. The served scan uses the pinned default rule set (`213` rules),
+    redacts the match, and records only
     rule/file/line/fingerprint metadata into discovery and graph. In the Secrets
     console, **Start a scan** focuses the exact path and mode form. Continuous
     repository ingress is a separate provider-webhook setup; the generic Discover

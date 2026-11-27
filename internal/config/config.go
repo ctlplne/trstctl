@@ -3208,8 +3208,8 @@ type Secrets struct {
 	// exchange receives. They must be explicit; an empty grant fails closed.
 	AuthTokenScopes []string `json:"auth_token_scopes,omitempty"`
 	// GitleaksBin points at the pinned Gitleaks v8.27.2 binary used by the served
-	// code/CI secret scan route. Empty resolves TRSTCTL_GITLEAKS_BIN, then
-	// tools/bin/gitleaks, then PATH at request time.
+	// code/CI secret scan route. Served scans require an absolute path here or
+	// in TRSTCTL_GITLEAKS_BIN.
 	GitleaksBin string `json:"gitleaks_bin,omitempty"`
 	// ScanRoots is the closed set of local filesystem trees the served Gitleaks
 	// bridge may read. Empty disables served local-path scans. Operators mount

@@ -2728,7 +2728,12 @@ The scanning bridge runs the pinned Gitleaks scanner from the served control pla
 recording redacted findings into [discovery](discovery-and-inventory.md), the
 [credential graph](graph-query-ai.md), and the risk view. `TRSTCTL_SECRETS_GITLEAKS_BIN`
 points at the Gitleaks `v8.27.2` binary from `tools/gitleaks/install.sh`, which
-checksums the release tarball before installing. `secrets.scan_roots` (or
+checksums the release tarball before installing. Set it to an absolute path outside
+every scan root; served scans fail closed without that path (or an absolute
+`TRSTCTL_GITLEAKS_BIN`). CLI scans may also find the binary under
+`tools/bin/gitleaks` or on `PATH`, but the resolved executable must be outside
+the scan root. Scanner child processes receive only `PATH`, `HOME`, and scanner
+color/update settings. `secrets.scan_roots` (or
 `TRSTCTL_SECRETS_SCAN_ROOTS`, a comma-separated list) is the closed set of mounted
 filesystem trees for served paths and custom rules. Empty roots disable local-path
 scans and path-based repository webhooks. Mount dedicated operator-owned directories

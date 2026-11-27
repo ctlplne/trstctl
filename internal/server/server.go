@@ -683,8 +683,8 @@ type Deps struct {
 	// workload-federated secret-sync targets. Server Shutdown owns it.
 	CloudTokenMinter *cloudauth.Minter
 	// SecretScanGitleaksBin points at the pinned Gitleaks binary used by
-	// POST /api/v1/secrets/scans (SEC-07/F39). Empty resolves
-	// TRSTCTL_GITLEAKS_BIN/tools/bin/gitleaks/PATH at request time.
+	// POST /api/v1/secrets/scans (SEC-07/F39). Set an absolute path here or
+	// through TRSTCTL_GITLEAKS_BIN before starting a served scan.
 	SecretScanGitleaksBin string
 	// SecretScanRoots confines served scan targets/custom rules to explicitly
 	// mounted operator-owned trees. Empty disables served local paths.

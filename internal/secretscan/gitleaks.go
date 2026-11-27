@@ -88,13 +88,14 @@ type GitleaksRunner struct {
 	rulesActiveOverride int
 }
 
-// NewGitleaksRunner returns a runner. An empty binary resolves from
+// NewGitleaksRunner returns a runner. An empty CLI binary resolves from
 // TRSTCTL_GITLEAKS_BIN, tools/bin/gitleaks, then PATH at scan time.
 func NewGitleaksRunner(binary string) *GitleaksRunner {
 	return &GitleaksRunner{Binary: strings.TrimSpace(binary), Timeout: 2 * time.Minute, MaxTargetMegabytes: 50, AllowedRoots: []string{"."}}
 }
 
-// NewServedGitleaksRunner uses only the operator's roots for local paths.
+// NewServedGitleaksRunner uses only the operator's roots for local paths and
+// requires an absolute scanner path from configuration or TRSTCTL_GITLEAKS_BIN.
 func NewServedGitleaksRunner(binary string, roots []string) *GitleaksRunner {
 	runner := NewGitleaksRunner(binary)
 	runner.AllowedRoots = append([]string(nil), roots...)
@@ -527,25 +528,59 @@ func ScanCapabilities(mode string, customRules bool) []string {
 }
 
 func (r *GitleaksRunner) resolveBinary() (string, error) {
-	candidates := []string{r.Binary, os.Getenv("TRSTCTL_GITLEAKS_BIN"), filepath.Join("tools", "bin", "gitleaks")}
-	for _, candidate := range candidates {
-		if candidate == "" {
-			continue
-		}
-		if filepath.IsAbs(candidate) || strings.ContainsRune(candidate, filepath.Separator) {
-			if info, err := os.Stat(candidate); err == nil && !info.IsDir() { // #nosec G703 -- locates the pinned gitleaks binary in known tool dirs (CWE-22)
-				return candidate, nil
-			}
-			continue
-		}
-		if path, err := exec.LookPath(candidate); err == nil {
-			return path, nil
-		}
+	candidate := strings.TrimSpace(r.Binary)
+	if candidate == "" {
+		candidate = strings.TrimSpace(os.Getenv("TRSTCTL_GITLEAKS_BIN"))
 	}
-	if path, err := exec.LookPath("gitleaks"); err == nil {
+	if candidate == "" && r.served {
+		return "", ErrGitleaksBinaryNotFound
+	}
+	if candidate != "" {
+		return r.resolveBinaryCandidate(candidate)
+	}
+	if path, err := r.resolveBinaryCandidate(filepath.Join("tools", "bin", "gitleaks")); err == nil {
 		return path, nil
 	}
-	return "", ErrGitleaksBinaryNotFound
+	return r.resolveBinaryCandidate("gitleaks")
+}
+
+func (r *GitleaksRunner) resolveBinaryCandidate(candidate string) (string, error) {
+	if r.served && !filepath.IsAbs(candidate) {
+		return "", ErrGitleaksBinaryNotFound
+	}
+	if !filepath.IsAbs(candidate) && !strings.ContainsRune(candidate, filepath.Separator) {
+		path, err := exec.LookPath(candidate)
+		if err != nil {
+			return "", ErrGitleaksBinaryNotFound
+		}
+		candidate = path
+	}
+	absolute, err := filepath.Abs(candidate)
+	if err != nil {
+		return "", ErrGitleaksBinaryNotFound
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", ErrGitleaksBinaryNotFound
+	}
+	info, err := os.Stat(resolved) // #nosec G703 -- scanner path is resolved before it is used
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
+		return "", ErrGitleaksBinaryNotFound
+	}
+	for _, root := range r.AllowedRoots {
+		root, err = filepath.Abs(root)
+		if err != nil {
+			return "", ErrGitleaksBinaryNotFound
+		}
+		root, err = filepath.EvalSymlinks(root)
+		if err != nil {
+			return "", ErrGitleaksBinaryNotFound
+		}
+		if safefile.ContainsPath(root, resolved) {
+			return "", ErrGitleaksBinaryNotFound
+		}
+	}
+	return resolved, nil
 }
 
 func normalizeTarget(target string, allowedRoots []string) (targetPath string, root string, err error) {
@@ -624,12 +659,11 @@ func relativizeFindings(findings []Finding, root string) {
 }
 
 func sanitizedGitleaksEnv(env []string) []string {
-	out := make([]string, 0, len(env)+3)
+	out := make([]string, 0, 4)
 	for _, kv := range env {
-		if strings.HasPrefix(kv, "GITLEAKS_CONFIG=") || strings.HasPrefix(kv, "GITLEAKS_CONFIG_TOML=") {
-			continue
+		if strings.HasPrefix(kv, "PATH=") || strings.HasPrefix(kv, "HOME=") {
+			out = append(out, kv)
 		}
-		out = append(out, kv)
 	}
 	out = append(out, "NO_COLOR=1", "GITLEAKS_NO_UPDATE_CHECK=true")
 	return out
