@@ -58,7 +58,7 @@ workflow verifies):
 
 ```bash
 cosign verify "$TRSTCTL_IMAGE_REF" \
-  --certificate-identity-regexp '^https://github.com/.*/trstctl/.github/workflows/release.yml@.*' \
+  --certificate-identity-regexp '^https://github\.com/ctlplne/trstctl/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+.*$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -145,10 +145,17 @@ artifact to GHCR, so you can verify the chart's provenance before installing —
 the same keyless-OIDC identity that signs the image:
 
 ```bash
-cosign verify ghcr.io/ctlplne/trstctl/charts/trstctl:<chart-version> \
-  --certificate-identity-regexp '^https://github.com/.*/trstctl/.github/workflows/release.yml@.*' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+export TRSTCTL_CHART_REF="$(cat trstctl-helm-chart.oci-ref)"
+scripts/verify-chart.sh "$TRSTCTL_CHART_REF" 'v<release-version>'
 ```
+
+Download `trstctl-helm-chart.oci-ref` from the selected release run's
+`trstctl-helm-chart` workflow artifact. It records the signed OCI digest, which
+may have a different chart version from the release tag. The helper checks the
+exact release tag identity on those bytes. For a registry install, replace
+`deploy/helm/trstctl` in the Helm command above with
+`"oci://${TRSTCTL_CHART_REF}"`, keeping the verified digest in the install
+reference.
 
 For offline or mirrored installs, also download `trstctl-helm-chart.intoto.jsonl`
 from the GitHub Release and verify the packaged chart bytes with `slsa-verifier`.

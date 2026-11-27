@@ -1050,7 +1050,7 @@ func TestProductionInstallPathsAvoidMutableLatest(t *testing.T) {
 		"ClusterImagePolicy",
 		"ghcr.io/ctlplne/trstctl@sha256:*",
 		"https://token.actions.githubusercontent.com",
-		"release.yml")
+		"release\\.yml")
 }
 
 // TestSupplyChainIsScannedPinnedAndRecorded encodes the R3.5 acceptance: the

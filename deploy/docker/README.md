@@ -217,8 +217,8 @@ or outbox waves.
 Verify a published image:
 
 ```bash
-cosign verify ghcr.io/ctlplne/trstctl:<tag> \
-  --certificate-identity-regexp '^https://github.com/.*/trstctl/.github/workflows/release.yml@.*' \
+cosign verify ghcr.io/ctlplne/trstctl@sha256:<release-image-digest> \
+  --certificate-identity-regexp '^https://github\.com/ctlplne/trstctl/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+.*$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 

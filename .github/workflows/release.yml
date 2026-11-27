@@ -558,6 +558,7 @@ jobs:
 
   image:
     name: build / sign / publish
+    if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40 # TEST-004 (multi-arch build + sign + SBOM)
     outputs:
@@ -1268,6 +1269,7 @@ jobs:
   # CI/security contexts like every other publishing job (TEST-003/005).
   helm-chart:
     name: helm chart / package + sign
+    if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20 # TEST-004
     needs: [test, required-checks, release-evidence]
@@ -1334,6 +1336,8 @@ jobs:
           digest="$(echo "${push_out}" | awk '/Digest:/ {print $2}')"
           repo="${CHART_OCI#oci://}/trstctl"
           cosign sign "${repo}@${digest}"
+          printf '%s\n' "${repo}@${digest}" > dist/trstctl-helm-chart.oci-ref
+          echo "Chart OCI reference: ${repo}@${digest}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload packaged chart as a release artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1342,6 +1346,7 @@ jobs:
           path: |
             dist/trstctl-*.tgz
             dist/trstctl-*.tgz.sha256
+            dist/trstctl-helm-chart.oci-ref
 
   helm-chart-provenance:
     name: slsa / helm chart provenance

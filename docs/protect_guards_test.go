@@ -3563,7 +3563,7 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		"kind: ClusterImagePolicy",
 		"glob: ghcr.io/ctlplne/trstctl@sha256:*",
 		"issuer: https://token.actions.githubusercontent.com",
-		"subjectRegExp: ^https://github.com/ctlplne/trstctl/.github/workflows/release.yml@refs/tags/v.*$",
+		"subjectRegExp: ^https://github\\.com/ctlplne/trstctl/\\.github/workflows/release\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+.*$",
 	)
 
 	for _, testName := range []string{
