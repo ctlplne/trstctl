@@ -46,11 +46,11 @@ func NewAnchorWorker(svc *audit.Service, log *events.Log, ts auditanchor.Timesta
 // Interval is the cadence the server runs the worker at.
 func (w *AnchorWorker) Interval() time.Duration { return w.interval }
 
-// RunOnce anchors every tenant whose chain grew since its last anchor. It
-// stops at the first failure: an authority outage fails every tenant alike, and
-// the next pass retries.
+// RunOnce anchors every tenant whose chain grew since its last anchor. Tenant
+// failures are reported together so the remaining tenants still get a turn.
 func (w *AnchorWorker) RunOnce(ctx context.Context) (editionseam.AuditAnchorSummary, error) {
 	var sum editionseam.AuditAnchorSummary
+	var tenantErrors []error
 	if w.interval <= 0 {
 		return sum, nil
 	}
@@ -60,11 +60,12 @@ func (w *AnchorWorker) RunOnce(ctx context.Context) (editionseam.AuditAnchorSumm
 	}
 	for _, tenant := range tenants {
 		if err := ctx.Err(); err != nil {
-			return sum, err
+			return sum, errors.Join(append(tenantErrors, err)...)
 		}
 		anchored, err := w.anchorTenant(ctx, tenant.TenantID)
 		if err != nil {
-			return sum, fmt.Errorf("audit anchoring: tenant %s: %w", tenant.TenantID, err)
+			tenantErrors = append(tenantErrors, fmt.Errorf("audit anchoring: tenant %s: %w", tenant.TenantID, err))
+			continue
 		}
 		if anchored {
 			sum.TenantsAnchored++
@@ -72,7 +73,7 @@ func (w *AnchorWorker) RunOnce(ctx context.Context) (editionseam.AuditAnchorSumm
 			sum.TenantsUnchanged++
 		}
 	}
-	return sum, nil
+	return sum, errors.Join(tenantErrors...)
 }
 
 func (w *AnchorWorker) anchorTenant(ctx context.Context, tenantID string) (bool, error) {

@@ -78,6 +78,9 @@ func TestServedTSAOpenSSLTimestampOverHTTP(t *testing.T) {
 	if err := os.WriteFile(verifyLogPath, out, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if got := countServedTSAEvents(t, h); got != 0 {
+		t.Fatalf("public timestamp recorded %d durable issuance events", got)
+	}
 
 	// The console preview reads the exact assembled runtime after OpenSSL proves
 	// the wire path. It must not issue a second timestamp or require timestamp

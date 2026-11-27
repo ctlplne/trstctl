@@ -19,21 +19,19 @@ type tsaQualificationSource struct {
 	configured           bool
 	configuredFor        string
 	stableCertConfigured bool
-	eventLogReady        bool
 }
 
-func newTSAQualificationSource(s *Server, protocols config.Protocols, tenantFallback string, eventLogReady bool) tsaQualificationSource {
+func newTSAQualificationSource(s *Server, protocols config.Protocols, tenantFallback string) tsaQualificationSource {
 	return tsaQualificationSource{
 		server:               s,
 		configured:           protocols.TSA.Enabled,
 		configuredFor:        firstNonEmpty(protocols.TSA.TenantID, tenantFallback),
 		stableCertConfigured: strings.TrimSpace(protocols.TSACertFile) != "",
-		eventLogReady:        eventLogReady,
 	}
 }
 
 func (s *Server) appendTSAQualificationOption(d Deps, options *[]api.Option) {
-	source := newTSAQualificationSource(s, d.Protocols, d.ProtocolTenant, d.Log != nil)
+	source := newTSAQualificationSource(s, d.Protocols, d.ProtocolTenant)
 	*options = append(*options, api.WithTSAQualificationPosture(source.read))
 }
 
@@ -57,7 +55,6 @@ func (source tsaQualificationSource) read(_ context.Context, tenantID string) ap
 	// timestamping-only certificate and matched it to the signer-held key.
 	posture.StableCertificateReady = source.stableCertConfigured
 	posture.SignerReady = source.server.signer != nil && source.server.signer.Client() != nil
-	posture.AuditReady = source.eventLogReady
-	posture.BulkheadReady = source.server.bulk != nil && source.server.bulk.Pool(bulkhead.SubsystemAPI) != nil
+	posture.BulkheadReady = source.server.bulk != nil && source.server.bulk.Pool(bulkhead.SubsystemProtocolHTTP) != nil
 	return posture
 }

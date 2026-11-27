@@ -77,11 +77,15 @@ A TSA answers one question with a signed token: here is a hash, certify the time
 now. trstctl's TSA (RFC 3161) builds a `TSTInfo` record — policy, hash algorithm, the
 submitted hash, a monotonic serial, and the generation time — and signs it through the
 signer boundary, kept in the isolated signing service rather than the API process.
-Each issuance is recorded as an immutable `tsa.timestamp.issued` event.
-If the audit event log does not acknowledge that append, the TSA refuses the
-request without returning the signed token. An operator should check event-log
-health and retry; the append error may be ambiguous, so verify the audit log
-before assuming a record is absent.
+Internal timestamps used for audit anchoring are recorded as immutable
+`tsa.timestamp.issued` events. If the event log does not acknowledge that append,
+the internal call returns no token. Public `/tsa` requests are counted by the
+HTTP request metrics, with no per-token event in the source-of-truth log. The
+public endpoint has per-client and process-wide rate limits of 30 and 120
+requests per minute, respectively, and returns 429 with `Retry-After` when a
+budget is exhausted. An operator should check event-log health and retry a
+failed internal anchor; an append error may be ambiguous, so verify the audit
+log before assuming a record is absent.
 
 The payoff is long-term validity (LTV): a `VerifyLongTermValidity` check confirms the
 signature and that the timestamp falls within the signing certificate's validity
@@ -99,8 +103,8 @@ artifact bytes never enter the browser. See [The web console](../web-console.md)
 For timestamping, open **Certificates → Protocols**, then **Set up and operate
 methods**. **Timestamp authority readiness** checks the exact running process before
 you send an artifact hash. It confirms the tenant-bound `/tsa` mount, active protocol
-profile, stable timestamping-only certificate, isolated signer connection, immutable
-audit path, and bounded responder capacity. The check is deliberately effect-free: it issues no
+profile, stable timestamping-only certificate, isolated signer connection, and
+bounded responder capacity. The check is deliberately effect-free: it issues no
 timestamp, reads no certificate file, contacts no signer or network, and performs no
 write. A failed gate names the safe repair and leaves **Check again** available.
 
@@ -392,8 +396,9 @@ body as `preview_fingerprint`; never put an OIDC proof in logs or evidence.
   `/tsa` when
   `protocols.tsa.enabled` plus `protocols.tsa.tenant_id` are set, returning
   `application/timestamp-reply` `TimeStampResp` bodies. The console readiness check
-  is a preview, not a synthetic timestamp: only a real request to `/tsa` calls the
-  signer and emits `tsa.timestamp.issued`.
+  is a preview, not a synthetic timestamp: a real request to `/tsa` calls the
+  signer and increments the HTTP request metric. Internal audit anchoring also
+  calls the signer and emits `tsa.timestamp.issued`.
 - Wire formats differ by surface: the TSA emits a real RFC 3161 `TimeStampToken` — a
   CMS `SignedData` over a DER `TSTInfo` — wrapped in the required `TimeStampResp`
   envelope for stock verifiers (`openssl ts -verify`, DSS/ESS validators). Code signing
@@ -425,7 +430,8 @@ body as `preview_fingerprint`; never put an OIDC proof in logs or evidence.
 - **Timestamping:** `Authority.Timestamp`, `Verify`, `VerifyLongTermValidity` (RFC 3161).
 - **Events:** `codesign.commanded`, `codesign.completed`, `codesign.failed`,
   `codesign.ephemeral.destroyed`, `codesign.signed`, `codesign.refused`,
-  `codesign.keyless.signed`, `codesign.csr_signed`, `attestation.verified`, `tsa.timestamp.issued`; worker
+  `codesign.keyless.signed`, `codesign.csr_signed`, `attestation.verified`, and
+  `tsa.timestamp.issued` for internal audit anchoring; worker
   execution uses `codesign.command`/`codesign.cleanup`, and Rekor publication uses the
   `transparency.rekor` outbox destination.
 - **Related:** the signing key lives behind the separate, isolated

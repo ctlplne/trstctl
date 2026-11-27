@@ -15,7 +15,7 @@ func TestVerifyAuthenticatesPresentCMSToken(t *testing.T) {
 	issuedAt := time.Now().UTC().Truncate(time.Second).Add(123456789 * time.Nanosecond)
 	a, root := newTSA(t, func() time.Time { return issuedAt })
 	imprint := imprintOf("portable audit evidence")
-	token, err := a.timestamp(t.Context(), imprint, big.NewInt(739))
+	token, err := a.timestamp(t.Context(), imprint, big.NewInt(739), true)
 	if err != nil {
 		t.Fatal(err)
 	}

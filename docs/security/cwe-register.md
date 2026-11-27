@@ -1490,8 +1490,8 @@ not this file.
 | `internal/server/pam_gateway_private_ca_served_test.go:71` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_health.go:100` | a positive interval in nanoseconds, never negative (CWE-190) |
 | `internal/server/pam_served_test.go:749` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/protocol_mounts.go:1044` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/protocol_mounts.go:1046` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:1048` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:174` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/restore_outbox_pairs.go:105` | positive int64 is representable. |
 | `internal/server/restore_outbox_pairs.go:109` | positive int64 is representable. |
@@ -2444,7 +2444,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:94` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:745` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:759` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:192` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:172` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2582` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/server.go:3313` | served CA certificate directory; the PEM is public material (CWE-276) |
@@ -2515,7 +2515,7 @@ not this file.
 | `internal/server/private_workload_socket_test.go:106` | owner-only socket fixture before activation |
 | `internal/server/private_workload_socket_test.go:149` | unsafe directory triggers the required fail-closed shutdown |
 | `internal/server/private_workload_socket_test.go:152` | restore owner-only test directory for cleanup |
-| `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:201` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/report_schedule_name_conflict_served_test.go:33` | owner execute is required to traverse this private test directory. |
 | `internal/server/tenant_baseline_served_test.go:61` | owner execute is required to traverse this private test directory. |
 | `internal/signing/serve.go:203` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
@@ -3192,10 +3192,10 @@ not this file.
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:97` | the repository's own fixture (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:117` | the repository's own fixture (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/protocol_mounts.go:764` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:879` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:996` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1417` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:766` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:881` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:998` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:1419` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:602` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:240` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:244` | test reads its own tempdir fixture (CWE-22) |
@@ -3205,8 +3205,8 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:775` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:781` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_tsa_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/protocols_served_tsa_test.go:193` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:196` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/protocols_served_tsa_test.go:201` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/restore_consistency.go:76` | the restored backup set's own event log, under the isolated target (CWE-22) |
@@ -3901,8 +3901,8 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:745` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:759` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:781` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:192` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:201` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/run.go:1254` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/secret_dynamic_lease_rotation_served_test.go:58` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |

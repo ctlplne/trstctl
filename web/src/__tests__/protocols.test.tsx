@@ -290,7 +290,6 @@ describe("protocol surface", () => {
         { id: "tenant-binding", label: "Tenant binding", passed: true, detail: "The TSA mount is bound to this authenticated tenant." },
         { id: "stable-certificate", label: "Stable TSA certificate", passed: true, detail: "The timestamp certificate matches the signer-held key." },
         { id: "signer", label: "Isolated timestamp signer", passed: true, detail: "The timestamp key stays in the isolated signer." },
-        { id: "audit", label: "Immutable issuance audit", passed: true, detail: "Timestamp issuances can be recorded." },
         { id: "bounded-capacity", label: "Bounded responder capacity", passed: true, detail: "The TSA responder is bulkheaded." },
       ],
       preview_writes: [],

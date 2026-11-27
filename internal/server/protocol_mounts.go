@@ -500,8 +500,10 @@ func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 		}
 	}
 	if sp.tsa != nil {
+		admission := newTimestampAdmission(timestampRequestsPerClientMinute, timestampRequestsGlobalMinute, timestampTrackedClients)
+		clientLimit := clientLimitForPool(bulk, bulkhead.SubsystemProtocolHTTP)
 		for _, pattern := range protocolHTTPMountPatterns("tsa") {
-			mux.Handle(pattern, wrap(tenantProtocolAdmission(sp.tenantServiceWork, sp.tenantServiceCheck, sp.tsaTenant, sp.tsa.Handler())))
+			mux.Handle(pattern, admission.wrap(clientLimit.wrap(wrap(tenantProtocolAdmission(sp.tenantServiceWork, sp.tenantServiceCheck, sp.tsaTenant, sp.tsa.Handler())))))
 		}
 	}
 	if sp.ssh != nil {

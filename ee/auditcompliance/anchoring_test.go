@@ -39,6 +39,46 @@ func (s *anchorScopes) WithAuditRetentionScope(ctx context.Context, scope string
 	return fn(ctx)
 }
 
+type selectiveAnchorScopes struct {
+	anchorScopes
+	unavailable string
+}
+
+func (s *selectiveAnchorScopes) WithAuditRetentionScope(ctx context.Context, scope string, fn func(context.Context) error) error {
+	if scope == s.unavailable {
+		return errors.New("tenant scope unavailable")
+	}
+	return s.anchorScopes.WithAuditRetentionScope(ctx, scope, fn)
+}
+
+func TestAnchorWorkerContinuesAfterTenantFailure(t *testing.T) {
+	ctx := context.Background()
+	const next = "22222222-2222-2222-2222-222222222222"
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	for _, tenantID := range []string{tenantA, next} {
+		if _, err := log.Append(ctx, events.Event{Type: "test.audit.issued", TenantID: tenantID, Data: []byte(`{}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	authority, _ := anchoringAuthority(t)
+	scopes := &selectiveAnchorScopes{unavailable: tenantA}
+	worker := auditcompliance.NewAnchorWorker(audit.NewService(log, nil), log, authority, scopes, anchorTenants{tenantA, next}, time.Hour)
+	summary, err := worker.RunOnce(ctx)
+	if err == nil || !strings.Contains(err.Error(), tenantA) {
+		t.Fatalf("tenant failure = %v, want attributed error", err)
+	}
+	if summary.TenantsAnchored != 1 {
+		t.Fatalf("anchored tenants = %d, want 1", summary.TenantsAnchored)
+	}
+	if got := strings.Join(scopes.held, ","); got != next {
+		t.Fatalf("completed tenant scopes = %q, want %q", got, next)
+	}
+}
+
 type switchableTSA struct {
 	authority *tsa.Authority
 	down      bool

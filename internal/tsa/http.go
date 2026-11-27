@@ -84,7 +84,7 @@ func Handler(a *Authority) http.Handler {
 			writeFailure(w, http.StatusBadRequest)
 			return
 		}
-		tok, err := a.timestamp(r.Context(), parsed.HashedMessage, parsed.Nonce)
+		tok, err := a.timestamp(r.Context(), parsed.HashedMessage, parsed.Nonce, false)
 		if err != nil {
 			writeFailure(w, http.StatusInternalServerError)
 			return

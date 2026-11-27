@@ -16917,10 +16917,11 @@ export const messages = {
     defaultMessage: "Confirm that timestamp signing stays in the separate signer process and never moves key material into the browser or control plane.",
     description: "TSA signer preview detail.",
   },
-  "protocols.tsaCheck.auditPreview": { defaultMessage: "Audit and bounded capacity", description: "TSA preview step for evidence and backpressure." },
+  "protocols.tsaCheck.auditPreview": { defaultMessage: "Bounded capacity", description: "TSA preview step for responder capacity." },
   "protocols.tsaCheck.auditPreviewDetail": {
-    defaultMessage: "Confirm that each accepted timestamp can be audited and that a burst cannot starve the control-plane API.",
-    description: "TSA audit and bulkhead preview detail.",
+    defaultMessage:
+      "Confirm that the public timestamp responder has a request budget and a separate worker pool, so a burst cannot starve the control-plane API.",
+    description: "TSA admission and bulkhead preview detail.",
   },
   "protocols.tsaCheck.ready": { defaultMessage: "Ready for a stock-client test", description: "Successful TSA readiness state." },
   "protocols.tsaCheck.blocked": { defaultMessage: "Needs repair before timestamping", description: "Blocked TSA readiness state." },

@@ -24,7 +24,6 @@ type TSARuntimePosture struct {
 	TenantBound            bool
 	StableCertificateReady bool
 	SignerReady            bool
-	AuditReady             bool
 	BulkheadReady          bool
 	PolicyOID              string
 }
@@ -106,12 +105,9 @@ func buildTSAQualification(posture TSARuntimePosture, checkedAt time.Time) TSAQu
 		tsaCheck("signer", "Isolated timestamp signer", posture.SignerReady,
 			"The timestamp key is reachable through the isolated signer process.",
 			"Restore the isolated signer connection; never move the TSA key into the control-plane process."),
-		tsaCheck("audit", "Immutable issuance audit", posture.AuditReady,
-			"Accepted timestamps can append tsa.timestamp.issued to the event-backed audit ledger.",
-			"Restore the event log before timestamping; do not issue untracked timestamp tokens."),
 		tsaCheck("bounded-capacity", "Bounded responder capacity", posture.BulkheadReady,
 			"The responder is protected by the bounded protocol HTTP worker pool.",
-			"Restore the API/protocol bulkhead before retrying so timestamp load cannot starve the control plane."),
+			"Restore the protocol HTTP bulkhead before retrying so timestamp load cannot starve the control plane."),
 	}
 	ready := true
 	blockers := make([]string, 0)
@@ -129,7 +125,7 @@ func buildTSAQualification(posture TSARuntimePosture, checkedAt time.Time) TSAQu
 		Proof: []string{
 			"This qualification reads only in-memory served posture for the authenticated tenant.",
 			"It does not create, parse, send, sign, store, or return a TimeStampReq, TimeStampResp, certificate, token, or private key.",
-			"It does not call the signer, event log, database, outbox, filesystem, or network; only POST /tsa can issue a timestamp.",
+			"It does not call the signer, event log, database, outbox, filesystem, or network; POST /tsa and internal audit anchoring can issue timestamps.",
 		},
 		Blockers: blockers,
 	}

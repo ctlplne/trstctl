@@ -4,7 +4,7 @@
 // issues signed timestamp tokens so signatures carry a trusted time and remain
 // verifiable after the signing certificate expires (long-term validity). Timestamp
 // signing routes through the isolated signer (AN-4) and the crypto boundary (AN-3);
-// every issuance is audited (AN-2).
+// internal timestamping for audit anchors is recorded as an event (AN-2).
 //
 // Wire format (INTEROP-005): each token carries a real RFC 3161 TimeStampToken —
 // a CMS SignedData over a DER-encoded TSTInfo with eContentType id-ct-TSTInfo,
@@ -144,9 +144,10 @@ const maxJSONExactInteger = uint64(1) << 53
 
 func manifest(info TSTInfo) ([]byte, error) { return json.Marshal(info) }
 
-// Timestamp issues a timestamp token over hashedMessage (the SHA-256 of the data).
+// Timestamp issues an internally audited token over hashedMessage (the SHA-256
+// of the data). The HTTP endpoint uses the same signer without a per-token event.
 func (a *Authority) Timestamp(ctx context.Context, hashedMessage []byte) (Token, error) {
-	return a.timestamp(ctx, hashedMessage, nil)
+	return a.timestamp(ctx, hashedMessage, nil, true)
 }
 
 // Rotate moves the authority onto a new certificate and signing key (A145):
@@ -179,7 +180,7 @@ func (a *Authority) Certificate() []byte {
 	return append([]byte(nil), a.cfg.TSACertDER...)
 }
 
-func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *big.Int) (Token, error) {
+func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *big.Int, recordAudit bool) (Token, error) {
 	if len(hashedMessage) == 0 {
 		return Token{}, fmt.Errorf("tsa: empty message imprint")
 	}
@@ -214,9 +215,11 @@ func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *
 	if err != nil {
 		return Token{}, fmt.Errorf("tsa: build timestamp token: %w", err)
 	}
-	if err := auditsink.Emit(ctx, a.cfg.Audit, nil, "tsa.timestamp.issued", a.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"serial":%d,"gen_time":%q}`, serial, info.GenTime.Format(time.RFC3339)))); err != nil {
-		return Token{}, fmt.Errorf("tsa: audit timestamp issuance: %w", err)
+	if recordAudit {
+		if err := auditsink.Emit(ctx, a.cfg.Audit, nil, "tsa.timestamp.issued", a.cfg.TenantID,
+			[]byte(fmt.Sprintf(`{"serial":%d,"gen_time":%q}`, serial, info.GenTime.Format(time.RFC3339)))); err != nil {
+			return Token{}, fmt.Errorf("tsa: audit timestamp issuance: %w", err)
+		}
 	}
 	return Token{Info: info, Signature: sig, TSACertDER: certDER, DER: der}, nil
 }
