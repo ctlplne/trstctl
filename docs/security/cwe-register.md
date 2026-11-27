@@ -1314,10 +1314,10 @@ not this file.
 | `internal/crypto/mongosignin/bson.go:81` | a command document is short (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:194` | a BSON int32's two's-complement bits (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:196` | a BSON int64's two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:311` | a message length is bounded by its reader (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:312` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:313` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:314` | an op code is a small constant (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:322` | a message length is bounded by its reader (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:323` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:324` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:325` | an op code is a small constant (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:132` | the 3-byte little-endian length of a payload checked above (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:194` | the capability flags' lower half (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:197` | the capability flags' upper half (CWE-190) |
