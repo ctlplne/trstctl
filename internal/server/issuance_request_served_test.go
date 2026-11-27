@@ -490,7 +490,7 @@ func TestServedIssuanceRequestPinsExternalCAThroughCompletion(t *testing.T) {
 		t.Fatalf("prepared identity lost selected CA: %v %s", err, body)
 	}
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+prepared.Identity.ID+"/transitions",
-		issuer, "issuance-request-issue:"+opened.ID, map[string]any{
+		issuer, "issuance-request-issue-"+opened.ID, map[string]any{
 			"to": "issued", "reason": "fulfill exact external CA request", "subject_csr_pem": csrPEM,
 		})
 	if status != http.StatusOK {
@@ -504,7 +504,7 @@ func TestServedIssuanceRequestPinsExternalCAThroughCompletion(t *testing.T) {
 		t.Fatalf("selected CA did not sign the leaf: certs=%+v err=%v", certs, err)
 	}
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests/"+opened.ID+"/complete",
-		issuer, "issuance-request-complete:"+opened.ID, nil)
+		issuer, "issuance-request-complete-"+opened.ID, nil)
 	if status != http.StatusOK || !jsonContains(t, body, `"status":"issued"`) ||
 		!jsonContains(t, body, `"id":"request-external-ca"`) {
 		t.Fatalf("selected CA completion: %d %s", status, body)

@@ -15,12 +15,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
@@ -243,9 +243,9 @@ func secretsReq(t *testing.T, h *servedHarness, method, path, token string, body
 	t.Helper()
 	idemKey := ""
 	if method != http.MethodGet {
-		// A per-(method,path) idempotency key; callers that need a STABLE key across two
-		// calls (the AN-5 retry probe) set it explicitly via secretsReqKey.
-		idemKey = method + ":" + path + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		// A fresh public idempotency key; callers that need a stable key across
+		// two calls set it explicitly via secretsReqKey.
+		idemKey = method + "-" + uuid.NewString()
 	}
 	return secretsReqKey(t, h, method, path, token, idemKey, body)
 }

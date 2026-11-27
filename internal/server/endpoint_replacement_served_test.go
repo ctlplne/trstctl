@@ -54,7 +54,7 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 		return err
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:read", "owners:write", "identities:read", "identities:write",
-		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "profiles:write")
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "profiles:write", "secrets:read")
 	create := func(path string, request any) map[string]json.RawMessage {
 		t.Helper()
 		status, body := secretsReq(t, h, http.MethodPost, path, tok, request)

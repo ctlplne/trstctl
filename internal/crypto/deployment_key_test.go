@@ -51,6 +51,7 @@ func FuzzNormalizeDeploymentPrivateKeyPEM(f *testing.F) {
 	key, _, err := GenerateUploadableRSAKeypair(time.Hour)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(key)
 	secret.Wipe(key)
