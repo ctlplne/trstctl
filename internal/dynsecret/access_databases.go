@@ -332,7 +332,7 @@ func readRESPValue(r *bufio.Reader, depth int, budget *int) (respValue, error) {
 		if n == -1 {
 			return respValue{null: true}, nil
 		}
-		if n+2 > *budget {
+		if *budget < 2 || n > *budget-2 {
 			return respValue{}, ErrAccessUnreadable
 		}
 		*budget -= n + 2
@@ -352,11 +352,14 @@ func readRESPValue(r *bufio.Reader, depth int, budget *int) (respValue, error) {
 		if n == -1 {
 			return respValue{null: true}, nil
 		}
-		if prefix == '%' {
-			n *= 2 // a map's keys and values, in order
-		}
 		if n > maxRESPElements {
 			return respValue{}, ErrAccessUnreadable
+		}
+		if prefix == '%' {
+			if n > maxRESPElements/2 {
+				return respValue{}, ErrAccessUnreadable
+			}
+			n *= 2 // a map's keys and values, in order
 		}
 		out := respValue{items: make([]respValue, 0, n)}
 		for range n {
