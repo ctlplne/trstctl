@@ -651,7 +651,7 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 	if err := RefuseWeakKey(subjectPublic); err != nil {
 		return IssuedHierarchyCA{}, err
 	}
-	if profile.CommonName == "" {
+	if strings.TrimSpace(profile.CommonName) == "" {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: CA common name is required")
 	}
 	if profile.TTL <= 0 {
@@ -834,6 +834,10 @@ func ImportedCASignatureAlgorithmSupported(label string) bool {
 }
 
 func verifyImportedProfile(cert *x509.Certificate, profile HierarchyCAProfile) error {
+	if strings.TrimSpace(cert.Subject.CommonName) == "" ||
+		(profile.CommonName != "" && strings.TrimSpace(profile.CommonName) == "") {
+		return fmt.Errorf("crypto: imported CA common name is required")
+	}
 	if profile.CommonName != "" && cert.Subject.CommonName != profile.CommonName {
 		return fmt.Errorf("crypto: imported CA common name %q does not match ceremony profile %q", cert.Subject.CommonName, profile.CommonName)
 	}

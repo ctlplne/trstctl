@@ -51,6 +51,12 @@ func TestCASpecRejectsUnrepresentableTTL(t *testing.T) {
 	}
 }
 
+func TestCASpecRequiresVisibleCommonName(t *testing.T) {
+	if err := validateCASpec(api.CASpec{CommonName: "  "}); !errors.Is(err, api.ErrCAHierarchyInvalid) {
+		t.Fatalf("blank CA common name error = %v, want invalid spec", err)
+	}
+}
+
 func TestImportedCAParentRequiresExactNextCertificate(t *testing.T) {
 	firstKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {

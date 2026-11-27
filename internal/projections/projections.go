@@ -7556,7 +7556,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				return fmt.Errorf("projections: %s requires root or intermediate kind", e.Type)
 			}
 		}
-		if pl.CAID == "" || pl.CommonName == "" || pl.CertificatePEM == "" ||
+		if pl.CAID == "" || strings.TrimSpace(pl.CommonName) == "" || pl.CertificatePEM == "" ||
 			pl.Serial == "" || pl.NotAfter.IsZero() || pl.CeremonyID == "" {
 			return fmt.Errorf("projections: %s requires ca_id, common_name, certificate_pem, serial, not_after, and ceremony_id", e.Type)
 		}
@@ -7603,7 +7603,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.PredecessorCAID == "" || pl.CommonName == "" || pl.Kind == "" ||
+		if pl.ID == "" || pl.PredecessorCAID == "" || strings.TrimSpace(pl.CommonName) == "" || pl.Kind == "" ||
 			pl.CertificatePEM == "" || (!pl.OfflineRoot && pl.SignerHandle == "") || pl.Serial == "" || pl.NotAfter.IsZero() {
 			return fmt.Errorf("projections: %s requires a complete signer-backed or explicit offline-root successor authority", e.Type)
 		}

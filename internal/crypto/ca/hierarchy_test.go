@@ -15,6 +15,13 @@ import (
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
+func TestReferenceCARequiresVisibleCommonName(t *testing.T) {
+	if ca, err := NewRoot(CASpec{CommonName: "  ", TTL: 24 * time.Hour}); err == nil {
+		ca.Destroy()
+		t.Fatal("blank CA common name was accepted")
+	}
+}
+
 // leafCSR builds a PKCS#10 CSR for the given common name and DNS SANs.
 func leafCSR(t *testing.T, cn string, dnsNames []string) []byte {
 	t.Helper()

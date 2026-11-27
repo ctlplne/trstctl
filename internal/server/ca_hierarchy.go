@@ -1661,7 +1661,7 @@ func flattenDERChain(chain [][]byte) []byte {
 }
 
 func validateCASpec(spec api.CASpec) error {
-	if spec.CommonName == "" {
+	if strings.TrimSpace(spec.CommonName) == "" {
 		return fmt.Errorf("%w: common_name is required", api.ErrCAHierarchyInvalid)
 	}
 	if spec.TTLSeconds < 0 {

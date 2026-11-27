@@ -4,6 +4,7 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -41,102 +42,111 @@ func (m *Manager) AlertCAHorizon(ctx context.Context, tenantID string) (int, err
 	}
 
 	alerted := 0
+	var errs []error
 	for _, ca := range candidates {
-		if ca.NotAfter == nil {
-			// A22: the row never recorded an expiry. The authority's own
-			// certificate is the source of truth when it parses; otherwise the
-			// unknown expiry is a real state that alerts once at warning.
-			derived, ok := caNotAfterFromPEM(ca.CertificatePEM)
-			if !ok {
-				if ca.AlertedMonths != nil && *ca.AlertedMonths <= CAHorizonUnknownExpiryBand {
-					continue
+		// Record each authority's result independently so later calendars
+		// can still advance when one authority needs repair.
+		err := func() error {
+			if ca.NotAfter == nil {
+				// A22: the row never recorded an expiry. The authority's own
+				// certificate is the source of truth when it parses; otherwise the
+				// unknown expiry is a real state that alerts once at warning.
+				derived, ok := caNotAfterFromPEM(ca.CertificatePEM)
+				if !ok {
+					if ca.AlertedMonths != nil && *ca.AlertedMonths <= CAHorizonUnknownExpiryBand {
+						return nil
+					}
+					dependents, err := m.store.CountActiveLeavesForAuthority(ctx, tenantID, ca.ID)
+					if err != nil {
+						return err
+					}
+					detail := caUnknownExpiryDetail(ca.Kind, dependents)
+					if err := m.orch.RecordCAAuthorityHorizonAlert(ctx, tenantID, projections.CAAuthorityHorizonAlerted{
+						CAAuthorityID: ca.ID, CommonName: ca.CommonName, Kind: ca.Kind,
+						HorizonMonths: CAHorizonUnknownExpiryBand, ExpiryUnknown: true,
+						DependentCertificates: dependents, AlertKind: notify.KindCAHorizon,
+						AlertDetail: detail, Severity: CAHorizonSeverity(CAHorizonUnknownExpiryBand),
+					}); err != nil {
+						return err
+					}
+					alerted++
+					return nil
 				}
-				dependents, err := m.store.CountActiveLeavesForAuthority(ctx, tenantID, ca.ID)
-				if err != nil {
-					return alerted, err
-				}
-				detail := caUnknownExpiryDetail(ca.Kind, dependents)
-				if err := m.orch.RecordCAAuthorityHorizonAlert(ctx, tenantID, projections.CAAuthorityHorizonAlerted{
-					CAAuthorityID: ca.ID, CommonName: ca.CommonName, Kind: ca.Kind,
-					HorizonMonths: CAHorizonUnknownExpiryBand, ExpiryUnknown: true,
-					DependentCertificates: dependents, AlertKind: notify.KindCAHorizon,
-					AlertDetail: detail, Severity: CAHorizonSeverity(CAHorizonUnknownExpiryBand),
-				}); err != nil {
-					return alerted, err
-				}
-				alerted++
-				continue
+				ca.NotAfter = &derived
 			}
-			ca.NotAfter = &derived
-		}
-		notAfter := ca.NotAfter.UTC()
-		band, inBand := CAHorizonBand(now, notAfter)
-		if !inBand {
-			// A23: beyond the widest threshold the authority is real and known;
-			// it announces itself once as a planning entry and is then quiet
-			// until it crosses into a band.
-			band = CAHorizonBeyondBand
-		}
-		if ca.AlertedMonths != nil && *ca.AlertedMonths <= band {
-			// Already alerted at this band or a tighter one. Re-alerting happens
-			// on the next tightening, not on the next sweep.
-			continue
-		}
+			notAfter := ca.NotAfter.UTC()
+			band, inBand := CAHorizonBand(now, notAfter)
+			if !inBand {
+				// A23: beyond the widest threshold the authority is real and known;
+				// it announces itself once as a planning entry and is then quiet
+				// until it crosses into a band.
+				band = CAHorizonBeyondBand
+			}
+			if ca.AlertedMonths != nil && *ca.AlertedMonths <= band {
+				// Already alerted at this band or a tighter one. Re-alerting happens
+				// on the next tightening, not on the next sweep.
+				return nil
+			}
 
-		dependents, err := m.store.CountActiveLeavesForAuthority(ctx, tenantID, ca.ID)
+			dependents, err := m.store.CountActiveLeavesForAuthority(ctx, tenantID, ca.ID)
+			if err != nil {
+				return err
+			}
+			compressed, actual := CompressedValidity(now, notAfter, leafValidity)
+			renewBy := CARenewBy(notAfter, leafValidity)
+
+			kind := notify.KindCAHorizon
+			detail := caHorizonDetail(ca.Kind, band, MonthsRemaining(now, notAfter), dependents)
+			truncated := 0
+			if compressed {
+				// The compressing case is a different problem with a different fix, so
+				// it gets its own kind rather than a longer sentence on the same one:
+				// renewing the parent restores full leaf validity, and until it is
+				// renewed every new leaf under it is quietly short.
+				kind = notify.KindCAValidityCompression
+				// A24: the retrospective half — leaves already issued short under
+				// this parent, so the alert says how much of the estate is affected
+				// today, not only that new leaves will be.
+				if _, total, err := m.store.ListTruncatedLeavesForAuthority(ctx, tenantID, ca.ID, notAfter, leafValidity, 1); err != nil {
+					return err
+				} else {
+					truncated = total
+				}
+				detail = caCompressionDetail(ca.Kind, leafValidity, actual, dependents, truncated)
+			}
+
+			horizonMonths := band
+			alert := notify.Alert{
+				Kind:                  kind,
+				TenantID:              tenantID,
+				AuthorityID:           ca.ID,
+				AuthorityKind:         ca.Kind,
+				Subject:               ca.CommonName,
+				NotAfter:              notAfter,
+				Detail:                detail,
+				Severity:              CAHorizonSeverity(band),
+				HorizonMonths:         &horizonMonths,
+				RenewBy:               renewBy,
+				DependentCertificates: &dependents,
+			}
+			if err := m.orch.RecordCAAuthorityHorizonAlert(ctx, tenantID, projections.CAAuthorityHorizonAlerted{
+				CAAuthorityID: ca.ID, CommonName: ca.CommonName, Kind: ca.Kind,
+				NotAfter: notAfter, HorizonMonths: band,
+				MonthsRemaining: MonthsRemaining(now, notAfter), RenewBy: renewBy,
+				ValidityCompressed: compressed, DependentCertificates: dependents,
+				AlertKind: alert.Kind, AlertDetail: alert.Detail, Severity: alert.Severity,
+				TruncatedLeaves: truncated,
+			}); err != nil {
+				return err
+			}
+			alerted++
+			return nil
+		}()
 		if err != nil {
-			return alerted, err
+			errs = append(errs, fmt.Errorf("CA authority %s: %w", ca.ID, err))
 		}
-		compressed, actual := CompressedValidity(now, notAfter, leafValidity)
-		renewBy := CARenewBy(notAfter, leafValidity)
-
-		kind := notify.KindCAHorizon
-		detail := caHorizonDetail(ca.Kind, band, MonthsRemaining(now, notAfter), dependents)
-		truncated := 0
-		if compressed {
-			// The compressing case is a different problem with a different fix, so
-			// it gets its own kind rather than a longer sentence on the same one:
-			// renewing the parent restores full leaf validity, and until it is
-			// renewed every new leaf under it is quietly short.
-			kind = notify.KindCAValidityCompression
-			// A24: the retrospective half — leaves already issued short under
-			// this parent, so the alert says how much of the estate is affected
-			// today, not only that new leaves will be.
-			if _, total, err := m.store.ListTruncatedLeavesForAuthority(ctx, tenantID, ca.ID, notAfter, leafValidity, 1); err != nil {
-				return alerted, err
-			} else {
-				truncated = total
-			}
-			detail = caCompressionDetail(ca.Kind, leafValidity, actual, dependents, truncated)
-		}
-
-		horizonMonths := band
-		alert := notify.Alert{
-			Kind:                  kind,
-			TenantID:              tenantID,
-			AuthorityID:           ca.ID,
-			AuthorityKind:         ca.Kind,
-			Subject:               ca.CommonName,
-			NotAfter:              notAfter,
-			Detail:                detail,
-			Severity:              CAHorizonSeverity(band),
-			HorizonMonths:         &horizonMonths,
-			RenewBy:               renewBy,
-			DependentCertificates: &dependents,
-		}
-		if err := m.orch.RecordCAAuthorityHorizonAlert(ctx, tenantID, projections.CAAuthorityHorizonAlerted{
-			CAAuthorityID: ca.ID, CommonName: ca.CommonName, Kind: ca.Kind,
-			NotAfter: notAfter, HorizonMonths: band,
-			MonthsRemaining: MonthsRemaining(now, notAfter), RenewBy: renewBy,
-			ValidityCompressed: compressed, DependentCertificates: dependents,
-			AlertKind: alert.Kind, AlertDetail: alert.Detail, Severity: alert.Severity,
-			TruncatedLeaves: truncated,
-		}); err != nil {
-			return alerted, err
-		}
-		alerted++
 	}
-	return alerted, nil
+	return alerted, errors.Join(errs...)
 }
 
 func caHorizonDetail(kind string, band, remaining, dependents int) string {

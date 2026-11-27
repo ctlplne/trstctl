@@ -343,6 +343,9 @@ func (c *CA) PermittedDNSDomains() []string { return c.permittedDNS }
 // signing key is signerKey. The private key is reconstructed from its locked
 // buffer only for the instant of CreateCertificate (AN-8 / CRYPTO-005).
 func signCACert(commonName string, permitted []string, maxPathLen int, ekus []string, ttl time.Duration, parent *x509.Certificate, signerKey *lockedKey, pub *ecdsa.PublicKey) ([]byte, *x509.Certificate, error) {
+	if strings.TrimSpace(commonName) == "" {
+		return nil, nil, errors.New("ca: common name is required")
+	}
 	serial, err := randomSerial()
 	if err != nil {
 		return nil, nil, err

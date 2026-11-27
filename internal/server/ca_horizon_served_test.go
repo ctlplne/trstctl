@@ -46,6 +46,25 @@ func seedCAAuthority(t *testing.T, ctx context.Context, st *store.Store, tenantI
 	return ca
 }
 
+func TestServedCAHorizonContinuesAfterOneAuthorityFails(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	ctx := t.Context()
+	now := time.Now().UTC()
+	seedCAAuthority(t, ctx, h.store, h.tenant, "  ", "root", "ca-blank", now.Add(365*24*time.Hour))
+	seedCAAuthority(t, ctx, h.store, h.tenant, "working root", "root", "ca-working", now.Add(2*365*24*time.Hour))
+
+	alerted, err := h.srv.runCAHorizonAlertsOnce(ctx)
+	if err == nil {
+		t.Fatal("sweep did not report the failed authority")
+	}
+	if alerted != 1 {
+		t.Fatalf("sweep alerted %d authorities, want the later authority", alerted)
+	}
+	if got := servedEventCount(t, h, projections.EventCAAuthorityHorizonAlerted); got != 1 {
+		t.Fatalf("sweep retained %d horizon decisions, want one", got)
+	}
+}
+
 func TestServedCAHorizonAlertsYearsAheadAndReAlertsOnEachTightening(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
