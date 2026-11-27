@@ -331,7 +331,7 @@ func TestDeployEnrollmentURLMatchesClient(t *testing.T) {
 	for _, item := range agentContainer.Env {
 		env[item.Name] = item.Value
 	}
-	if got, want := env["TRSTCTL_ENROLL_URL"], "https://trstctl:8443"; got != want {
+	if got, want := env["TRSTCTL_ENROLL_URL"], "https://trstctl.trstctl.svc:8443"; got != want {
 		t.Fatalf("TRSTCTL_ENROLL_URL = %q, want %q so the client appends exactly /enroll/bootstrap", got, want)
 	}
 
@@ -415,7 +415,7 @@ func TestOPS008DeploymentStrengthGuardsStayWired(t *testing.T) {
 		"subPathExpr: $(NODE_NAME)",
 		"secretName: trstctl-agent-bootstrap",
 		"TRSTCTL_SERVER",
-		"trstctl:9443")
+		"trstctl.trstctl.svc:9443")
 	requireTestDeclares(t, root, filepath.Join("deploy", "windows", "windows_test.go"), "TestAgentBootstrapMSIRequiresConfiguredFirstBootProperties")
 	requireTestDeclares(t, root, filepath.Join("deploy", "windows", "windows_test.go"), "TestAgentBootstrapWindowsDocsUseTokenFile")
 	requireFileContains(t, root, filepath.Join("deploy", "windows", "trstctl-agent.wxs"),
