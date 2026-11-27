@@ -102,7 +102,8 @@ func PostgresRiskCategories(sql []byte) []string { return sqlRiskCategories(sql,
 func MySQLRiskCategories(sql []byte) []string { return sqlRiskCategories(sql, true) }
 
 func sqlRiskCategories(sql []byte, mysql bool) []string {
-	if len(sql) > MaxStatementBytes || !utf8.Valid(sql) || bytes.IndexByte(sql, 0) >= 0 {
+	if len(sql) > MaxStatementBytes || !utf8.Valid(sql) || bytes.IndexByte(sql, 0) >= 0 ||
+		mysql && mysqlHasUnsupportedControl(sql) {
 		return nil
 	}
 	found := map[string]bool{}

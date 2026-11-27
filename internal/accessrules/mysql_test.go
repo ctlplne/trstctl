@@ -50,6 +50,27 @@ func TestMySQLRulesInspectExecutableCommentsAndKeepValuesOut(t *testing.T) {
 	}
 }
 
+func TestMySQLRuleClassifierRejectsUnsupportedControls(t *testing.T) {
+	for _, control := range []byte{1, 31, 127} {
+		sql := append([]byte("GRANT SELECT ON orders TO app"), control)
+		if _, err := MySQLOperations(sql); err != ErrUninspectable {
+			t.Fatalf("control %d: operation classifier err=%v", control, err)
+		}
+		if _, err := MySQLRuleOperations(sql); err != ErrUninspectable {
+			t.Fatalf("control %d: rule classifier err=%v", control, err)
+		}
+		if got := MySQLRiskCategories(sql); len(got) != 0 {
+			t.Fatalf("control %d: risk categories=%v", control, got)
+		}
+	}
+	for _, separator := range []byte{'\t', '\n', '\r'} {
+		sql := []byte{'S', 'E', 'L', 'E', 'C', 'T', separator, '1'}
+		if _, err := MySQLRuleOperations(sql); err != nil {
+			t.Fatalf("separator %d: err=%v", separator, err)
+		}
+	}
+}
+
 func TestCR005MySQLCommentEndsOnlyAtLF(t *testing.T) {
 	for _, sql := range []string{
 		"# note\r'\nDELETE FROM victim -- '",

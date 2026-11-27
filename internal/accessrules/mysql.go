@@ -13,7 +13,7 @@ var mysqlClassifierNames = append(slices.Clone(mysqlOperationNames), "PREPARE", 
 // version comments. It keeps only public operation classes, never quoted values.
 // Stored programs and dynamically constructed SQL remain lexical bypasses.
 func MySQLOperations(raw []byte) ([]string, error) {
-	if len(raw) > MaxStatementBytes || !utf8.Valid(raw) || bytes.IndexByte(raw, 0) >= 0 {
+	if len(raw) > MaxStatementBytes || !utf8.Valid(raw) || mysqlHasUnsupportedControl(raw) {
 		return nil, ErrUninspectable
 	}
 	var a, b [64]bool
@@ -30,6 +30,17 @@ func MySQLOperations(raw []byte) ([]string, error) {
 	}
 	slices.Sort(out)
 	return out, nil
+}
+
+// mysqlHasUnsupportedControl keeps operation and risk classification on the
+// same accepted byte vocabulary. Ordinary SQL separators remain available.
+func mysqlHasUnsupportedControl(raw []byte) bool {
+	for _, c := range raw {
+		if c == 127 || c < 32 && c != '\t' && c != '\n' && c != '\r' {
+			return true
+		}
+	}
+	return false
 }
 
 func mysqlOperations(raw []byte, backslash bool, depth int, seen *[64]bool) error {

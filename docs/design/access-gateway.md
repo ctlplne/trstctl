@@ -631,6 +631,8 @@ connections admit supported UTF-8 collations and the stock client's single-byte
 latin1 collation (ID 8); the classifier refuses non-UTF-8 SQL bytes. Other
 handshake charsets and SQL `SET` are refused so the client cannot switch to a
 multibyte charset or change parsing rules after sign-in.
+The classifier also refuses control bytes other than tab, LF and CR. It uses
+the same accepted byte set for operation and risk-category checks.
 Operation classes, public identifiers and digests reach command review; statement
 text, query values and the injected sign-in credential do not. Login-change
 requests are refused before command evaluation. Rules work without recording.
