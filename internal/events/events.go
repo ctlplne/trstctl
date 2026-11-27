@@ -711,7 +711,7 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 		if err != nil {
 			return Event{}, err
 		}
-		producerScope := &ingressProducerScope{digest: producerDigest, explicitTime: explicitTime, history: l}
+		producerScope := &ingressProducerScope{digest: producerDigest, explicitTime: explicitTime, imported: requireSourceEnvelope, history: l}
 		producerScope.active = true
 		defer func() {
 			producerScope.mu.Lock()

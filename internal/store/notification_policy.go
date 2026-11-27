@@ -38,6 +38,10 @@ type NotificationRoutingSelector struct {
 	AssetRef  string
 }
 
+// ErrNotificationRoutingIdentityConflict identifies a retained route whose
+// global ID does not belong to the event tenant.
+var ErrNotificationRoutingIdentityConflict = errors.New("store: notification routing policy identity belongs to another tenant")
+
 // ListNotificationRoutingPolicies returns one tenant's routing policies ordered
 // by operator-facing name. The tenant predicate is in SQL and RLS enforces it.
 func (s *Store) ListNotificationRoutingPolicies(ctx context.Context, tenantID string) ([]NotificationRoutingPolicy, error) {
@@ -192,7 +196,7 @@ func (s *Store) ApplyNotificationRoutingPolicyUpsertedTx(ctx context.Context, tx
 		return err
 	}
 	if tag.RowsAffected() != 1 {
-		return errors.New("store: notification routing policy conflict does not match the tenant-owned identity")
+		return ErrNotificationRoutingIdentityConflict
 	}
 	return nil
 }

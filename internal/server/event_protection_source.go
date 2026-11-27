@@ -177,7 +177,7 @@ func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tena
 	return func(admitCtx context.Context, event events.Event,
 		publish func(context.Context) (events.Event, error),
 	) (events.Event, error) {
-		if err := projections.ValidateSchemaVersion(event); err != nil {
+		if err := validateProjectionBeforeAppend(admitCtx, st, event); err != nil {
 			return events.Event{}, err
 		}
 		var published events.Event
@@ -204,6 +204,22 @@ func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tena
 	}
 }
 
+func validateProjectionBeforeAppend(ctx context.Context, st *store.Store, event events.Event) error {
+	if events.IngressIsImport(ctx) {
+		return projections.ValidateSchemaVersion(event)
+	}
+	if err := projections.ValidateAppendCandidate(ctx, st, event); err != nil {
+		found, lookupErr := events.IngressEventAlreadyPublished(ctx, event)
+		if lookupErr != nil {
+			return errors.Join(err, lookupErr)
+		}
+		if !found {
+			return err
+		}
+	}
+	return nil
+}
+
 // restoreEventIngressOptionsWithJournal is the store-backed producer, exact
 // wire, and canonical readback stage. It is not attached to served construction
 // until the separate command/projection token can settle after SQL commit.
@@ -224,7 +240,7 @@ func restoreEventIngressOptionsWithJournal(st *store.Store, access func() tenant
 		events.WithAppendAdmission(func(admitCtx context.Context, event events.Event,
 			publish func(context.Context) (events.Event, error),
 		) (events.Event, error) {
-			if err := projections.ValidateSchemaVersion(event); err != nil {
+			if err := validateProjectionBeforeAppend(admitCtx, st, event); err != nil {
 				return events.Event{}, err
 			}
 			if st.HasKeyStateOwnerContext(admitCtx) && !events.IngressHistoryReadPreheld(admitCtx) {

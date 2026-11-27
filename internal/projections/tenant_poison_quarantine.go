@@ -256,7 +256,8 @@ func (q *tenantPoisonQuarantine) confineApplyFailure(ctx context.Context, tx pgx
 	var pgErr *pgconn.PgError
 	var typeErr *json.UnmarshalTypeError
 	var syntaxErr *json.SyntaxError
-	projectableDataError := errors.As(applyErr, &typeErr) || errors.As(applyErr, &syntaxErr)
+	projectableDataError := errors.As(applyErr, &typeErr) || errors.As(applyErr, &syntaxErr) ||
+		errors.Is(applyErr, store.ErrNotificationRoutingIdentityConflict)
 	if errors.As(applyErr, &pgErr) {
 		// Data exceptions and integrity constraints are stable for the same
 		// event and read-model state. Connection, resource, and transaction
