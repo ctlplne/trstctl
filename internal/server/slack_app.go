@@ -604,7 +604,7 @@ func (a *slackAppServer) decide(ctx context.Context, d slackDecision, tenantID, 
 		reason = "denied in Slack by " + subject
 	}
 	status, answer := a.s.api.DecideApprovalAs(ctx, tenantID, subject, d.Request, d.Digest, approve, reason,
-		"slack:"+slackUserID+":"+d.Request+":"+action)
+		"slack-"+use)
 	if status/100 != 2 {
 		var problem struct {
 			Detail string `json:"detail"`
