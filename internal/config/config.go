@@ -1254,19 +1254,22 @@ type KMIPProtocol struct {
 // event/projection backlog; these numbers are the abuse-budget fence for the
 // memory-resident protocol view.
 type ACMEQuota struct {
-	MaxNonces                  int `json:"max_nonces,omitempty"`
-	MaxAccounts                int `json:"max_accounts,omitempty"`
-	MaxPendingOrders           int `json:"max_pending_orders,omitempty"`
-	MaxPendingAuthorizations   int `json:"max_pending_authorizations,omitempty"`
-	MaxPendingChallenges       int `json:"max_pending_challenges,omitempty"`
-	MaxPendingOrdersPerAccount int `json:"max_pending_orders_per_account,omitempty"`
-	MaxNewOrdersPerAccount     int `json:"max_new_orders_per_account,omitempty"`
-	MaxNewNoncesPerSource      int `json:"max_new_nonces_per_source,omitempty"`
-	MaxNewAccountsPerSource    int `json:"max_new_accounts_per_source,omitempty"`
-	MaxNewOrdersPerSource      int `json:"max_new_orders_per_source,omitempty"`
-	SourceWindowSeconds        int `json:"source_window_seconds,omitempty"`
-	NonceTTLSeconds            int `json:"nonce_ttl_seconds,omitempty"`
-	StateTTLSeconds            int `json:"state_ttl_seconds,omitempty"`
+	MaxNonces                     int `json:"max_nonces,omitempty"`
+	MaxAccounts                   int `json:"max_accounts,omitempty"`
+	MaxPendingOrders              int `json:"max_pending_orders,omitempty"`
+	MaxPendingAuthorizations      int `json:"max_pending_authorizations,omitempty"`
+	MaxPendingChallenges          int `json:"max_pending_challenges,omitempty"`
+	MaxPendingOrdersPerAccount    int `json:"max_pending_orders_per_account,omitempty"`
+	MaxNewOrdersPerAccount        int `json:"max_new_orders_per_account,omitempty"`
+	MaxAccountMutationsPerAccount int `json:"max_account_mutations_per_account,omitempty"`
+	MaxAccountMutationsPerTenant  int `json:"max_account_mutations_per_tenant,omitempty"`
+	MaxNewNoncesPerSource         int `json:"max_new_nonces_per_source,omitempty"`
+	MaxNewAccountsPerSource       int `json:"max_new_accounts_per_source,omitempty"`
+	MaxNewOrdersPerSource         int `json:"max_new_orders_per_source,omitempty"`
+	MaxAccountMutationsPerSource  int `json:"max_account_mutations_per_source,omitempty"`
+	SourceWindowSeconds           int `json:"source_window_seconds,omitempty"`
+	NonceTTLSeconds               int `json:"nonce_ttl_seconds,omitempty"`
+	StateTTLSeconds               int `json:"state_ttl_seconds,omitempty"`
 }
 
 // ACMEExternalAccountBinding is the server-side EAB key registry for ACME account
@@ -3905,19 +3908,22 @@ func Default() *Config {
 			TSA:                   ProtocolToggle{Enabled: false},
 			KMIP:                  KMIPProtocol{Enabled: false, Addr: ":5696"},
 			ACMEQuota: ACMEQuota{
-				MaxNonces:                  4096,
-				MaxAccounts:                2048,
-				MaxPendingOrders:           4096,
-				MaxPendingAuthorizations:   8192,
-				MaxPendingChallenges:       24576,
-				MaxPendingOrdersPerAccount: 128,
-				MaxNewOrdersPerAccount:     100,
-				MaxNewNoncesPerSource:      120,
-				MaxNewAccountsPerSource:    20,
-				MaxNewOrdersPerSource:      60,
-				SourceWindowSeconds:        600,
-				NonceTTLSeconds:            600,
-				StateTTLSeconds:            86400,
+				MaxNonces:                     4096,
+				MaxAccounts:                   2048,
+				MaxPendingOrders:              4096,
+				MaxPendingAuthorizations:      8192,
+				MaxPendingChallenges:          24576,
+				MaxPendingOrdersPerAccount:    128,
+				MaxNewOrdersPerAccount:        100,
+				MaxAccountMutationsPerAccount: 60,
+				MaxAccountMutationsPerTenant:  600,
+				MaxNewNoncesPerSource:         120,
+				MaxNewAccountsPerSource:       20,
+				MaxNewOrdersPerSource:         60,
+				MaxAccountMutationsPerSource:  60,
+				SourceWindowSeconds:           600,
+				NonceTTLSeconds:               600,
+				StateTTLSeconds:               86400,
 			},
 			RAKeyFile:   "data/protocols/ra-transport.key",
 			TSACertFile: "data/protocols/tsa.crt",
@@ -4510,9 +4516,12 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES", &p.ACMEQuota.MaxPendingChallenges)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT", &p.ACMEQuota.MaxPendingOrdersPerAccount)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_ACCOUNT", &p.ACMEQuota.MaxNewOrdersPerAccount)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_ACCOUNT", &p.ACMEQuota.MaxAccountMutationsPerAccount)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_TENANT", &p.ACMEQuota.MaxAccountMutationsPerTenant)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_NONCES_PER_SOURCE", &p.ACMEQuota.MaxNewNoncesPerSource)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ACCOUNTS_PER_SOURCE", &p.ACMEQuota.MaxNewAccountsPerSource)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_SOURCE", &p.ACMEQuota.MaxNewOrdersPerSource)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_SOURCE", &p.ACMEQuota.MaxAccountMutationsPerSource)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS", &p.ACMEQuota.SourceWindowSeconds)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_NONCE_TTL_SECONDS", &p.ACMEQuota.NonceTTLSeconds)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_STATE_TTL_SECONDS", &p.ACMEQuota.StateTTLSeconds)
@@ -6492,9 +6501,12 @@ func (q ACMEQuota) validate() []error {
 	check("max_pending_challenges", q.MaxPendingChallenges)
 	check("max_pending_orders_per_account", q.MaxPendingOrdersPerAccount)
 	check("max_new_orders_per_account", q.MaxNewOrdersPerAccount)
+	check("max_account_mutations_per_account", q.MaxAccountMutationsPerAccount)
+	check("max_account_mutations_per_tenant", q.MaxAccountMutationsPerTenant)
 	check("max_new_nonces_per_source", q.MaxNewNoncesPerSource)
 	check("max_new_accounts_per_source", q.MaxNewAccountsPerSource)
 	check("max_new_orders_per_source", q.MaxNewOrdersPerSource)
+	check("max_account_mutations_per_source", q.MaxAccountMutationsPerSource)
 	check("source_window_seconds", q.SourceWindowSeconds)
 	check("nonce_ttl_seconds", q.NonceTTLSeconds)
 	check("state_ttl_seconds", q.StateTTLSeconds)

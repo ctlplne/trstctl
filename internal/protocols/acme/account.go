@@ -3,10 +3,12 @@
 package acme
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"slices"
 	"sort"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto/jose"
 )
@@ -26,9 +28,16 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request, msg *jose
 	if len(msg.Payload) > 0 {
 		update, err = ParseAccountUpdateRequest(msg.Payload)
 		if err != nil {
-			s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
+			problem := "malformed"
+			if errors.Is(err, ErrInvalidAccountContact) {
+				problem = "invalidContact"
+			}
+			s.problem(w, r, http.StatusBadRequest, problem, err.Error())
 			return
 		}
+	}
+	if (update.Contact != nil || update.Deactivate) && !s.admitAccountMutation(w, r, acct) {
+		return
 	}
 	s.mu.Lock()
 	updated := *acct
@@ -54,6 +63,40 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request, msg *jose
 	s.mu.Unlock()
 	w.Header().Set("Location", acct.url)
 	writeJSON(w, http.StatusOK, body)
+}
+
+func (s *Server) admitAccountMutation(w http.ResponseWriter, r *http.Request, acct *account) bool {
+	if s.accountLimiter == nil {
+		s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "account rate limiter is unavailable")
+		return false
+	}
+	allowed, retryAfter, err := s.accountLimiter.AllowAccountMutation(r.Context(), s.stateTenantID, "",
+		s.quota.MaxAccountMutationsPerTenant)
+	if err != nil {
+		s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "account rate limiter is unavailable")
+		return false
+	}
+	if !allowed {
+		s.rateLimitedAfter(w, r, retryAfter, "too many ACME account changes for this tenant")
+		return false
+	}
+	allowed, retryAfter, err = s.accountLimiter.AllowAccountMutation(r.Context(), s.stateTenantID, acct.url,
+		s.quota.MaxAccountMutationsPerAccount)
+	if err != nil {
+		s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "account rate limiter is unavailable")
+		return false
+	}
+	if !allowed {
+		s.rateLimitedAfter(w, r, retryAfter, "too many ACME account changes for this account")
+		return false
+	}
+	s.mu.Lock()
+	allowed = s.consumeSourceLocked(sourceKey(r), "account-mutation", time.Now())
+	s.mu.Unlock()
+	if !allowed {
+		s.rateLimited(w, r, "too many ACME account changes from this source")
+	}
+	return allowed
 }
 
 func accountPath(acct *account) string {

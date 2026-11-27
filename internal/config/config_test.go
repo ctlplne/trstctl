@@ -25,7 +25,7 @@ func TestDefaultIsValid(t *testing.T) {
 	if p.TSACertFile == "" {
 		t.Fatal("protocols.tsa_cert_file must have a default so the served TSA can persist a stable certificate when enabled")
 	}
-	if p.ACMEQuota.MaxNonces <= 0 || p.ACMEQuota.MaxPendingOrders <= 0 || p.ACMEQuota.MaxNewOrdersPerAccount <= 0 || p.ACMEQuota.SourceWindowSeconds <= 0 {
+	if p.ACMEQuota.MaxNonces <= 0 || p.ACMEQuota.MaxPendingOrders <= 0 || p.ACMEQuota.MaxNewOrdersPerAccount <= 0 || p.ACMEQuota.MaxAccountMutationsPerTenant <= 0 || p.ACMEQuota.SourceWindowSeconds <= 0 {
 		t.Fatalf("protocols.acme_quota must expose positive safe defaults, got %+v", p.ACMEQuota)
 	}
 	if Default().ManagedKeys.Enabled {
@@ -62,46 +62,49 @@ func TestEnvOverridesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		"TRSTCTL_CONFIG_FILE":                                   path,
-		"TRSTCTL_POSTGRES_DSN":                                  "env-dsn",
-		"TRSTCTL_LOG_LEVEL":                                     "debug",
-		"TRSTCTL_AIRGAP_ENABLED":                                "true",
-		"TRSTCTL_AIRGAP_ALLOW_PRIVATE":                          "true",
-		"TRSTCTL_AIRGAP_ALLOW_HOSTS":                            "collector.airgap.local",
-		"TRSTCTL_AIRGAP_ALLOW_CIDRS":                            "10.0.0.0/8,192.168.0.0/16",
-		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS":                  "env:TRSTCTL_SPLUNK_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
-		"TRSTCTL_SERVICENOW_INSTANCE_URL":                       "https://example.service-now.com",
-		"TRSTCTL_SERVICENOW_TOKEN_REF":                          "env:TRSTCTL_SERVICENOW_TOKEN",
-		"TRSTCTL_SERVICENOW_ALLOW_PRIVATE_ENDPOINT":             "true",
-		"TRSTCTL_SERVICENOW_PRIVATE_EGRESS_CIDRS":               "10.25.0.0/16,127.0.0.1/32",
-		"TRSTCTL_TELEMETRY_INSTANCE_ID_FILE":                    "/var/lib/trstctl/telemetry/instance-id",
-		"TRSTCTL_MANAGED_KEYS_ENABLED":                          "true",
-		"TRSTCTL_MANAGED_KEYS_PROVIDER":                         "aws",
-		"TRSTCTL_MANAGED_KEYS_AWS_REGION":                       "us-east-1",
-		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":                     "http://127.0.0.1:4566",
-		"TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK":      "true",
-		"TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID":                "test",
-		"TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY":            "test-secret",
-		"TRSTCTL_PROTOCOLS_RA_KEY_FILE":                         "/var/lib/trstctl/protocol-ra.key",
-		"TRSTCTL_PROTOCOLS_TSA_CERT_FILE":                       "/var/lib/trstctl/tsa.crt",
-		"TRSTCTL_PROTOCOLS_ACME_MAX_NONCES":                     "17",
-		"TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT": "3",
-		"TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_ACCOUNT":     "4",
-		"TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS":          "45",
-		"TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED":                   "true",
-		"TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID":                     "customer-issuer-01",
-		"TRSTCTL_PROTOCOLS_ACME_EAB_HMAC_KEY":                   "eab-hmac-key-material",
-		"TRSTCTL_PROTOCOLS_SCEP_ENABLED":                        "true",
-		"TRSTCTL_PROTOCOLS_SCEP_TENANT_ID":                      "11111111-1111-1111-1111-111111111111",
-		"TRSTCTL_PROTOCOLS_TSA_ENABLED":                         "true",
-		"TRSTCTL_PROTOCOLS_TSA_TENANT_ID":                       "11111111-1111-1111-1111-111111111111",
-		"TRSTCTL_PROTOCOLS_KMIP_ENABLED":                        "true",
-		"TRSTCTL_PROTOCOLS_KMIP_TENANT_ID":                      "11111111-1111-1111-1111-111111111111",
-		"TRSTCTL_PROTOCOLS_KMIP_ADDR":                           ":5697",
-		"TRSTCTL_PROTOCOLS_KMIP_CERT_FILE":                      "/var/lib/trstctl/kmip.crt",
-		"TRSTCTL_PROTOCOLS_KMIP_KEY_FILE":                       "/var/lib/trstctl/kmip.key",
-		"TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE":                 "/var/lib/trstctl/kmip-clients.crt",
-		"TRSTCTL_PROTOCOLS_CMP_ALLOW_RA_ENROLLMENT":             "true",
+		"TRSTCTL_CONFIG_FILE":                                      path,
+		"TRSTCTL_POSTGRES_DSN":                                     "env-dsn",
+		"TRSTCTL_LOG_LEVEL":                                        "debug",
+		"TRSTCTL_AIRGAP_ENABLED":                                   "true",
+		"TRSTCTL_AIRGAP_ALLOW_PRIVATE":                             "true",
+		"TRSTCTL_AIRGAP_ALLOW_HOSTS":                               "collector.airgap.local",
+		"TRSTCTL_AIRGAP_ALLOW_CIDRS":                               "10.0.0.0/8,192.168.0.0/16",
+		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS":                     "env:TRSTCTL_SPLUNK_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
+		"TRSTCTL_SERVICENOW_INSTANCE_URL":                          "https://example.service-now.com",
+		"TRSTCTL_SERVICENOW_TOKEN_REF":                             "env:TRSTCTL_SERVICENOW_TOKEN",
+		"TRSTCTL_SERVICENOW_ALLOW_PRIVATE_ENDPOINT":                "true",
+		"TRSTCTL_SERVICENOW_PRIVATE_EGRESS_CIDRS":                  "10.25.0.0/16,127.0.0.1/32",
+		"TRSTCTL_TELEMETRY_INSTANCE_ID_FILE":                       "/var/lib/trstctl/telemetry/instance-id",
+		"TRSTCTL_MANAGED_KEYS_ENABLED":                             "true",
+		"TRSTCTL_MANAGED_KEYS_PROVIDER":                            "aws",
+		"TRSTCTL_MANAGED_KEYS_AWS_REGION":                          "us-east-1",
+		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":                        "http://127.0.0.1:4566",
+		"TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK":         "true",
+		"TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID":                   "test",
+		"TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY":               "test-secret",
+		"TRSTCTL_PROTOCOLS_RA_KEY_FILE":                            "/var/lib/trstctl/protocol-ra.key",
+		"TRSTCTL_PROTOCOLS_TSA_CERT_FILE":                          "/var/lib/trstctl/tsa.crt",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_NONCES":                        "17",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT":    "3",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_ACCOUNT":        "4",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_ACCOUNT": "5",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_TENANT":  "6",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_SOURCE":  "7",
+		"TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS":             "45",
+		"TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED":                      "true",
+		"TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID":                        "customer-issuer-01",
+		"TRSTCTL_PROTOCOLS_ACME_EAB_HMAC_KEY":                      "eab-hmac-key-material",
+		"TRSTCTL_PROTOCOLS_SCEP_ENABLED":                           "true",
+		"TRSTCTL_PROTOCOLS_SCEP_TENANT_ID":                         "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_PROTOCOLS_TSA_ENABLED":                            "true",
+		"TRSTCTL_PROTOCOLS_TSA_TENANT_ID":                          "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_PROTOCOLS_KMIP_ENABLED":                           "true",
+		"TRSTCTL_PROTOCOLS_KMIP_TENANT_ID":                         "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_PROTOCOLS_KMIP_ADDR":                              ":5697",
+		"TRSTCTL_PROTOCOLS_KMIP_CERT_FILE":                         "/var/lib/trstctl/kmip.crt",
+		"TRSTCTL_PROTOCOLS_KMIP_KEY_FILE":                          "/var/lib/trstctl/kmip.key",
+		"TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE":                    "/var/lib/trstctl/kmip-clients.crt",
+		"TRSTCTL_PROTOCOLS_CMP_ALLOW_RA_ENROLLMENT":                "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -145,6 +148,9 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.Protocols.ACMEQuota.MaxNewOrdersPerAccount != 4 {
 		t.Errorf("protocols.acme_quota.max_new_orders_per_account env override not applied: got %d", cfg.Protocols.ACMEQuota.MaxNewOrdersPerAccount)
+	}
+	if q := cfg.Protocols.ACMEQuota; q.MaxAccountMutationsPerAccount != 5 || q.MaxAccountMutationsPerTenant != 6 || q.MaxAccountMutationsPerSource != 7 {
+		t.Errorf("protocols.acme_quota account write overrides = %+v", q)
 	}
 	if cfg.Protocols.ACMEQuota.SourceWindowSeconds != 45 {
 		t.Errorf("protocols.acme_quota.source_window_seconds env override not applied: got %d", cfg.Protocols.ACMEQuota.SourceWindowSeconds)
@@ -434,8 +440,9 @@ func TestValidateRejectsBadValues(t *testing.T) {
 			c.Telemetry.Enabled = true
 			c.Telemetry.InstanceIDFile = ""
 		},
-		"zero acme quota":     func(c *Config) { c.Protocols.ACMEQuota.MaxNonces = 0 },
-		"negative acme quota": func(c *Config) { c.Protocols.ACMEQuota.MaxNewOrdersPerSource = -1 },
+		"zero acme quota":          func(c *Config) { c.Protocols.ACMEQuota.MaxNonces = 0 },
+		"negative acme quota":      func(c *Config) { c.Protocols.ACMEQuota.MaxNewOrdersPerSource = -1 },
+		"zero account write quota": func(c *Config) { c.Protocols.ACMEQuota.MaxAccountMutationsPerTenant = 0 },
 		"acme eab required without keys": func(c *Config) {
 			c.Protocols.ACMEEAB.Required = true
 		},

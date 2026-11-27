@@ -8,11 +8,12 @@ import (
 	"time"
 )
 
-// AccountOrderLimiter is the account-keyed order/hour bulkhead. The ACME server
+// AccountOrderLimiter is the account-keyed state-write bulkhead. The ACME server
 // depends on this small shape so served deployments can use PostgreSQL-backed
 // buckets while protocol tests can stay storage-free.
 type AccountOrderLimiter interface {
 	AllowNewOrder(ctx context.Context, tenantID, accountURL string, perHour int) (allowed bool, retryAfter time.Duration, err error)
+	AllowAccountMutation(ctx context.Context, tenantID, accountURL string, perHour int) (allowed bool, retryAfter time.Duration, err error)
 }
 
 type memoryAccountOrderLimiter struct {
@@ -33,6 +34,14 @@ func newMemoryAccountOrderLimiter() *memoryAccountOrderLimiter {
 }
 
 func (l *memoryAccountOrderLimiter) AllowNewOrder(_ context.Context, tenantID, accountURL string, perHour int) (bool, time.Duration, error) {
+	return l.allow(tenantID, "order", accountURL, perHour)
+}
+
+func (l *memoryAccountOrderLimiter) AllowAccountMutation(_ context.Context, tenantID, accountURL string, perHour int) (bool, time.Duration, error) {
+	return l.allow(tenantID, "mutation", accountURL, perHour)
+}
+
+func (l *memoryAccountOrderLimiter) allow(tenantID, kind, accountURL string, perHour int) (bool, time.Duration, error) {
 	if perHour <= 0 {
 		return true, 0, nil
 	}
@@ -40,7 +49,7 @@ func (l *memoryAccountOrderLimiter) AllowNewOrder(_ context.Context, tenantID, a
 	defer l.mu.Unlock()
 
 	now := l.clock()
-	key := tenantID + "|" + accountURL
+	key := tenantID + "|" + kind + "|" + accountURL
 	capacity := float64(perHour)
 	refill := capacity / time.Hour.Seconds()
 	b := l.buckets[key]

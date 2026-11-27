@@ -4,12 +4,12 @@ package acme
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -130,9 +130,10 @@ func TestAccountOrdersPaginationAndIsolation(t *testing.T) {
 
 func TestAccountUpdatePropertyPreservesContactPresence(t *testing.T) {
 	if err := quick.Check(func(value string, present, deactivate bool) bool {
-		// URL escaping keeps the generated contact ASCII without weakening the
-		// property: every escaped string must survive decoding unchanged.
-		contacts := []string{"mailto:" + url.QueryEscape(value) + "@example.test"}
+		// Keep generated contacts within the admitted mail address syntax while
+		// checking that the parser preserves every supplied address exactly.
+		local := "x" + hex.EncodeToString([]byte(value[:min(len(value), 32)]))
+		contacts := []string{"mailto:" + local + "@example.test"}
 		raw := map[string]any{"status": "valid", "orders": "ignored"}
 		if present {
 			raw["contact"] = contacts

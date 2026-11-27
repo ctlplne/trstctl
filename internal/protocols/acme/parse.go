@@ -6,7 +6,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/mail"
+	"net/url"
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -18,6 +21,32 @@ import (
 type AccountUpdateRequest struct {
 	Contact    *[]string
 	Deactivate bool
+}
+
+var ErrInvalidAccountContact = errors.New("acme: invalid account contact")
+
+func validateAccountContacts(contacts []string) error {
+	if len(contacts) > 10 {
+		return fmt.Errorf("%w: at most ten contacts are allowed", ErrInvalidAccountContact)
+	}
+	for _, contact := range contacts {
+		if len(contact) == 0 || len(contact) > 254 {
+			return fmt.Errorf("%w: contact length is outside the supported range", ErrInvalidAccountContact)
+		}
+		u, err := url.Parse(contact)
+		if err != nil || u.Scheme != "mailto" || u.Opaque == "" || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("%w: only mailto addresses are supported", ErrInvalidAccountContact)
+		}
+		address, err := url.PathUnescape(u.Opaque)
+		if err != nil || strings.ContainsAny(address, "\r\n") {
+			return fmt.Errorf("%w: contact address is invalid", ErrInvalidAccountContact)
+		}
+		parsed, err := mail.ParseAddress(address)
+		if err != nil || parsed.Address != address {
+			return fmt.Errorf("%w: contact address is invalid", ErrInvalidAccountContact)
+		}
+	}
+	return nil
 }
 
 // ParseAccountUpdateRequest parses the exact account-resource mutation payload.
@@ -43,6 +72,9 @@ func ParseAccountUpdateRequest(payload []byte) (AccountUpdateRequest, error) {
 			if bytes.Equal(bytes.TrimSpace(element), []byte("null")) {
 				return AccountUpdateRequest{}, fmt.Errorf("acme: contact cannot contain null")
 			}
+		}
+		if err := validateAccountContacts(contacts); err != nil {
+			return AccountUpdateRequest{}, err
 		}
 		out.Contact = &contacts
 	}

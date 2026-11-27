@@ -10,6 +10,7 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	xacme "golang.org/x/crypto/acme"
 
@@ -18,11 +19,82 @@ import (
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
 
+type accountStatusCapture struct{ limited *atomic.Bool }
+
+func (c accountStatusCapture) RoundTrip(r *http.Request) (*http.Response, error) {
+	response, err := http.DefaultTransport.RoundTrip(r)
+	if err == nil && response.StatusCode == http.StatusTooManyRequests {
+		c.limited.Store(true)
+	}
+	return response, err
+}
+
 func requireInactiveACMEAccount(t *testing.T, err error) {
 	t.Helper()
 	var problem *xacme.Error
 	if !errors.As(err, &problem) || problem.StatusCode != http.StatusUnauthorized || problem.ProblemType != "urn:ietf:params:acme:error:unauthorized" {
 		t.Fatalf("inactive account: got %v, want ACME 401 unauthorized", err)
+	}
+}
+
+func TestACMENewAccountAdmitsOnlyBoundedMailContacts(t *testing.T) {
+	ctx := context.Background()
+	log := openACMEStateLog(t)
+	srv, err := acmesrv.New(nil, acmesrv.AcceptAll{}).WithStateLog(ctx, "account-contact", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	client, err := acmekey.NewClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Register(ctx, &xacme.Account{Contact: []string{"https://example.test/contact"}}, xacme.AcceptTOS); err == nil {
+		t.Fatal("invalid account contact was admitted")
+	}
+	if seq, err := log.LastSequence(ctx); err != nil || seq != 0 {
+		t.Fatalf("rejected registration advanced the event log: sequence=%d err=%v", seq, err)
+	}
+}
+
+func TestACMEAccountWriteBudgetPreservesEventLog(t *testing.T) {
+	ctx := context.Background()
+	log := openACMEStateLog(t)
+	srv, err := acmesrv.New(nil, acmesrv.AcceptAll{}).WithQuota(acmesrv.QuotaConfig{
+		MaxAccountMutationsPerAccount: 2, MaxAccountMutationsPerSource: 2,
+	}).WithStateLog(ctx, "account-budget", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	client, err := acmekey.NewClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatal(err)
+	}
+	for _, contact := range []string{"mailto:one@example.test", "mailto:two@example.test"} {
+		if _, err := client.UpdateReg(ctx, &xacme.Account{Contact: []string{contact}}); err != nil {
+			t.Fatalf("admitted account write: %v", err)
+		}
+	}
+	before, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var limited atomic.Bool
+	client.HTTPClient = &http.Client{Transport: accountStatusCapture{limited: &limited}}
+	updateCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_, _ = client.UpdateReg(updateCtx, &xacme.Account{Contact: []string{"mailto:three@example.test"}})
+	if !limited.Load() {
+		t.Fatal("account write did not receive a 429 response")
+	}
+	if after, err := log.LastSequence(ctx); err != nil || after != before {
+		t.Fatalf("bounded account write advanced event log: %d -> %d, err=%v", before, after, err)
 	}
 }
 

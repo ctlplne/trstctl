@@ -358,9 +358,7 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 			return nil, fmt.Errorf("build served ACME EAB: %w", err)
 		}
 	}
-	if cfg.ACMEQuota.MaxNewOrdersPerAccount > 0 {
-		acmeSrv = acmeSrv.WithAccountOrderLimiter(ratelimit.NewACMEAccountOrders(s.store))
-	}
+	acmeSrv = acmeSrv.WithAccountOrderLimiter(ratelimit.NewACMEAccountOrders(s.store))
 	state := acmeRegistrationLog{log: s.log, store: s.store, tenantID: acmeTenant}
 	acmeSrv, err = acmeSrv.WithStateScope(state.scope).WithStateLog(ctx, acmeTenant, state)
 	if err != nil {
@@ -778,19 +776,22 @@ func loadSCEPIntuneTrustAnchor(path string) ([]byte, error) {
 
 func acmeQuotaConfig(q config.ACMEQuota) acme.QuotaConfig {
 	return acme.QuotaConfig{
-		MaxNonces:                  q.MaxNonces,
-		MaxAccounts:                q.MaxAccounts,
-		MaxPendingOrders:           q.MaxPendingOrders,
-		MaxPendingAuthorizations:   q.MaxPendingAuthorizations,
-		MaxPendingChallenges:       q.MaxPendingChallenges,
-		MaxPendingOrdersPerAccount: q.MaxPendingOrdersPerAccount,
-		MaxNewOrdersPerAccount:     q.MaxNewOrdersPerAccount,
-		MaxNewNoncesPerSource:      q.MaxNewNoncesPerSource,
-		MaxNewAccountsPerSource:    q.MaxNewAccountsPerSource,
-		MaxNewOrdersPerSource:      q.MaxNewOrdersPerSource,
-		SourceWindow:               time.Duration(q.SourceWindowSeconds) * time.Second,
-		NonceTTL:                   time.Duration(q.NonceTTLSeconds) * time.Second,
-		StateTTL:                   time.Duration(q.StateTTLSeconds) * time.Second,
+		MaxNonces:                     q.MaxNonces,
+		MaxAccounts:                   q.MaxAccounts,
+		MaxPendingOrders:              q.MaxPendingOrders,
+		MaxPendingAuthorizations:      q.MaxPendingAuthorizations,
+		MaxPendingChallenges:          q.MaxPendingChallenges,
+		MaxPendingOrdersPerAccount:    q.MaxPendingOrdersPerAccount,
+		MaxNewOrdersPerAccount:        q.MaxNewOrdersPerAccount,
+		MaxAccountMutationsPerAccount: q.MaxAccountMutationsPerAccount,
+		MaxAccountMutationsPerTenant:  q.MaxAccountMutationsPerTenant,
+		MaxNewNoncesPerSource:         q.MaxNewNoncesPerSource,
+		MaxNewAccountsPerSource:       q.MaxNewAccountsPerSource,
+		MaxNewOrdersPerSource:         q.MaxNewOrdersPerSource,
+		MaxAccountMutationsPerSource:  q.MaxAccountMutationsPerSource,
+		SourceWindow:                  time.Duration(q.SourceWindowSeconds) * time.Second,
+		NonceTTL:                      time.Duration(q.NonceTTLSeconds) * time.Second,
+		StateTTL:                      time.Duration(q.StateTTLSeconds) * time.Second,
 	}
 }
 

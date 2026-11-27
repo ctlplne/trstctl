@@ -10,7 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// ACMEAccountOrders is a PostgreSQL-backed account-keyed ACME new-order limiter.
+// ACMEAccountOrders is a PostgreSQL-backed account-keyed ACME state-write limiter.
 // The tenant boundary is enforced by store.RateLimitTake under RLS (AN-1).
 type ACMEAccountOrders struct {
 	store *store.Store
@@ -25,6 +25,15 @@ func NewACMEAccountOrders(st *store.Store) *ACMEAccountOrders {
 
 // AllowNewOrder takes one token from tenantID/accountURL's ACME new-order bucket.
 func (l *ACMEAccountOrders) AllowNewOrder(ctx context.Context, tenantID, accountURL string, perHour int) (bool, time.Duration, error) {
+	return l.take(ctx, tenantID, "new-order", accountURL, perHour)
+}
+
+// AllowAccountMutation takes one token from the account's state-write bucket.
+func (l *ACMEAccountOrders) AllowAccountMutation(ctx context.Context, tenantID, accountURL string, perHour int) (bool, time.Duration, error) {
+	return l.take(ctx, tenantID, "account-mutation", accountURL, perHour)
+}
+
+func (l *ACMEAccountOrders) take(ctx context.Context, tenantID, kind, accountURL string, perHour int) (bool, time.Duration, error) {
 	if perHour <= 0 {
 		return true, 0, nil
 	}
@@ -35,5 +44,5 @@ func (l *ACMEAccountOrders) AllowNewOrder(ctx context.Context, tenantID, account
 		return false, 0, errors.New("ratelimit: ACME account limiter tenant_id is required")
 	}
 	capacity := float64(perHour)
-	return l.store.RateLimitTake(ctx, tenantID, "acme:new-order:"+accountURL, capacity, capacity/time.Hour.Seconds())
+	return l.store.RateLimitTake(ctx, tenantID, "acme:"+kind+":"+accountURL, capacity, capacity/time.Hour.Seconds())
 }

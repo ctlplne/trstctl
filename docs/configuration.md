@@ -5190,9 +5190,12 @@ profile both when it admits the order and when it finalizes the certificate.
 | `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS` | `8192` | Maximum pending ACME authorizations retained across pending orders. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES` | `24576` | Maximum pending ACME challenge records retained across pending authorizations. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT` | `128` | Per-account pending-order cap, independent from source-IP budgets. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_ACCOUNT` | `60` | Per-account update/key-change budget per hour. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_TENANT` | `600` | Tenant-wide update/key-change budget per hour. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_NEW_NONCES_PER_SOURCE` | `120` | Per-source newNonce budget per source window. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ACCOUNTS_PER_SOURCE` | `20` | Per-source account-creation budget per source window. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_SOURCE` | `60` | Per-source order-creation budget per source window. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNT_MUTATIONS_PER_SOURCE` | `60` | Per-source account update/key-change budget per source window. |
 | `TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS` | `600` | Source-budget window for ACME nonce/account/order creation. |
 | `TRSTCTL_PROTOCOLS_ACME_NONCE_TTL_SECONDS` | `600` | TTL for unused ACME replay nonces before the request-time janitor drops them. |
 | `TRSTCTL_PROTOCOLS_ACME_STATE_TTL_SECONDS` | `86400` | TTL for pending ACME order/authorization/challenge state before the request-time janitor drops it. |
@@ -5601,7 +5604,12 @@ and the bulkheads it complements.
 
 ACME also has protocol-local abuse budgets above because its public nonce/account/order
 routes are not REST API routes. The protocol bulkhead limits concurrent work; the
-ACME quota knobs bound retained ACME protocol state.
+ACME quota knobs bound retained ACME protocol state. Account registration, update,
+and key change accept JWS bodies of at most 16 KiB. Account contacts must be at most
+ten `mailto:` addresses of at most 254 bytes each. Account updates and key changes
+share 600-per-hour tenant and 60-per-hour account budgets backed by PostgreSQL in
+served deployments, plus a 60-per-10-minute source budget. Read-only account lookups do not spend these
+write budgets.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

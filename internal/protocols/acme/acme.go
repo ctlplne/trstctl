@@ -41,7 +41,8 @@ import (
 )
 
 const (
-	maxJWSBody = 1 << 20
+	maxJWSBody        = 1 << 20
+	maxAccountJWSBody = 16 << 10
 
 	statusPending     = "pending"
 	statusReady       = "ready"
@@ -62,19 +63,22 @@ const (
 // per tenant mount, so these limits are tenant-local; source limits are keyed by
 // the request peer address and account limits are keyed by the ACME account URL.
 type QuotaConfig struct {
-	MaxNonces                  int
-	MaxAccounts                int
-	MaxPendingOrders           int
-	MaxPendingAuthorizations   int
-	MaxPendingChallenges       int
-	MaxPendingOrdersPerAccount int
-	MaxNewOrdersPerAccount     int
-	MaxNewNoncesPerSource      int
-	MaxNewAccountsPerSource    int
-	MaxNewOrdersPerSource      int
-	SourceWindow               time.Duration
-	NonceTTL                   time.Duration
-	StateTTL                   time.Duration
+	MaxNonces                     int
+	MaxAccounts                   int
+	MaxPendingOrders              int
+	MaxPendingAuthorizations      int
+	MaxPendingChallenges          int
+	MaxPendingOrdersPerAccount    int
+	MaxNewOrdersPerAccount        int
+	MaxAccountMutationsPerAccount int
+	MaxAccountMutationsPerTenant  int
+	MaxNewNoncesPerSource         int
+	MaxNewAccountsPerSource       int
+	MaxNewOrdersPerSource         int
+	MaxAccountMutationsPerSource  int
+	SourceWindow                  time.Duration
+	NonceTTL                      time.Duration
+	StateTTL                      time.Duration
 }
 
 // DefaultQuotaConfig returns conservative in-process caps for the public ACME
@@ -82,19 +86,22 @@ type QuotaConfig struct {
 // memory-only view from growing without an abuse budget.
 func DefaultQuotaConfig() QuotaConfig {
 	return QuotaConfig{
-		MaxNonces:                  4096,
-		MaxAccounts:                2048,
-		MaxPendingOrders:           4096,
-		MaxPendingAuthorizations:   8192,
-		MaxPendingChallenges:       24576,
-		MaxPendingOrdersPerAccount: 128,
-		MaxNewOrdersPerAccount:     100,
-		MaxNewNoncesPerSource:      120,
-		MaxNewAccountsPerSource:    20,
-		MaxNewOrdersPerSource:      60,
-		SourceWindow:               10 * time.Minute,
-		NonceTTL:                   10 * time.Minute,
-		StateTTL:                   24 * time.Hour,
+		MaxNonces:                     4096,
+		MaxAccounts:                   2048,
+		MaxPendingOrders:              4096,
+		MaxPendingAuthorizations:      8192,
+		MaxPendingChallenges:          24576,
+		MaxPendingOrdersPerAccount:    128,
+		MaxNewOrdersPerAccount:        100,
+		MaxAccountMutationsPerAccount: 60,
+		MaxAccountMutationsPerTenant:  600,
+		MaxNewNoncesPerSource:         120,
+		MaxNewAccountsPerSource:       20,
+		MaxNewOrdersPerSource:         60,
+		MaxAccountMutationsPerSource:  60,
+		SourceWindow:                  10 * time.Minute,
+		NonceTTL:                      10 * time.Minute,
+		StateTTL:                      24 * time.Hour,
 	}
 }
 
@@ -121,6 +128,12 @@ func normalizeQuota(q QuotaConfig) QuotaConfig {
 	if q.MaxNewOrdersPerAccount <= 0 {
 		q.MaxNewOrdersPerAccount = d.MaxNewOrdersPerAccount
 	}
+	if q.MaxAccountMutationsPerAccount <= 0 {
+		q.MaxAccountMutationsPerAccount = d.MaxAccountMutationsPerAccount
+	}
+	if q.MaxAccountMutationsPerTenant <= 0 {
+		q.MaxAccountMutationsPerTenant = d.MaxAccountMutationsPerTenant
+	}
 	if q.MaxNewNoncesPerSource <= 0 {
 		q.MaxNewNoncesPerSource = d.MaxNewNoncesPerSource
 	}
@@ -129,6 +142,9 @@ func normalizeQuota(q QuotaConfig) QuotaConfig {
 	}
 	if q.MaxNewOrdersPerSource <= 0 {
 		q.MaxNewOrdersPerSource = d.MaxNewOrdersPerSource
+	}
+	if q.MaxAccountMutationsPerSource <= 0 {
+		q.MaxAccountMutationsPerSource = d.MaxAccountMutationsPerSource
 	}
 	if q.SourceWindow <= 0 {
 		q.SourceWindow = d.SourceWindow
@@ -288,10 +304,11 @@ type revocation struct {
 }
 
 type sourceBudget struct {
-	resetAt    time.Time
-	newNonce   int
-	newAccount int
-	newOrder   int
+	resetAt         time.Time
+	newNonce        int
+	newAccount      int
+	newOrder        int
+	accountMutation int
 }
 
 // Server is the built-in ACME server. Construct it with New and mount it as an
@@ -426,7 +443,7 @@ func (s *Server) WithQuota(q QuotaConfig) *Server {
 	return s
 }
 
-// WithAccountOrderLimiter installs the account-keyed order/hour limiter. Served
+// WithAccountOrderLimiter installs the account-keyed state-write limiter. Served
 // deployments pass a PostgreSQL-backed limiter; tests and embedded uses default to
 // a process-local token bucket.
 func (s *Server) WithAccountOrderLimiter(l AccountOrderLimiter) *Server {
@@ -887,7 +904,12 @@ func (s *Server) jws(h jwsHandler) http.HandlerFunc {
 
 func (s *Server) jwsWithAccountLock(h jwsHandler, exclusive bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := bodylimit.ReadAll(r.Body, maxJWSBody)
+		maxBody := maxJWSBody
+		if r.URL.Path == "/acme/new-account" || r.URL.Path == "/acme/key-change" ||
+			(strings.HasPrefix(r.URL.Path, "/acme/acct/") && !strings.HasSuffix(r.URL.Path, "/orders")) {
+			maxBody = maxAccountJWSBody
+		}
+		body, err := bodylimit.ReadAll(r.Body, int64(maxBody))
 		if errors.Is(err, bodylimit.ErrTooLarge) {
 			s.problem(w, r, http.StatusRequestEntityTooLarge, "malformed", "request body too large")
 			return
@@ -1046,6 +1068,10 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 			s.problem(w, r, http.StatusBadRequest, "malformed", "cannot parse new-account request")
 			return
 		}
+	}
+	if err := validateAccountContacts(req.Contact); err != nil {
+		s.problem(w, r, http.StatusBadRequest, "invalidContact", err.Error())
+		return
 	}
 
 	thumb := key.Thumbprint()
@@ -1859,6 +1885,9 @@ func (s *Server) keyChange(w http.ResponseWriter, r *http.Request, msg *jose.ACM
 		s.problem(w, r, http.StatusForbidden, "unauthorized", "keyChange account URL does not match the authenticated account")
 		return
 	}
+	if !s.admitAccountMutation(w, r, acct) {
+		return
+	}
 	newThumb := newKey.Thumbprint()
 	s.mu.Lock()
 	if oldKey.Thumbprint() != acct.key.Thumbprint() {
@@ -2095,6 +2124,11 @@ func (s *Server) consumeSourceLocked(source, kind string, now time.Time) bool {
 			return false
 		}
 		b.newOrder++
+	case "account-mutation":
+		if b.accountMutation >= s.quota.MaxAccountMutationsPerSource {
+			return false
+		}
+		b.accountMutation++
 	}
 	return true
 }
