@@ -985,7 +985,7 @@ not this file.
 | `internal/store/secret_scoped_sync.go:437` | SQL column list, no credential (CWE-798) |
 | `internal/store/secret_static_rotation.go:429` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:360` | SQL column identifiers only; this constant contains no credential material. |
-| `internal/store/secret_sync_workload_identity.go:235` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
+| `internal/store/secret_sync_workload_identity.go:236` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/tenant_name_held.go:43` | table names and read queries, not credentials (CWE-798) |
 | `internal/store/tenant_unique_names_test.go:19` | table names and reasons, not credentials (CWE-798) |
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
@@ -1662,8 +1662,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:411` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:435` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:968` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:988` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:970` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:990` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1901,7 +1901,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4559` | closed test table list above |
+| `internal/store/migration_content_test.go:4623` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -1965,8 +1965,8 @@ not this file.
 | `deploy/helm/helm_test.go:1192` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/signer_hsm_test.go:54` | the chart test's own helm template invocation (CWE-78) |
 | `deploy/helm/signer_serviceaccount_test.go:31` | the chart test's own helm template invocation (CWE-78) |
-| `deploy/kubernetes/manifests_test.go:507` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/kubernetes/manifests_test.go:525` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/kubernetes/manifests_test.go:545` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/kubernetes/manifests_test.go:563` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:112` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:300` | arguments are fixed checked-in scripts (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:514` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
@@ -2679,8 +2679,8 @@ not this file.
 | `deploy/helm/helm_test.go:1215` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/signer_hsm_test.go:153` | the test's own golden file (CWE-22) |
 | `deploy/iac/iac_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/kubernetes/manifests_test.go:568` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/kubernetes/manifests_test.go:585` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/kubernetes/manifests_test.go:606` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/kubernetes/manifests_test.go:623` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/local-oidc/oidc_test.go:309` | paths are exact children of t.TempDir (CWE-22) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/aud56_test.go:62` | name comes from the fixed documentation manifest in this test (CWE-22). |
