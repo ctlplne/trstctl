@@ -5,6 +5,8 @@ package enrollproxy
 import (
 	"errors"
 	"net/http"
+	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,10 +25,9 @@ import (
 // anything. That is a property of having built the proxy stateless, and it is
 // what makes failover a routing problem rather than a replication problem.
 //
-// So this is deliberately small. It picks a healthy upstream, notices when one
-// stops answering, and stops sending to it. Anything cleverer — sticky sessions,
-// request replay, partial-state handoff — would be inventing state the design
-// went to some trouble not to have.
+// So this is deliberately small. It picks an upstream, notices when one stops
+// answering, and stops sending to it. The bounded request body can be sent to
+// another endpoint when a transport failure happens before any answer.
 
 // Pool routes enrollment traffic across several control-plane endpoints.
 //
@@ -113,18 +114,35 @@ func newPool(upstreams []string, publicURL string, client *http.Client, cooldown
 // making a real error look like a flapping relay. Only a transport failure —
 // nothing answered — moves to the next endpoint.
 func (p *Pool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !Proxied(r.URL.Path) {
+	cleanPath := path.Clean(r.URL.Path)
+	if !strings.HasPrefix(cleanPath, "/") {
+		cleanPath = "/" + cleanPath
+	}
+	if !Proxied(cleanPath) {
 		p.refused.Add(1)
 		http.Error(w, "not an enrollment protocol path", http.StatusNotFound)
 		return
 	}
+	body, ok := readEnrollmentBody(w, r)
+	if !ok {
+		return
+	}
+	defer clear(body)
+	attempted := make(map[*poolTarget]bool, len(p.targets))
 	for attempt := 0; attempt < len(p.targets); attempt++ {
-		target := p.pick()
+		if r.Context().Err() != nil {
+			return
+		}
+		target := p.pick(attempted)
 		if target == nil {
 			break
 		}
+		attempted[target] = true
 		rec := &failoverRecorder{ResponseWriter: w}
-		target.proxy.ServeHTTP(rec, r)
+		target.proxy.forward(rec, r, cleanPath, body)
+		if r.Context().Err() != nil {
+			return
+		}
 		if !rec.transportFailed {
 			if rec.upstreamResponded {
 				p.markHealthy(target)
@@ -138,20 +156,28 @@ func (p *Pool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "no control-plane endpoint is answering", http.StatusServiceUnavailable)
 }
 
-// pick returns the next endpoint that is not in cooldown.
-func (p *Pool) pick() *poolTarget {
+// pick prefers an endpoint outside cooldown. If all candidates are cooling,
+// the earliest eligible recovery probe can still discover that service is back.
+func (p *Pool) pick(attempted map[*poolTarget]bool) *poolTarget {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := p.now()
+	var probe *poolTarget
 	for i := 0; i < len(p.targets); i++ {
 		t := p.targets[(p.next+i)%len(p.targets)]
+		if attempted[t] {
+			continue
+		}
 		if t.unhealthy && now.Before(t.recoverAt) {
+			if probe == nil || t.recoverAt.Before(probe.recoverAt) {
+				probe = t
+			}
 			continue
 		}
 		p.next = (p.next + i + 1) % len(p.targets)
 		return t
 	}
-	return nil
+	return probe
 }
 
 func (p *Pool) markHealthy(t *poolTarget) {

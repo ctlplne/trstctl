@@ -21,6 +21,7 @@
 package enrollproxy
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -34,6 +35,35 @@ import (
 
 	"trstctl.com/trstctl/internal/netsec"
 )
+
+// Limit memory held by one enrollment request and make a complete body
+// available for a second upstream when the first connection fails.
+const maxEnrollmentBodyBytes = 4 << 20
+
+func readEnrollmentBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	if r.Context().Err() != nil {
+		return nil, false
+	}
+	if r.Body == nil {
+		return nil, true
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxEnrollmentBodyBytes+1))
+	if r.Context().Err() != nil {
+		clear(body)
+		return nil, false
+	}
+	if err != nil {
+		clear(body)
+		http.Error(w, "enrollment request body could not be read", http.StatusBadRequest)
+		return nil, false
+	}
+	if len(body) > maxEnrollmentBodyBytes {
+		clear(body)
+		http.Error(w, "enrollment request body is too large", http.StatusRequestEntityTooLarge)
+		return nil, false
+	}
+	return body, true
+}
 
 // proxiedPrefixes are the protocol paths this proxy forwards.
 //
@@ -167,6 +197,18 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not an enrollment protocol path", http.StatusNotFound)
 		return
 	}
+	body, ok := readEnrollmentBody(w, r)
+	if !ok {
+		return
+	}
+	defer clear(body)
+	p.forward(w, r, cleanPath, body)
+}
+
+func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, cleanPath string, body []byte) {
+	if r.Context().Err() != nil {
+		return
+	}
 
 	// The scheme and host come from the OPERATOR's configured upstream and are
 	// never taken from the request; only the path and query travel, and the path
@@ -177,10 +219,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	outURL.Path = cleanPath
 	outURL.RawQuery = r.URL.RawQuery
 
-	// The body is streamed rather than read: an EST/SCEP payload can be large,
-	// and buffering it here would put a client's CSR in the relay's memory for
-	// no reason.
-	out, err := http.NewRequestWithContext(r.Context(), r.Method, outURL.String(), r.Body)
+	// Each attempt gets its own reader. A real transport failure may have read
+	// the complete signed protocol body before the next endpoint is tried.
+	out, err := http.NewRequestWithContext(r.Context(), r.Method, outURL.String(), bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "upstream request could not be built", http.StatusBadGateway)
 		return
@@ -211,6 +252,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// endpoint it reaches and cannot redirect the relay (CWE-918).
 	resp, err := p.client.Do(out)
 	if err != nil {
+		if r.Context().Err() != nil {
+			// The client left; no upstream health fact was observed.
+			return
+		}
 		if marker, ok := w.(interface{ markTransportFailure() }); ok {
 			// The pool needs an out-of-band fact here. Guessing from HTTP 502
 			// would turn a real 502 response from the control plane into a fake

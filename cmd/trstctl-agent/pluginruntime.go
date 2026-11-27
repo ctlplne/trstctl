@@ -324,6 +324,8 @@ func startEnrollProxy(ctx context.Context, o agentOptions, client *http.Client) 
 	srv := &http.Server{
 		Handler:           pool,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		MaxHeaderBytes:    16 << 10,
 	}
 	done := make(chan struct{})
 	var serving atomic.Bool

@@ -2590,9 +2590,9 @@ not this file.
 | `cmd/trstctl-agent/main.go:2069` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/observe.go:105` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:504` | operator-supplied public issuer certificate (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:534` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:479` | operator-supplied runtime configuration path (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:506` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:536` | operator-supplied public issuer certificate (CWE-22) |
 | `cmd/trstctl-agent/relayloop.go:212` | explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22). |
 | `cmd/trstctl-agent/role_grant_renewal_test.go:149` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/secretrender.go:23` | the operator's --secret-render-config (CWE-22) |
@@ -3961,7 +3961,7 @@ not this file.
 |---|---|
 | `cmd/trstctl/connector.go:426` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `cmd/trstctl/connector.go:446` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
-| `internal/agent/enrollproxy/proxy.go:207` | the destination host is the operator-configured upstream, |
+| `internal/agent/enrollproxy/proxy.go:248` | the destination host is the operator-configured upstream, |
 | `internal/agent/relay/k8ssecret_kind_e2e_test.go:108` | the kind cluster API server the job exports (CWE-918) |
 | `internal/agent/relay/k8ssecret_kind_e2e_test.go:117` | the kind cluster API server the job exports (CWE-918) |
 | `internal/agent/workloadapi/attest_linux_test.go:29` | the parent test hands its own temporary socket's path to this helper process (CWE-918). |

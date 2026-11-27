@@ -3,8 +3,11 @@
 package enrollproxy_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +16,168 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/enrollproxy"
 )
+
+type brokenEnrollmentBody struct{}
+
+func (brokenEnrollmentBody) Read(p []byte) (int, error) { return 0, io.ErrUnexpectedEOF }
+func (brokenEnrollmentBody) Close() error               { return nil }
+
+type enrollmentRoundTrip func(*http.Request) (*http.Response, error)
+
+func (f enrollmentRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func enrollmentResponse(r *http.Request) *http.Response {
+	return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("ok")), Request: r}
+}
+
+func TestClientAbortDoesNotPoisonUpstreamHealth(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		request func() *http.Request
+		want    int
+	}{
+		{name: "cancelled context", request: func() *http.Request {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return httptest.NewRequest(http.MethodPost, "http://relay.local/acme/new-order", nil).WithContext(ctx)
+		}},
+		{name: "broken inbound body", request: func() *http.Request {
+			r := httptest.NewRequest(http.MethodPost, "http://relay.local/acme/new-order", nil)
+			r.Body = brokenEnrollmentBody{}
+			return r
+		}, want: http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			up := newUpstream(t)
+			pool, err := enrollproxy.NewPool([]string{up.srv.URL, up.srv.URL}, up.srv.Client(), time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := httptest.NewRecorder()
+			pool.ServeHTTP(rec, tc.request())
+			if tc.want != 0 && rec.Code != tc.want {
+				t.Fatalf("client failure status = %d, want %d", rec.Code, tc.want)
+			}
+			if h := pool.Health(); h.Failures != 0 || h.Unhealthy != 0 || !h.LastFailoverAt.IsZero() {
+				t.Fatalf("client failure became an upstream outage: %+v", h)
+			}
+			good := httptest.NewRecorder()
+			pool.ServeHTTP(good, httptest.NewRequest(http.MethodGet, "http://relay.local/directory", nil))
+			if good.Code != http.StatusCreated {
+				t.Fatalf("next honest request = %d, want 201", good.Code)
+			}
+		})
+	}
+}
+
+func TestFailoverReplaysCompleteSignedBody(t *testing.T) {
+	const signed = `{"protected":"header","payload":"data","signature":"sig"}`
+	var calls, received int
+	client := &http.Client{Transport: enrollmentRoundTrip(func(r *http.Request) (*http.Response, error) {
+		calls++
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, err
+		}
+		if calls == 1 {
+			return nil, errors.New("upstream connection reset after body")
+		}
+		if string(body) == signed {
+			received++
+		}
+		return enrollmentResponse(r), nil
+	})}
+	pool, err := enrollproxy.NewPool([]string{"https://cp-a.example", "https://cp-b.example"}, client, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	pool.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "http://relay.local/acme/new-order", strings.NewReader(signed)))
+	if rec.Code != http.StatusOK || calls != 2 || received != 1 {
+		t.Fatalf("failover status=%d attempts=%d complete replays=%d", rec.Code, calls, received)
+	}
+}
+
+func TestAllCoolingUpstreamsStillProbeForRecovery(t *testing.T) {
+	var calls int
+	client := &http.Client{Transport: enrollmentRoundTrip(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("upstream restart")
+		}
+		return enrollmentResponse(r), nil
+	})}
+	pool, err := enrollproxy.NewPool([]string{"https://cp-a.example"}, client, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := httptest.NewRecorder()
+	pool.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "http://relay.local/directory", nil))
+	second := httptest.NewRecorder()
+	pool.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "http://relay.local/directory", nil))
+	if first.Code != http.StatusServiceUnavailable || second.Code != http.StatusOK || calls != 2 {
+		t.Fatalf("recovery status=%d then %d, upstream attempts=%d", first.Code, second.Code, calls)
+	}
+	if h := pool.Health(); h.Unhealthy != 0 || h.Healthy != 1 {
+		t.Fatalf("successful probe did not restore health: %+v", h)
+	}
+}
+
+func TestResetSocketMidBodyDoesNotTakeDownEnrollment(t *testing.T) {
+	up := newUpstream(t)
+	pool, err := enrollproxy.NewPool([]string{up.srv.URL, up.srv.URL}, up.srv.Client(), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aborted := make(chan struct{})
+	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pool.ServeHTTP(w, r)
+		if r.Method == http.MethodPost {
+			close(aborted)
+		}
+	}))
+	defer front.Close()
+	conn, err := net.Dial("tcp", strings.TrimPrefix(front.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(conn, "POST /acme/new-order HTTP/1.1\r\nHost: relay.local\r\nContent-Length: 100000\r\n\r\nabc"); err != nil {
+		t.Fatal(err)
+	}
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.SetLinger(0)
+	}
+	_ = conn.Close()
+	select {
+	case <-aborted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("relay did not finish the aborted request")
+	}
+	if h := pool.Health(); h.Failures != 0 || h.Unhealthy != 0 || !h.LastFailoverAt.IsZero() {
+		t.Fatalf("reset client socket poisoned upstream health: %+v", h)
+	}
+	resp, err := http.Get(front.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("honest enrollment after abort = %d, want 201", resp.StatusCode)
+	}
+}
+
+func TestOversizeEnrollmentBodyIsRejectedBeforeForwarding(t *testing.T) {
+	up := newUpstream(t)
+	pool, err := enrollproxy.NewPool([]string{up.srv.URL}, up.srv.Client(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	pool.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "http://relay.local/acme/new-order", strings.NewReader(strings.Repeat("x", (4<<20)+1))))
+	if rec.Code != http.StatusRequestEntityTooLarge || up.gotPath != "" {
+		t.Fatalf("oversize status=%d upstream path=%q, want local 413", rec.Code, up.gotPath)
+	}
+}
 
 // The relay proxies enrollment and decides nothing (epic A4).
 //

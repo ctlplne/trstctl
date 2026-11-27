@@ -1092,6 +1092,12 @@ never live in the API process. What you can do end to end against the running bi
   client retries through another path and its order is still there. A 5xx FROM the
   control plane is NOT a failover trigger: it is an answer, and retrying elsewhere
   would ask a second endpoint the same question while hiding the real error.
+  Client disconnects and incomplete request bodies do not count as upstream
+  failures. The relay reads at most 4 MiB of an enrollment request body so it
+  can replay the exact bytes to a second upstream after a transport failure;
+  larger requests receive HTTP 413. The relay allows 15 seconds to receive an
+  entire request, and probes the earliest recovering endpoint when every
+  upstream is in cooldown.
   Every heartbeat preserves the relay's segment, public URL, verified,
   unavailable, and not-yet-verified upstream counts,
   forwarded/refused/failure counters, and last-forward/last-upstream-failover times
