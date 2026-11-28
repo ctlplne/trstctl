@@ -136,7 +136,7 @@ func TestIdentityRevocationReachesSelectedCAAndRestoredPredecessor(t *testing.T)
 		return nil
 	}}
 	srv := &Server{orch: h.orch, outbox: h.outbox}
-	_, err = srv.buildExternalCAService(Deps{Store: h.store, Log: h.log, ExternalCAs: []ExternalCA{{ID: "selected-ca", Type: "letsencrypt", Name: "selected authority", Factory: func(context.Context) (ca.CA, func(), error) { return upstream, func() { cleaned++ }, nil }}}}, h.handler.idem)
+	_, err = srv.buildExternalCAService(Deps{Store: h.store, Log: h.log, ExternalCAs: []ExternalCA{{ID: "selected-ca", TenantID: h.tenant, Type: "letsencrypt", Name: "selected authority", Factory: func(context.Context) (ca.CA, func(), error) { return upstream, func() { cleaned++ }, nil }}}}, h.handler.idem)
 	if err != nil {
 		t.Fatal(err)
 	}

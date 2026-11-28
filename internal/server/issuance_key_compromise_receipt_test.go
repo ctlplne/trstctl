@@ -79,7 +79,7 @@ func TestCompoundKeyCompromiseDispatcherRetainsExactCAOutcome(t *testing.T) {
 	}}
 	srv := &Server{orch: h.orch, outbox: h.outbox}
 	if _, err := srv.buildExternalCAService(Deps{Store: h.store, Log: h.log, ExternalCAs: []ExternalCA{{
-		ID: "compound-test-ca", Type: "vaultpki", Name: "compound test authority",
+		ID: "compound-test-ca", TenantID: h.tenant, Type: "vaultpki", Name: "compound test authority",
 		Factory: func(context.Context) (ca.CA, func(), error) { return upstream, func() {}, nil },
 	}}}, h.handler.idem); err != nil {
 		t.Fatal(err)

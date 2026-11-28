@@ -55,7 +55,7 @@ func TestIdentityRevocationContinuesAfterPredecessorRefusal(t *testing.T) {
 	}}
 	srv := &Server{orch: h.orch, outbox: h.outbox}
 	_, err = srv.buildExternalCAService(Deps{Store: h.store, Log: h.log, ExternalCAs: []ExternalCA{{
-		ID: "selected-ca", Type: "vaultpki", Name: "selected authority",
+		ID: "selected-ca", TenantID: h.tenant, Type: "vaultpki", Name: "selected authority",
 		Factory: func(context.Context) (ca.CA, func(), error) { return upstream, func() {}, nil },
 	}}}, h.handler.idem)
 	if err != nil {
