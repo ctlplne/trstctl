@@ -280,11 +280,8 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 	// The line comes from the tenant's brand, never from the payload.
 	alert.PoweredBy = branding.PoweredByLine(ctx, alert.TenantID)
 	channels, route, err := d.effectiveChannels(ctx, alert)
-	if err != nil {
-		return err
-	}
 	// Tenant-authored channels carry credential material for this delivery
-	// only (A98); release it once the wave below has joined.
+	// only (A98); release them after any resolution or delivery outcome.
 	defer func() {
 		for _, ch := range channels {
 			if ephemeral, ok := ch.(interface{ Release() }); ok {
@@ -292,6 +289,9 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 			}
 		}
 	}()
+	if err != nil {
+		return err
+	}
 	if len(channels) == 0 {
 		return noReceiverError{}
 	}
@@ -527,13 +527,13 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 		channels := d.channelsByNameStrict(requested)
 		if len(channels) == 0 && d.channelSource != nil {
 			dynamic, err := d.channelSource.ResolveNotificationChannels(ctx, alert.TenantID, requested)
-			if err != nil {
-				return nil, route, fmt.Errorf("notify: resolve channel %q: %w", alert.TargetChannel, err)
-			}
 			channels = append(channels, dynamic...)
+			if err != nil {
+				return channels, route, fmt.Errorf("notify: resolve channel %q: %w", alert.TargetChannel, err)
+			}
 		}
 		if len(missingChannelNames(requested, channels)) != 0 {
-			return nil, route, fmt.Errorf("notify: channel %q is not configured", alert.TargetChannel)
+			return channels, route, fmt.Errorf("notify: channel %q is not configured", alert.TargetChannel)
 		}
 		if alert.Kind == KindComplianceReportReady {
 			return channels, routingEvidence{source: "report_schedule"}, nil
@@ -576,13 +576,13 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 	channels := d.channelsByName(names)
 	if d.channelSource != nil {
 		dynamic, err := d.channelSource.ResolveNotificationChannels(ctx, alert.TenantID, names)
-		if err != nil {
-			return nil, route, fmt.Errorf("notify: resolve tenant channels: %w", err)
-		}
 		channels = append(channels, dynamic...)
+		if err != nil {
+			return channels, route, fmt.Errorf("notify: resolve tenant channels: %w", err)
+		}
 	}
 	if missing := missingChannelNames(names, channels); len(missing) > 0 {
-		return nil, route, fmt.Errorf("notify: requested channel(s) are not configured: %s", strings.Join(missing, ", "))
+		return channels, route, fmt.Errorf("notify: requested channel(s) are not configured: %s", strings.Join(missing, ", "))
 	}
 	return channels, route, nil
 }

@@ -21,6 +21,19 @@ type capturingNotifier struct {
 	err  error
 }
 
+type releasingNotifier struct {
+	capturingNotifier
+	releases int
+}
+
+func (n *releasingNotifier) Release() { n.releases++ }
+
+type fixedChannelResolver struct{ channel notify.Notifier }
+
+func (r fixedChannelResolver) ResolveNotificationChannels(context.Context, string, []string) ([]notify.Notifier, error) {
+	return []notify.Notifier{r.channel}, nil
+}
+
 type contextBlockingNotifier struct {
 	name    string
 	started chan struct{}
@@ -483,6 +496,33 @@ func TestDispatchRejectsMissingPolicyChannel(t *testing.T) {
 	err := d.Dispatch(context.Background(), payload)
 	if err == nil || !strings.Contains(err.Error(), "opsgenie") {
 		t.Fatalf("partially configured route was ACKed, want missing-channel error: %v", err)
+	}
+}
+
+func TestDispatchReleasesBuiltChannelsWhenRouteIsIncomplete(t *testing.T) {
+	for _, kind := range []string{notify.KindUnexpectedIssuance, notify.KindNotificationChannelTest} {
+		t.Run(kind, func(t *testing.T) {
+			channel := &releasingNotifier{capturingNotifier: capturingNotifier{name: "webhook"}}
+			d := notify.NewDispatcher()
+			d.SetChannelResolver(fixedChannelResolver{channel: channel})
+			d.SetDefaultRoutingPolicy(notify.RoutingPolicy{
+				DefaultChannels: []string{"webhook", "missing"},
+			})
+			alert := notify.Alert{Kind: kind, TenantID: "t1"}
+			if kind == notify.KindNotificationChannelTest {
+				alert.TargetChannel = "missing"
+			}
+			payload, err := json.Marshal(alert)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := d.Dispatch(context.Background(), payload); err == nil {
+				t.Fatal("incomplete route was accepted")
+			}
+			if channel.releases != 1 || len(channel.got) != 0 {
+				t.Fatalf("channel release=%d deliveries=%d, want 1 and 0", channel.releases, len(channel.got))
+			}
+		})
 	}
 }
 
