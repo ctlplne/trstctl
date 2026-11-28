@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/server"
 	corestore "trstctl.com/trstctl/internal/store"
 )
@@ -96,7 +97,6 @@ certificate_posture contains {"rule": "provider-template", "severity": "low", "r
 		DeploymentTargets: []api.BaselineDeploymentTarget{{Key: "edge-lb", Name: "edge-lb", Connector: "f5",
 			Config: json.RawMessage(`{"address_ref":"edge-lb"}`)}},
 		NotificationChannels: []api.BaselineNotificationChannel{{ChannelType: "webhook", Label: channelLabel, EndpointURL: "https://hooks.example.com/trstctl"}},
-		Members:              []api.BaselineMember{{Subject: "customer-admin@customer.example", Roles: []string{"operator"}}},
 	}
 }
 
@@ -114,10 +114,8 @@ func TestProviderTemplatesOnboardDriftAndRollout(t *testing.T) {
 	delegations := StaticDelegations{
 		{OperatorID: "op-1", CustomerID: customer, Operations: []Operation{OpRead, OpProvision}},
 	}
-	var orch *orchestrator.Orchestrator
 	srv, err := server.Build(ctx, server.Deps{Store: st, Log: log, EnablePolicyGate: true,
 		ProviderHandlerFactory: func(o *orchestrator.Orchestrator, baselines api.ProviderTenantServices) (http.Handler, error) {
-			orch = o
 			return NewHandler(Config{
 				License: providerLicense(t, 10), Store: NewPGStore(st), Mutations: sink, Activity: NewEventLogActivitySource(log),
 				Authenticator: stubAuth{accept: templateOperatorCredential}, Delegations: delegations,
@@ -138,12 +136,9 @@ func TestProviderTemplatesOnboardDriftAndRollout(t *testing.T) {
 		t.Fatal("the customer's core tenant existed before onboarding; the test would not prove registration")
 	}
 
-	// Recording validates with core's own checks. A role name that is neither a
-	// built-in role nor a well-formed custom role name is refused here; a
-	// well-formed custom role name is checked against the tenant when applied
-	// (TestProviderTemplateNamingAnUndefinedCustomRoleFailsWhenApplied).
+	// Customer workforce roles remain under the customer tenant's control.
 	bad := templateBaseline("Ops")
-	bad.Members[0].Roles = []string{"No Such Role"}
+	bad.Members = []api.BaselineMember{{Subject: "customer-admin@customer.example", Roles: []string{"admin"}}}
 	if rec := templateRequest(t, h, http.MethodPost, "/provider/v1/templates", "record-bad",
 		TemplateRequest{ID: "standard", Name: "Standard customer", Baseline: bad}); rec.Code != http.StatusBadRequest ||
 		!strings.Contains(rec.Body.String(), "template_invalid") {
@@ -164,14 +159,11 @@ func TestProviderTemplatesOnboardDriftAndRollout(t *testing.T) {
 	rec = templateRequest(t, h, http.MethodPost, "/provider/v1/tenants/"+customer+"/template", "onboard",
 		TemplateApplyRequest{TemplateID: "standard"})
 	var onboarded TemplateApplication
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &onboarded) != nil || !onboarded.Complete || len(onboarded.Results) != 6 {
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &onboarded) != nil || !onboarded.Complete || len(onboarded.Results) != 5 {
 		t.Fatalf("onboard = %d %s", rec.Code, rec.Body.String())
 	}
 	if _, err := st.GetTenant(ctx, customer); err != nil {
 		t.Fatalf("onboarding did not register the customer's tenant: %v", err)
-	}
-	if m, err := st.GetTenantMember(ctx, customer, "customer-admin@customer.example"); err != nil || len(m.Roles) != 1 || m.Roles[0] != "operator" {
-		t.Fatalf("templated member = %+v %v", m, err)
 	}
 	if p, err := st.GetActiveProfile(ctx, customer, "web-server"); err != nil || p.Version != 1 {
 		t.Fatalf("templated profile = %+v %v", p, err)
@@ -189,8 +181,18 @@ func TestProviderTemplatesOnboardDriftAndRollout(t *testing.T) {
 		t.Fatalf("drift after onboarding = %+v", d)
 	}
 
-	// The customer's own administrator changes the member's roles.
-	if _, err := orch.UpsertTenantMember(ctx, customer, corestore.TenantMember{Subject: "customer-admin@customer.example", Roles: []string{"viewer"}}); err != nil {
+	// A customer-side channel change appears as drift without changing authority.
+	changed, err := json.Marshal(projections.NotificationChannelUpserted{
+		ID: "webhook", ChannelType: "webhook", Label: "Customer channel", EndpointURL: "https://hooks.example.com/trstctl", Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := log.Append(ctx, events.Event{Type: projections.EventNotificationChannelUpserted, TenantID: customer, Data: changed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Apply(ctx, event); err != nil {
 		t.Fatal(err)
 	}
 	d := drift()
@@ -200,7 +202,7 @@ func TestProviderTemplatesOnboardDriftAndRollout(t *testing.T) {
 			drifted[o.Kind] = o.Status
 		}
 	}
-	if d.Report.InSync || len(drifted) != 1 || drifted[api.BaselineKindMember] != api.BaselineDrifted {
+	if d.Report.InSync || len(drifted) != 1 || drifted[api.BaselineKindNotificationChannel] != api.BaselineDrifted {
 		t.Fatalf("drift after a customer change = %v", drifted)
 	}
 
@@ -220,8 +222,8 @@ func TestProviderTemplatesOnboardDriftAndRollout(t *testing.T) {
 	for _, c := range preview.Tenants[0].Changes {
 		changes[c.Kind] = true
 	}
-	if preview.Tenants[0].TenantID != customer || preview.Tenants[0].CurrentVersion != 1 || len(changes) != 2 ||
-		!changes[api.BaselineKindNotificationChannel] || !changes[api.BaselineKindMember] {
+	if preview.Tenants[0].TenantID != customer || preview.Tenants[0].CurrentVersion != 1 || len(changes) != 1 ||
+		!changes[api.BaselineKindNotificationChannel] {
 		t.Fatalf("preview changes = %+v", preview.Tenants[0])
 	}
 	if rec := templateRequest(t, h, http.MethodPost, "/provider/v1/templates/standard/rollout", "rollout-stale",

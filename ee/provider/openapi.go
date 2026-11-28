@@ -53,7 +53,7 @@ var providerOperations = []providerOperation{
 	{"POST", "/provider/v1/tenants/{id}/rmm-devices/{target}/{device}/actions", "requestProviderTenantRMMAction", "Install, upgrade or remove the agent on a customer's device through its RMM", "202", "ProviderRMMActionRequest", "ProviderRMMAction", false, false, false},
 	{"PUT", "/provider/v1/tenants/{id}/brand", "setProviderTenantBrand", "Replace a customer brand using its current ETag", "204", "ProviderBrandRequest", "", false, false, false},
 	{"GET", "/provider/v1/tenants/{id}/brand", "getProviderTenantBrand", "Read saved customer brand and revision ETag", "200", "", "ProviderBrand", false, false, false},
-	{"POST", "/provider/v1/templates", "recordProviderTemplate", "Record a tenant template version: profiles, lifecycle policy, CA bindings, connector targets, notification channels, member roles and report schedules", "200", "ProviderTemplateRequest", "ProviderTemplate", false, false, false},
+	{"POST", "/provider/v1/templates", "recordProviderTemplate", "Record a tenant template version: profiles, lifecycle policy, CA bindings, connector targets, notification channels and report schedules; customer workforce changes are refused", "200", "ProviderTemplateRequest", "ProviderTemplate", false, false, false},
 	{"GET", "/provider/v1/templates", "listProviderTemplates", "List the latest version of every tenant template", "200", "", "ProviderTemplateList", false, false, false},
 	{"GET", "/provider/v1/templates/{id}", "getProviderTemplate", "Read a tenant template's versions and the delegated customers bound to it", "200", "", "ProviderTemplateDetail", false, false, false},
 	{"POST", "/provider/v1/templates/{id}/rollout/preview", "previewProviderTemplateRollout", "Preview what applying a template version changes in each customer, writing nothing", "200", "ProviderTemplateRolloutRequest", "ProviderTemplateRolloutPreview", false, false, false},
@@ -224,7 +224,7 @@ func providerOpenAPISchemas() map[string]any {
 	brandRequest["additionalProperties"] = false
 	brandRequest["description"] = "A customer's white-label brand. A field not listed here is refused. " +
 		"\"Powered by trstctl\" shows beside every white-label brand and is not a brand setting."
-	baselineObject := map[string]any{"type": "object", "description": "A tenant baseline: profiles, policy, issuers (CA bindings), deployment_targets (connector defaults), notification_channels, custom_roles (tenant custom roles: name, description, permissions; applied before members), members (role grants) and report_schedules, each in the shape the core API accepts for that object."}
+	baselineObject := map[string]any{"type": "object", "description": "A Provider tenant baseline: profiles, policy, issuers (CA bindings), deployment_targets (connector defaults), notification_channels and report_schedules. The members and custom_roles sections are refused; customer workforce authority is managed in the tenant access API."}
 	baselineState := object(map[string]any{"kind": str, "key": str, "object_id": str,
 		"status":          map[string]any{"type": "string", "enum": []string{"in_sync", "drifted", "missing"}},
 		"expected_digest": str, "actual_digest": str, "detail": str}, "kind", "key", "status", "expected_digest")

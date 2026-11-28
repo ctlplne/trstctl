@@ -4,7 +4,7 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -14,11 +14,8 @@ import (
 	"trstctl.com/trstctl/internal/server"
 )
 
-// A template may name a tenant custom role. Recording it checks only that the
-// name is well formed, since no tenant is bound; applying it to a tenant that
-// has not defined the role fails that member with the reason, and the tenant
-// gains no member holding a role that grants nothing.
-func TestProviderTemplateNamingAnUndefinedCustomRoleFailsWhenApplied(t *testing.T) {
+// Customer role definitions and assignments stay with the customer tenant.
+func TestProviderTemplateLeavesCustomerRolesWithTenant(t *testing.T) {
 	ctx := t.Context()
 	st, log, sink := isolatedTemplateFixture(t)
 	customer := CustomerID("template-custom-role")
@@ -43,27 +40,29 @@ func TestProviderTemplateNamingAnUndefinedCustomRoleFailsWhenApplied(t *testing.
 		t.Fatalf("provision = %d %s", rec.Code, rec.Body.String())
 	}
 	baseline := templateBaseline("Ops")
-	baseline.Members[0].Roles = []string{"payments-ops"}
+	baseline.Members = []api.BaselineMember{{Subject: "customer-admin@customer.example", Roles: []string{"payments-ops"}}}
+	if _, err := NewService(Config{}).applyTemplate(ctx, Operator{}, customer, TenantTemplate{Baseline: baseline}); !errors.Is(err, ErrTemplateInvalid) {
+		t.Fatalf("retained template member applied: %v", err)
+	}
 	if rec := templateRequest(t, h, http.MethodPost, "/provider/v1/templates", "record-custom-role",
-		TemplateRequest{ID: "custom-role", Name: "Custom role customer", Baseline: baseline}); rec.Code != http.StatusOK {
-		t.Fatalf("a template naming a well-formed custom role was refused: %d %s", rec.Code, rec.Body.String())
+		TemplateRequest{ID: "custom-role", Name: "Custom role customer", Baseline: baseline}); rec.Code != http.StatusBadRequest ||
+		!strings.Contains(rec.Body.String(), "template_invalid") {
+		t.Fatalf("template member grant = %d %s", rec.Code, rec.Body.String())
 	}
-	rec := templateRequest(t, h, http.MethodPost, "/provider/v1/tenants/"+customer+"/template", "onboard-custom-role",
-		TemplateApplyRequest{TemplateID: "custom-role"})
-	var applied TemplateApplication
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &applied) != nil || applied.Complete {
-		t.Fatalf("onboarding with an undefined custom role = %d %s", rec.Code, rec.Body.String())
+	baseline.Members = nil
+	baseline.CustomRoles = []api.BaselineCustomRole{{Name: "payments-ops", Permissions: []string{"certs:read"}}}
+	if _, err := NewService(Config{}).applyTemplate(ctx, Operator{}, customer, TenantTemplate{Baseline: baseline}); !errors.Is(err, ErrTemplateInvalid) {
+		t.Fatalf("retained template role definition applied: %v", err)
 	}
-	var member *api.BaselineObjectResult
-	for i := range applied.Results {
-		if applied.Results[i].Kind == api.BaselineKindMember {
-			member = &applied.Results[i]
-		}
+	if rec := templateRequest(t, h, http.MethodPost, "/provider/v1/templates", "record-role-definition",
+		TemplateRequest{ID: "custom-role", Name: "Custom role customer", Baseline: baseline}); rec.Code != http.StatusBadRequest ||
+		!strings.Contains(rec.Body.String(), "template_invalid") {
+		t.Fatalf("template role definition = %d %s", rec.Code, rec.Body.String())
 	}
-	if member == nil || member.Outcome != api.BaselineFailed || !strings.Contains(member.Error, "unknown role payments-ops") {
-		t.Fatalf("member result = %+v", member)
+	if versions, err := NewPGStore(st).TenantTemplateVersions(ctx, "custom-role"); err != nil || len(versions) != 0 {
+		t.Fatalf("customer authority template was recorded: %d versions, %v", len(versions), err)
 	}
 	if m, err := st.GetTenantMember(ctx, customer, "customer-admin@customer.example"); err == nil {
-		t.Fatalf("the tenant gained a member holding an undefined role: %+v", m)
+		t.Fatalf("the customer gained an unapproved template member: %+v", m)
 	}
 }

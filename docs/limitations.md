@@ -4767,10 +4767,10 @@ than sending an operator looking for a credential that was never there.
   of customer objects, `/provider/v1/tenants/{id}/template` onboards a customer
   from one (registering its core tenant when needed), `.../template-drift` reads
   its drift, and a rollout applies a new version across customers after a
-  preview whose fingerprint it must match. What a template can say is what core
-  holds: "roles" are role grants to named members, built-in or a custom role
-  the template defines (`custom_roles`, A186-L2) or the tenant already has; a CA
-  binding is an issuer record
+  preview whose fingerprint it must match. Provider templates refuse `members`
+  and `custom_roles`; customer administrators manage those through the tenant
+  access API. Previously recorded templates with either section also refuse
+  application. A CA binding is an issuer record
   (a changed chain binds a new issuer and the old one stays for what it issued);
   connector defaults are deployment targets. A template's report schedule can
   carry `dispatch`, announcing each run on the customer's channel of that type.

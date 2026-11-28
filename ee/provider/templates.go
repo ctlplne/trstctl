@@ -17,11 +17,11 @@ import (
 
 // Tenant templates hold a Provider's customer tenants to a versioned set of
 // tenant objects: certificate profiles, the lifecycle policy, CA bindings,
-// connector targets, notification channels, member role grants and report
-// schedules (core's tenant baseline). A template version is immutable. A
-// customer is onboarded from a version, which registers its core tenant when
-// needed and writes each object through the customer's own commands; its drift
-// is read back from its own records; and a new version rolls out across the
+// connector targets, notification channels and report schedules (core's tenant
+// baseline). Customer members and roles stay under customer administration.
+// A template version is immutable. Applying it registers the customer's core
+// tenant when needed. It writes objects through the customer's own commands.
+// Drift is read from customer records, and a new version rolls out across the
 // customers that use the template after a preview, each customer's application
 // an audited Provider event.
 
@@ -158,6 +158,16 @@ func (s *Service) templatesReady() error {
 
 func templateScope(templateID string) string { return "template:" + templateID }
 
+// Customer workforce authority is managed in the customer tenant. Provider
+// templates configure its infrastructure, but cannot create standing members
+// or define roles that would later be assigned to them.
+func validateTemplateCustomerAuthority(b api.TenantBaseline) error {
+	if len(b.Members) != 0 || len(b.CustomRoles) != 0 {
+		return fmt.Errorf("%w: customer members and roles must be managed by the customer tenant", ErrTemplateInvalid)
+	}
+	return nil
+}
+
 // RecordTemplate validates a template with core's own checks and records it as
 // a new immutable version; an unchanged definition returns the latest version.
 func (s *Service) RecordTemplate(ctx context.Context, actor Operator, req TemplateRequest) (TenantTemplate, error) {
@@ -179,6 +189,9 @@ func (s *Service) RecordTemplate(ctx context.Context, actor Operator, req Templa
 	}
 	if baselineObjectCount(req.Baseline) == 0 {
 		return TenantTemplate{}, errTemplateBaselineEmpty
+	}
+	if err := validateTemplateCustomerAuthority(req.Baseline); err != nil {
+		return TenantTemplate{}, err
 	}
 	if err := s.templates.Baselines.ValidateTenantBaseline(req.Baseline); err != nil {
 		return TenantTemplate{}, fmt.Errorf("%w: %v", ErrTemplateInvalid, err)
@@ -310,6 +323,9 @@ func (s *Service) ApplyTemplate(ctx context.Context, actor Operator, customerID 
 }
 
 func (s *Service) applyTemplate(ctx context.Context, actor Operator, customerID string, tmpl TenantTemplate) (TemplateApplication, error) {
+	if err := validateTemplateCustomerAuthority(tmpl.Baseline); err != nil {
+		return TemplateApplication{}, err
+	}
 	tenant, err := s.store.Tenant(ctx, customerID)
 	if err != nil {
 		return TemplateApplication{}, err

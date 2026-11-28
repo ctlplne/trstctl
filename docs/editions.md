@@ -461,14 +461,15 @@ accepts for it:
 | `issuers` | CA bindings: the X.509 chain (or SSH CA key) its identities are issued under |
 | `deployment_targets` | connector targets it deploys to by default |
 | `notification_channels` | its channel of each type |
-| `custom_roles` | tenant custom roles: name, description and permissions from the custom role vocabulary, defined before the members that hold them (A186-L2) |
-| `members` | role grants to named members: built-in roles, or custom roles the template or the tenant defines |
+| `custom_roles` | refused in Provider templates; customer administrators define tenant roles in the core access API |
+| `members` | refused in Provider templates; customer administrators assign tenant members in the core access API |
 | `report_schedules` | scheduled compliance reports |
 
 `POST /provider/v1/templates` records a version (`templates:write`): the
-template is checked with the same validation the customer's own requests get,
-and an unchanged definition returns the latest version instead of minting
-another. `GET /provider/v1/templates` and `GET /provider/v1/templates/{id}` read
+template is checked with the same validation the customer's own requests get.
+Customer workforce changes are refused before a version is recorded. An
+unchanged definition returns the latest version instead of minting another.
+`GET /provider/v1/templates` and `GET /provider/v1/templates/{id}` read
 them, with the customers bound to each that the operator may see.
 
 `POST /provider/v1/tenants/{id}/template` onboards a delegated customer
