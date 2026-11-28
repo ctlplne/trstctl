@@ -125,6 +125,10 @@ func (c *Client) list(ctx context.Context, collectionPath, labelSelector string)
 				return nil, "", fmt.Errorf("k8s: list %s: a single resource exceeds the API response limit: %w", collectionPath, err)
 			}
 			pageSize = max(1, pageSize/2)
+			// A continuation token belongs to its original limit. Start a fresh
+			// snapshot so every later page uses the same reduced limit.
+			items = nil
+			snapshot, next = "", ""
 			continue
 		}
 		if err != nil {

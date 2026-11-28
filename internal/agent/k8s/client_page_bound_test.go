@@ -66,6 +66,63 @@ func TestListReducesPageSizeUntilSnapshotFits(t *testing.T) {
 	}
 }
 
+func TestListRestartsSnapshotAfterLaterPageNeedsSmallerLimit(t *testing.T) {
+	type request struct {
+		limit, offset int
+	}
+	var requests []request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		offset, _ := strconv.Atoi(r.URL.Query().Get("continue"))
+		requests = append(requests, request{limit, offset})
+		if limit > listPageSize/2 && offset == 2 {
+			_, _ = w.Write([]byte(strings.Repeat("x", maxAPIBody+1)))
+			return
+		}
+		end := min(offset+2, 4)
+		version := "28"
+		if limit > listPageSize/2 {
+			version = "27"
+		}
+		page := struct {
+			Metadata struct {
+				ResourceVersion string `json:"resourceVersion"`
+				Continue        string `json:"continue,omitempty"`
+			} `json:"metadata"`
+			Items []map[string]any `json:"items"`
+		}{}
+		page.Metadata.ResourceVersion = version
+		if end < 4 {
+			page.Metadata.Continue = strconv.Itoa(end)
+		}
+		for n := offset; n < end; n++ {
+			page.Items = append(page.Items, map[string]any{
+				"metadata": map[string]any{"name": version + "-" + strconv.Itoa(n)},
+			})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(page)
+	}))
+	defer server.Close()
+	client := New(server.URL, "", "", server.Client())
+	items, rv, err := client.list(context.Background(), "/apis/example/v1/items", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rv != "28" || len(items) != 4 || objectName(items[0]) != "28-0" {
+		t.Fatalf("snapshot = %q, items = %v; want four items from version 28", rv, items)
+	}
+	want := []request{{500, 0}, {500, 2}, {250, 0}, {250, 2}}
+	if len(requests) != len(want) {
+		t.Fatalf("requests = %v, want %v", requests, want)
+	}
+	for n, got := range requests {
+		if got != want[n] {
+			t.Fatalf("requests = %v, want %v", requests, want)
+		}
+	}
+}
+
 func TestListReportsSingleResourceCapacityFailure(t *testing.T) {
 	var limits []int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
