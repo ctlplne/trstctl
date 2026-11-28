@@ -28,7 +28,7 @@ func TestEventProtectionReadinessDetectsCurrentCustodyLossAtWarmCheckpoint(t *te
 			st := newServerTestStore(t)
 			cfg := eventProtectionRuntimeConfigFixture(t)
 			key := testAuditSigningKey(t)
-			log, custody, err := openConfiguredEventSource(t.Context(), cfg, st, key, true, nil)
+			log, custody, err := openConfiguredEventSourceFixture(t, cfg, st, key, true, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -124,7 +124,7 @@ func TestEventProtectionReadinessDetectsCurrentCustodyLossAtWarmCheckpoint(t *te
 				} else {
 					cfg.Privacy.EventProtection.KeyDirectory = ""
 				}
-				log, custody, err = openConfiguredEventSource(t.Context(), cfg, st, key, true, nil)
+				log, custody, err = openConfiguredEventSourceFixture(t, cfg, st, key, true, nil)
 				if err != nil {
 					if !errors.Is(err, eventprotect.ErrKey) && !errors.Is(err, eventprivacy.ErrSource) {
 						t.Fatalf("warm source refused for unrelated cause: %v", err)
@@ -147,7 +147,7 @@ func TestEventProtectionReadinessDetectsCurrentCustodyLossAtWarmCheckpoint(t *te
 				}
 				move()
 			}
-			code, checks := projectionReadiness(t, srv.Handler())
+			code, checks := waitProjectionReadiness(t, srv.Handler(), http.StatusServiceUnavailable)
 			if code != http.StatusServiceUnavailable || checks["event_key_custody"] == "" || checks["event_key_custody"] == "ok" {
 				t.Fatalf("current custody loss hidden by warm SQL/head-only probes: HTTP%d checks%v", code, checks)
 			}
@@ -161,7 +161,7 @@ func TestEventProtectionReadinessDetectsCurrentCustodyLossAtWarmCheckpoint(t *te
 					t.Fatal("readiness recreated missing material")
 				}
 				restore()
-				code, checks = projectionReadiness(t, srv.Handler())
+				code, checks = waitProjectionReadiness(t, srv.Handler(), http.StatusOK)
 				if code != http.StatusOK || checks["event_key_custody"] != "ok" {
 					t.Fatalf("restored original custody did not recover readiness: HTTP%d checks%v", code, checks)
 				}

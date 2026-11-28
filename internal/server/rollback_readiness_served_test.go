@@ -19,7 +19,7 @@ import (
 // rollback.
 func TestServedConnectorTargetReportsRollbackReadiness(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
-	token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read")
+	token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "secrets:read")
 	create := func(name, connector string, cfg map[string]any) string {
 		t.Helper()
 		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", token, map[string]any{

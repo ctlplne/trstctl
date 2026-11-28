@@ -53,6 +53,8 @@ func TestServedReadinessStaysReadyWhileTheRequestPoolIsSaturated(t *testing.T) {
 	}
 
 	// With the request pool exhausted, readiness still answers 200, promptly.
+	// Let the healthy public sample expire so this request exercises the busy pool.
+	time.Sleep(1100 * time.Millisecond)
 	began := time.Now()
 	st, body := getReadyz(t, h, 15*time.Second)
 	elapsed := time.Since(began)

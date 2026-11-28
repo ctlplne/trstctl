@@ -19,14 +19,9 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
-// A169-L2 Done-when (served readiness): /readyz asks the signer how each
-// workload-identity managed-key provider's token exchange went since the
-// signer started. While Entra refuses one, readiness still answers 200 —
-// CA signing and every other provider keep working — with
-// managed_key_providers degraded, naming the provider and the closed reason;
-// once the signer's retry succeeds the check reads ok. An unreachable signer
-// is the signer check's to report, never this one's.
-func TestServedReadinessNamesAManagedKeyProviderThatCannotAuthenticateA169L2(t *testing.T) {
+// Public readiness reports the provider verdict while the operator diagnostic
+// retains its provider and closed reason. A successful retry restores both.
+func TestServedReadinessSeparatesProviderVerdictAndDiagnostic(t *testing.T) {
 	var refuse atomic.Int32
 	refuse.Store(1 << 30)
 	srv := signing.NewServer(signing.WithManagedKeyReadinessBackoff(10*time.Millisecond, 20*time.Millisecond),
@@ -62,14 +57,15 @@ func TestServedReadinessNamesAManagedKeyProviderThatCannotAuthenticateA169L2(t *
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		code, verdict := ready()
-		if strings.Contains(verdict, "token_exchange_refused") {
-			if code != http.StatusOK || !strings.HasPrefix(verdict, "degraded") || !strings.Contains(verdict, "azure-key-vault (token_exchange_refused)") {
-				t.Fatalf("while Entra refuses: %d %q", code, verdict)
+		_, detailed, _ := readiness.EvaluateDetailed(context.Background())
+		if strings.Contains(detailed["managed_key_providers"], "token_exchange_refused") && verdict == "degraded" {
+			if code != http.StatusOK || !strings.Contains(detailed["managed_key_providers"], "azure-key-vault (token_exchange_refused)") {
+				t.Fatalf("provider readiness: public=%d %q operator=%q", code, verdict, detailed["managed_key_providers"])
 			}
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("readiness never named the refused provider: %d %q", code, verdict)
+			t.Fatalf("provider diagnostic did not appear: public=%d %q operator=%q", code, verdict, detailed["managed_key_providers"])
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

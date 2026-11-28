@@ -10,28 +10,35 @@ readiness-probed.
 | Path | Purpose | Auth |
 | --- | --- | --- |
 | `/healthz` | **Liveness** — the process is up and the signer (if configured) is reachable. | none |
-| `/readyz` | **Readiness** — probes PostgreSQL, NATS JetStream, the durable projection tail, the signer, whether the SSH revocation list can be served current (`ssh_krl`, when the SSH CA is served), and whether audit history can be read (`audit_read`); returns `200` when all are trustworthy, `503` with a per-dependency body otherwise. | none |
+| `/readyz` | **Readiness** — probes PostgreSQL, NATS JetStream, the durable projection tail, the signer, whether the SSH revocation list can be served current (`ssh_krl`, when the SSH CA is served), and whether audit history can be read (`audit_read`); returns `200` when all are trustworthy, `503` with a per-dependency verdict otherwise. | none |
 | `/metrics` | **Prometheus** metrics in the text exposition format. | none |
 
 `/readyz` is the Kubernetes readiness-probe target: a dropped dependency flips it
 to 503 and removes the pod from rotation, while `/healthz` (liveness) stays green
-so a transient blip does not get the pod killed. For external NATS, readiness also
-checks the event stream's durability: fewer JetStream replicas than
+so a transient blip does not get the pod killed. Readiness shares concurrent
+probe work and caches its public verdict for one second. Each public check says
+only `ok`, `degraded`, or `failed`; the authenticated
+`GET /api/v1/platform/system` readout carries the detailed operator diagnosis.
+For external NATS, readiness also checks the event stream's durability: fewer
+JetStream replicas than
 `TRSTCTL_NATS_REPLICAS` degrades `/readyz` rather than serve with a weaker RPO than
 configured. A managed-key provider whose credential comes from a workload identity
 (`managed_keys.azure.workload_identity`, `managed_keys.gcp.workload_identity`) is
 checked too (A169-L2): the signer exchanges the platform token as it starts and
 retries a failed exchange with backoff (15 seconds, doubling to 5 minutes) until one
 succeeds, and while one has not, `/readyz` answers `200` with `managed_key_providers`
-degraded, naming the provider and a closed reason — `federated_token_unreadable`,
+degraded. The authenticated system readout names the provider and a closed reason —
+`federated_token_unreadable`,
 `token_exchange_refused`, `token_exchange_unreachable` or `token_exchange_failed`,
 never the identity provider's own words. CA signing and the other providers keep
-working, so it does not take the pod out of rotation. Projection readiness reads the persisted projection checkpoint. If
+working, so it does not take the pod out of rotation. Projection readiness reads
+the persisted projection checkpoint. If
 the tail cannot apply a sequence, it records that failed sequence before it
 retries and `/readyz` returns 503. A normal short-lived positive lag does not flap
 readiness; an unresolved failed consumer sequence degrades it even when live
-command projection has moved the relational checkpoint ahead. The response contains safe sequence and lag numbers, not
-the stored database error or event payload. Set `TRSTCTL_CA_FILE` to the inspected
+command projection has moved the relational checkpoint ahead. The authenticated
+system readout contains sequence and lag numbers, not the stored database error
+or event payload. Set `TRSTCTL_CA_FILE` to the inspected
 public evaluation CA or the operator-managed production CA before probing HTTPS;
 do not train monitors to disable certificate verification.
 

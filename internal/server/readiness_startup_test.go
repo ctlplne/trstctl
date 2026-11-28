@@ -5,7 +5,6 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +33,17 @@ func TestReadinessProvesSSHKRLAndAuditReads(t *testing.T) {
 		}
 		return resp.StatusCode, out.Checks
 	}
+	waitReadyz := func(want int) (int, map[string]string) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			code, checks := readyz()
+			if code == want || time.Now().After(deadline) {
+				return code, checks
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+	}
 	code, checks := readyz()
 	if code != http.StatusOK || checks["ssh_krl"] != "ok" || checks["audit_read"] != "ok" {
 		t.Fatalf("healthy readiness = %d %v", code, checks)
@@ -45,20 +55,16 @@ func TestReadinessProvesSSHKRLAndAuditReads(t *testing.T) {
 	ssh.applied = ssh.verifiedSnapshot.LastSequence + 1
 	ssh.syncedFrom = time.Time{}
 	ssh.syncMu.Unlock()
-	code, checks = readyz()
-	if code != http.StatusServiceUnavailable || !strings.Contains(checks["ssh_krl"], "cannot be brought up to date") || checks["audit_read"] != "ok" {
+	code, checks = waitReadyz(http.StatusServiceUnavailable)
+	if code != http.StatusServiceUnavailable || checks["ssh_krl"] != "failed" || checks["audit_read"] != "ok" {
 		t.Fatalf("readiness with an unservable KRL = %d %v", code, checks)
-	}
-	// The probe never copies the internal cause into the public response.
-	if strings.Contains(checks["ssh_krl"], "generation") {
-		t.Fatalf("readiness leaked the KRL's internal state: %q", checks["ssh_krl"])
 	}
 
 	ssh.syncMu.Lock()
 	ssh.applied = verifiedCursor
 	ssh.syncedFrom = time.Time{}
 	ssh.syncMu.Unlock()
-	if code, checks = readyz(); code != http.StatusOK || checks["ssh_krl"] != "ok" {
+	if code, checks = waitReadyz(http.StatusOK); code != http.StatusOK || checks["ssh_krl"] != "ok" {
 		t.Fatalf("readiness after the KRL recovered = %d %v", code, checks)
 	}
 }

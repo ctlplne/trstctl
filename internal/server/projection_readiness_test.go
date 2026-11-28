@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/api"
@@ -85,18 +86,8 @@ func TestProjectionTailFailureDegradesServedReadinessUntilCheckpointCoversIt(t *
 	if readyCode != http.StatusServiceUnavailable {
 		t.Fatalf("/readyz = %d, want 503; checks=%v", readyCode, readyChecks)
 	}
-	diagnostic := readyChecks["projection"]
-	for _, want := range []string{
-		fmt.Sprintf("applied_sequence=%d", health.AppliedSequence),
-		fmt.Sprintf("failed_sequence=%d", poison.Sequence),
-		fmt.Sprintf("lag=%d", wantLag),
-	} {
-		if !strings.Contains(diagnostic, want) {
-			t.Fatalf("projection readiness diagnostic %q does not contain %q", diagnostic, want)
-		}
-	}
-	if strings.Contains(diagnostic, rawFailure) || strings.Contains(diagnostic, "secret-password") || strings.Contains(diagnostic, "db.internal") {
-		t.Fatalf("/readyz exposed the persisted projection error: %q", diagnostic)
+	if got := readyChecks["projection"]; got != "failed" {
+		t.Fatalf("public projection verdict = %q, want failed", got)
 	}
 
 	token := seedScopedToken(t, st, tenantID, string(authz.AccessRead))
@@ -111,8 +102,17 @@ func TestProjectionTailFailureDegradesServedReadinessUntilCheckpointCoversIt(t *
 		}
 	}
 	projection := readout.Dependencies[2]
-	if projection.Ready || projection.Error != diagnostic {
-		t.Fatalf("system projection dependency = %+v, want same failed diagnostic as /readyz %q", projection, diagnostic)
+	if projection.Ready {
+		t.Fatalf("system projection dependency = %+v, want failed", projection)
+	}
+	for _, want := range []string{
+		fmt.Sprintf("applied_sequence=%d", health.AppliedSequence),
+		fmt.Sprintf("failed_sequence=%d", poison.Sequence),
+		fmt.Sprintf("lag=%d", wantLag),
+	} {
+		if !strings.Contains(projection.Error, want) {
+			t.Fatalf("authenticated projection diagnostic %q does not contain %q", projection.Error, want)
+		}
 	}
 	if strings.Contains(projection.Error, rawFailure) {
 		t.Fatalf("system readout exposed the persisted projection error: %q", projection.Error)
@@ -135,7 +135,7 @@ func TestProjectionTailFailureDegradesServedReadinessUntilCheckpointCoversIt(t *
 		t.Fatal("test precondition lost: recovery must retain ordinary positive lag")
 	}
 
-	readyCode, readyChecks = projectionReadiness(t, srv.Handler())
+	readyCode, readyChecks = waitProjectionReadiness(t, srv.Handler(), http.StatusOK)
 	if readyCode != http.StatusOK || readyChecks["projection"] != "ok" {
 		t.Fatalf("recovered /readyz = %d checks=%v, want 200 with projection=ok", readyCode, readyChecks)
 	}
@@ -187,7 +187,7 @@ func TestProjectionTailFailureBehindReadModelCheckpointDegradesReadiness(t *test
 		t.Fatalf("checkpoint ahead of failed durable consumer = %+v, want applied=%d failed=%d", health, newer.Sequence, older.Sequence)
 	}
 	code, checks := projectionReadiness(t, srv.Handler())
-	if code != http.StatusServiceUnavailable || !strings.Contains(checks["projection"], fmt.Sprintf("failed_sequence=%d", older.Sequence)) {
+	if code != http.StatusServiceUnavailable || checks["projection"] != "failed" {
 		t.Fatalf("readiness during older consumer failure = %d, %+v", code, checks)
 	}
 	// The tail has now replayed that exact old message. Advancing with its
@@ -200,7 +200,7 @@ func TestProjectionTailFailureBehindReadModelCheckpointDegradesReadiness(t *test
 	if err != nil || health.FailedSequence != 0 || health.AppliedSequence != newer.Sequence {
 		t.Fatalf("older consumer recovery = %+v, %v", health, err)
 	}
-	code, checks = projectionReadiness(t, srv.Handler())
+	code, checks = waitProjectionReadiness(t, srv.Handler(), http.StatusOK)
 	if code != http.StatusOK || checks["projection"] != "ok" {
 		t.Fatalf("readiness after exact replay = %d, %+v", code, checks)
 	}
@@ -218,6 +218,18 @@ func projectionReadiness(t *testing.T, handler http.Handler) (int, map[string]st
 		t.Fatalf("decode /readyz: %v body=%s", err, rec.Body.String())
 	}
 	return rec.Code, body.Checks
+}
+
+func waitProjectionReadiness(t *testing.T, handler http.Handler, want int) (int, map[string]string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		code, checks := projectionReadiness(t, handler)
+		if code == want || time.Now().After(deadline) {
+			return code, checks
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }
 
 func projectionSystemReadout(t *testing.T, handler http.Handler, token, tenantID string) api.SystemReadout {

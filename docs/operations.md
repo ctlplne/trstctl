@@ -279,13 +279,14 @@ unreachable. The datastore-reading checks (`nats` samples, `projection`,
 `secret_sync_recovery_authority`, `application_secret_reconciliation`) read
 through the request pool under a one-second budget. When one of them is shed by
 load (the store's busy signal, or the budget runs out) `/readyz` still answers
-**200** so the replica stays in rotation, but the check reads `degraded: …`,
+**200** so the replica stays in rotation, but the check reads `degraded`,
 the body carries a `degraded` list naming the checks, and
 `trstctl_readiness_probe_shed{check}` is 1 for as long as it lasts. Shedding
 that outlasts the **two-minute grace window** fails the check: a datastore that
 has been too slow for that long is a stall, not a burst. A check that fails for
 a real reason (a stalled projection, a missing recovery authority) fails
-readiness immediately, as before.
+readiness on the next evaluation. The public result is shared for one second;
+read the authenticated system readout for the exact diagnostic.
 
 For **503 with `sqlstate` 40001 or 40P01** and `retryable: false`, PostgreSQL
 rolled back one transaction after a concurrent write. That does not prove the
