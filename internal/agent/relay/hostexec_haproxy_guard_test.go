@@ -144,6 +144,14 @@ func TestHostExecutorBindsHAProxyMaterialToCertificateAndKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
+	commandBytes, err := os.ReadFile(command) // #nosec G304 -- copy the resolved local test executable into a regular fixture file.
+	if err != nil {
+		t.Fatal(err)
+	}
+	command = filepath.Join(root, "true")
+	if err := os.WriteFile(command, commandBytes, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	crtPath, configPath := filepath.Join(root, "server.pem"), filepath.Join(root, "haproxy.cfg")
 	target, err := json.Marshal(map[string]string{"crt_path": crtPath, "config_path": configPath})
 	if err != nil {
