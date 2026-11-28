@@ -20,6 +20,7 @@ func a261CanonicalEvaluation() (events.Event, pamAutoApprovalRequest, error) {
 	rule.ID = "11111111-1111-4111-8111-111111111111"
 	rule.Name = "Routine read"
 	rule.Revision = 1
+	rule.SavedBy = "review-author"
 	matched, ok := pamAutoApprovalMatches(rule, req)
 	if !ok {
 		return events.Event{}, req, errors.New("fixture rule does not match")
@@ -60,6 +61,12 @@ func TestCanonicalAutoEvaluationRejectsChangedAuthorityA261(t *testing.T) {
 			var v projections.PAMAutoApprovalEvaluated
 			_ = json.Unmarshal(e.Data, &v)
 			v.Facts.Target = "postgres/other"
+			e.Data, _ = json.Marshal(v)
+		}},
+		{"missing reviewer", func(e *events.Event) {
+			var v projections.PAMAutoApprovalEvaluated
+			_ = json.Unmarshal(e.Data, &v)
+			v.Rule.SavedBy = ""
 			e.Data, _ = json.Marshal(v)
 		}},
 	}

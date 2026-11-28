@@ -30,15 +30,72 @@ const (
 )
 
 var (
-	ErrApprovalRequestNotFound = errors.New("store: approval request not found")
-	ErrApprovalDigestMismatch  = errors.New("store: approval intent digest mismatch")
-	ErrApprovalSelfDecision    = errors.New("store: approval requester cannot decide their own request")
-	ErrApprovalExpired         = errors.New("store: approval request expired")
-	ErrApprovalSuperseded      = errors.New("store: approval request superseded")
-	ErrApprovalConsumed        = errors.New("store: approval authority already consumed")
-	ErrApprovalDrifted         = errors.New("store: approval target version or state drifted")
-	ErrApprovalNotReady        = errors.New("store: approval request has not reached quorum")
+	ErrApprovalRequestNotFound        = errors.New("store: approval request not found")
+	ErrApprovalDigestMismatch         = errors.New("store: approval intent digest mismatch")
+	ErrApprovalSelfDecision           = errors.New("store: approval requester cannot decide their own request")
+	ErrApprovalReviewerNotIndependent = errors.New("store: approval reviewer is not independent")
+	ErrApprovalExpired                = errors.New("store: approval request expired")
+	ErrApprovalSuperseded             = errors.New("store: approval request superseded")
+	ErrApprovalConsumed               = errors.New("store: approval authority already consumed")
+	ErrApprovalDrifted                = errors.New("store: approval target version or state drifted")
+	ErrApprovalNotReady               = errors.New("store: approval request has not reached quorum")
 )
+
+const pamAutoRuleReviewerEvidencePrefix = "pam-auto-reviewer:"
+
+// PAMAutoRuleReviewerEvidence binds a rule's synthetic decision to the human
+// reviewer who authored it in the immutable approval request.
+func PAMAutoRuleReviewerEvidence(ruleID, author string) string {
+	return pamAutoRuleReviewerEvidencePrefix + ruleID + ":" + author
+}
+
+func pamAutoRuleReviewer(refs []string) (synthetic, author string, ok bool) {
+	for _, ref := range refs {
+		value, matches := strings.CutPrefix(ref, pamAutoRuleReviewerEvidencePrefix)
+		if !matches {
+			continue
+		}
+		if ok {
+			return "", "", false
+		}
+		ruleID, savedBy, separated := strings.Cut(value, ":")
+		if !separated || ruleID == "" || savedBy == "" {
+			return "", "", false
+		}
+		synthetic, author, ok = "auto-approval:"+ruleID, savedBy, true
+	}
+	return synthetic, author, ok
+}
+
+func hasPAMAutoRuleReviewerEvidence(refs []string) bool {
+	for _, ref := range refs {
+		if strings.HasPrefix(ref, pamAutoRuleReviewerEvidencePrefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) sameApprovalReviewerTx(ctx context.Context, tx pgx.Tx, tenantID, left, right string) (bool, error) {
+	if authz.SameApprovalPrincipal(left, right) {
+		return true, nil
+	}
+	linked, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, left, []string{right})
+	if err != nil || linked {
+		return linked, err
+	}
+	return s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, right, []string{left})
+}
+
+// PAMAutoRuleReviewerConflictTx checks the exact author frozen with a rule's
+// decision, including retained delegated-token relationships.
+func (s *Store) PAMAutoRuleReviewerConflictTx(ctx context.Context, tx pgx.Tx, tenantID string, refs []string, approver string) (bool, error) {
+	synthetic, author, ok := pamAutoRuleReviewer(refs)
+	if !ok || approver == synthetic {
+		return false, nil
+	}
+	return s.sameApprovalReviewerTx(ctx, tx, tenantID, author, approver)
+}
 
 // OperationApprovalRequest is the tenant-scoped projection of one immutable
 // operation intent. ID and IntentDigest, together, are the capability reviewers
@@ -388,6 +445,13 @@ func (s *Store) applyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 		if minter {
 			return ErrApprovalSelfDecision
 		}
+		conflict, err := s.PAMAutoRuleReviewerConflictTx(ctx, tx, d.TenantID, r.EvidenceRefs, d.Approver)
+		if err != nil {
+			return err
+		}
+		if conflict {
+			return ErrApprovalReviewerNotIndependent
+		}
 	}
 	if d.ExpectedResourceKind != "" && d.ExpectedResourceKind != r.ResourceKind ||
 		d.ExpectedResourceID != "" && d.ExpectedResourceID != r.ResourceID ||
@@ -443,7 +507,7 @@ func (s *Store) applyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 		status = ApprovalStatusDenied
 	} else {
 		var count int
-		if recorded {
+		if recorded && !hasPAMAutoRuleReviewerEvidence(r.EvidenceRefs) {
 			if err := tx.QueryRow(ctx, `
 			SELECT count(*) FROM operation_approval_decisions
 			 WHERE tenant_id = $1 AND request_id = $2 AND decision = 'approve'`,
@@ -452,7 +516,7 @@ func (s *Store) applyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 			}
 		} else {
 			var err error
-			count, err = s.countIndependentOperationApprovalsTx(ctx, tx, d.TenantID, d.RequestID, r.Requester)
+			count, err = s.countIndependentOperationApprovalsTx(ctx, tx, d.TenantID, d.RequestID, r)
 			if err != nil {
 				return err
 			}
@@ -470,7 +534,7 @@ func (s *Store) applyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 
 // Retained decisions remain in the audit log but cannot supply live quorum
 // when their reviewer minted a token for the requester's subject.
-func (s *Store) countIndependentOperationApprovalsTx(ctx context.Context, tx pgx.Tx, tenantID, requestID, requester string) (int, error) {
+func (s *Store) countIndependentOperationApprovalsTx(ctx context.Context, tx pgx.Tx, tenantID, requestID string, request OperationApprovalRequest) (int, error) {
 	rows, err := tx.Query(ctx, `SELECT approver FROM operation_approval_decisions
 		WHERE tenant_id=$1 AND request_id=$2 AND decision='approve' ORDER BY approver LIMIT 1025`, tenantID, requestID)
 	if err != nil {
@@ -493,12 +557,35 @@ func (s *Store) countIndependentOperationApprovalsTx(ctx context.Context, tx pgx
 	if len(approvers) > 1024 {
 		return 0, fmt.Errorf("store: operation approvals exceed review bound")
 	}
+	synthetic, author, hasRuleReviewer := pamAutoRuleReviewer(request.EvidenceRefs)
+	autoPresent := false
+	for _, approver := range approvers {
+		if hasRuleReviewer && approver == synthetic {
+			autoPresent = true
+			break
+		}
+	}
 	count := 0
 	for _, approver := range approvers {
-		if authz.SameApprovalPrincipal(requester, approver) {
+		principal := approver
+		if strings.HasPrefix(approver, "auto-approval:") {
+			if !hasRuleReviewer || approver != synthetic {
+				continue
+			}
+			principal = author
+		} else if autoPresent {
+			conflict, err := s.sameApprovalReviewerTx(ctx, tx, tenantID, author, approver)
+			if err != nil {
+				return 0, err
+			}
+			if conflict {
+				continue
+			}
+		}
+		if authz.SameApprovalPrincipal(request.Requester, principal) {
 			continue
 		}
-		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, requester, []string{approver})
+		minter, err := s.DelegatedTokenMinterMatchesTx(ctx, tx, tenantID, request.Requester, []string{principal})
 		if err != nil {
 			return 0, err
 		}
@@ -623,7 +710,7 @@ func (s *Store) GetOperationApprovalTx(ctx context.Context, tx pgx.Tx, tenantID,
 	if err != nil {
 		return r, err
 	}
-	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, requestID, r.Requester)
+	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, requestID, r)
 	if r.Status == ApprovalStatusApproved && r.ApprovalCount < r.RequiredApprovals {
 		r.Status = ApprovalStatusPending
 	}
@@ -639,7 +726,7 @@ func (s *Store) GetOperationApprovalForUpdateTx(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return r, err
 	}
-	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, requestID, r.Requester)
+	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, requestID, r)
 	if r.Status == ApprovalStatusApproved && r.ApprovalCount < r.RequiredApprovals {
 		r.Status = ApprovalStatusPending
 	}
@@ -772,7 +859,7 @@ func (s *Store) ListOperationApprovalsPage(ctx context.Context, tenantID string,
 			if out[i].ApprovalCount == 0 || (out[i].Status != ApprovalStatusPending && out[i].Status != ApprovalStatusApproved) {
 				continue
 			}
-			count, err := s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, out[i].ID, out[i].Requester)
+			count, err := s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, out[i].ID, out[i])
 			if err != nil {
 				return err
 			}
@@ -973,7 +1060,7 @@ func (s *Store) ValidateOperationApprovalUseTx(ctx context.Context, tx pgx.Tx, t
 	if err != nil {
 		return OperationApprovalRequest{}, err
 	}
-	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, use.RequestID, r.Requester)
+	r.ApprovalCount, err = s.countIndependentOperationApprovalsTx(ctx, tx, tenantID, use.RequestID, r)
 	if err != nil {
 		return OperationApprovalRequest{}, err
 	}

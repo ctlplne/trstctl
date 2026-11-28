@@ -882,7 +882,10 @@ its role to one without `access:approve`, stops its rules from applying. Roles a
 from the identity provider's mapping are not recorded, so they cannot be read again: an
 author whose `access:approve` comes only from them is refused when saving (403) and needs a
 member role that grants it. A rule's approval is one of the request's required approvals,
-its template's or `pam.required_approvals`, and reviewers give the rest; a deployment that
+its template's or `pam.required_approvals`, and independent reviewers give the rest.
+The rule and the author of its selected revision count as one reviewer, including when
+the author uses a delegated token; that author cannot add a manual decision to the same
+request. A deployment that
 sets `pam.auto_approval_alone` lets a matching rule approve a request by itself (see
 [Configuration](../configuration.md)). The first evaluation,
 including no-match, is frozen in `pam.auto_approval.evaluated` for that request UUID: retries

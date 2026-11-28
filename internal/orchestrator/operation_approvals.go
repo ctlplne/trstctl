@@ -319,6 +319,13 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 			if minter {
 				return store.ErrApprovalSelfDecision
 			}
+			conflict, err := o.store.PAMAutoRuleReviewerConflictTx(ctx, tx, tenantID, request.EvidenceRefs, decision.Approver)
+			if err != nil {
+				return err
+			}
+			if conflict {
+				return store.ErrApprovalReviewerNotIndependent
+			}
 			var (
 				managedKey        store.ManagedKey
 				managedKeyExists  = true

@@ -76,6 +76,84 @@ func operationApprovalUse(request store.OperationApprovalRequest) store.Operatio
 	}
 }
 
+func TestPAMRuleReviewerCountsOnceInEitherDecisionOrder(t *testing.T) {
+	for _, order := range [][]string{
+		{"auto-approval:rule-1", "rule-author"},
+		{"rule-author", "auto-approval:rule-1"},
+		{"auto-approval:rule-1", "rule-delegate"},
+	} {
+		t.Run(strings.Join(order, "_then_"), func(t *testing.T) {
+			s := newOperationApprovalStore(t)
+			ctx := context.Background()
+			if order[1] == "rule-delegate" {
+				if _, err := s.CreateAPIToken(ctx, store.APITokenRecord{TenantID: tenantA,
+					TokenHash: privacy.SubjectRef(tenantA, "pam-rule-delegate"),
+					Subject:   "rule-delegate", MintedBy: "rule-author"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			request := operationApprovalRequest("77000000-0000-4000-8000-000000000978", tenantA)
+			request.ResourceKind = "pam"
+			request.ResourceID = "pam:reviewed"
+			request.Action = "activate"
+			request.EvidenceRefs = []string{store.PAMAutoRuleReviewerEvidence("rule-1", "rule-author")}
+			if err := applyOperationApprovalRequest(ctx, s, request); err != nil {
+				t.Fatal(err)
+			}
+			if order[1] == "rule-delegate" {
+				var conflict bool
+				err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+					var lookupErr error
+					conflict, lookupErr = s.PAMAutoRuleReviewerConflictTx(ctx, tx, tenantA, request.EvidenceRefs, "rule-delegate")
+					return lookupErr
+				})
+				if err != nil || !conflict {
+					t.Fatalf("delegated reviewer conflict = %v, error %v; want true", conflict, err)
+				}
+			}
+			manualReviewer := "rule-author"
+			if order[1] == "rule-delegate" {
+				manualReviewer = "rule-delegate"
+			}
+			if err := applyOperationApprovalDecision(ctx, s,
+				operationApprovalDecision(request, manualReviewer, "77000000-0000-4000-8000-000000000982")); !errors.Is(err, store.ErrApprovalReviewerNotIndependent) {
+				t.Fatalf("rule author decision = %v, want independent-reviewer error", err)
+			}
+			for i, approver := range order {
+				decision := operationApprovalDecision(request, approver, []string{
+					"77000000-0000-4000-8000-000000000979",
+					"77000000-0000-4000-8000-000000000980",
+				}[i])
+				if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+					return s.ApplyRecordedOperationApprovalDecisionTx(ctx, tx, decision)
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := s.GetOperationApproval(ctx, tenantA, request.ID)
+			if err != nil || got.ApprovalCount != 1 || got.Status != store.ApprovalStatusPending {
+				t.Fatalf("rule and author review = status %s, count %d, error %v; want pending 1/2", got.Status, got.ApprovalCount, err)
+			}
+			if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				_, err := s.ValidateOperationApprovalUseTx(ctx, tx, tenantA, operationApprovalUse(request), operationApprovalBaseTime.Add(15*time.Minute))
+				return err
+			}); !errors.Is(err, store.ErrApprovalNotReady) {
+				t.Fatalf("single reviewer supplied quorum: %v", err)
+			}
+			independent := operationApprovalDecision(request, "independent-reviewer", "77000000-0000-4000-8000-000000000981")
+			if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				return s.ApplyRecordedOperationApprovalDecisionTx(ctx, tx, independent)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			got, err = s.GetOperationApproval(ctx, tenantA, request.ID)
+			if err != nil || got.ApprovalCount != 2 || got.Status != store.ApprovalStatusApproved {
+				t.Fatalf("independent review = status %s, count %d, error %v; want approved 2/2", got.Status, got.ApprovalCount, err)
+			}
+		})
+	}
+}
+
 func TestOperationApprovalRejectsHistoricalDelegatedMinter(t *testing.T) {
 	s := newOperationApprovalStore(t)
 	ctx := context.Background()

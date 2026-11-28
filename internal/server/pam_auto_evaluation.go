@@ -168,6 +168,10 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 			return fmt.Errorf("%w: the access review expired; start a new request", api.ErrPAMRejected)
 		}
 		intent.EvidenceRefs = append(intent.EvidenceRefs, "pam-auto-evaluation:"+evaluationID)
+		if evaluated.Rule != nil {
+			intent.EvidenceRefs = append(intent.EvidenceRefs,
+				store.PAMAutoRuleReviewerEvidence(evaluated.Rule.ID, evaluated.Rule.SavedBy))
+		}
 		intent.ExpiresAtNotAfter = evaluated.ExpiresAt
 		// A standing approval stands in for every reviewer (OD-9). A rule's
 		// approval is one of the request's required approvals, its
@@ -264,7 +268,7 @@ func pamCanonicalAutoEvaluation(source events.Event, tenantID, eventID, requestI
 	if out.RequestID != requestID || out.Kind != req.Kind || out.Requester != requester || out.BaseDigest != digest || out.TargetType != req.TargetType || out.TargetID != req.TargetID || out.At.IsZero() || !source.Time.Equal(out.At) || !out.ExpiresAt.Equal(out.At.Add(reviewTTL)) || !out.ExpiresAt.After(out.At) || (out.Rule == nil) != (out.Facts == nil) {
 		return out, fmt.Errorf("%w: automatic review evaluation command differs", store.ErrIdempotencyConflict)
 	}
-	if out.Rule != nil && (!validUUID(out.Rule.ID) || out.Rule.Name == "" || out.Rule.Revision < 1 || out.Facts.Target != req.TargetType+"/"+req.TargetID || "auto-approval:"+out.Rule.ID == requester ||
+	if out.Rule != nil && (!validUUID(out.Rule.ID) || out.Rule.Name == "" || out.Rule.Revision < 1 || out.Rule.SavedBy == "" || out.Facts.Target != req.TargetType+"/"+req.TargetID || "auto-approval:"+out.Rule.ID == requester ||
 		authz.SameApprovalPrincipal(out.Rule.SavedBy, requester)) {
 		return out, fmt.Errorf("%w: automatic review rule witness is incomplete", store.ErrIdempotencyConflict)
 	}

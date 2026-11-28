@@ -562,6 +562,8 @@ func approvalAPIError(err error) error {
 		return errStatus(http.StatusNotFound, "resource not found")
 	case errors.Is(err, store.ErrApprovalSelfDecision), errors.Is(err, store.ErrSelfIssuanceApproval):
 		return errStatus(http.StatusForbidden, "approval requester cannot approve their own request")
+	case errors.Is(err, store.ErrApprovalReviewerNotIndependent):
+		return errStatus(http.StatusForbidden, "approval requires an independent reviewer")
 	case errors.Is(err, store.ErrApprovalExpired):
 		return errStatus(http.StatusConflict, "approval request expired")
 	case errors.Is(err, store.ErrApprovalSuperseded):

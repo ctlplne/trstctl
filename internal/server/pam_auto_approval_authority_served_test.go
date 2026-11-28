@@ -145,6 +145,26 @@ func TestServedAutoApprovalRuleIsApprovalAuthorityCR001(t *testing.T) {
 		}
 	})
 
+	t.Run("a rule and its author count as one reviewer", func(t *testing.T) {
+		got := ask(requester, "a request under its author's rule")
+		if got.Status != "pending" || got.ApprovalCount != 1 || got.RequiredApprovals != 2 {
+			t.Fatalf("review after rule application: status=%s approvals=%d/%d, want pending 1/2", got.Status, got.ApprovalCount, got.RequiredApprovals)
+		}
+		if status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/approval-requests/"+got.ApprovalRequestID+"/approvals", approver, uuid.NewString(),
+			map[string]any{"intent_digest": got.IntentDigest}); status != http.StatusForbidden {
+			t.Fatalf("rule author decision = %d %s, want 403", status, raw)
+		}
+		status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/access/session-requests/"+got.ApprovalRequestID, requester, nil)
+		var progress api.PAMRequestProgress
+		if status != http.StatusOK || json.Unmarshal(raw, &progress) != nil || progress.Status != "pending" || progress.ApprovalCount != 1 {
+			t.Fatalf("review after author decision = %d %s, want pending 1/2", status, raw)
+		}
+		if status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/approval-requests/"+got.ApprovalRequestID+"/approvals", reviewer, uuid.NewString(),
+			map[string]any{"intent_digest": got.IntentDigest}); status != http.StatusOK {
+			t.Fatalf("independent reviewer decision = %d %s", status, raw)
+		}
+	})
+
 	t.Run("a rule stops applying once its author may no longer approve", func(t *testing.T) {
 		// Offboarding the author revokes its tokens and ends its membership.
 		if status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/members/"+subject("approver")+"/offboard", admin, uuid.NewString(),
