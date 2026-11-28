@@ -107,7 +107,7 @@ write_config() { # $1 = instance dir, $2 = server port, $3 = pg port, $4 = NATS 
 {
   "server": {"addr": "127.0.0.1:$port", "tls": {"mode": "disabled", "allow_plaintext_dev": true}},
   "postgres": {"mode": "external", "dsn": "postgres://postgres:$POSTGRES_PASSWORD@127.0.0.1:$pgport/postgres?sslmode=disable"},
-  "nats": {"mode": "external", "url": "nats://127.0.0.1:$natsport", "replicas": 1, "allow_single_replica": true},
+  "nats": {"mode": "external", "url": "nats://127.0.0.1:$natsport", "replicas": 1, "allow_single_replica": true, "allow_plaintext_dev": true},
   "migrate": {"auto": true},
   "rate_limit": {"enabled": false},
   "telemetry": {"enabled": false},

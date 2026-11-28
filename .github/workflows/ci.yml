@@ -2500,7 +2500,7 @@ jobs:
         run: |
           helm lint deploy/helm/trstctl \
             --set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
-            --set nats.url='nats://nats:4222' --set kek.generate=true \
+            --set nats.url='tls://nats:4222' --set nats.existingSecret=trstctl-nats-identity --set kek.generate=true \
             --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider
 
       - name: Set up Go
@@ -2521,7 +2521,7 @@ jobs:
         run: |
           helm template trstctl deploy/helm/trstctl --namespace trstctl \
             --set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
-            --set nats.url='nats://nats:4222' --set kek.generate=true \
+            --set nats.url='tls://nats:4222' --set nats.existingSecret=trstctl-nats-identity --set kek.generate=true \
             --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider \
             | kubeconform -strict -summary -ignore-missing-schemas
 
@@ -2531,7 +2531,7 @@ jobs:
             rendered="$(mktemp)"
             helm template trstctl deploy/helm/trstctl --namespace trstctl \
               --set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
-              --set nats.url='nats://nats:4222' --set kek.generate=true \
+              --set nats.url='tls://nats:4222' --set nats.existingSecret=trstctl-nats-identity --set kek.generate=true \
               --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider \
               --set signer.mode="$signer_mode" --set signer.mtls.serverName=signer.trstctl.svc \
               --set fips.required=true > "$rendered"
