@@ -128,7 +128,7 @@ func VerifyJWTBytes(token []byte, jwks JWKS) (claimsJSON []byte, err error) {
 	}
 	hb := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[0])))
 	defer secret.Wipe(hb)
-	n, err := base64.RawURLEncoding.Decode(hb, parts[0])
+	n, err := decodeCompactJWTPart(hb, parts[0])
 	if err != nil {
 		return nil, fmt.Errorf("crypto: JWT header: %w", err)
 	}
@@ -151,7 +151,7 @@ func VerifyJWTBytes(token []byte, jwks JWKS) (claimsJSON []byte, err error) {
 	}
 	sig := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[2])))
 	defer secret.Wipe(sig)
-	n, err = base64.RawURLEncoding.Decode(sig, parts[2])
+	n, err = decodeCompactJWTPart(sig, parts[2])
 	if err != nil {
 		return nil, fmt.Errorf("crypto: JWT signature: %w", err)
 	}
@@ -165,12 +165,25 @@ func VerifyJWTBytes(token []byte, jwks JWKS) (claimsJSON []byte, err error) {
 		return nil, err
 	}
 	payload := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[1])))
-	n, err = base64.RawURLEncoding.Decode(payload, parts[1])
+	n, err = decodeCompactJWTPart(payload, parts[1])
 	if err != nil {
 		secret.Wipe(payload)
 		return nil, fmt.Errorf("crypto: JWT payload: %w", err)
 	}
 	return payload[:n], nil
+}
+
+// decodeCompactJWTPart enforces the unpadded base64url alphabet before Go's
+// strict decoder checks trailing bits; the decoder alone ignores line breaks.
+func decodeCompactJWTPart(dst, src []byte) (int, error) {
+	for _, c := range src {
+		if c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' ||
+			c >= '0' && c <= '9' || c == '-' || c == '_' {
+			continue
+		}
+		return 0, fmt.Errorf("invalid compact JWT character")
+	}
+	return base64.RawURLEncoding.Strict().Decode(dst, src)
 }
 
 // JWK is the subset of a JSON Web Key needed to verify RS*/ES* tokens and to

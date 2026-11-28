@@ -486,8 +486,9 @@ func authenticateJWT(ctx context.Context, credential []byte, opts jwtMethodOptio
 		}
 		scopes = fromToken
 	}
-	// The single-use key; useOnce records it after the method's own checks.
-	useKey := "token:" + crypto.SHA256Hex(credential)
+	// The single-use key binds the authenticated signing input, which is stable
+	// across signature encodings. useOnce records it after the method's checks.
+	useKey := signedJWTUseKey(credential)
 	if reg.JTI != "" {
 		useKey = "jti:" + crypto.SHA256Hex([]byte(reg.Iss+"\x00"+reg.JTI))
 	}
@@ -514,11 +515,16 @@ func UseKey(credential []byte) (string, time.Time, error) {
 	if err := json.Unmarshal(payload[:n], &reg); err != nil || reg.Exp == 0 {
 		return "", time.Time{}, errors.New("authmethod: unreadable JWT claims")
 	}
-	key := "token:" + crypto.SHA256Hex(credential)
+	key := signedJWTUseKey(credential)
 	if reg.JTI != "" {
 		key = "jti:" + crypto.SHA256Hex([]byte(reg.Iss+"\x00"+reg.JTI))
 	}
 	return key, time.Unix(reg.Exp, 0), nil
+}
+
+func signedJWTUseKey(credential []byte) string {
+	lastDot := bytes.LastIndexByte(credential, '.')
+	return "token:" + crypto.SHA256Hex(credential[:lastDot])
 }
 
 // useOnce records the token's single use with the method's durable guard. Each
