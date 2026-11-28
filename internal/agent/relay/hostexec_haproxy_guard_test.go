@@ -149,7 +149,7 @@ func TestHostExecutorBindsHAProxyMaterialToCertificateAndKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	command = filepath.Join(root, "true")
-	if err := os.WriteFile(command, commandBytes, 0o700); err != nil {
+	if err := os.WriteFile(command, commandBytes, 0o700); err != nil { // #nosec G306 G703 -- this fixed file in the test's private directory needs execute permission (CWE-22, CWE-276).
 		t.Fatal(err)
 	}
 	crtPath, configPath := filepath.Join(root, "server.pem"), filepath.Join(root, "haproxy.cfg")
