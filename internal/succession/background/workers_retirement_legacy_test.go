@@ -5,12 +5,14 @@ package background
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -61,6 +63,12 @@ func (s *legacyRetirementSigner) has(handle string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.held[handle]
+}
+
+func (s *legacyRetirementSigner) hold(handle string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.held[handle] = true
 }
 
 type legacyRetirementSignerProvider struct{ client *signing.Client }
@@ -168,4 +176,49 @@ func TestRetiredLegacyPolicyRepairsSignerCustodyAfterColdRestart(t *testing.T) {
 	if err != nil || !found || policy.Status != "retired" {
 		t.Fatalf("retirement status after custody retry = %q, found=%t, err=%v", policy.Status, found, err)
 	}
+
+	const pendingTenantID = "00000000-0000-4000-8000-000000000001"
+	const laterTenantID = "33333333-3333-4333-8333-333333333333"
+	if err := store.UpsertTenant(ctx, corestore.Tenant{TenantID: pendingTenantID, Name: "pending retirement"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertTenant(ctx, corestore.Tenant{TenantID: laterTenantID, Name: "later retirement"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpsertRetirementPolicy(ctx, pendingTenantID, pcasstore.RetirementPolicy{
+		IdentityID: identityID, PredecessorEpoch: 0, Threshold: 1, Status: "retired",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpsertRetirementPolicy(ctx, laterTenantID, pcasstore.RetirementPolicy{
+		IdentityID: identityID, PredecessorEpoch: 0, Threshold: 1, Status: "retired",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	laterFact, err := json.Marshal(succession.RetirementV1{
+		TenantID: laterTenantID, IdentityID: identityID, Epoch: 0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{TenantID: laterTenantID, Type: succession.TypeRetirement, Data: laterFact}); err != nil {
+		t.Fatal(err)
+	}
+	laterHandle := succession.TenantKeyHandle(laterTenantID, identityID, 0)
+	fake.hold(laterHandle)
+	if err := newWorker().runOnce(ctx); err == nil || !strings.Contains(err.Error(), "retired policy has no matching") {
+		t.Fatalf("pending policy must remain visible, got %v", err)
+	}
+	if fake.has(laterHandle) {
+		t.Fatal("later tenant custody was not reconciled after a pending policy")
+	}
+	t.Run("keeps the configured retry schedule", func(t *testing.T) {
+		worker := newWorker()
+		worker.interval = 50 * time.Millisecond
+		runCtx, cancel := context.WithTimeout(ctx, 120*time.Millisecond)
+		defer cancel()
+		if err := worker.Run(runCtx); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("worker exited before its scheduled retries: %v", err)
+		}
+	})
 }

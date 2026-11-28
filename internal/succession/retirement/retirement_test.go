@@ -42,6 +42,17 @@ func (l *memLedger) Append(_ context.Context, e events.Event) (events.Event, err
 	return e, nil
 }
 
+func (l *memLedger) EventByID(_ context.Context, id string) (events.Event, bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, e := range l.evs {
+		if e.ID == id {
+			return e, true, nil
+		}
+	}
+	return events.Event{}, false, nil
+}
+
 func (l *memLedger) count(typ string) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -202,6 +213,57 @@ func TestRetirement_OnlyAfterQuorum(t *testing.T) {
 	}
 	if _, err := pred.SignDigest(crypto.SHA256Sum([]byte("x")), crypto.SignOptions{Hash: crypto.SHA256}); err != nil {
 		t.Fatalf("untouched predecessor should still sign: %v", err)
+	}
+}
+
+func TestRetirementWaitsForPreconditionsBeforeAnnouncing(t *testing.T) {
+	rp := newRP(t, "rp1")
+	ledger := &memLedger{}
+	ctrl, err := retirement.New(retirement.Config{
+		Roster: rosterOf(rp), Policy: retirement.QuorumPolicy{Threshold: 1}, Ledger: ledger,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	predecessor := &spyPredecessor{inner: newPredecessor(t)}
+	closed := errors.New("precondition is pending")
+	result, err := ctrl.Execute(t.Context(), retirement.CutoverRequest{
+		Target:      retirement.Target{TenantID: tenantA, IdentityID: identA, Epoch: 1},
+		Acks:        []retirement.SignedAck{rp.ack(t, tenantA, identA, 1, evalTime)},
+		Predecessor: predecessor, Successor: pureSuccessor(),
+		PreRetire: func(context.Context) error { return closed },
+	}, evalTime)
+	if !errors.Is(err, closed) || !result.QuorumMet || result.Advanced || result.Retired {
+		t.Fatalf("pending precondition: result=%+v err=%v", result, err)
+	}
+	if ledger.count(succession.TypeSuccession) != 0 || ledger.count(succession.TypeRetirement) != 0 || len(predecessor.order) != 0 {
+		t.Fatalf("pending precondition changed ledger or predecessor: succession=%d retirement=%d operations=%v",
+			ledger.count(succession.TypeSuccession), ledger.count(succession.TypeRetirement), predecessor.order)
+	}
+}
+
+func TestRetirementReusesCutoverLedgerEvents(t *testing.T) {
+	rp := newRP(t, "rp1")
+	ledger := &memLedger{}
+	ctrl, err := retirement.New(retirement.Config{
+		Roster: rosterOf(rp), Policy: retirement.QuorumPolicy{Threshold: 1}, Ledger: ledger,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := retirement.CutoverRequest{
+		Target:    retirement.Target{TenantID: tenantA, IdentityID: identA, Epoch: 1},
+		Acks:      []retirement.SignedAck{rp.ack(t, tenantA, identA, 1, evalTime)},
+		Successor: pureSuccessor(), RetiredAlg: "ECDSA-P256",
+	}
+	for range 2 {
+		if _, err := ctrl.Execute(t.Context(), req, evalTime); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ledger.count(succession.TypeSuccession) != 1 || ledger.count(succession.TypeRetirement) != 1 {
+		t.Fatalf("repeated cutover facts: succession=%d retirement=%d, want one each",
+			ledger.count(succession.TypeSuccession), ledger.count(succession.TypeRetirement))
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 
@@ -318,19 +319,19 @@ type retirementWorker struct {
 func (w *retirementWorker) Name() string { return "pcas.retirement" }
 
 func (w *retirementWorker) Run(ctx context.Context) error {
-	if err := w.runOnce(ctx); err != nil {
-		return err
-	}
 	t := time.NewTicker(w.interval)
 	defer t.Stop()
 	for {
+		if err := w.runOnce(ctx); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			slog.ErrorContext(ctx, "pcas retirement pass incomplete; retrying at the configured interval", "error", err)
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-t.C:
-			if err := w.runOnce(ctx); err != nil {
-				return err
-			}
 		}
 	}
 }
@@ -351,6 +352,7 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("pcas retirement worker: list tenants: %w", err)
 	}
+	var failures []error
 	for _, tenant := range tenants {
 		// Include historical retired policies. Earlier builds could project
 		// "retired" after deleting a legacy unscoped handle while the real
@@ -358,44 +360,50 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 		// custody after every cold start, not just while a policy is active.
 		policies, err := w.repo.ListRetirementPolicies(ctx, tenant.TenantID, false)
 		if err != nil {
-			return err
+			failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s: list policies: %w", tenant.TenantID, err))
+			continue
 		}
 		for _, policy := range policies {
-			retirementRecorded := alreadyRetired(ledgerEvents, tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch)
-			if policy.Status == "retired" && !retirementRecorded {
-				return fmt.Errorf("pcas retirement worker: retired policy has no matching tenant-bound retirement event for identity %s epoch %d", policy.IdentityID, policy.PredecessorEpoch)
-			}
-			if retirementRecorded {
-				// A retirement event can commit before the status projection does.
-				// Reconcile signer custody first: status must never get ahead of the
-				// exact tenant-bound predecessor key's destruction. A retired
-				// historical policy can contain a blank or wrong legacy handle;
-				// the event's tenant, identity, and epoch bind the actual target.
-				if policy.Status == "active" {
-					if _, err := retirementPredecessorHandle(tenant.TenantID, policy); err != nil {
-						return err
-					}
-				}
-				handle := succession.TenantKeyHandle(tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch)
-				if err := ensureRetiredPredecessorAbsent(ctx, client, handle); err != nil {
-					return fmt.Errorf("pcas retirement worker: reconcile predecessor zeroization: %w", err)
-				}
-				if policy.Status == "active" {
-					if err := w.repo.MarkRetirementRetired(ctx, tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch); err != nil {
-						return err
-					}
-				}
-				continue
-			}
-			if policy.Status != "active" {
-				return fmt.Errorf("pcas retirement worker: unknown policy status %q for identity %s epoch %d", policy.Status, policy.IdentityID, policy.PredecessorEpoch)
-			}
-			if err := w.evaluatePolicy(ctx, client, tenant.TenantID, policy, ledgerEvents); err != nil && !errors.Is(err, retirement.ErrQuorumNotMet) {
-				return err
+			if err := w.reconcileRetirementPolicy(ctx, client, tenant.TenantID, policy, ledgerEvents); err != nil && !errors.Is(err, retirement.ErrQuorumNotMet) {
+				failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s identity %s epoch %d: %w",
+					tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch, err))
 			}
 		}
 	}
-	return nil
+	if len(failures) == 1 {
+		return failures[0]
+	}
+	return errors.Join(failures...)
+}
+
+func (w *retirementWorker) reconcileRetirementPolicy(ctx context.Context, client *signing.Client,
+	tenantID string, policy pcasstore.RetirementPolicy, ledgerEvents []events.Event,
+) error {
+	retirementRecorded := alreadyRetired(ledgerEvents, tenantID, policy.IdentityID, policy.PredecessorEpoch)
+	if policy.Status == "retired" && !retirementRecorded {
+		return errors.New("retired policy has no matching tenant-bound retirement event")
+	}
+	if retirementRecorded {
+		// A retirement event can commit before the status projection does.
+		// Reconcile signer custody before projecting the final status.
+		if policy.Status == "active" {
+			if _, err := retirementPredecessorHandle(tenantID, policy); err != nil {
+				return err
+			}
+		}
+		handle := succession.TenantKeyHandle(tenantID, policy.IdentityID, policy.PredecessorEpoch)
+		if err := ensureRetiredPredecessorAbsent(ctx, client, handle); err != nil {
+			return fmt.Errorf("reconcile predecessor zeroization: %w", err)
+		}
+		if policy.Status == "active" {
+			return w.repo.MarkRetirementRetired(ctx, tenantID, policy.IdentityID, policy.PredecessorEpoch)
+		}
+		return nil
+	}
+	if policy.Status != "active" {
+		return fmt.Errorf("unknown policy status %q", policy.Status)
+	}
+	return w.evaluatePolicy(ctx, client, tenantID, policy, ledgerEvents)
 }
 
 // The signer is the source of truth for key custody. A successful delete alone

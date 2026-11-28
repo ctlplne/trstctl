@@ -20,6 +20,28 @@ const kemRewrapOperationDomain = "trstctl/pcas/kem-rewrap-operation/v1\x00"
 const kemDataKeyRegisteredDomain = "trstctl/pcas/kem-data-key-registered/v1\x00"
 const kemDataKeyRewrappedDomain = "trstctl/pcas/kem-data-key-rewrapped/v1\x00"
 const kemRewrapStageCompletedDomain = "trstctl/pcas/kem-rewrap-stage-completed/v1\x00"
+const cutoverSuccessionDomain = "trstctl/pcas/cutover-succession/v1\x00"
+const cutoverRetirementDomain = "trstctl/pcas/cutover-retirement/v1\x00"
+
+// CutoverSuccessionEventID binds one announced succession to its predecessor.
+func CutoverSuccessionEventID(tenantID, identityID string, predecessorEpoch uint64) string {
+	bound, _ := json.Marshal(struct {
+		TenantID         string `json:"tenant_id"`
+		IdentityID       string `json:"identity_id"`
+		PredecessorEpoch uint64 `json:"predecessor_epoch"`
+	}{tenantID, identityID, predecessorEpoch})
+	return recoveryEventID(cutoverSuccessionDomain, bound)
+}
+
+// CutoverRetirementEventID binds one completed retirement to its predecessor.
+func CutoverRetirementEventID(tenantID, identityID string, predecessorEpoch uint64) string {
+	bound, _ := json.Marshal(struct {
+		TenantID         string `json:"tenant_id"`
+		IdentityID       string `json:"identity_id"`
+		PredecessorEpoch uint64 `json:"predecessor_epoch"`
+	}{tenantID, identityID, predecessorEpoch})
+	return recoveryEventID(cutoverRetirementDomain, bound)
+}
 
 // KEMDataKeyEventID fences one data-key envelope per tenant identity epoch and
 // target: the first registration (or re-wrap receipt) at that tuple wins.

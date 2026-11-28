@@ -248,6 +248,9 @@ func (f *fakeRewrap) RewrapComplete(_, _ string, _ uint64) (bool, error) { retur
 type nopLedger struct{}
 
 func (nopLedger) Append(_ context.Context, e events.Event) (events.Event, error) { return e, nil }
+func (nopLedger) EventByID(context.Context, string) (events.Event, bool, error) {
+	return events.Event{}, false, nil
+}
 
 // TestKEMSuccession_RewrapThenRetire: predecessor retirement is blocked until re-wrap
 // under the successor completes, then proceeds (PCAS-claim-15 re-wrap-before-retire).

@@ -230,6 +230,11 @@ window, and a policy that PCAS has already retired on that quorum still counts.
 When PCAS retirement is enabled and the identity has a succession, the same
 quorum also retires the predecessor key, so set the policy for the identity
 whose relying parties actually acknowledge pure ML-DSA.
+The worker checks data re-wrap before announcing the cutover. A pending
+precondition leaves the predecessor and the cutover ledger unchanged. A failed
+policy remains visible in the worker log while other tenants continue through
+that pass; the worker retries at its configured interval. Each completed
+cutover stage has a stable event identity across retries.
 
 On restart, the retirement worker checks previously retired policies against
 the signed retirement event and the tenant-bound signer handle. This also

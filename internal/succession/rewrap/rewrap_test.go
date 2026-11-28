@@ -95,6 +95,9 @@ func TestRewrap_StageHealthHalts(t *testing.T) {
 type nopLedger struct{}
 
 func (nopLedger) Append(_ context.Context, e events.Event) (events.Event, error) { return e, nil }
+func (nopLedger) EventByID(context.Context, string) (events.Event, bool, error) {
+	return events.Event{}, false, nil
+}
 
 func retire(t *testing.T, gate func(context.Context) error) (*retirement.Controller, retirement.CutoverRequest, *byok.ManagedSigner) {
 	t.Helper()

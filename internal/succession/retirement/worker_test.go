@@ -21,6 +21,15 @@ func (m *int17Ledger) Append(_ context.Context, e events.Event) (events.Event, e
 	return e, nil
 }
 
+func (m *int17Ledger) EventByID(_ context.Context, id string) (events.Event, bool, error) {
+	for _, e := range m.evs {
+		if e.ID == id {
+			return e, true, nil
+		}
+	}
+	return events.Event{}, false, nil
+}
+
 func int17AckEvent(t *testing.T, rp crypto.Signer, rpID, tenant, id string, epoch uint64) events.Event {
 	t.Helper()
 	sig, err := rp.Sign(retirement.AckMessage(tenant, id, epoch, rpID), crypto.SignOptions{Hash: crypto.SHA256})

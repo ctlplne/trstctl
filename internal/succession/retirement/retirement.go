@@ -209,9 +209,11 @@ type Predecessor interface {
 	Zeroize(ctx context.Context, tenantID string) error
 }
 
-// EventAppender is the AN-2 ledger sink. *events.Log satisfies it.
+// EventAppender is the AN-2 ledger sink with canonical event lookup.
+// *events.Log satisfies it.
 type EventAppender interface {
 	Append(ctx context.Context, e events.Event) (events.Event, error)
+	EventByID(ctx context.Context, id string) (events.Event, bool, error)
 }
 
 // Successor is the pure-PQC posture the cutover advances to (PCAS-claim-2). The
@@ -234,12 +236,10 @@ type CutoverRequest struct {
 	RetiredAlg    string
 	SuccessionRef []byte // opaque reference to the dual-signed succession record (PCAS-04)
 
-	// PreRetire, when set, is a precondition evaluated after the quorum is met and
-	// the succession is announced, but BEFORE the predecessor is revoked/zeroized. A
-	// non-nil error blocks retirement (the succession stands, the predecessor is left
-	// usable). PCAS-14 supplies a re-wrap gate here so a confidentiality (KEM) key is
-	// not retired until data protected under it has been re-wrapped under the
-	// successor.
+	// PreRetire, when set, is a precondition evaluated after the quorum is met
+	// and before the succession is announced or the predecessor is changed.
+	// PCAS-14 supplies a re-wrap gate here so a confidentiality (KEM) key is
+	// retained until data protected under it has been re-wrapped.
 	PreRetire func(ctx context.Context) error
 }
 
@@ -289,6 +289,11 @@ func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime t
 		return CutoverResult{QuorumMet: false, Quorum: q}, ErrQuorumNotMet
 	}
 	digest := AckSetDigest(q.Satisfying)
+	if req.PreRetire != nil {
+		if err := req.PreRetire(ctx); err != nil {
+			return CutoverResult{QuorumMet: true, Quorum: q, AckSetDigest: digest}, fmt.Errorf("retirement: pre-retire gate: %w", err)
+		}
+	}
 
 	// PCAS-claim-2: announce the evidence-gated hybrid→pure-PQC succession before retiring
 	// the predecessor, so the identity's new key is on the ledger first.
@@ -303,14 +308,6 @@ func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime t
 		RecordDigest:          req.SuccessionRef,
 	}); err != nil {
 		return CutoverResult{QuorumMet: true, Quorum: q, AckSetDigest: digest}, err
-	}
-
-	// Re-wrap (or any) precondition gates retirement: if it fails, the succession
-	// stands but the predecessor is NOT retired (PCAS-14 re-wrap-before-retire).
-	if req.PreRetire != nil {
-		if err := req.PreRetire(ctx); err != nil {
-			return CutoverResult{QuorumMet: true, Quorum: q, AckSetDigest: digest, Advanced: true}, fmt.Errorf("retirement: pre-retire gate: %w", err)
-		}
 	}
 
 	// PCAS-claims-8, 16 / INV-9: revoke (fail-closed) THEN zeroize the
@@ -344,8 +341,37 @@ func (c *Controller) append(ctx context.Context, p succession.Payload) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.cfg.Ledger.Append(ctx, ev)
-	return err
+	switch fact := p.(type) {
+	case succession.SuccessionV1:
+		ev.ID = succession.CutoverSuccessionEventID(fact.TenantID, fact.IdentityID, fact.PredecessorEpoch)
+	case succession.RetirementV1:
+		ev.ID = succession.CutoverRetirementEventID(fact.TenantID, fact.IdentityID, fact.Epoch)
+	}
+	if ev.ID != "" {
+		prior, found, err := c.cfg.Ledger.EventByID(ctx, ev.ID)
+		if err != nil {
+			return err
+		}
+		if found {
+			return sameCutoverFact(ev, prior)
+		}
+	}
+	appended, err := c.cfg.Ledger.Append(ctx, ev)
+	if err != nil {
+		return err
+	}
+	if ev.ID != "" {
+		return sameCutoverFact(ev, appended)
+	}
+	return nil
+}
+
+func sameCutoverFact(want, got events.Event) error {
+	if got.ID != want.ID || got.Type != want.Type || got.TenantID != want.TenantID ||
+		got.SchemaVersion != want.SchemaVersion || !bytes.Equal(got.Data, want.Data) {
+		return errors.New("retirement: recorded cutover fact differs from the approved transition")
+	}
+	return nil
 }
 
 func writeField(b *bytes.Buffer, v []byte) {
