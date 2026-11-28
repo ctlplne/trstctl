@@ -36,7 +36,7 @@ func TestAccessLauncherProtectsParentEnvironment(t *testing.T) {
 		}
 		return
 	}
-	self := exec.Command(os.Args[0], "-test.run=^TestAccessLauncherProtectsParentEnvironment$")
+	self := exec.Command("/proc/self/exe", "-test.run=^TestAccessLauncherProtectsParentEnvironment$")
 	self.Env = append(os.Environ(), "TRSTCTL_VISIBILITY_HELPER=1", "TRSTCTL_TOKEN="+marker)
 	output, err := self.CombinedOutput()
 	if err != nil {
