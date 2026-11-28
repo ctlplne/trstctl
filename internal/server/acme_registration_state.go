@@ -133,7 +133,7 @@ func (l acmeRegistrationLog) append(ctx context.Context, event events.Event, pos
 	event.ID = acmeRegistrationEventPrefix(expected) + events.NewID()
 	var appended events.Event
 	err := l.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		return l.store.WithTenant(readCtx, l.tenantID, func(tx pgx.Tx) error {
+		return l.store.WithTenantEvent(readCtx, l.tenantID, func(readCtx context.Context, tx pgx.Tx) error {
 			// A lost outer HTTP admission session must not let a late event enter
 			// the next registration. Protect this append with independent xact locks.
 			if err := l.store.TryTenantServiceAdmissionTx(readCtx, tx, l.tenantID); err != nil {

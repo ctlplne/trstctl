@@ -40,7 +40,7 @@ func (a *API) projectServiceReconcileFence(ctx context.Context, tenantID string,
 		if err != nil {
 			return err
 		}
-		err = a.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err = a.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 			locked, _, _, err := a.store.LockApprovedTargetFenceTx(ctx, tx, tenantID, store.ApprovedTargetServiceReconciliation, latest.CommandKey)
 			if err != nil {
 				return err

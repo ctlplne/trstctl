@@ -89,7 +89,7 @@ func (h *caHierarchyService) RevokeAuthority(ctx context.Context, tenantID, caID
 		return api.CAAuthorityRevocation{}, api.ErrCAHierarchyUnavailable
 	}
 	var result api.CAAuthorityRevocation
-	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = h.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		authority, err := h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, caID)
 		if err != nil {
 			return err

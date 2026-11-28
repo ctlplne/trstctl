@@ -198,7 +198,7 @@ func (s IncidentStore) Close(ctx context.Context, tenantID, incidentID, resoluti
 		return Incident{}, err
 	}
 	proj := NewProjection(s.Store)
-	err = s.Store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = s.Store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var status string
 		err := tx.QueryRow(ctx, `SELECT status FROM misuse_incidents WHERE tenant_id = $1 AND incident_id = $2 FOR UPDATE`,
 			tenantID, incidentID).Scan(&status)

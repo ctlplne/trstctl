@@ -1255,7 +1255,7 @@ func (s *pamService) authorizeActivation(ctx context.Context, tenantID, idempote
 	if found && req.TargetType == pamTargetSSH {
 		return time.Time{}, fmt.Errorf("%w: SSH signing was already attempted for this approval; inspect recovery audit and start a fresh approved request", api.ErrPAMRejected)
 	}
-	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = s.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if !found {
 			if _, err := s.store.ValidateOperationApprovalUseTx(ctx, tx, tenantID, use, s.clock().UTC()); err != nil {
 				return err

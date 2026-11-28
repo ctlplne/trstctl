@@ -171,7 +171,7 @@ func (s *pamService) reviewGatewayCommand(ctx context.Context, tenant, agent str
 		if err != nil {
 			return err
 		}
-		return s.store.WithTenant(work, tenant, func(tx pgx.Tx) error {
+		return s.store.WithTenantEvent(work, tenant, func(work context.Context, tx pgx.Tx) error {
 			if _, err := s.store.GetPAMCommandActionForUpdateTx(work, tx, tenant, initial.ID); err != nil {
 				return err
 			}

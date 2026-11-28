@@ -209,7 +209,7 @@ func (r *configuredBreakglassRuntime) IssueBreakglass(ctx context.Context, tenan
 	var bundle breakglass.Bundle
 	var canonicalEvent events.Event
 	var appendAttempted bool
-	err := r.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := r.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		approvers, err := r.consumeAndVerifyCeremony(ctx, tx, req.CeremonyID, purpose)
 		if err != nil {
 			return err
@@ -316,7 +316,7 @@ func (r *configuredBreakglassRuntime) RotateBreakglass(ctx context.Context, tena
 	var nextSigner *signing.RemoteSigner
 	var signerCreated, appendAttempted bool
 	var canonicalEvent events.Event
-	err := r.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := r.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		approvers, err := r.consumeAndVerifyCeremony(ctx, tx, req.CeremonyID, purpose)
 		if err != nil {
 			return err
@@ -427,7 +427,7 @@ func (r *configuredBreakglassRuntime) CrossSignBreakglass(ctx context.Context, t
 	var canonical breakglassCrossSignEvent
 	var canonicalEvent events.Event
 	var appendAttempted bool
-	err = r.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = r.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		approvers, err := r.consumeAndVerifyCeremony(ctx, tx, req.CeremonyID, purpose)
 		if err != nil {
 			return err

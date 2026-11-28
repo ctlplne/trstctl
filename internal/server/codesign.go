@@ -718,7 +718,7 @@ func (s *servedCodeSigningService) projectCodeSigningFenceUnbarriered(
 		return err
 	}
 	projector := projections.New(s.store)
-	return s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return s.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		locked, use, privacyRewritten, err := s.store.LockApprovedTargetFenceTx(ctx, tx, tenantID,
 			store.ApprovedTargetCodeSigningCommand, fence.CommandKey)
 		if err != nil {

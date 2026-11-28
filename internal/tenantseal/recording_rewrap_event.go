@@ -53,7 +53,7 @@ func appendRecordingRewrap(ctx context.Context, st *store.Store, log *events.Log
 	}
 	return st.WithGlobalKeyStateAdmission(ctx, store.KeyStateExclusive, func(admitted context.Context) error {
 		return log.WithHistoryRead(admitted, func(history context.Context) error {
-			return st.WithTenant(history, c.TenantID, func(tx pgx.Tx) error {
+			return st.WithTenantEvent(history, c.TenantID, func(history context.Context, tx pgx.Tx) error {
 				owned, err := st.BindKeyStateOwnerTx(history, tx, c.TenantID, store.KeyStateExclusive)
 				if err != nil {
 					return err

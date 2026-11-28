@@ -203,7 +203,7 @@ func (s *pamService) OpenPAMEmergencyCheckout(ctx context.Context, tenantID, ide
 		secret.Wipe(credential)
 		return nil, err
 	}
-	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = s.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		candidate := events.Event{ID: pamEmergencyReleasedEventID(tenantID, req.RequestID), Type: projections.EventPAMCheckoutEmergencyReleased,
 			TenantID: tenantID, Time: now.Truncate(time.Microsecond), Data: payload}
 		if actor, ok := events.ActorFromContext(ctx); ok {

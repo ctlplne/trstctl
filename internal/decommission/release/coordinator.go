@@ -252,7 +252,7 @@ func (c *Coordinator) claim(ctx context.Context, tenantID, keyID, ceremonyID str
 
 func (c *Coordinator) reconcile(ctx context.Context, command corestore.CACeremonyEffectCommand) error {
 	return c.store.WithPrivacyRecoveryBarrier(ctx, command.TenantID, "CA dependent release recovery", func(barrierCtx context.Context) error {
-		return c.store.WithTenant(barrierCtx, command.TenantID, func(tx pgx.Tx) error {
+		return c.store.WithTenantEvent(barrierCtx, command.TenantID, func(barrierCtx context.Context, tx pgx.Tx) error {
 			current, err := c.store.LockCACeremonyEffectCommandTx(barrierCtx, tx, command.TenantID, command.CeremonyID)
 			if err != nil {
 				return err

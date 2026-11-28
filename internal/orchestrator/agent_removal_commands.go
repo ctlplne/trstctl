@@ -28,7 +28,7 @@ func (o *Orchestrator) reconcileAgentRemovalCommand(ctx context.Context, command
 	defer release()
 	return o.store.WithPrivacyRecoveryBarrier(fenced, command.TenantID,
 		"agent removal recovery privacy barrier", func(barrierCtx context.Context) error {
-			return o.store.WithTenant(barrierCtx, command.TenantID, func(tx pgx.Tx) error {
+			return o.store.WithTenantEvent(barrierCtx, command.TenantID, func(barrierCtx context.Context, tx pgx.Tx) error {
 				current, err := o.store.LockAgentRemovalCommandTx(barrierCtx, tx, command.TenantID, command.Event.ID)
 				if err != nil {
 					return err

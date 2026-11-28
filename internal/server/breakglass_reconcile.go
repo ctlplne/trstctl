@@ -96,7 +96,7 @@ func reconcileVerifiedBreakglassBundle(ctx context.Context, tenantID string, bun
 		}
 	}
 	added := false
-	err = st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = st.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		// A tenant-scoped PostgreSQL lock serializes replicas for this signed
 		// request ID. The immutable event remains the state of record; this lock
 		// is only a short-lived coordination fence, not a mutable status row.

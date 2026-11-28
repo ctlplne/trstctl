@@ -62,7 +62,7 @@ func (o *Orchestrator) reconcileMachineAuthMethodCommand(ctx context.Context, co
 	defer release()
 	return o.store.WithPrivacyRecoveryBarrier(fenced, command.TenantID,
 		"machine-auth command recovery privacy barrier", func(barrierCtx context.Context) error {
-			return o.store.WithTenant(barrierCtx, command.TenantID, func(tx pgx.Tx) error {
+			return o.store.WithTenantEvent(barrierCtx, command.TenantID, func(barrierCtx context.Context, tx pgx.Tx) error {
 				current, err := o.store.LockMachineAuthMethodCommandTx(barrierCtx, tx, command.TenantID, command.MethodName)
 				if err != nil {
 					return err

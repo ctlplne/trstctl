@@ -30,7 +30,7 @@ func (o *Orchestrator) reconcileAPITokenRevocation(ctx context.Context, command 
 	defer release()
 	return o.store.WithPrivacyRecoveryBarrier(fenced, command.TenantID,
 		"API-token revocation recovery privacy barrier", func(barrierCtx context.Context) error {
-			return o.store.WithTenant(barrierCtx, command.TenantID, func(tx pgx.Tx) error {
+			return o.store.WithTenantEvent(barrierCtx, command.TenantID, func(barrierCtx context.Context, tx pgx.Tx) error {
 				current, err := o.store.LockAPITokenRevocationCommandTx(barrierCtx, tx, command.TenantID, command.TokenID)
 				if err != nil {
 					return err

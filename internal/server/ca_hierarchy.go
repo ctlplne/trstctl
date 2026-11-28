@@ -1168,7 +1168,7 @@ func (h *caHierarchyService) CrossSignAuthority(ctx context.Context, tenantID, c
 	}
 	purpose := libhierarchy.PurposeCrossSign(caID, targetDER)
 	var crossDER []byte
-	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = h.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		lockedAuthority, err := h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, caID)
 		if err != nil {
 			return err
@@ -1242,7 +1242,7 @@ func (h *caHierarchyService) ImportOfflineRootCrossSign(ctx context.Context, ten
 		return api.CACrossSign{}, err
 	}
 	purpose := offlineCrossSignPurpose(caID, targetDER, crossDER)
-	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = h.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, _, err := h.store.ValidateKeyCeremonyWithApprovalEvidenceTx(ctx, tx, tenantID, ceremonyID, purpose); err != nil {
 			return err
 		}
@@ -1307,7 +1307,7 @@ func (h *caHierarchyService) RekeyOfflineRoot(ctx context.Context, tenantID, caI
 	}
 	successorID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenantID+":"+ceremonyID+":offline-root-rekey")).String()
 	var predecessor, successor store.CAAuthority
-	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = h.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		predecessor, err = h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, caID)
 		if err != nil {

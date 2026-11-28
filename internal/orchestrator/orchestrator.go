@@ -757,7 +757,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 
 	var terminalApprovalErr error
 	apply := func(ctx context.Context) error {
-		return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return o.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 			eventTime := commandTime
 			if to == StateIssued {
 				if err := o.validateEndpointReplacementIssuanceTx(ctx, tx, tenantID, ident); err != nil {

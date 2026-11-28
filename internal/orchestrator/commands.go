@@ -259,7 +259,7 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 	}
 
 	var ev events.Event
-	err = o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
+	err = o.store.WithTenantEvent(ctx, next.TenantID, func(ctx context.Context, tx pgx.Tx) error {
 		// An offboard claim and a bearer/member source append take the same
 		// subject transaction lock. A token may have a different authenticated
 		// minter, so fence both people in a stable order before the source append.
@@ -2095,7 +2095,7 @@ func (o *Orchestrator) projectApprovedCertificateFenceUnbarriered(
 		return store.Certificate{}, fmt.Errorf("orchestrator: decode certificate fence before locking: %w", err)
 	}
 	var canonical projections.CertificateRecorded
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		// Match the inline/tail projector lock order: certificate first, then
 		// approval. The public caller already owns the privacy-history barrier.
 		if err := o.store.LockCertificateRecordingTx(ctx, tx, tenantID, proposed.Fingerprint); err != nil {
@@ -2829,7 +2829,7 @@ func (o *Orchestrator) RecordRemediationPlaybookRun(ctx context.Context, tenantI
 		return store.RemediationPlaybookRun{}, err
 	}
 	var ev events.Event
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventRemediationPlaybookRunRecorded, TenantID: tenantID, Data: payload})
 		if err != nil {

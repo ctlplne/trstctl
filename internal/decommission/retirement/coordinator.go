@@ -257,7 +257,7 @@ func (c *Coordinator) Retry(ctx context.Context, tenantID, keyID string, request
 	if err != nil {
 		return receipt, err
 	}
-	err = c.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = c.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var signerHandle, authorityStatus string
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(signer_handle,''),status FROM ca_authorities
 		    WHERE tenant_id=$1 AND id=$2::uuid FOR SHARE`, tenantID, keyID).

@@ -33,7 +33,7 @@ func appendAndProjectOrderedCertificateMetadata(ctx context.Context, st *store.S
 		return events.Event{}, err
 	}
 	var published events.Event
-	err = st.WithTenant(ctx, candidate.TenantID, func(tx pgx.Tx) error {
+	err = st.WithTenantEvent(ctx, candidate.TenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if recording {
 			// Recording projections also take the fingerprint lock. Preserve
 			// their relation -> metadata -> fingerprint order before append.

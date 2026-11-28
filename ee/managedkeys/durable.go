@@ -346,7 +346,7 @@ func (s *durableService) submit(ctx context.Context, tenantID, requestedProvider
 	if command.Approval != nil {
 		schemaVersion = projections.ManagedKeyApprovalEventSchemaVersion
 	}
-	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = s.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		eventTime := time.Now().UTC()
 		if command.Approval != nil {
 			if _, err := s.store.ValidateManagedKeyApprovalCommandTx(ctx, tx, tenantID,

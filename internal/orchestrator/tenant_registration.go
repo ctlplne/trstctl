@@ -512,12 +512,12 @@ func (o *Orchestrator) emitTenantOffboardOperation(ctx context.Context, next eve
 							}
 						}
 
-						if err := o.store.WithTenant(readCtx, next.TenantID, func(tx pgx.Tx) error {
+						if err := o.store.WithTenantEvent(readCtx, next.TenantID, func(readCtx context.Context, tx pgx.Tx) error {
 							owned, err := o.store.BindKeyStateOwnerTx(readCtx, tx, next.TenantID, store.KeyStateExclusive)
 							if err != nil {
 								return err
 							}
-							readCtx := owned
+							readCtx = owned
 							// Keep the privacy-operation try-lock as the first callback statement.
 							if err := o.store.PreflightTenantOffboardTx(readCtx, tx, next.TenantID); err != nil {
 								return err

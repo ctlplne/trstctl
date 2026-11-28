@@ -79,7 +79,7 @@ func (o *Orchestrator) BulkRevokeCertificates(ctx context.Context, tenantID, com
 	// Holding a tenant row before a history read can deadlock a rewrite/rebuild.
 	err := o.store.WithPrivacyRecoveryBarrier(ctx, tenantID, "certificate revocation", func(ctx context.Context) error {
 		return o.log.WithHistoryRead(ctx, func(ctx context.Context) error {
-			return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			return o.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 				tenant, err := o.store.LockLiveTenantRegistrationSnapshotTx(ctx, tx, tenantID)
 				if err != nil {
 					return err

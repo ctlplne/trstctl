@@ -49,7 +49,7 @@ func TestIngressDoesNotWaitOnCommandOwnedReadModelRow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	var updated events.Event
-	err = h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+	err = h.store.WithTenantEvent(ctx, h.tenant, func(ctx context.Context, tx pgx.Tx) error {
 		var lockedID string
 		if err := tx.QueryRow(ctx, `SELECT id::text FROM notification_routing_policies WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,
 			h.tenant, policyID).Scan(&lockedID); err != nil {

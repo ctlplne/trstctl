@@ -380,7 +380,7 @@ func (d *Detector) record(ctx context.Context, tenantID string, c candidate, pol
 	if err != nil {
 		return err
 	}
-	return d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return d.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err := d.log.Append(ctx, events.Event{ID: c.id, Type: EventFindingDetected, TenantID: tenantID, Data: payload})
 		if err != nil {
 			return err

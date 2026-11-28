@@ -326,12 +326,12 @@ func (l *Lifecycle) requestSealAdmitted(
 		return store.TenantKeyDomain{}, err
 	}
 	var out store.TenantKeyDomain
-	err = l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = l.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		owned, err := l.store.BindKeyStateOwnerTx(ctx, tx, tenantID, store.KeyStateExclusive)
 		if err != nil {
 			return err
 		}
-		ctx := owned
+		ctx = owned
 		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
 			return err
 		}

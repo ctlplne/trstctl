@@ -149,7 +149,7 @@ func (s PolicyStore) Set(ctx context.Context, tenantID string, pol Policy) (Poli
 		return PolicyView{}, err
 	}
 	proj := NewProjection(s.Store)
-	if err := s.Store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := s.Store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err := s.Log.Append(ctx, events.Event{Type: EventPolicySet, TenantID: tenantID, Data: payload})
 		if err != nil {
 			return err

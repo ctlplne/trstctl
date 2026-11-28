@@ -60,7 +60,7 @@ func (h *caHierarchyService) CancelCeremony(ctx context.Context, tenantID, id, r
 
 func reconcileCACeremonyCancel(ctx context.Context, s *store.Store, log *events.Log, command store.CACeremonyCancelCommand, newlyClaimed bool) error {
 	return s.WithPrivacyRecoveryBarrier(ctx, command.TenantID, "CA ceremony cancellation recovery", func(barrierCtx context.Context) error {
-		return s.WithTenant(barrierCtx, command.TenantID, func(tx pgx.Tx) error {
+		return s.WithTenantEvent(barrierCtx, command.TenantID, func(barrierCtx context.Context, tx pgx.Tx) error {
 			current, err := s.LockCACeremonyCancelCommandTx(barrierCtx, tx, command.TenantID, command.CeremonyID)
 			if err != nil {
 				return err

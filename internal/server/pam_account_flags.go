@@ -410,7 +410,7 @@ func (s *pamService) ApplyPAMAccountAction(ctx context.Context, tenantID, reques
 	if err != nil {
 		return api.PAMAccountFlag{}, err
 	}
-	if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := s.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := s.store.ValidateOperationApprovalUseTx(ctx, tx, tenantID, use, s.clock().UTC()); err != nil {
 			return err
 		}

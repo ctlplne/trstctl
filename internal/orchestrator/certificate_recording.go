@@ -55,7 +55,7 @@ func (o *Orchestrator) emitCertificateRecording(ctx context.Context, next events
 	}
 	var result events.Event
 	err = o.store.WithPrivacyRecoveryBarrier(ctx, next.TenantID, "certificate recording recovery", func(readCtx context.Context) error {
-		return o.store.WithTenant(readCtx, next.TenantID, func(tx pgx.Tx) error {
+		return o.store.WithTenantEvent(readCtx, next.TenantID, func(readCtx context.Context, tx pgx.Tx) error {
 			if err := o.store.LockCertificateRecordingTx(readCtx, tx, next.TenantID, material.Fingerprint); err != nil {
 				return err
 			}

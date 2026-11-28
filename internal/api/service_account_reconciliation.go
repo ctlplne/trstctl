@@ -255,7 +255,7 @@ func (a *API) appendDependentRotationQueued(ctx context.Context, tenantID string
 		}
 		return a.projectServiceReconcileFence(ctx, tenantID, fence)
 	}
-	return a.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return a.store.WithTenantEvent(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := a.store.ValidateServiceDependentRotationSourcesTx(ctx, tx, tenantID, queued.Intent, true); err != nil {
 			return err
 		}

@@ -237,7 +237,7 @@ func (s eventSink) appendBoundEventOnce(ctx context.Context, kind, identity stri
 	}
 	encoded.ID = kind + ":" + crypto.SHA256Hex([]byte(identity))
 	var recorded bool
-	err := s.store.WithTenant(ctx, encoded.TenantID, func(tx pgx.Tx) error {
+	err := s.store.WithTenantEvent(ctx, encoded.TenantID, func(ctx context.Context, tx pgx.Tx) error {
 		// A row lock cannot protect an event that has not yet been appended.
 		// This transaction-scoped lock fences competing workers; the canonical
 		// event ID is the durable answer after a crash or lost append response.

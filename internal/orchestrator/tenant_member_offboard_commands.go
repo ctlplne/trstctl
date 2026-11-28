@@ -38,7 +38,7 @@ func (o *Orchestrator) reconcileTenantMemberOffboardCommand(ctx context.Context,
 	sizeBlocked := false
 	err = o.store.WithPrivacyRecoveryBarrier(fenced, command.TenantID,
 		"member offboard recovery privacy barrier", func(barrierCtx context.Context) error {
-			return o.store.WithTenant(barrierCtx, command.TenantID, func(tx pgx.Tx) error {
+			return o.store.WithTenantEvent(barrierCtx, command.TenantID, func(barrierCtx context.Context, tx pgx.Tx) error {
 				if err := o.store.LockTenantMemberSubjectRefTx(barrierCtx, tx, command.TenantID, command.SubjectRef); err != nil {
 					return err
 				}

@@ -38,7 +38,7 @@ func (o *Orchestrator) RecordEventProtectionControl(ctx context.Context, next ev
 	}
 	var result events.Event
 	err = o.store.WithEventKeyDestructionClaim(ctx, claim, func(current context.Context) error {
-		return o.store.WithTenant(current, next.TenantID, func(tx pgx.Tx) error {
+		return o.store.WithTenantEvent(current, next.TenantID, func(current context.Context, tx pgx.Tx) error {
 			var err error
 			result, err = o.log.Append(current, next)
 			if err != nil {
