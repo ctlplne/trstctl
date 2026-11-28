@@ -58,7 +58,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3676 annotated sites across 35 rules. Each row is
+3678 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -104,7 +104,7 @@ not this file.
 | `ee/enterpriseauth/scim_custom_roles_served_test.go:112` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_custom_roles_served_test.go:205` | fabricated fixture credentials (CWE-798) |
 | `ee/enterpriseauth/scim_served_test.go:35` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `ee/enterpriseauth/scim_subject_binding_served_test.go:40` | fabricated local fixture, not a credential (CWE-798) |
+| `ee/enterpriseauth/scim_subject_binding_served_test.go:39` | fabricated local fixture, not a credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_private_test.go:50` | fabricated fixture credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_rotation_served_test.go:35` | fabricated fixture credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_rotation_served_test.go:36` | fabricated fixture credentials (CWE-798) |
@@ -2537,7 +2537,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (858 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (859 sites)
 
 | Location | Reason |
 |---|---|
@@ -2767,7 +2767,8 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:144` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
 | `internal/agent/relay/hostexec.go:181` | operator-supplied profile path, read at their instruction (CWE-22) |
-| `internal/agent/relay/hostexec_haproxy_guard_test.go:199` | private test directory and fixed path (CWE-22) |
+| `internal/agent/relay/hostexec_haproxy_guard_test.go:147` | copy the resolved local test executable into a regular fixture file. |
+| `internal/agent/relay/hostexec_haproxy_guard_test.go:207` | private test directory and fixed path (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
 | `internal/agent/relay/hostrenew_tpm_test.go:140` | owned fixture log (CWE-22) |
 | `internal/agent/relay/hostrenew_tpm_test.go:270` | the test's own temp directory (CWE-22) |
@@ -3400,7 +3401,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (150 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (151 sites)
 
 | Location | Reason |
 |---|---|
@@ -3442,6 +3443,7 @@ not this file.
 | `internal/agent/relay/adcsdatabase_test.go:260` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/adcsdecide_test.go:47` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/adcsrevoke_test.go:46` | a test-owned executable stand-in (CWE-276). |
+| `internal/agent/relay/hostexec_haproxy_guard_test.go:152` | this fixed file in the test's private directory needs execute permission (CWE-22, CWE-276). |
 | `internal/agent/relay/recovery_check_test.go:31` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/selfupgrade_test.go:35` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/swtpm_host_key_journey_test.go:284` | the container's stock nginx config path, as the package installs it (CWE-276) |
@@ -3775,7 +3777,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1340` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:978` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (181 sites)
+### G703 — CWE-22 Path traversal (taint) (182 sites)
 
 | Location | Reason |
 |---|---|
@@ -3801,6 +3803,7 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:224` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:255` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:288` | derived agent-owned state path |
+| `internal/agent/relay/hostexec_haproxy_guard_test.go:152` | this fixed file in the test's private directory needs execute permission (CWE-22, CWE-276). |
 | `internal/agent/relay/hostrollback.go:939` | both paths are inside the validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/k8ssecret_kind_e2e_test.go:84` | the cluster CA file the kind job exports (CWE-22) |
 | `internal/agent/sessionobserve/observer_linux_test.go:132` | the proof names its report path in the environment, never a request (CWE-22) |
