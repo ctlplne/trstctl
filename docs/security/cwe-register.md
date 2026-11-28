@@ -34,6 +34,7 @@ golangci-lint results do not replace that evidence.
 
 | CWE | Where | What was fixed | Guard that fails if it returns |
 |---|---|---|---|
+| CWE-400 | `internal/agent/k8s/informer.go` | Kubernetes collection reads now detect bounded-response overflow, restart with a smaller consistent page, and use metadata-only continuation to identify a single oversized resource while other resources still reconcile. The controller reports a per-resource failure and an incomplete collection posture. | TestListReducesPageSizeUntilSnapshotFits, TestListRestartsSnapshotAfterLaterPageNeedsSmallerLimit, TestListKeepsOtherResourcesWhenOneNeedsMetadataOnlyRead, and TestControllerPostureReportsIssuerInformerFailure (internal/agent/k8s/client_page_bound_test.go) |
 | CWE-400 | `internal/notify/email/email.go` | Native SMTP delivery could remain blocked after the notification dispatch deadline. The complete exchange now shares a bounded socket deadline, and context cancellation closes the connection, releasing the worker even when a relay withholds its greeting or DATA acknowledgment. | TestSMTPGreetingHonorsCancellation and TestSMTPProductionExchangeAndDataDeadline (internal/notify/email/smtp_deadline_test.go) |
 | CWE-863 | `internal/api/endpoint_binding_execution.go` | Endpoint enrollment and direct destination deployment could queue certificate issuance without the ordinary issuance permission, policy, dual-control and profile checks. Both now share the identity issuance gate and retain the exact profile binding through host-agent handoff. | TestEndpointEnrollmentHonorsIssuanceAuthority (internal/server/endpoint_binding_authority_served_test.go) |
 | CWE-367 | `internal/orchestrator/endpoint_binding.go` | Endpoint metadata changes do not increment the lifecycle version. Reviewed identity snapshots now participate in approval evidence and are compared under the identity row lock before issuance, preventing policy-time binding changes from authorizing different work. | TestEndpointEnrollmentHonorsIssuanceAuthority/endpoint_enrollment/identity_changed_during_policy and target_deploy/identity_changed_during_policy (internal/server/endpoint_binding_authority_served_test.go) |
@@ -128,7 +129,7 @@ not this file.
 | `internal/agent/discovery/keystore.go:41` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
 | `internal/agent/discovery/keystore_jceks_test.go:18` | fixture file paths, not credentials (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
-| `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/k8s/client.go:32` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/relay/deploy_failure_log_keep_test.go:34` | a canary the log must not keep, not a credential (CWE-798) |
 | `internal/agent/relay/deploy_failure_log_keep_test.go:42` | "password_ref" is a reference NAME, not a credential (CWE-798) |
 | `internal/agent/relay/deploy_failure_log_test.go:35` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
@@ -3625,7 +3626,7 @@ not this file.
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:88` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:105` | jitter spread (CWE-338) |
-| `internal/agent/k8s/informer.go:208` | reconnect jitter, not a security decision (CWE-338) |
+| `internal/agent/k8s/informer.go:269` | reconnect jitter, not a security decision (CWE-338) |
 | `internal/cli/cli.go:726` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/crypto/scep_property_test.go:145` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/scep_property_test.go:184` | deterministic property-test stream, not security randomness (CWE-338) |

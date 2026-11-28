@@ -26,12 +26,14 @@ empty. The DaemonSet's pods elect one controller through a
 
 The controller reduces list page size when a Kubernetes API response exceeds
 its 4 MiB read bound, then starts a new consistent collection snapshot at that
-size. If even a one-object page cannot fit, that collection reports
-`reconcile_failed` and the
-agent log identifies `api_response_too_large` and the collection path. Check the
-agent log and reduce the oversized resource before relying on signing or bundle
-posture for that collection. The controller does not mark an incomplete list as
-synced.
+size. If one full object still cannot fit, a metadata-only list identifies it
+and advances the snapshot. Other objects continue to reconcile, while the
+affected object's posture is `failed` with reason `api_response_too_large` and
+the collection reports `reconcile_failed`. The agent log identifies the
+collection path and resource. Reduce that resource before relying on its
+signing or bundle state. If the API does not support a bounded metadata-only
+response, the collection remains failed rather than silently skipping an
+unidentified object.
 
 ## cert-manager external issuer
 

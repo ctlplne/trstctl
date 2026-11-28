@@ -256,7 +256,7 @@ func validKubernetesPostureReason(reason, capability string) bool {
 		return capability == store.KubernetesPostureCertManagerRequests
 	case "issuer_binding_mismatch", "invalid_signer_name":
 		return capability == store.KubernetesPostureCertificateSigningRequests
-	case "signed", "already_ready", "approval_pending", "issuer_not_found", "denied", "failed", "awaiting_sign", "distributed", "controller_error":
+	case "signed", "already_ready", "approval_pending", "issuer_not_found", "denied", "failed", "awaiting_sign", "distributed", "controller_error", "api_response_too_large":
 		return true
 	default:
 		return false

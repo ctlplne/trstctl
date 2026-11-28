@@ -350,9 +350,28 @@ func (rt *controllerRuntime) report(ctx context.Context) {
 func (rt *controllerRuntime) postureReport() ControllerPostureReport {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+	issuerFailure := false
+	for _, issuer := range []*informer{rt.clusterIssuers, rt.issuers} {
+		if issuer != nil {
+			_, _, err := issuer.state()
+			issuerFailure = issuerFailure || err != nil
+		}
+	}
 	section := func(name string, inf *informer, optional bool) PostureSection {
-		resources := make([]PostureResource, 0, len(rt.posture[name]))
-		for _, resource := range rt.posture[name] {
+		byKey := make(map[string]PostureResource, len(rt.posture[name]))
+		for key, resource := range rt.posture[name] {
+			byKey[key] = resource
+		}
+		for _, obj := range inf.omittedSnapshot() {
+			metadata, _ := obj["metadata"].(map[string]any)
+			uid, _ := metadata["uid"].(string)
+			byKey[objectKey(obj)] = PostureResource{
+				Namespace: objectNamespace(obj), Name: objectName(obj), UID: uid,
+				ResourceVersion: objectResourceVersion(obj), State: "failed", Reason: "api_response_too_large",
+			}
+		}
+		resources := make([]PostureResource, 0, len(byKey))
+		for _, resource := range byKey {
 			resources = append(resources, resource)
 		}
 		sort.Slice(resources, func(i, j int) bool {
@@ -365,7 +384,7 @@ func (rt *controllerRuntime) postureReport() ControllerPostureReport {
 		switch {
 		case optional && errors.Is(lastErr, errNotInstalled):
 			return PostureSection{Complete: true, Resources: resources}
-		case lastErr != nil:
+		case lastErr != nil || (!rt.issuersSynced && issuerFailure):
 			return PostureSection{FailureCode: "reconcile_failed", Resources: resources}
 		case !synced || !rt.issuersSynced:
 			return PostureSection{FailureCode: "not_reconciled", Resources: resources}

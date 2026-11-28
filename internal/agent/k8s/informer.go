@@ -32,8 +32,9 @@ var (
 )
 
 const (
-	listPageSize     = 500
-	notInstalledWait = 30 * time.Second
+	listPageSize       = 500
+	notInstalledWait   = 30 * time.Second
+	metadataListAccept = "application/json;as=PartialObjectMetadataList;g=meta.k8s.io;v=v1"
 )
 
 // watchEvent is one event from a Kubernetes watch stream.
@@ -104,11 +105,27 @@ func (c *Client) watch(ctx context.Context, collectionPath, labelSelector, resou
 	}
 }
 
-// list reads the whole collection page by page and returns its items with the
-// snapshot's resourceVersion.
-func (c *Client) list(ctx context.Context, collectionPath, labelSelector string) ([]map[string]any, string, error) {
-	var items []map[string]any
-	snapshot, next := "", ""
+type collectionSnapshot struct {
+	items           []map[string]any
+	omitted         []map[string]any
+	resourceVersion string
+}
+
+type collectionPage struct {
+	Kind       string `json:"kind"`
+	APIVersion string `json:"apiVersion"`
+	Metadata   struct {
+		ResourceVersion string `json:"resourceVersion"`
+		Continue        string `json:"continue"`
+	} `json:"metadata"`
+	Items []map[string]any `json:"items"`
+}
+
+// list reads a consistent collection snapshot. A resource that cannot fit in
+// one full-object page is identified through Kubernetes' metadata-only list.
+func (c *Client) list(ctx context.Context, collectionPath, labelSelector string) (collectionSnapshot, error) {
+	var result collectionSnapshot
+	next := ""
 	pageSize := listPageSize
 	for {
 		query := url.Values{}
@@ -122,43 +139,73 @@ func (c *Client) list(ctx context.Context, collectionPath, labelSelector string)
 		st, body, err := c.request(ctx, http.MethodGet, collectionPath+"?"+query.Encode(), nil)
 		if errors.Is(err, errAPIBodyTooLarge) {
 			if pageSize == 1 {
-				return nil, "", fmt.Errorf("k8s: list %s: a single resource exceeds the API response limit: %w", collectionPath, err)
+				st, body, err = c.requestAsAccept(ctx, http.MethodGet, collectionPath+"?"+query.Encode(), "application/json", metadataListAccept, nil)
+				if err != nil {
+					return collectionSnapshot{}, fmt.Errorf("k8s: read metadata for %s: %w", collectionPath, err)
+				}
+				if st == http.StatusGone {
+					return collectionSnapshot{}, errWatchExpired
+				}
+				if st != http.StatusOK {
+					return collectionSnapshot{}, fmt.Errorf("k8s: metadata list %s: status %d", collectionPath, st)
+				}
+				var page collectionPage
+				if err := json.Unmarshal(body, &page); err != nil {
+					return collectionSnapshot{}, fmt.Errorf("k8s: decode metadata list %s: %w", collectionPath, err)
+				}
+				if page.Kind != "PartialObjectMetadataList" || page.APIVersion != "meta.k8s.io/v1" || len(page.Items) != 1 ||
+					objectKey(page.Items[0]) == "" || objectResourceVersion(page.Items[0]) == "" {
+					return collectionSnapshot{}, fmt.Errorf("k8s: metadata list %s did not identify one resource", collectionPath)
+				}
+				metadata, _ := page.Items[0]["metadata"].(map[string]any)
+				uid, _ := metadata["uid"].(string)
+				if uid == "" || len(uid) > 128 || len(objectName(page.Items[0])) > 253 || len(objectNamespace(page.Items[0])) > 63 || len(objectResourceVersion(page.Items[0])) > 128 {
+					return collectionSnapshot{}, fmt.Errorf("k8s: metadata list %s returned an invalid resource identity", collectionPath)
+				}
+				if result.resourceVersion != "" && result.resourceVersion != page.Metadata.ResourceVersion {
+					return collectionSnapshot{}, errWatchExpired
+				}
+				result.resourceVersion = page.Metadata.ResourceVersion
+				result.omitted = append(result.omitted, map[string]any{"metadata": map[string]any{
+					"name": objectName(page.Items[0]), "namespace": objectNamespace(page.Items[0]),
+					"uid": uid, "resourceVersion": objectResourceVersion(page.Items[0]),
+				}})
+				if page.Metadata.Continue == "" {
+					return result, nil
+				}
+				next = page.Metadata.Continue
+				continue
 			}
 			pageSize = max(1, pageSize/2)
 			// A continuation token belongs to its original limit. Start a fresh
 			// snapshot so every later page uses the same reduced limit.
-			items = nil
-			snapshot, next = "", ""
+			result = collectionSnapshot{}
+			next = ""
 			continue
 		}
 		if err != nil {
-			return nil, "", err
+			return collectionSnapshot{}, err
 		}
 		if st == http.StatusNotFound {
-			return nil, "", errNotInstalled
+			return collectionSnapshot{}, errNotInstalled
 		}
 		if st == http.StatusGone {
-			return nil, "", errWatchExpired // the continue token expired; start over
+			return collectionSnapshot{}, errWatchExpired // the continue token expired; start over
 		}
 		if st/100 != 2 {
-			return nil, "", fmt.Errorf("k8s: list %s: status %d: %s", collectionPath, st, string(body))
+			return collectionSnapshot{}, fmt.Errorf("k8s: list %s: status %d: %s", collectionPath, st, string(body))
 		}
-		var page struct {
-			Metadata struct {
-				ResourceVersion string `json:"resourceVersion"`
-				Continue        string `json:"continue"`
-			} `json:"metadata"`
-			Items []map[string]any `json:"items"`
-		}
+		var page collectionPage
 		if err := json.Unmarshal(body, &page); err != nil {
-			return nil, "", fmt.Errorf("k8s: decode %s list: %w", collectionPath, err)
+			return collectionSnapshot{}, fmt.Errorf("k8s: decode %s list: %w", collectionPath, err)
 		}
-		if snapshot == "" {
-			snapshot = page.Metadata.ResourceVersion
+		if result.resourceVersion != "" && result.resourceVersion != page.Metadata.ResourceVersion {
+			return collectionSnapshot{}, errWatchExpired
 		}
-		items = append(items, page.Items...)
+		result.resourceVersion = page.Metadata.ResourceVersion
+		result.items = append(result.items, page.Items...)
 		if page.Metadata.Continue == "" {
-			return items, snapshot, nil
+			return result, nil
 		}
 		next = page.Metadata.Continue
 	}
@@ -174,6 +221,7 @@ type informer struct {
 
 	mu        sync.RWMutex
 	items     map[string]map[string]any
+	omitted   map[string]map[string]any
 	synced    bool
 	installed bool
 	lastErr   error
@@ -182,7 +230,7 @@ type informer struct {
 func newInformer(client *Client, path, labelSelector string, onChange func(string, map[string]any)) *informer {
 	return &informer{
 		client: client, path: path, labelSelector: labelSelector, onChange: onChange,
-		watchTimeout: 5 * time.Minute, items: map[string]map[string]any{},
+		watchTimeout: 5 * time.Minute, items: map[string]map[string]any{}, omitted: map[string]map[string]any{},
 	}
 }
 
@@ -237,23 +285,29 @@ func (i *informer) run(ctx context.Context) {
 
 // relist replaces the cache with a fresh snapshot, reporting what differs.
 func (i *informer) relist(ctx context.Context) (string, error) {
-	items, rv, err := i.client.list(ctx, i.path, i.labelSelector)
+	snapshot, err := i.client.list(ctx, i.path, i.labelSelector)
 	if errors.Is(err, errNotInstalled) {
-		i.replace(nil, false, err)
+		i.replace(nil, nil, false, err)
 		return "", err
 	}
 	if err != nil {
 		return "", err
 	}
-	i.replace(items, true, nil)
-	return rv, nil
+	i.replace(snapshot.items, snapshot.omitted, true, nil)
+	return snapshot.resourceVersion, nil
 }
 
-func (i *informer) replace(items []map[string]any, installed bool, cause error) {
+func (i *informer) replace(items, omitted []map[string]any, installed bool, cause error) {
 	fresh := make(map[string]map[string]any, len(items))
 	for _, obj := range items {
 		if key := objectKey(obj); key != "" {
 			fresh[key] = obj
+		}
+	}
+	skipped := make(map[string]map[string]any, len(omitted))
+	for _, obj := range omitted {
+		if key := objectKey(obj); key != "" {
+			skipped[key] = obj
 		}
 	}
 	i.mu.Lock()
@@ -268,8 +322,14 @@ func (i *informer) replace(items []map[string]any, installed bool, cause error) 
 			changed[key] = old
 		}
 	}
-	i.items, i.synced, i.installed, i.lastErr = fresh, true, installed, cause
+	i.items, i.omitted, i.synced, i.installed, i.lastErr = fresh, skipped, true, installed, cause
+	if len(skipped) > 0 {
+		i.lastErr = errAPIBodyTooLarge
+	}
 	i.mu.Unlock()
+	for key := range skipped {
+		slog.Warn("k8s informer collection sync skipped oversized resource", "collection", i.path, "resource", key, "cause", "api_response_too_large")
+	}
 	for key, obj := range changed {
 		i.onChange(key, obj)
 	}
@@ -294,13 +354,17 @@ func (i *informer) apply(event watchEvent, rv *string) error {
 	switch event.Type {
 	case "ADDED", "MODIFIED":
 		i.items[key] = obj
+		delete(i.omitted, key)
 	case "DELETED":
 		delete(i.items, key)
+		delete(i.omitted, key)
 	default:
 		i.mu.Unlock()
 		return nil
 	}
-	i.lastErr = nil
+	if len(i.omitted) == 0 {
+		i.lastErr = nil
+	}
 	i.mu.Unlock()
 	i.onChange(key, obj)
 	return nil
@@ -343,6 +407,16 @@ func (i *informer) snapshot() []map[string]any {
 	defer i.mu.RUnlock()
 	out := make([]map[string]any, 0, len(i.items))
 	for _, obj := range i.items {
+		out = append(out, deepCopyObject(obj))
+	}
+	return out
+}
+
+func (i *informer) omittedSnapshot() []map[string]any {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	out := make([]map[string]any, 0, len(i.omitted))
+	for _, obj := range i.omitted {
 		out = append(out, deepCopyObject(obj))
 	}
 	return out

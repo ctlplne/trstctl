@@ -191,3 +191,18 @@ func TestKubernetesControllerPostureContractAcceptsIssuerBindingFailures(t *test
 		})
 	}
 }
+
+func TestKubernetesControllerPostureContractAcceptsBoundedListFailure(t *testing.T) {
+	report := projections.KubernetesControllerPostureReported{
+		ReportID:  "33333333-3333-3333-3333-333333333333",
+		AgentID:   "44444444-4444-4444-4444-444444444444",
+		ClusterID: "sha256:" + strings.Repeat("a", 64), ReconcileIntervalSeconds: 30,
+		CertificateSigning: projections.KubernetesPostureSection{FailureCode: "reconcile_failed", Resources: []projections.KubernetesPostureResource{{
+			Name: "large-csr", UID: "csr-uid", ResourceVersion: "17", State: "failed", Reason: "api_response_too_large",
+		}}},
+		TrustBundles: projections.KubernetesPostureSection{Complete: true},
+	}
+	if _, err := projections.MarshalKubernetesPostureReport(report); err != nil {
+		t.Fatalf("bounded list failure was refused: %v", err)
+	}
+}

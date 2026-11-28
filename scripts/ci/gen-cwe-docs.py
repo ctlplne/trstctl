@@ -79,6 +79,9 @@ CWE_BY_RULE = {
 # The weaknesses that were FIXED (not waived), each with the guard that fails
 # if the weakness returns. Hand-maintained: a fix lands here in the same change.
 FIXED = [
+    ("CWE-400", "internal/agent/k8s/informer.go",
+     "Kubernetes collection reads now detect bounded-response overflow, restart with a smaller consistent page, and use metadata-only continuation to identify a single oversized resource while other resources still reconcile. The controller reports a per-resource failure and an incomplete collection posture.",
+     "TestListReducesPageSizeUntilSnapshotFits, TestListRestartsSnapshotAfterLaterPageNeedsSmallerLimit, TestListKeepsOtherResourcesWhenOneNeedsMetadataOnlyRead, and TestControllerPostureReportsIssuerInformerFailure (internal/agent/k8s/client_page_bound_test.go)"),
     ("CWE-400", "internal/notify/email/email.go",
      "Native SMTP delivery could remain blocked after the notification dispatch deadline. The complete exchange now shares a bounded socket deadline, and context cancellation closes the connection, releasing the worker even when a relay withholds its greeting or DATA acknowledgment.",
      "TestSMTPGreetingHonorsCancellation and TestSMTPProductionExchangeAndDataDeadline (internal/notify/email/smtp_deadline_test.go)"),

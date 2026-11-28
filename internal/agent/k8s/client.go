@@ -123,6 +123,10 @@ func (c *Client) request(ctx context.Context, method, path string, body any) (in
 // requestAs is request with the body sent under contentType, for the PATCH
 // flavours the API server tells apart by media type.
 func (c *Client) requestAs(ctx context.Context, method, path, contentType string, body any) (int, []byte, error) {
+	return c.requestAsAccept(ctx, method, path, contentType, "application/json", body)
+}
+
+func (c *Client) requestAsAccept(ctx context.Context, method, path, contentType, accept string, body any) (int, []byte, error) {
 	var payload []byte
 	if body != nil {
 		var err error
@@ -148,7 +152,7 @@ func (c *Client) requestAs(ctx context.Context, method, path, contentType string
 		if c.token != "" {
 			req.Header.Set("Authorization", "Bearer "+c.token)
 		}
-		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Accept", accept)
 		if body != nil {
 			req.Header.Set("Content-Type", contentType)
 		}

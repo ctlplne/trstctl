@@ -27,6 +27,7 @@ coverage ledger applies to assets, applied to weaknesses.
 
 | CWE | Where | Guard |
 |---|---|---|
+| CWE-400 | `internal/agent/k8s/informer.go` | TestListReducesPageSizeUntilSnapshotFits, TestListRestartsSnapshotAfterLaterPageNeedsSmallerLimit, TestListKeepsOtherResourcesWhenOneNeedsMetadataOnlyRead, and TestControllerPostureReportsIssuerInformerFailure (internal/agent/k8s/client_page_bound_test.go) |
 | CWE-400 | `internal/notify/email/email.go` | TestSMTPGreetingHonorsCancellation and TestSMTPProductionExchangeAndDataDeadline (internal/notify/email/smtp_deadline_test.go) |
 | CWE-863 | `internal/api/endpoint_binding_execution.go` | TestEndpointEnrollmentHonorsIssuanceAuthority (internal/server/endpoint_binding_authority_served_test.go) |
 | CWE-367 | `internal/orchestrator/endpoint_binding.go` | TestEndpointEnrollmentHonorsIssuanceAuthority/endpoint_enrollment/identity_changed_during_policy and target_deploy/identity_changed_during_policy (internal/server/endpoint_binding_authority_served_test.go) |
