@@ -5889,6 +5889,34 @@ func discoveryFindingStableProjectionSQL() string {
 		 ORDER BY tenant_id, id`
 }
 
+func TestMigration0530PreservesRoutingPoliciesAndScopesTheirIdentity(t *testing.T) {
+	runPopulatedDefaultMigrationHarness(t, 530, notificationRoutingPolicyStableProjectionSQL(),
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			seedNotificationRoutingPolicyMetadataContent(t, ctx, pool)
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			sharedID := uuid(tenantA, 62)
+			if _, err := pool.Exec(ctx, `
+				INSERT INTO notification_routing_policies
+				(id, tenant_id, name, channels_by_severity, default_channels, created_at, updated_at)
+				VALUES ($1, $2, 'tenant-local route', '{}'::jsonb, '[]'::jsonb, now(), now())`,
+				sharedID, tenantB); err != nil {
+				t.Fatalf("insert independent tenant routing policy identity: %v", err)
+			}
+			var count int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM notification_routing_policies
+				WHERE id = $1 AND tenant_id IN ($2, $3)`,
+				sharedID, tenantA, tenantB).Scan(&count); err != nil || count != 2 {
+				t.Fatalf("tenant-scoped routing identity rows=%d err=%v, want 2", count, err)
+			}
+			var original string
+			if err := pool.QueryRow(ctx, `SELECT name FROM notification_routing_policies
+				WHERE tenant_id = $1 AND id = $2`, tenantA, sharedID).Scan(&original); err != nil || original != "critical-escalation" {
+				t.Fatalf("existing routing policy after tenant-local insert: name=%q err=%v", original, err)
+			}
+		})
+}
+
 func seedNotificationRoutingPolicyMetadataContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 	rows := []struct {

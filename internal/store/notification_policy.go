@@ -171,12 +171,10 @@ func (s *Store) ApplyNotificationRoutingPolicyUpsertedTx(ctx context.Context, tx
 	}
 
 	// The event stream can race the command-side projector: both may try to
-	// install the same event at once. PostgreSQL is free to report either the
-	// global id primary key or the tenant/id unique key first, so targeting one
-	// constraint with ON CONFLICT leaves the other race unhandled. After any
-	// conflict, update only the exact tenant-owned identity. A name/scope clash
-	// with a different identity, or a globally colliding id owned by another
-	// tenant, changes zero rows and fails closed.
+	// install the same event at once. A conflict can come from the tenant/id,
+	// tenant/name or tenant/scope indexes. After any conflict, update only the
+	// exact tenant-owned identity; a name or scope held by another policy in
+	// that tenant still fails closed.
 	tag, err = tx.Exec(ctx,
 		`UPDATE notification_routing_policies
 		    SET name = $3,

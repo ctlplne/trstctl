@@ -70,7 +70,7 @@ func TestEffectiveNotificationRoutingPolicyUsesMostSpecificTenantRule(t *testing
 	}
 }
 
-func TestNotificationRoutingPolicyProjectionReplayUsesPrimaryIdentityAndKeepsTenantOwnership(t *testing.T) {
+func TestNotificationRoutingPolicyProjectionUsesTenantScopedIdentity(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 	apply := func(tenantID string, candidate store.NotificationRoutingPolicy) error {
@@ -114,9 +114,9 @@ func TestNotificationRoutingPolicyProjectionReplayUsesPrimaryIdentityAndKeepsTen
 
 	neighbor := policy
 	neighbor.TenantID = tenantB
-	neighbor.Name = "Neighbor must not claim the same global ID"
-	if err := apply(tenantB, neighbor); err == nil {
-		t.Fatal("neighbor tenant reused a globally owned routing policy ID")
+	neighbor.Name = "Independent tenant route"
+	if err := apply(tenantB, neighbor); err != nil {
+		t.Fatalf("same routing policy ID in another tenant: %v", err)
 	}
 	got, err := s.GetNotificationRoutingPolicy(ctx, tenantA, policy.ID)
 	if err != nil {
@@ -125,7 +125,8 @@ func TestNotificationRoutingPolicyProjectionReplayUsesPrimaryIdentityAndKeepsTen
 	if got.TenantID != tenantA || got.Name != policy.Name {
 		t.Fatalf("tenant A policy changed after neighbor collision: %+v", got)
 	}
-	if _, err := s.GetNotificationRoutingPolicy(ctx, tenantB, policy.ID); !store.IsNotFound(err) {
-		t.Fatalf("tenant B lookup error = %v, want not found", err)
+	got, err = s.GetNotificationRoutingPolicy(ctx, tenantB, policy.ID)
+	if err != nil || got.TenantID != tenantB || got.Name != neighbor.Name {
+		t.Fatalf("read tenant B policy after independent insert: policy=%+v err=%v", got, err)
 	}
 }
