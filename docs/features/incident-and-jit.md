@@ -787,8 +787,12 @@ longer hold. An action on an open flag is proposed for approval
 credential and disable the target (for an account its provider rotates between two,
 `rotation_old_ref` names the one in use). Two people with `access:approve` approve it like
 any other request; `.../actions/apply` then applies it once with the approval's exact
-identifiers, consuming the approval, and the flag and the target read back what it did. In
-the console: Access → Privileged access → **Orphaned and unused accounts**.
+identifiers. The credential rotation is queued only while that review is approved,
+unexpired, and bound to the current open flag; denied or expired reviews leave the
+credential untouched. That review grants authority for this account's rotation
+even when the requester lacks `secrets:write` or provider-write permission. The
+action consumes the approval, and the flag and the target
+read back what it did. In the console: Access → Privileged access → **Orphaned and unused accounts**.
 
 Brokered accounts are certified through the access reviews: a review generated with
 `"source": "pam_accounts"` (`POST /api/v1/access/reviews/generate`) lists every enabled

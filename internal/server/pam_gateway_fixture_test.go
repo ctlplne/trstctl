@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,6 +147,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	if opts.vaulted {
 		_, f.vaultDSN = provisionTwoUserTarget(t, pgDSN)
 	}
+	pgURL, err := url.Parse(pgDSN)
+	if err != nil || pgURL.Query().Get("sslrootcert") == "" {
+		t.Fatalf("fixture PostgreSQL trust: %v", err)
+	}
+	pgCARoot := filepath.Dir(pgURL.Query().Get("sslrootcert"))
 	var redisProviders, mysqlProviders, mongoProviders, clickhouseProviders DynamicSecretProviderRegistry
 	if opts.redis {
 		if opts.redisPlaintext {
@@ -166,7 +172,6 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	if opts.clickhouseNote != "" {
 		f.clickhouse, clickhouseProviders = startPAMClickHouse(t, opts.clickhouseNote)
 	}
-	var err error
 	if f.auditKey, err = jose.GenerateRSASigningKey("audit-export"); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +202,7 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 			d.EnableSecretsAPI = true
 			vault := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "pam-pg-vault", Type: "postgresql",
 				AdminDSNRef: adminDSNRef, Database: "postgres", Schema: "app", UsernamePrefix: "trstctl", AllowedRoles: []string{twoUserRole},
-				MaxTTL: time.Hour.String(), AllowStaticRotation: true,
+				MaxTTL: time.Hour.String(), AllowStaticRotation: true, DatabaseCAFileRoot: pgCARoot,
 				RotationAccounts: map[string][]string{twoUserRole: {twoUserAccountA, twoUserAccountB}}}
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant],
 				newConfiguredDynamicProvider(vault, map[string]bool{twoUserRole: true}, time.Hour,

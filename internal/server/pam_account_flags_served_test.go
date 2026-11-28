@@ -99,6 +99,11 @@ func TestServedOrphanedAccountActionIsApprovedAppliedAndReadBackA276(t *testing.
 		if status, _ := apply(key + "-early"); status == http.StatusOK {
 			t.Fatalf("%s applied before its review", key)
 		}
+		if action["action"] == "rotate_disable" {
+			if _, queued, err := h.store.LatestSecretStaticRotationCommandForKey(t.Context(), h.tenant, twoUserRole); err != nil || queued {
+				t.Fatalf("credential rotation before review: queued=%t err=%v", queued, err)
+			}
+		}
 		for i, reviewer := range reviewers {
 			if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/approval-requests/"+review.ApprovalRequestID+"/approvals",
 				reviewer, key+"-approve-"+strconv.Itoa(i), map[string]any{"intent_digest": review.IntentDigest}); status != http.StatusOK {
@@ -172,6 +177,45 @@ func TestServedOrphanedAccountActionIsApprovedAppliedAndReadBackA276(t *testing.
 	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/account-flags/postgres/orders-vault/actions", steward, "a276-guess",
 		map[string]any{"request_id": uuid.NewString(), "action": "rotate_disable", "reason": "a guess", "rotation_old_ref": "none"}); status != http.StatusUnprocessableEntity {
 		t.Fatalf("a rotation without the account in use: %d %s", status, body)
+	}
+	// A durable rotation requires a live, approved review at admission.
+	for _, reviewState := range []string{"denied", "expired"} {
+		action := map[string]any{"request_id": uuid.NewString(), "action": "rotate_disable", "rotation_old_ref": twoUserAccountA,
+			"reason": "review the account retirement"}
+		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost,
+			"/api/v1/access/account-flags/postgres/orders-vault/actions", steward, "a276-"+reviewState+"-request", action)
+		var review api.PAMAccountActionReview
+		if status != http.StatusAccepted || json.Unmarshal(body, &review) != nil {
+			t.Fatalf("%s review request: %d %s", reviewState, status, body)
+		}
+		action["approval_request_id"], action["intent_digest"] = review.ApprovalRequestID, review.IntentDigest
+		if reviewState == "denied" {
+			status, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+				"/api/v1/approval-requests/"+review.ApprovalRequestID+"/denials", reviewers[0], "a276-denied-decision",
+				map[string]any{"intent_digest": review.IntentDigest, "reason": "Retain the account"})
+			if status != http.StatusOK {
+				t.Fatalf("denial decision: %d %s", status, body)
+			}
+		} else {
+			for i, reviewer := range reviewers {
+				status, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+					"/api/v1/approval-requests/"+review.ApprovalRequestID+"/approvals", reviewer,
+					"a276-expired-approval-"+strconv.Itoa(i), map[string]any{"intent_digest": review.IntentDigest})
+				if status != http.StatusOK {
+					t.Fatalf("expiring review decision %d: %d %s", i+1, status, body)
+				}
+			}
+			clockOffset.Store(int64(time.Hour))
+		}
+		status, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+			"/api/v1/access/account-flags/postgres/orders-vault/actions/apply", steward, "a276-"+reviewState+"-apply", action)
+		clockOffset.Store(0)
+		if status == http.StatusOK {
+			t.Fatalf("%s review applied: %d %s", reviewState, status, body)
+		}
+		if _, queued, err := h.store.LatestSecretStaticRotationCommandForKey(t.Context(), h.tenant, twoUserRole); err != nil || queued {
+			t.Fatalf("credential rotation with %s review: queued=%t err=%v", reviewState, queued, err)
+		}
 	}
 	_, flag = approve("a276-rotate-disable", map[string]any{"action": "rotate_disable", "rotation_old_ref": twoUserAccountA, "reason": "no owner left; retire the account"})
 	if flag.Status != "actioned" || flag.Action != "rotate_disable" || flag.ActionRotationID == "" {

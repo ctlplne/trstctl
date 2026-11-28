@@ -314,12 +314,8 @@ func sameEvidence(a, b []string) bool {
 	return slices.Equal(x, y)
 }
 
-// PlanPAMAccountAction checks an apply's approval and says what applying it
-// rotates first.
-func (s *pamService) PlanPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string, req api.PAMAccountActionRequest) (api.PAMAccountActionPlan, error) {
-	if _, _, err := s.approvedPAMAccountAction(ctx, tenantID, requester, targetType, id, req); err != nil {
-		return api.PAMAccountActionPlan{}, err
-	}
+// planPAMAccountAction identifies the credential an approved action rotates.
+func (s *pamService) planPAMAccountAction(ctx context.Context, tenantID, targetType, id string, req api.PAMAccountActionRequest) (api.PAMAccountActionPlan, error) {
 	if req.Action != "rotate_disable" {
 		return api.PAMAccountActionPlan{}, nil
 	}
@@ -332,6 +328,57 @@ func (s *pamService) PlanPAMAccountAction(ctx context.Context, tenantID, request
 		oldRef = req.RotationOldRef
 	}
 	return api.PAMAccountActionPlan{RotateProvider: target.ProviderID, RotateKey: target.AccountSecret, RotateOldRef: oldRef}, nil
+}
+
+// RunApprovedPAMAccountAction validates live approval authority and holds the
+// reviewed flag and approval rows through durable rotation admission.
+func (s *pamService) RunApprovedPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string,
+	req api.PAMAccountActionRequest, queue func(context.Context, api.PAMAccountActionPlan) (string, error),
+) (string, error) {
+	if queue == nil {
+		return "", fmt.Errorf("%w: approved action needs a queue callback", api.ErrPAMInvalid)
+	}
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-account-flag\x00"+tenantID+"\x00"+req.ApprovalRequestID)).String()
+	if _, found, err := s.log.EventByID(ctx, eventID); err != nil {
+		return "", err
+	} else if found {
+		flag, err := s.ApplyPAMAccountAction(ctx, tenantID, requester, targetType, id, req, "")
+		return flag.ActionRotationID, err
+	}
+	approval, flag, err := s.approvedPAMAccountAction(ctx, tenantID, requester, targetType, id, req)
+	if err != nil {
+		return "", err
+	}
+	if flag.Status != "open" {
+		return "", fmt.Errorf("%w: the account's flag is %s; only an open flag takes an action", api.ErrPAMTargetConflict, flag.Status)
+	}
+	use, err := store.OperationApprovalUseFromRequest(approval)
+	if err != nil {
+		return "", err
+	}
+	plan, err := s.planPAMAccountAction(ctx, tenantID, targetType, id, req)
+	if err != nil {
+		return "", err
+	}
+	var rotationID string
+	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		current, err := s.store.LockPAMAccountFlagTx(ctx, tx, tenantID, targetType, id)
+		if err != nil {
+			return err
+		}
+		if current.Status != "open" || !current.FlaggedAt.Equal(flag.FlaggedAt) || !slices.Equal(current.Reasons, flag.Reasons) {
+			return fmt.Errorf("%w: the reviewed account flag changed; request a new review", api.ErrPAMTargetConflict)
+		}
+		validated, err := s.store.ValidateOperationApprovalUseTx(ctx, tx, tenantID, use, s.clock().UTC())
+		if err != nil {
+			return err
+		}
+		queueCtx, cancel := context.WithDeadline(ctx, validated.ExpiresAt)
+		defer cancel()
+		rotationID, err = queue(queueCtx, plan)
+		return err
+	})
+	return rotationID, err
 }
 
 // twoUserAccounts is the pair a provider rotates a role's account between,
@@ -360,7 +407,9 @@ func (s *pamService) ApplyPAMAccountAction(ctx context.Context, tenantID, reques
 	if found {
 		var done projections.PAMAccountFlagActioned
 		if canonical.Type != projections.EventPAMAccountFlagActioned || canonical.TenantID != tenantID || json.Unmarshal(canonical.Data, &done) != nil ||
-			done.TargetType != targetType || done.TargetID != id || done.Actor != requester {
+			done.TargetType != targetType || done.TargetID != id || done.Actor != requester || done.Action != req.Action ||
+			done.OwnerID != req.OwnerID || done.Reason != strings.TrimSpace(req.Reason) ||
+			done.Approval.RequestID != req.ApprovalRequestID || done.Approval.IntentDigest != req.IntentDigest {
 			return api.PAMAccountFlag{}, fmt.Errorf("%w: the approval was applied to a different action", orchestrator.ErrIdempotencyConflict)
 		}
 		flag, err := s.store.GetPAMAccountFlag(ctx, tenantID, targetType, id)
@@ -456,11 +505,13 @@ func (s *Server) RequestPAMAccountAction(ctx context.Context, tenantID, requeste
 	return s.pam.RequestPAMAccountAction(ctx, tenantID, requester, targetType, id, req)
 }
 
-func (s *Server) PlanPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string, req api.PAMAccountActionRequest) (api.PAMAccountActionPlan, error) {
+func (s *Server) RunApprovedPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string,
+	req api.PAMAccountActionRequest, queue func(context.Context, api.PAMAccountActionPlan) (string, error),
+) (string, error) {
 	if s.pam == nil {
-		return api.PAMAccountActionPlan{}, api.ErrPAMUnavailable
+		return "", api.ErrPAMUnavailable
 	}
-	return s.pam.PlanPAMAccountAction(ctx, tenantID, requester, targetType, id, req)
+	return s.pam.RunApprovedPAMAccountAction(ctx, tenantID, requester, targetType, id, req, queue)
 }
 
 func (s *Server) ApplyPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string, req api.PAMAccountActionRequest, rotationID string) (api.PAMAccountFlag, error) {

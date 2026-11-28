@@ -73,7 +73,8 @@ type PAMAccountFlagService interface {
 	ListPAMAccountFlags(ctx context.Context, tenantID, status string) ([]PAMAccountFlag, error)
 	ScanPAMAccountFlags(ctx context.Context, tenantID string) ([]PAMAccountFlag, error)
 	RequestPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string, req PAMAccountActionRequest) (PAMAccountActionReview, error)
-	PlanPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string, req PAMAccountActionRequest) (PAMAccountActionPlan, error)
+	RunApprovedPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string, req PAMAccountActionRequest,
+		queue func(context.Context, PAMAccountActionPlan) (string, error)) (string, error)
 	ApplyPAMAccountAction(ctx context.Context, tenantID, requester, targetType, id string, req PAMAccountActionRequest, rotationID string) (PAMAccountFlag, error)
 }
 
@@ -177,27 +178,27 @@ func (a *API) applyPAMAccountAction(w http.ResponseWriter, r *http.Request) {
 		}
 		actor := principalSubject(ctx)
 		targetType, id := r.PathValue("target_type"), r.PathValue("id")
-		plan, err := svc.PlanPAMAccountAction(ctx, tenantID, actor, targetType, id, req)
+		rotationID, err := svc.RunApprovedPAMAccountAction(ctx, tenantID, actor, targetType, id, req,
+			func(approved context.Context, plan PAMAccountActionPlan) (string, error) {
+				if req.Action != "rotate_disable" || plan.RotateProvider == "" || plan.RotateKey == "" {
+					return "", nil
+				}
+				// Keep the approval locked until the durable rotation command is queued.
+				rotation := secretRotationRequest{Provider: plan.RotateProvider, Key: plan.RotateKey, OldRef: plan.RotateOldRef, AcknowledgeSinglePhase: true}
+				key := "pam-account-flag:" + req.ApprovalRequestID
+				_, binding, err := a.applicationSecretRequestBinding(tenantID, key, actor, http.MethodPost,
+					"/api/v1/access/account-flags/"+targetType+"/"+id+"/actions/apply", "static-rotate", staticRotationSurface, rotation.Key, rotation)
+				if err != nil {
+					return "", err
+				}
+				cmd, err := a.queueStaticSecretRotation(approved, tenantID, key, binding, "", rotation)
+				if err != nil {
+					return "", applicationSecretMutationError(err)
+				}
+				return cmd.ID, nil
+			})
 		if err != nil {
 			return 0, nil, err
-		}
-		rotationID := ""
-		if req.Action == "rotate_disable" && plan.RotateProvider != "" && plan.RotateKey != "" {
-			// The approved action rotates the account's vaulted credential
-			// first, as a durable rotation command keyed by the approval, so
-			// a retried apply finds the same command.
-			rotation := secretRotationRequest{Provider: plan.RotateProvider, Key: plan.RotateKey, OldRef: plan.RotateOldRef, AcknowledgeSinglePhase: true}
-			key := "pam-account-flag:" + req.ApprovalRequestID
-			_, binding, err := a.applicationSecretRequestBinding(tenantID, key, actor, http.MethodPost,
-				"/api/v1/access/account-flags/"+targetType+"/"+id+"/actions/apply", "static-rotate", staticRotationSurface, rotation.Key, rotation)
-			if err != nil {
-				return 0, nil, err
-			}
-			cmd, err := a.queueStaticSecretRotation(ctx, tenantID, key, binding, "", rotation)
-			if err != nil {
-				return 0, nil, applicationSecretMutationError(err)
-			}
-			rotationID = cmd.ID
 		}
 		flag, err := svc.ApplyPAMAccountAction(ctx, tenantID, actor, targetType, id, req, rotationID)
 		if err != nil {

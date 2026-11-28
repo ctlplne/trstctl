@@ -89,6 +89,17 @@ func (s *Store) GetPAMAccountFlag(ctx context.Context, tenantID, targetType, tar
 	return out, err
 }
 
+// LockPAMAccountFlagTx keeps the reviewed flag stable while its approved
+// credential rotation is admitted.
+func (s *Store) LockPAMAccountFlagTx(ctx context.Context, tx pgx.Tx, tenantID, targetType, targetID string) (PAMAccountFlag, error) {
+	flag, err := scanPAMAccountFlag(tx.QueryRow(ctx, `SELECT `+pamAccountFlagColumns+` FROM pam_account_flags
+		 WHERE tenant_id = $1::uuid AND target_type = $2 AND target_id = $3 FOR UPDATE`, tenantID, targetType, targetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PAMAccountFlag{}, ErrPAMAccountFlagNotFound
+	}
+	return flag, err
+}
+
 // ListPAMAccountFlags lists a tenant's flags, newest first; only one status
 // when it is named.
 func (s *Store) ListPAMAccountFlags(ctx context.Context, tenantID, status string) ([]PAMAccountFlag, error) {
