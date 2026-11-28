@@ -181,7 +181,12 @@ path = pathlib.Path(sys.argv[2])
 path.write_text(json.dumps({"kind": "reachability_key", "key_id": "agentid-reach-verdict", "public_key_pem": public}) + "\n")
 path.chmod(0o600)
 PY
-	"$BIN_DIR/trstctl-signer" --keystore "$dir/signer-keys" --agid-provision-trust "$binding" \
+	local signer_dev_args=()
+	if [ "$(uname -s)" != Linux ]; then
+		# Use the rehearsal's local-development signer mode for this one-shot step.
+		signer_dev_args=(--allow-insecure-dev-nonlinux)
+	fi
+	"$BIN_DIR/trstctl-signer" "${signer_dev_args[@]}" --keystore "$dir/signer-keys" --agid-provision-trust "$binding" \
 		|| fail "signer-local AGID verdict trust ceremony failed"
 	# The binding contains only reviewed public material, but it is no longer
 	# needed after the signer has read it into its local first-writer floor.
