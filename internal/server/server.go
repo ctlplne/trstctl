@@ -1373,6 +1373,9 @@ func buildAdmitted(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if d.eventProtection != nil {
+		d.eventProtection.attachAdmissionProjector(proj)
+	}
 	orch, idem, err := s.configureMutationSpine(ctx, d, proj)
 	if err != nil {
 		return nil, err

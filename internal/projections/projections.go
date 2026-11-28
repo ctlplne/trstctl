@@ -6293,6 +6293,14 @@ func ValidateSchemaVersion(e events.Event) error {
 	return nil
 }
 
+// CoreEventTypeKnown reports whether this binary has a versioned core contract
+// for the event. Forward-compatible unknown types must retain ordinary replay:
+// a future binary may assign them a read-model projection.
+func CoreEventTypeKnown(eventType string) bool {
+	_, known := knownSchemaVersions[eventType]
+	return known
+}
+
 // isLifecycleEvent reports whether eventType is one of the current identity
 // lifecycle transition events. It intentionally does not match every "identity.*"
 // string: a new future lifecycle event must be registered before this projector

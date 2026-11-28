@@ -616,6 +616,11 @@ func (s *Store) SettleCommandProjectionTx(ctx context.Context, tx pgx.Tx, tenant
 	if tag.RowsAffected() != 1 {
 		return ErrRestoreActivityUnresolved
 	}
+	owner.mu.Lock()
+	if owner.projectionActivities[eventID] == operationID {
+		delete(owner.projectionActivities, eventID)
+	}
+	owner.mu.Unlock()
 	return nil
 }
 

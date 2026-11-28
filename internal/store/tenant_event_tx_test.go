@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -39,14 +40,6 @@ func TestTenantEventTransactionBorrowIsScopedToTenantAndCommit(t *testing.T) {
 		if !found || borrowErr != nil {
 			return fmt.Errorf("borrow active tenant transaction: found=%v, err=%w", found, borrowErr)
 		}
-		called := false
-		found, borrowErr = s.UseTenantEventTx(eventCtx, tenantB, func(pgx.Tx) error {
-			called = true
-			return nil
-		})
-		if !found || !errors.Is(borrowErr, store.ErrTenantEventTxUnavailable) || called {
-			return fmt.Errorf("cross-tenant borrow: found=%v, err=%v, called=%v", found, borrowErr, called)
-		}
 		return nil
 	})
 	if err != nil {
@@ -59,5 +52,85 @@ func TestTenantEventTransactionBorrowIsScopedToTenantAndCommit(t *testing.T) {
 	})
 	if !found || !errors.Is(err, store.ErrTenantEventTxUnavailable) || called {
 		t.Fatalf("borrow after commit: found=%v, err=%v, called=%v", found, err, called)
+	}
+	called = false
+	err = s.WithTenantEvent(ctx, tenantA, func(eventCtx context.Context, _ pgx.Tx) error {
+		found, borrowErr := s.UseTenantEventTx(eventCtx, tenantB, func(pgx.Tx) error {
+			called = true
+			return nil
+		})
+		if !found || !errors.Is(borrowErr, store.ErrTenantEventTxUnavailable) {
+			return fmt.Errorf("cross-tenant borrow: found=%v, err=%v", found, borrowErr)
+		}
+		return nil
+	})
+	if !errors.Is(err, store.ErrTenantEventTxUnavailable) || called {
+		t.Fatalf("cross-tenant borrow committed: err=%v, called=%v", err, called)
+	}
+}
+
+func TestTenantEventAdmissionRemainsHeldThroughCommit(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	commandDone := make(chan error, 1)
+	go func() {
+		commandDone <- s.WithTenantEvent(ctx, tenantA, func(context.Context, pgx.Tx) error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	select {
+	case <-entered:
+	case err := <-commandDone:
+		t.Fatalf("tenant event admission: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	exclusiveDone := make(chan error, 1)
+	go func() {
+		exclusiveDone <- s.WithGlobalKeyStateAdmission(ctx, store.KeyStateExclusive,
+			func(context.Context) error { return nil })
+	}()
+	select {
+	case err := <-exclusiveDone:
+		t.Fatalf("exclusive admission completed before tenant commit: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	if err := <-commandDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-exclusiveDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTenantEventBorrowFailureRequiresRollback(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	stop := errors.New("tenant event apply failed")
+	err := s.WithTenantEvent(t.Context(), tenantA, func(eventCtx context.Context, _ pgx.Tx) error {
+		found, borrowErr := s.UseTenantEventTx(eventCtx, tenantA, func(pgx.Tx) error {
+			return stop
+		})
+		if !found || !errors.Is(borrowErr, stop) {
+			return fmt.Errorf("borrow failure: found=%v, err=%v", found, borrowErr)
+		}
+		return nil
+	})
+	if !errors.Is(err, stop) {
+		t.Fatalf("tenant event transaction accepted an ignored apply failure: %v", err)
 	}
 }

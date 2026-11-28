@@ -3,10 +3,16 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -119,7 +125,7 @@ func openConfiguredEventSourceWithCustodyBeforeOpen(ctx context.Context, cfg *co
 		if core != nil {
 			access = func() tenantseal.Access { return core.access }
 		}
-		options = append(options, restoreEventIngressOptionWithCustody(st, access))
+		options = append(options, restoreEventIngressOptionWithCustody(st, access, protection.admissionProjector))
 		options = append(options, events.WithBackupHistoryAdmission(
 			func(admitCtx context.Context, cut uint64, artifactDigest string, run func(context.Context) (int, error)) (int, error) {
 				// Refuse an absent owner before opening a maintenance activity: this
@@ -162,8 +168,10 @@ func openConfiguredEventSourceWithCustodyBeforeOpen(ctx context.Context, cfg *co
 	return log, protection, nil
 }
 
-func restoreEventIngressOptionWithCustody(st *store.Store, access func() tenantseal.Access) events.OpenOption {
-	return events.WithAppendAdmission(restoreEventIngressAdmissionWithCustody(st, access))
+func restoreEventIngressOptionWithCustody(st *store.Store, access func() tenantseal.Access,
+	projector ...func() *projections.Projector,
+) events.OpenOption {
+	return events.WithAppendAdmission(restoreEventIngressAdmissionWithCustody(st, access, projector...))
 }
 
 // CustodyValidatedEventIngressOption lets an isolated local harness use the
@@ -173,12 +181,28 @@ func CustodyValidatedEventIngressOption(st *store.Store, access tenantseal.Acces
 	return restoreEventIngressOptionWithCustody(st, func() tenantseal.Access { return access })
 }
 
-func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tenantseal.Access) events.AppendAdmission {
+func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tenantseal.Access,
+	projector ...func() *projections.Projector,
+) events.AppendAdmission {
+	var currentProjector func() *projections.Projector
+	if len(projector) > 0 {
+		currentProjector = projector[0]
+	} else if st != nil {
+		core := projections.New(st)
+		currentProjector = func() *projections.Projector { return core }
+	}
 	return func(admitCtx context.Context, event events.Event,
 		publish func(context.Context) (events.Event, error),
 	) (events.Event, error) {
 		if err := projections.ValidateSchemaVersion(event); err != nil {
 			return events.Event{}, err
+		}
+		var activeProjector *projections.Projector
+		if currentProjector != nil {
+			activeProjector = currentProjector()
+		}
+		if activeProjector != nil && stagedCoreIngressEligible(event) {
+			return admitStagedCoreEvent(admitCtx, st, activeProjector, access, event, publish)
 		}
 		var published events.Event
 		err := st.WithRestoreEventIngress(admitCtx, event.TenantID, event.ID, event.Type,
@@ -202,6 +226,102 @@ func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tena
 			})
 		return published, err
 	}
+}
+
+func stagedCoreIngressEligible(event events.Event) bool {
+	if _, err := uuid.Parse(event.TenantID); err != nil {
+		return false
+	}
+	return !events.SealedBearingEvent(event) &&
+		projections.CoreEventTypeKnown(event.Type) &&
+		!events.RequiresExclusiveKeyStateAdmission(event.Type) &&
+		event.Type != audit.EventTypeArchived &&
+		event.Type != projections.EventTenantRegistered &&
+		event.Type != projections.EventTenantOffboarded &&
+		event.Type != projections.EventTenantEventProtectionRequested &&
+		event.Type != projections.EventTenantEventProtectionActivated &&
+		event.Type != projections.EventTenantEventProtectionHoldsCleared &&
+		event.Type != projections.EventTenantEventProtectionDestroyed
+}
+
+// Stage the core read model in the producer's tenant transaction, or own a
+// short projection transaction for direct producers. Both paths acquire the
+// key-state session before the transaction and retain it through SQL commit.
+func admitStagedCoreEvent(ctx context.Context, st *store.Store, projector *projections.Projector,
+	access func() tenantseal.Access, event events.Event,
+	publish func(context.Context) (events.Event, error),
+) (events.Event, error) {
+	var published events.Event
+	err := st.WithGlobalKeyStateAdmission(ctx, store.KeyStateShared, func(admitted context.Context) error {
+		run := func(tx pgx.Tx) error {
+			owned := admitted
+			if st.HasKeyStateOwnerContext(admitted) {
+				if err := st.RequireKeyStateOwnerTx(admitted, tx, event.TenantID, store.KeyStateShared); err != nil {
+					return err
+				}
+			} else {
+				var err error
+				owned, err = st.BindKeyStateOwnerTx(admitted, tx, event.TenantID, store.KeyStateShared)
+				if err != nil {
+					return err
+				}
+			}
+			return st.WithRestoreEventIngress(owned, event.TenantID, event.ID, event.Type,
+				func(ingress context.Context) error {
+					var current tenantseal.Access
+					if access != nil {
+						current = access()
+					}
+					if current == nil {
+						return store.RestoreActivityNoEffect(errProductionIngressCustodyUnavailable)
+					}
+					if err := validateSealedIngressCandidate(ingress, current, event); err != nil {
+						return store.RestoreActivityNoEffect(err)
+					}
+					if _, found, err := events.IngressEventByID(ingress, event.ID); err != nil {
+						return store.RestoreActivityNoEffect(err)
+					} else if found {
+						var publishErr error
+						published, publishErr = publish(ingress)
+						if publishErr != nil {
+							return publishErr
+						}
+						return st.SettleCommandProjectionTx(ingress, tx, event.TenantID, event.ID)
+					}
+					position, err := events.IngressObserveAppendStream(ingress, event.TenantID)
+					if err != nil {
+						return store.RestoreActivityNoEffect(err)
+					}
+					if position.Sequence() == ^uint64(0) {
+						return store.RestoreActivityNoEffect(events.ErrAppendPositionChanged)
+					}
+					candidate := event
+					candidate.Sequence = position.Sequence() + 1
+					if err := projector.StagePreappendTx(ingress, tx, candidate); err != nil {
+						return store.RestoreActivityNoEffect(err)
+					}
+					published, err = events.IngressAtStreamPosition(ingress, event.TenantID, position, publish)
+					if errors.Is(err, events.ErrAppendPositionChanged) {
+						return store.RestoreActivityNoEffect(err)
+					}
+					if err != nil {
+						return err
+					}
+					if published.ID != candidate.ID || published.Type != candidate.Type ||
+						published.TenantID != candidate.TenantID || published.Sequence != candidate.Sequence ||
+						!published.Time.Equal(candidate.Time) || published.SchemaVersion != candidate.SchemaVersion ||
+						!bytes.Equal(published.Data, candidate.Data) || !reflect.DeepEqual(published.Actor, candidate.Actor) {
+						return store.RestoreActivityNoEffect(events.ErrAppendPositionChanged)
+					}
+					return nil
+				})
+		}
+		if found, err := st.UseTenantEventTx(admitted, event.TenantID, run); found || err != nil {
+			return err
+		}
+		return st.WithTenantProjection(admitted, event.TenantID, run)
+	})
+	return published, err
 }
 
 // restoreEventIngressOptionsWithJournal is the store-backed producer, exact

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
@@ -31,6 +32,22 @@ type eventProtectionRuntime struct {
 	readbacks *keyReadbacks
 	// retentionFloor is the operator's audit retention floor (OD-11).
 	retentionFloor time.Duration
+	// The served projector is attached after catch-up and before mutation
+	// workers start. Admission uses its exact core validation options.
+	ingressProjector atomic.Pointer[projections.Projector]
+}
+
+func (r *eventProtectionRuntime) admissionProjector() *projections.Projector {
+	if r == nil {
+		return nil
+	}
+	return r.ingressProjector.Load()
+}
+
+func (r *eventProtectionRuntime) attachAdmissionProjector(projector *projections.Projector) {
+	if r != nil {
+		r.ingressProjector.Store(projector)
+	}
 }
 
 func newEventProtectionRuntime(cfg *config.Config, st *store.Store, key *jose.SigningKey, extraBackupRoots ...string) (*eventProtectionRuntime, error) {
@@ -123,7 +140,11 @@ func (r *eventProtectionRuntime) projectionOptions() []projections.Option {
 }
 
 func (r *eventProtectionRuntime) Close() error {
-	if r == nil || r.custody == nil {
+	if r == nil {
+		return nil
+	}
+	r.ingressProjector.Store(nil)
+	if r.custody == nil {
 		return nil
 	}
 	return r.custody.Close()

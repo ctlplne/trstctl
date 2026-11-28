@@ -19,25 +19,33 @@ type tenantEventTxScope struct {
 	store    *Store
 	tenantID string
 	tx       pgx.Tx
+	failed   error
 	active   bool
 }
 
 // WithTenantEvent gives an event producer a tenant transaction and an append
-// context bound to that exact transaction. The context expires before commit.
+// context bound to that exact transaction. Key-state admission is acquired
+// before the transaction opens and remains held through its commit.
 func (s *Store) WithTenantEvent(ctx context.Context, tenantID string,
 	fn func(context.Context, pgx.Tx) error,
 ) error {
 	if fn == nil {
 		return ErrTenantEventTxUnavailable
 	}
-	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		scope := &tenantEventTxScope{store: s, tenantID: tenantID, tx: tx, active: true}
-		defer func() {
+	return s.WithGlobalKeyStateAdmission(ctx, KeyStateShared, func(admitted context.Context) error {
+		return s.WithTenant(admitted, tenantID, func(tx pgx.Tx) error {
+			scope := &tenantEventTxScope{store: s, tenantID: tenantID, tx: tx, active: true}
+			defer func() {
+				scope.mu.Lock()
+				scope.active = false
+				scope.mu.Unlock()
+			}()
+			callbackErr := fn(context.WithValue(admitted, tenantEventTxContextKey{}, scope), tx)
 			scope.mu.Lock()
-			scope.active = false
+			borrowErr := scope.failed
 			scope.mu.Unlock()
-		}()
-		return fn(context.WithValue(ctx, tenantEventTxContextKey{}, scope), tx)
+			return errors.Join(callbackErr, borrowErr)
+		})
 	})
 }
 
@@ -57,7 +65,12 @@ func (s *Store) UseTenantEventTx(ctx context.Context, tenantID string,
 	scope.mu.Lock()
 	defer scope.mu.Unlock()
 	if !scope.active || scope.store != s || scope.tenantID != tenantID || scope.tx == nil {
+		scope.failed = errors.Join(scope.failed, ErrTenantEventTxUnavailable)
 		return true, ErrTenantEventTxUnavailable
 	}
-	return true, fn(scope.tx)
+	callbackErr := fn(scope.tx)
+	if callbackErr != nil {
+		scope.failed = errors.Join(scope.failed, callbackErr)
+	}
+	return true, callbackErr
 }
