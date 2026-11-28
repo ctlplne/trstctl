@@ -172,6 +172,9 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 		if err := crypto.VerifyCertificateSigner(persistedDER, remote.Public()); err != nil {
 			return fmt.Errorf("agent CA certificate %q does not match signer handle %q; refusing trust rotation: %w", certFile, agentCAHandle, err)
 		}
+		if err := validateAgentCACertificateIdentity(persistedDER); err != nil {
+			return fmt.Errorf("agent CA certificate %q has an invalid trust role: %w", certFile, err)
+		}
 		if err := checkStartupKeyBinding(fmt.Sprintf("agent CA (signer handle %q)", agentCAHandle), remote.Public(), remote); err != nil {
 			return err
 		}
@@ -199,7 +202,7 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 	if err := checkStartupKeyBinding(fmt.Sprintf("agent CA (signer handle %q)", agentCAHandle), remote.Public(), remote); err != nil {
 		return err
 	}
-	caDER, err := crypto.SelfSignedCACert(remote, "trstctl Agent CA", 90*24*time.Hour)
+	caDER, err := crypto.SelfSignedCACert(remote, mtls.AgentCACommonName, 90*24*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -209,6 +212,17 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 		if err := writeCertPEM(certFile, caDER); err != nil {
 			return fmt.Errorf("persist agent CA cert: %w", err)
 		}
+	}
+	return nil
+}
+
+func validateAgentCACertificateIdentity(der []byte) error {
+	info, err := certinfo.Inspect(der)
+	if err != nil {
+		return err
+	}
+	if !info.IsCA || !info.KeyUsageCertSign || info.CommonName != mtls.AgentCACommonName {
+		return fmt.Errorf("expected a signing CA named %q", mtls.AgentCACommonName)
 	}
 	return nil
 }

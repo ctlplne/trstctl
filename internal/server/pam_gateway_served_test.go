@@ -29,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/cli"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
@@ -96,6 +97,15 @@ func TestServedGatewayKeepsThePostgresCredentialFromTheClientA254(t *testing.T) 
 		block, _ := pem.Decode(resp.CertificatePEM)
 		if block == nil {
 			return nil, fmt.Errorf("gateway certificate is not PEM")
+		}
+		info, err := certinfo.Inspect(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		for _, uri := range info.URIs {
+			if uri == mtls.AgentControlPlaneServerURI {
+				return nil, fmt.Errorf("gateway certificate has the control-plane server role")
+			}
 		}
 		return block.Bytes, nil
 	})

@@ -20,6 +20,18 @@ func HTTPTransport(caPEM []byte) (*http.Transport, error) {
 	return HTTPTransportForServerName(caPEM, "")
 }
 
+// ControlPlaneHTTPTransport accepts an operator's API certificate while
+// requiring the control-plane role SAN for a leaf under the shared agent CA.
+// A mixed bundle keeps each certificate in its assigned trust role.
+func ControlPlaneHTTPTransport(caPEM []byte) (*http.Transport, error) {
+	transport, err := HTTPTransport(caPEM)
+	if err != nil {
+		return nil, err
+	}
+	requireControlPlaneAgentRole(transport.TLSClientConfig)
+	return transport, nil
+}
+
 // DirectoryHTTPTransport exposes the verified directory TLS configuration as
 // a transport solely so netsec can adopt it onto an SSRF-scoped HTTP dialer.
 func DirectoryHTTPTransport() *http.Transport {
@@ -93,7 +105,34 @@ func AgentHTTPTransport(src ClientCertSource, serverCAPEM []byte, serverName str
 	if !pool.AppendCertsFromPEM(serverCAPEM) {
 		return nil, errors.New("mtls: no CA certificates found in PEM")
 	}
-	return &http.Transport{
-		TLSClientConfig: clientTLSConfig(src, pool, serverName, pin),
-	}, nil
+	config := clientTLSConfig(src, pool, serverName, pin)
+	requireControlPlaneAgentRole(config)
+	return &http.Transport{TLSClientConfig: config}, nil
+}
+
+func requireControlPlaneAgentRole(config *tls.Config) {
+	prior := config.VerifyConnection
+	config.VerifyConnection = func(state tls.ConnectionState) error {
+		if prior != nil {
+			if err := prior(state); err != nil {
+				return err
+			}
+		}
+		if len(state.PeerCertificates) == 0 || len(state.VerifiedChains) == 0 {
+			return errors.New("mtls: control-plane HTTPS peer has no verified certificate chain")
+		}
+		for _, chain := range state.VerifiedChains {
+			if len(chain) == 0 || !chain[len(chain)-1].IsCA ||
+				chain[len(chain)-1].Subject.CommonName != AgentCACommonName {
+				continue
+			}
+			for _, uri := range state.PeerCertificates[0].URIs {
+				if uri.String() == AgentControlPlaneServerURI {
+					return nil
+				}
+			}
+			return errors.New("mtls: agent-CA HTTPS peer is not the control plane")
+		}
+		return nil
+	}
 }

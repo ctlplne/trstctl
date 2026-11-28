@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/kek"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/signing"
 )
@@ -271,6 +272,31 @@ func TestProvisionAgentCARefusesMalformedOrMismatchedCertificate(t *testing.T) {
 			t.Fatalf("mismatched certificate was changed: equal=%t err=%v", bytes.Equal(after, planted), readErr)
 		}
 	})
+}
+
+func TestAgentCACertificateIdentityKeepsFixedTrustRole(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	for _, tc := range []struct {
+		name, commonName string
+		valid            bool
+	}{
+		{"agent CA", mtls.AgentCACommonName, true},
+		{"other CA", "operator API CA", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			der, err := crypto.SelfSignedCACert(key, tc.commonName, time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateAgentCACertificateIdentity(der); (err == nil) != tc.valid {
+				t.Fatalf("agent CA profile error = %v; valid=%t", err, tc.valid)
+			}
+		})
+	}
 }
 
 // provisionOnce starts a persistent signer over the given sealed key store +

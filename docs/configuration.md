@@ -5389,6 +5389,15 @@ remains empty and fail-closed until an operator chooses each kind.
 See [Getting started](getting-started.md) for the blank Compose stack's published
 agent-channel port and the local CA-pinning steps to reach it from an agent CLI.
 
+**Control-plane HTTPS trust.** Agent enrollment, SSH KRL retrieval, CSI secrets,
+and secret rendering accept the configured API CA with normal hostname checks.
+When their verified chain ends at the signer-custodied `trstctl Agent CA`, the
+leaf must also carry the control-plane agent-channel URI SAN. The agent's gRPC
+channel uses the same role check. A bundle containing both the API CA and agent
+CA therefore keeps the two server identities distinct. Startup rejects a
+persisted agent CA certificate whose signing profile or subject no longer
+matches that identity.
+
 **Private HTTPS targets reached by a network relay.** The agent's
 `--ca-bundle` authenticates the control plane only. If an appliance, CMDB, or
 other relay target uses an internal CA that the relay host does not already

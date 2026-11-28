@@ -383,7 +383,7 @@ func connectorCLIHTTPClient(baseURL, caFile, privateCIDRs string) (*http.Client,
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", caFile, err)
 	}
-	transport, err := mtls.HTTPTransport(caPEM)
+	transport, err := mtls.ControlPlaneHTTPTransport(caPEM)
 	if err != nil {
 		return nil, err
 	}

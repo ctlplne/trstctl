@@ -1422,8 +1422,8 @@ not this file.
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
 | `internal/orchestrator/discovery.go:397` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:75` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/orchestrator/operation_approvals.go:449` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
-| `internal/orchestrator/operation_approvals.go:459` | a negative stored version is classified as drift before conversion (CWE-190). |
+| `internal/orchestrator/operation_approvals.go:456` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
+| `internal/orchestrator/operation_approvals.go:466` | a negative stored version is classified as drift before conversion (CWE-190). |
 | `internal/orchestrator/rewrap_tenant_command_owner_test.go:45` | net.TCPAddr.Port is bounded to the 16-bit TCP port range |
 | `internal/orchestrator/secret_rotation.go:628` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:243` | bounded test sequence. |
@@ -1438,10 +1438,10 @@ not this file.
 | `internal/projections/certificate_sct.go:105` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:637` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:8065` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8082` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:8095` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:8130` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:8073` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8090` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:8103` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:8138` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:46` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1625,7 +1625,7 @@ not this file.
 | `internal/store/migration_run.go:313` | positive bigint constrained by migration (CWE-190) |
 | `internal/store/migration_run.go:346` | positive bigint constrained by migration (CWE-190) |
 | `internal/store/offboard_test.go:46` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/store/operation_approvals.go:300` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
+| `internal/store/operation_approvals.go:357` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/outbox_reconciliation_checkpoint.go:34` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/outbox_reconciliation_conflicts.go:76` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190). |
 | `internal/store/ownership_assignment.go:65` | event sequences fit PostgreSQL bigint |
@@ -2448,7 +2448,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:192` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:172` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2582` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3313` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:3316` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -3136,11 +3136,11 @@ not this file.
 | `internal/server/bundled_pg.go:202` | fixed files in the owned private socket directory (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:32` | fixed repository source path (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:46` | fixed repository source path (CWE-22) |
-| `internal/server/ca_custody_test.go:91` | test-owned path verifies upgrade custody |
-| `internal/server/ca_custody_test.go:95` | test-owned path verifies public mirror |
-| `internal/server/ca_custody_test.go:226` | test-owned path under t.TempDir verifies fail-closed preservation (CWE-22) |
-| `internal/server/ca_custody_test.go:261` | test-owned path under t.TempDir captures the planted mismatch (CWE-22) |
-| `internal/server/ca_custody_test.go:269` | same test-owned path proves the mismatch was not overwritten (CWE-22) |
+| `internal/server/ca_custody_test.go:92` | test-owned path verifies upgrade custody |
+| `internal/server/ca_custody_test.go:96` | test-owned path verifies public mirror |
+| `internal/server/ca_custody_test.go:227` | test-owned path under t.TempDir verifies fail-closed preservation (CWE-22) |
+| `internal/server/ca_custody_test.go:262` | test-owned path under t.TempDir captures the planted mismatch (CWE-22) |
+| `internal/server/ca_custody_test.go:270` | same test-owned path proves the mismatch was not overwritten (CWE-22) |
 | `internal/server/cbom_cyclonedx_served_test.go:243` | the repository's own fixture path (CWE-22) |
 | `internal/server/cmdb_readonly_test.go:126` | test reads repo source files it names itself (CWE-22) |
 | `internal/server/cmp_qualification.go:135` | operator-configured local public CRL path, not request input; read bounded below (CWE-22) |
@@ -3184,7 +3184,7 @@ not this file.
 | `internal/server/pam_gateway_kubernetes_kind_test.go:47` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:162` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_private_ca_served_test.go:84` | the fixture's own data directory (CWE-22) |
-| `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |
+| `internal/server/pam_gateway_served_test.go:238` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_gateway_ssh_served_test.go:282` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_served_test.go:780` | test fixture's own administrator DSN file (CWE-22) |
 | `internal/server/pam_served_test.go:962` | test reads its own fixture/tempdir path (CWE-22) |
@@ -3244,9 +3244,9 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:1796` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:3240` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:3317` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:1799` | operator-configured key file path (CWE-22) |
+| `internal/server/server.go:3243` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:3320` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:62` | the repository's own SOAR pack (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:72` | a playbook the repository's own pack names (CWE-22) |
 | `internal/server/spiffe_ca.go:40` | path derives from operator CA file and canonical tenant UUID |
@@ -3526,7 +3526,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:586` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3323` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:3326` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_certificate_lease_served_test.go:76` | public CA/KRL fixture in a test tempdir (CWE-276) |

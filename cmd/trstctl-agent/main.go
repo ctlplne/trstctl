@@ -1701,7 +1701,7 @@ func bootstrapTokenForRun(o agentOptions) ([]byte, error) {
 }
 
 func enrollmentHTTPClient(caPEM []byte) (*http.Client, error) {
-	enrollTransport, err := mtls.HTTPTransport(caPEM)
+	enrollTransport, err := mtls.ControlPlaneHTTPTransport(caPEM)
 	if err != nil {
 		return nil, err
 	}

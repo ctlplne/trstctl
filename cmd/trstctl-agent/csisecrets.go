@@ -46,7 +46,7 @@ func runCSISecrets(ctx context.Context, socketPath, configPath string) error {
 		if err != nil {
 			return err
 		}
-		transport, err := mtls.HTTPTransport(pem)
+		transport, err := mtls.ControlPlaneHTTPTransport(pem)
 		if err != nil {
 			return err
 		}

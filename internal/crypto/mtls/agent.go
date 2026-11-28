@@ -501,6 +501,10 @@ func (s *SwappableSource) ClientCertificate() (*tls.Certificate, error) {
 // certificate. A tenant gateway certificate carries its agent SPIFFE ID instead.
 const AgentControlPlaneServerURI = "spiffe://trstctl/system/agent-channel"
 
+// AgentCACommonName identifies the signer-custodied agent CA in a mixed
+// operator bundle. Its HTTPS leaves need the control-plane role SAN.
+const AgentCACommonName = "trstctl Agent CA"
+
 // AgentClientCredentials builds gRPC client credentials for an agent from the
 // control-plane CA certificate (PEM) and requires the control-plane role SAN.
 func AgentClientCredentials(src ClientCertSource, serverCAPEM []byte, serverName string, pin *Pin) (credentials.TransportCredentials, error) {
