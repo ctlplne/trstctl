@@ -44,7 +44,7 @@ func TestServedSCIMWritebackBearerRotatesWithoutRestartA207L1(t *testing.T) {
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "writeback-rotation"}); err != nil {
 		t.Fatal(err)
 	}
-	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", roleAssignerScopes("viewer", "operator"))
+	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", []string{"*"})
 	dir := t.TempDir()
 	if err := writeSecretFile(dir+"/scim.token", []byte(scimToken)); err != nil {
 		t.Fatal(err)

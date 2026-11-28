@@ -219,13 +219,13 @@ func TestLDAPWritebackReconcilesMemberBeyondFirstRange(t *testing.T) {
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = httpSrv.Serve(ln) }()
 	defer func() { _ = httpSrv.Close() }()
-	token := seedServedScopedToken(t, st, tenantID, roleAssignerScopes("viewer")...)
+	token := seedServedScopedToken(t, st, tenantID, "*")
 	call := func(method, path, body string) (int, string) {
 		t.Helper()
 		req, _ := http.NewRequest(method, baseURL+path, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Idempotency-Key", method+path+body)
+		req.Header.Set("Idempotency-Key", servedFixtureKey(method, path, body))
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)

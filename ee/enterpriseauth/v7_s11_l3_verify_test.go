@@ -115,7 +115,7 @@ func (s *v7LDAPServed) adminCall(method, path, body string) (int, string) {
 	req, _ := http.NewRequest(method, s.baseURL+path, strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+s.admin)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", "v7-"+method+path+body)
+	req.Header.Set("Idempotency-Key", servedFixtureKey(method, path, body))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.t.Fatal(err)
@@ -125,15 +125,9 @@ func (s *v7LDAPServed) adminCall(method, path, body string) (int, string) {
 	return resp.StatusCode, string(out)
 }
 
-// S11-L3 strengthened: in user_dn_template mode one directory account is as
-// many trstctl subjects as its username has case spellings. Shown on a served
-// LDAP sign-in against the local OpenLDAP fixture:
-//
-//	A. dual control by one person: alice files a governed profile edit as
-//	   "alice" and approves it as "ALICE" (requester != approver by string);
-//	B. member-record role narrowing (admin group -> viewer) is bypassed;
-//	C. offboarding is bypassed, with real API authority (not only /auth/me).
-func TestV7LDAPTemplateSubjectCaseVariantsBypassMemberFences(t *testing.T) {
+// Case variants of one directory identity must share dual-control, role, and
+// offboarding decisions in the served LDAP path.
+func TestLDAPTemplateCaseVariantsHonorMemberFences(t *testing.T) {
 	if testing.Short() {
 		t.Skip("embedded PostgreSQL and an OpenLDAP container")
 	}

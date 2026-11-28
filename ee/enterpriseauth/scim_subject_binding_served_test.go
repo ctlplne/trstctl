@@ -18,7 +18,6 @@ import (
 	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
-	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
@@ -43,9 +42,7 @@ func TestServedSCIMExplicitSubjectBindingControlsRealSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	bearer := seedServedAPIToken(t, ctx, st, tenantID, subject, []string{"access:read"})
-	adopter := seedServedAPIToken(t, ctx, st, tenantID, "scim-adoption-operator", []string{
-		string(authz.AccessWrite), string(authz.AccessRoleAssign),
-	})
+	adopter := seedServedAPIToken(t, ctx, st, tenantID, "scim-adoption-operator", []string{"*"})
 	tokenFile := t.TempDir() + "/scim.token"
 	if err := writeSecretFile(tokenFile, []byte(provisionToken)); err != nil {
 		t.Fatal(err)
@@ -120,8 +117,8 @@ func TestServedSCIMExplicitSubjectBindingControlsRealSessions(t *testing.T) {
 	if code, _ := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", session); code != http.StatusOK {
 		t.Fatalf("same subject session after rename=%d", code)
 	}
-	if code, _ := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", bearer, "", nil); code != http.StatusOK {
-		t.Fatalf("same subject token before offboard=%d", code)
+	if code, _ := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", bearer, "", nil); code != http.StatusForbidden {
+		t.Fatalf("token without a member role=%d, want403", code)
 	}
 
 	group := map[string]any{"schemas": []string{scim.SchemaGroup}, "displayName": "operator", "members": []map[string]string{{"value": subject}}}
@@ -131,6 +128,9 @@ func TestServedSCIMExplicitSubjectBindingControlsRealSessions(t *testing.T) {
 	member, err := st.GetTenantMember(ctx, tenantID, subject)
 	if err != nil || member.SCIM == nil || member.SCIM.UserName != renamed || !strings.Contains(strings.Join(member.Roles, ","), "operator") {
 		t.Fatalf("group grant lost binding or role: %+v err=%v", member, err)
+	}
+	if code, _ := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", bearer, "", nil); code != http.StatusOK {
+		t.Fatalf("same subject token with member role=%d", code)
 	}
 	filtered := doSCIM(t, ts, http.MethodGet, "/scim/v2/Users?filter="+url.QueryEscape(`userName eq "`+renamed+`"`), provisionToken, "", nil)
 	if filtered.Code != http.StatusOK || !bytes.Contains(filtered.Body.Bytes(), []byte(`"id":"`+subject+`"`)) {
