@@ -49,6 +49,9 @@ scope="certs:request"`. Invalid tokens receive RFC 6750 `invalid_token`; recogni
 tokens without enrollment scope receive `insufficient_scope`. A Basic-authenticator
 deployment still advertises Basic because the authenticator, not the EST handler,
 owns the challenge.
+For an access-bundle run token, each EST request derives enrollment permission
+from the run's current grants. Removing a grant, narrowing or deleting its bundle,
+or revoking the run affects the next request, including a renewal.
 
 EST records enrollment, renewal, and server-side key generation decisions in the
 tenant event log before sending a certificate or an encrypted key. If the log

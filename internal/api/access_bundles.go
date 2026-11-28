@@ -1170,7 +1170,13 @@ func (a *API) revokeAccessRun(w http.ResponseWriter, r *http.Request) {
 // request. A run with nothing left, or one never recorded, is refused like an
 // unknown token.
 func (a *API) bundleRunPrincipal(ctx context.Context, rec store.APITokenRecord) (authz.Principal, error) {
-	_, allowed, err := a.store.RunAuthority(ctx, rec.TenantID, rec.ID, time.Now())
+	return BundleRunTokenPrincipal(ctx, a.store, rec, time.Now())
+}
+
+// BundleRunTokenPrincipal resolves one run token against its current grants.
+// REST and protocol authentication use this same live authority check.
+func BundleRunTokenPrincipal(ctx context.Context, st *store.Store, rec store.APITokenRecord, now time.Time) (authz.Principal, error) {
+	_, allowed, err := st.RunAuthority(ctx, rec.TenantID, rec.ID, now)
 	if err != nil {
 		if errors.Is(err, store.ErrAccessBundleNotFound) {
 			return authz.Principal{}, errors.New("api: access bundle run is not recorded")

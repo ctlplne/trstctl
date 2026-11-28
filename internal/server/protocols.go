@@ -762,6 +762,12 @@ func (a servedEnrollAuth) Authenticate(r *http.Request) est.AuthenticationResult
 		tenantID = rec.TenantID
 	}
 	principal := auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal()
+	if _, isRun := orchestrator.BundleRunPrincipal(rec.Subject); isRun {
+		principal, err = api.BundleRunTokenPrincipal(r.Context(), a.store, rec, time.Now())
+		if err != nil {
+			return servedESTBearerDenial(http.StatusUnauthorized, "invalid_token")
+		}
+	}
 	if !principal.Can(a.requiredPermission(), authz.Scope{TenantID: tenantID}) {
 		return servedESTBearerDenial(http.StatusForbidden, "insufficient_scope")
 	}
