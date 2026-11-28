@@ -155,10 +155,13 @@ type CircuitSnapshot struct {
 	LastError   string
 }
 
-// CircuitTransition is emitted whenever a tenant/destination circuit changes state.
+// CircuitTransition separates the destination family from the tenant's effect lane.
+// The family is suitable for aggregate telemetry; the lane remains available to
+// tenant-scoped diagnostics.
 type CircuitTransition struct {
 	TenantID    string
 	Destination string
+	Lane        string
 	From        CircuitState
 	To          CircuitState
 	Failures    int
@@ -179,6 +182,7 @@ type circuitProbe struct {
 
 type outboxCircuit struct {
 	probe     *circuitProbe
+	family    string
 	state     CircuitState
 	failures  int
 	openUntil time.Time
@@ -1465,7 +1469,7 @@ func (o *Outbox) reserveHalfOpenProbes(now time.Time, scope DestinationScope) ([
 			circuit.probe = &circuitProbe{key: key}
 			reserved[key] = circuit.probe
 			transitions = append(transitions, CircuitTransition{
-				TenantID: key.tenantID, Destination: key.destination,
+				TenantID: key.tenantID, Destination: circuit.family, Lane: key.destination,
 				From: from, To: circuit.state, Failures: circuit.failures, OpenUntil: circuit.openUntil,
 			})
 		case CircuitHalfOpen:
@@ -1507,8 +1511,10 @@ func (o *Outbox) recordCircuitFailure(m Message, err error, now time.Time) {
 	o.circuitMu.Lock()
 	circuit := o.circuits[key]
 	if circuit == nil {
-		circuit = &outboxCircuit{state: CircuitClosed}
+		circuit = &outboxCircuit{state: CircuitClosed, family: m.Destination}
 		o.circuits[key] = circuit
+	} else if circuit.family != m.Destination {
+		circuit.family = "mixed"
 	}
 	from := circuit.state
 	circuit.failures++
@@ -1521,7 +1527,7 @@ func (o *Outbox) recordCircuitFailure(m Message, err error, now time.Time) {
 	}
 	if from != circuit.state {
 		transition = &CircuitTransition{
-			TenantID: key.tenantID, Destination: key.destination,
+			TenantID: key.tenantID, Destination: circuit.family, Lane: key.destination,
 			From: from, To: circuit.state, Failures: circuit.failures, OpenUntil: circuit.openUntil,
 		}
 	}
@@ -1542,6 +1548,9 @@ func (o *Outbox) recordCircuitSuccess(m Message, now time.Time) {
 	o.circuitMu.Lock()
 	circuit := o.circuits[key]
 	if circuit != nil {
+		if circuit.family != m.Destination {
+			circuit.family = "mixed"
+		}
 		from := circuit.state
 		circuit.state = CircuitClosed
 		circuit.probe = nil
@@ -1551,7 +1560,7 @@ func (o *Outbox) recordCircuitSuccess(m Message, now time.Time) {
 		circuit.lastError = ""
 		if from != circuit.state {
 			transition = &CircuitTransition{
-				TenantID: key.tenantID, Destination: key.destination,
+				TenantID: key.tenantID, Destination: circuit.family, Lane: key.destination,
 				From: from, To: circuit.state, Failures: circuit.failures,
 			}
 		}

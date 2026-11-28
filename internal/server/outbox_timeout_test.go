@@ -8,16 +8,16 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/eventstest"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
-func TestOutboxDeliveryTimeoutMetricIsLabeledByTenantAndDestination(t *testing.T) {
+func TestOutboxDeliveryTimeoutMetricUsesDestinationFamily(t *testing.T) {
 	if testing.Short() {
 		t.Skip("starts an embedded PostgreSQL; skipped in -short")
 	}
@@ -81,10 +81,9 @@ func TestOutboxDeliveryTimeoutMetricIsLabeledByTenantAndDestination(t *testing.T
 	if err := srv.registry.WriteProm(&buf); err != nil {
 		t.Fatalf("WriteProm: %v", err)
 	}
-	// The name of this test is historical: the metric used to carry tenant_id.
-	// /metrics is unauthenticated, so F270 labels it by destination only, and no
-	// series may name the tenant.
-	want := `trstctl_outbox_delivery_timeouts_total{destination="connector.deploy"} 1`
+	// Aggregate telemetry names only the destination family. The tenant-scoped
+	// status surface retains the exact receiver route.
+	want := `trstctl_outbox_delivery_timeouts_total{destination="connector"} 1`
 	if !strings.Contains(buf.String(), want) {
 		t.Fatalf("timeout metric missing %q from:\n%s", want, buf.String())
 	}

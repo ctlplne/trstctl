@@ -1,12 +1,12 @@
 # Runbook: outbox dead letters (OPS-DLQ-001)
 
 **Alert:** `TrstctlOutboxDeadLetterDepth` — `trstctl_outbox_deadletter_depth > 0 for 15m`,
-labeled by `destination`. `/metrics` is unauthenticated, so it names no tenant; list
-the affected tenants with the query in triage step 1.
+labeled by a closed `destination` family. `/metrics` is unauthenticated, so it
+names no tenant or receiver coordinate; list the exact rows in triage step 1.
 
 An outbox row is dead-lettered when it exhausts its delivery attempts: its
 `status` becomes `failed`, it is never dispatched again, and — per AN-6 — it is
-never silently deleted. The gauge counts those rows per destination, summed across tenants; the
+never silently deleted. The gauge counts those rows per destination family, summed across tenants; the
 retention sweeper (`internal/outboxgc`) reclaims only eligible `delivered` rows,
 so a dead letter stays visible until an operator acts. A delivered event-derived
 secret-sync outbox row may also age out: its immutable queued/terminal events and
@@ -25,11 +25,14 @@ an effect already proved by its receipt.
 
 ## Triage
 
-1. Take `destination` from the alert labels and list the affected tenants
-   (system operation, RLS-bypassing):
-   `SELECT tenant_id, count(*) FROM outbox WHERE status = 'failed' AND destination = $1
-    GROUP BY tenant_id ORDER BY count(*) DESC;`
-2. Inspect the rows' `last_error` (system operation, RLS-bypassing):
+1. Take the destination family from the alert label and list exact failed
+   destinations and tenants (system operation, RLS-bypassing):
+   `SELECT tenant_id, destination, count(*) FROM outbox WHERE status = 'failed'
+    GROUP BY tenant_id, destination ORDER BY count(*) DESC;`
+   Match the alert family to the destination prefix; `other` requires inspecting
+   every listed destination.
+2. Inspect the rows' `last_error` using the exact tenant and destination from
+   step 1 (system operation, RLS-bypassing):
    `SELECT id, idempotency_key, attempts, last_error, created_at FROM outbox
     WHERE status = 'failed' AND tenant_id = $1 AND destination = $2
     ORDER BY created_at;`

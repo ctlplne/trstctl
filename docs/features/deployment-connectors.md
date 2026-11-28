@@ -174,7 +174,9 @@ profile's, a missing configuration, a policy gate) says nothing about the receiv
 never counts toward the circuit; it is bounded by its own message's retry budget.
 Operators inspect live state with `GET /api/v1/connectors/outbox-circuits`; Prometheus
 exposes transitions through
-`trstctl_outbox_circuit_transitions_total{destination,from,to}` (circuits stay per tenant and destination; the metric names no tenant because `/metrics` is unauthenticated).
+`trstctl_outbox_circuit_transitions_total{destination,from,to}` (the label names
+only a closed destination family; the authenticated circuit status retains the
+exact tenant and effect lane).
 
 ### The initial connector set (F7)
 

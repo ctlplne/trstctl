@@ -75,7 +75,9 @@ The control plane emits, at minimum:
 - `trstctl_outbox_reconciliation_lag_events` — how far boot reconciliation is
   behind the event-log head.
 - `trstctl_outbox_delivery_timeouts_total{destination}` — outbox
-  deliveries that exceeded their per-message execution timeout.
+  deliveries that exceeded their per-message execution timeout, grouped by a
+  closed destination family. Inspect authenticated outbox status for the exact
+  tenant and receiver.
 - `trstctl_read_model_snapshots_written_total`,
   `trstctl_read_model_snapshot_last_success_timestamp_seconds`, and
   `trstctl_read_model_snapshot_failures_total` — snapshot worker throughput, last

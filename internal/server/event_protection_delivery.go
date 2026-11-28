@@ -97,10 +97,10 @@ func (s *Server) newEventKeyOutbox(d Deps, check tenancy.ServiceCheck) *orchestr
 		orchestrator.WithTenantServiceCheck(check),
 		orchestrator.WithDeliveryTimeout(d.OutboxDeliveryTimeout),
 		orchestrator.WithDeliveryTimeoutObserver(func(message orchestrator.Message) {
-			s.mOutboxDeliveryTimeouts.WithLabelValues(message.Destination).Inc()
+			s.recordOutboxDeliveryTimeoutMetric(message.Destination)
 		}),
 		orchestrator.WithCircuitObserver(func(transition orchestrator.CircuitTransition) {
-			s.mOutboxCircuitTransitions.WithLabelValues(transition.Destination, string(transition.From), string(transition.To)).Inc()
+			s.recordOutboxCircuitTransitionMetric(transition)
 		}),
 	)
 }

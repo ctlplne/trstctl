@@ -1685,7 +1685,7 @@ not this file.
 | `internal/store/upsert_arbiter_race_test.go:105` | small fixture counter (CWE-190) |
 | `internal/store/upsert_arbiter_race_test.go:220` | small fixture counter (CWE-190) |
 | `internal/store/workload_jwt_keys.go:36` | bounded to int64 above (CWE-190) |
-| `internal/succession/background/workers_retirement_legacy_test.go:81` | TCP port was checked against [0, 65535] above. |
+| `internal/succession/background/workers_retirement_legacy_test.go:89` | TCP port was checked against [0, 65535] above. |
 | `internal/succession/conformance/int20_fullstack_test.go:541` | source sequence was checked against MaxInt64 above (CWE-190). |
 | `internal/tenantseal/deployment_keyring.go:225` | a generation is a small positive counter checked by the table (CWE-190) |
 | `internal/tenantseal/idempotency.go:96` | length framing of short bounded fields (CWE-190) |
@@ -3637,7 +3637,7 @@ not this file.
 | `internal/crypto/x509_property_test.go:196` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/discovery/adcs/membership_paths_test.go:48` | deterministic property-test permutations, never a cryptographic choice (CWE-330). |
 | `internal/discovery/cloudsecret/generic_entropy_test.go:18` | a seeded fixture generator: reproducible test data, not a secret (CWE-338) |
-| `internal/orchestrator/outbox.go:493` | retry backoff jitter, not a security decision (CWE-338) |
+| `internal/orchestrator/outbox.go:497` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/acme/property_test.go:90` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/acme/property_test.go:144` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |

@@ -1683,12 +1683,12 @@ func (s *Server) configureMutationSpine(
 	}
 	s.mOutboxDeliveryTimeouts = s.registry.CounterVec(
 		"trstctl_outbox_delivery_timeouts_total",
-		"Outbox deliveries that exceeded their per-message deadline, per destination (no tenant label: /metrics is unauthenticated).",
+		"Outbox deliveries that exceeded their per-message deadline, per destination family.",
 		[]string{"destination"},
 	)
 	s.mOutboxCircuitTransitions = s.registry.CounterVec(
 		"trstctl_outbox_circuit_transitions_total",
-		"Outbox circuit breaker state transitions, per destination (circuits are per tenant and destination; no tenant label: /metrics is unauthenticated).",
+		"Outbox circuit breaker state transitions, per destination family.",
 		[]string{"destination", "from", "to"},
 	)
 	s.outbox = orchestrator.NewOutbox(d.Store,
@@ -1696,18 +1696,18 @@ func (s *Server) configureMutationSpine(
 		orchestrator.WithTenantServiceCheck(d.TenantServiceCheck),
 		orchestrator.WithDeliveryTimeout(d.OutboxDeliveryTimeout),
 		orchestrator.WithDeliveryTimeoutObserver(func(m orchestrator.Message) {
-			s.mOutboxDeliveryTimeouts.WithLabelValues(m.Destination).Inc()
+			s.recordOutboxDeliveryTimeoutMetric(m.Destination)
 		}),
 		orchestrator.WithCircuitObserver(func(tr orchestrator.CircuitTransition) {
-			s.mOutboxCircuitTransitions.WithLabelValues(tr.Destination, string(tr.From), string(tr.To)).Inc()
+			s.recordOutboxCircuitTransitionMetric(tr)
 			// An opened circuit means repeated external failures that the
-			// console only shows on the connector health page. Log it so an
-			// operator tailing the control plane sees the stall without
-			// database access. Only routing metadata is logged (AN-8): no
-			// error text, payload, or credential can appear here.
+			// console only shows on the connector health page. The operator
+			// log keeps the exact tenant route; public metrics keep only its
+			// family. No error text or payload is copied into this log entry.
 			if tr.To == orchestrator.CircuitOpen && s.logger != nil {
 				s.logger.Warn("outbox circuit opened after repeated delivery failures",
 					slog.String("tenant_id", tr.TenantID), slog.String("destination", tr.Destination),
+					slog.String("effect_lane", tr.Lane),
 					slog.Int("failures", tr.Failures), slog.Time("open_until", tr.OpenUntil))
 			}
 		}),
@@ -2976,9 +2976,9 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
 	s.mOutboxReconcileLag = s.registry.Gauge("trstctl_outbox_reconciliation_lag_events", "Number of events after the last boot reconciliation checkpoint.")
 	// /metrics is unauthenticated on the API listener, so no series names a tenant
-	// (F270): the gauge sums tenants per destination, and the per-tenant rows stay
+	// (F270): the gauge sums tenants per destination family, and the per-tenant rows stay
 	// behind the authenticated, tenant-scoped API and the runbook's system query.
-	s.mOutboxDeadLetter = s.registry.GaugeVec("trstctl_outbox_deadletter_depth", "Dead-lettered (permanently failed) outbox rows awaiting operator sweep or replay, summed across tenants per destination.", []string{"destination"})
+	s.mOutboxDeadLetter = s.registry.GaugeVec("trstctl_outbox_deadletter_depth", "Dead-lettered (permanently failed) outbox rows awaiting operator sweep or replay, summed across tenants per destination family.", []string{"destination"})
 	s.outboxDeadLetterSeen = map[string][2]string{}
 	s.mEventLogReplicasDesired = s.registry.Gauge("trstctl_event_log_replicas_desired", "Configured JetStream replica count required for the source-of-truth event stream.")
 	s.mEventLogReplicasActual = s.registry.Gauge("trstctl_event_log_replicas_actual", "Observed JetStream replica count on the source-of-truth event stream.")
@@ -4139,7 +4139,7 @@ func (s *Server) probeEventLog(ctx context.Context) error {
 	return err
 }
 
-// sampleOutboxDeadLetterDepth refreshes the per-tenant/destination dead-letter
+// sampleOutboxDeadLetterDepth refreshes the destination-family dead-letter
 // gauge (OPS-DLQ-001). Buckets that drained since the last sample are zeroed so
 // the alert clears when an operator sweeps or replays the rows.
 func (s *Server) sampleOutboxDeadLetterDepth(ctx context.Context) error {
@@ -4152,7 +4152,7 @@ func (s *Server) sampleOutboxDeadLetterDepth(ctx context.Context) error {
 	}
 	byDestination := map[string]float64{}
 	for _, d := range depths {
-		byDestination[d.Destination] += float64(d.Depth)
+		byDestination[outboxMetricDestination(d.Destination)] += float64(d.Depth)
 	}
 	current := map[string][2]string{}
 	for destination, depth := range byDestination {
