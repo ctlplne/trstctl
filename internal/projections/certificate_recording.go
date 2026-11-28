@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/caevent"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -172,6 +173,9 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 	if err := p.store.RequireRestoreProjectionTx(ctx, tx, admissionTenant); err != nil {
 		return err
 	}
+	if err := p.store.LockProjectionEventTx(ctx, tx, e.TenantID, e.ID); err != nil {
+		return err
+	}
 	activityTenant := e.TenantID
 	if _, err := uuid.Parse(activityTenant); err != nil {
 		activityTenant = store.RestoreControlTenantID
@@ -195,6 +199,22 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 	}
 	if err := p.requireCurrentCanonicalEventTx(ctx, tx, e); err != nil {
 		return err
+	}
+	stagedDigest, staged, err := p.store.StagedProjectionEventReceiptTx(ctx, tx,
+		e.TenantID, e.ID, e.Sequence)
+	if err != nil {
+		return err
+	}
+	if staged {
+		currentDigest, err := stagedProjectionEventDigest(e)
+		if err != nil {
+			return err
+		}
+		defer secret.Wipe(currentDigest)
+		if !bytes.Equal(stagedDigest, currentDigest) {
+			return store.ErrProjectionStagedEventMismatch
+		}
+		return p.store.SettleCommandProjectionTx(ctx, tx, e.TenantID, e.ID)
 	}
 	if isKeyStateMutationEventType(e.Type) {
 		if err := p.store.RequireKeyStateOwnerTx(ctx, tx, e.TenantID, store.KeyStateExclusive); err != nil {

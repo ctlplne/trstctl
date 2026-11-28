@@ -725,3 +725,47 @@ func TestRequiredRawHistoryLowLevelRefusesUnboundOwnerCR045(t *testing.T) {
 		t.Fatalf("unowned raw writer changed broker head: %d, %v", head, err)
 	}
 }
+
+func TestIngressStreamPositionBindsActiveSource(t *testing.T) {
+	ctx := t.Context()
+	const tenantID = "11111111-1111-4111-8111-111111111111"
+	var observed AppendStreamPosition
+	var firstID string
+	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		WithRequiredAppendAdmission(),
+		WithAppendAdmission(func(admitted context.Context, event Event,
+			publish func(context.Context) (Event, error),
+		) (Event, error) {
+			if event.Type == "fixture.second" {
+				canonical, found, lookupErr := IngressEventByID(admitted, firstID)
+				if lookupErr != nil || !found || canonical.ID != firstID {
+					return Event{}, errors.New("active source did not return the first event")
+				}
+				return IngressAtStreamPosition(admitted, tenantID, observed, publish)
+			}
+			var observeErr error
+			observed, observeErr = IngressObserveAppendStream(admitted, tenantID)
+			if observeErr != nil {
+				return Event{}, observeErr
+			}
+			return IngressAtStreamPosition(admitted, tenantID, observed, publish)
+		}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	first, err := log.Append(ctx, Event{TenantID: tenantID, Type: "fixture.first"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstID = first.ID
+	if _, err := log.Append(ctx, Event{TenantID: tenantID, Type: "fixture.second"}); !errors.Is(err, ErrAppendPositionChanged) {
+		t.Fatalf("stale source position: %v", err)
+	}
+	if head, err := log.LastSequence(ctx); err != nil || head != first.Sequence {
+		t.Fatalf("source head after refused append: head=%d err=%v", head, err)
+	}
+	if _, err := IngressObserveAppendStream(ctx, tenantID); !errors.Is(err, ErrAppendAdmissionUnavailable) {
+		t.Fatalf("observation outside admission: %v", err)
+	}
+}

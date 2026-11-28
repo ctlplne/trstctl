@@ -30,6 +30,7 @@ type appendSubjectPositionKey struct{}
 // AppendStreamPosition fences an event against every writer to the active
 // stream. It is used when related state transitions have different subjects.
 type AppendStreamPosition struct {
+	log      *Log
 	stream   string
 	tenantID string
 	sequence uint64
@@ -52,7 +53,7 @@ func (l *Log) ObserveAppendStream(ctx context.Context, tenantID string) (AppendS
 		if err != nil {
 			return err
 		}
-		position = AppendStreamPosition{stream: name, tenantID: tenantID, sequence: info.State.LastSeq}
+		position = AppendStreamPosition{log: l, stream: name, tenantID: tenantID, sequence: info.State.LastSeq}
 		return nil
 	})
 	return position, err
@@ -60,7 +61,7 @@ func (l *Log) ObserveAppendStream(ctx context.Context, tenantID string) (AppendS
 
 // AppendAtStreamPosition publishes only if the stream head is unchanged.
 func (l *Log) AppendAtStreamPosition(ctx context.Context, e Event, position AppendStreamPosition) (Event, error) {
-	if position.stream == "" || position.tenantID != e.TenantID {
+	if position.log != l || position.stream == "" || position.tenantID != e.TenantID {
 		return Event{}, ErrAppendPositionChanged
 	}
 	return l.Append(context.WithValue(ctx, appendStreamPositionKey{}, position), e)

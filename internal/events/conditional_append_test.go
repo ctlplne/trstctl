@@ -69,6 +69,11 @@ func TestConditionalAppendFencesDifferentTransitionSubjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	otherSource := openEmbedded(t)
+	if _, err := otherSource.AppendAtStreamPosition(ctx,
+		events.Event{TenantID: tenant, Type: "fixture.object.destroyed"}, position); !errors.Is(err, events.ErrAppendPositionChanged) {
+		t.Fatalf("a position from another source was accepted: %v", err)
+	}
 	if _, err := log.AppendAtStreamPosition(ctx, events.Event{TenantID: tenant, Type: "fixture.object.destroyed"}, position); err != nil {
 		t.Fatalf("current transition did not append: %v", err)
 	}
