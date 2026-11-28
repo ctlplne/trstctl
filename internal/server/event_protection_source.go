@@ -26,6 +26,7 @@ import (
 )
 
 var errProductionIngressCustodyUnavailable = errors.New("server: production event ingress requires tenant custody")
+var errProjectionAdmissionNotReady = errors.New("server: core projection admission requires a caught-up read model")
 
 // openConfiguredEventSource creates exactly one custodian before any Open
 // recovery can read protected history. The caller closes log, then custody,
@@ -201,7 +202,10 @@ func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tena
 		if currentProjector != nil {
 			activeProjector = currentProjector()
 		}
-		if activeProjector != nil && stagedCoreIngressEligible(event) {
+		if stagedCoreIngressEligible(event) {
+			if activeProjector == nil {
+				return events.Event{}, errProjectionAdmissionNotReady
+			}
 			return admitStagedCoreEvent(admitCtx, st, activeProjector, access, event, publish)
 		}
 		var published events.Event

@@ -203,6 +203,42 @@ func TestFutureEventAdmissionPreservesReplayWithoutCoreReceipt(t *testing.T) {
 	}
 }
 
+func TestKnownCoreAdmissionWaitsForReadModelCatchUp(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	ctx := t.Context()
+	runtime := &eventProtectionRuntime{}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		events.WithRequiredAppendAdmission(),
+		restoreEventIngressOptionWithCustody(h.store,
+			func() tenantseal.Access { return publicJournalIngressAccess{} }, runtime.admissionProjector))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	policyID := uuid.NewString()
+	data, err := json.Marshal(projections.NotificationRoutingPolicyUpserted{
+		ID: policyID, Name: "Ready route", ScopeKind: "manual",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := events.Event{Type: projections.EventNotificationRoutingPolicyUpserted,
+		TenantID: h.tenant, Data: data}
+	if _, err := log.Append(ctx, candidate); !errors.Is(err, errProjectionAdmissionNotReady) {
+		t.Fatalf("core admission before read-model catch-up: %v", err)
+	}
+	if head, err := log.LastSequence(ctx); err != nil || head != 0 {
+		t.Fatalf("source head before read-model catch-up: head=%d err=%v", head, err)
+	}
+	runtime.attachAdmissionProjector(projections.New(h.store, projections.WithCanonicalEventSource(log)))
+	if _, err := log.Append(ctx, candidate); err != nil {
+		t.Fatalf("core admission after read-model catch-up: %v", err)
+	}
+	if _, err := h.store.GetNotificationRoutingPolicy(ctx, h.tenant, policyID); err != nil {
+		t.Fatalf("committed read model: %v", err)
+	}
+}
+
 func TestAttachedProjectorValidatesDirectEvent(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
