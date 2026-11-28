@@ -13,13 +13,8 @@ import (
 // This test reuses the shared package helpers ownerCreated(id, name) and
 // ownerCount(t, s, tenantID) defined alongside the other projections tests.
 
-// TestRebuildIsAtomicOnMidReplayFailure is the RESIL-003 acceptance: if a rebuild
-// fails partway through replaying the log, the read model must be left fully in its
-// pre-rebuild state, never truncated/partial. On the pre-fix tree Rebuild truncated
-// in its own auto-committed statement and then replayed event-by-event, so a
-// mid-replay failure left the inventory empty while the API could still answer
-// queries. Here a poison event (a known type carrying an unknown schema version)
-// makes the replay fail mid-stream, and we assert the prior read model survived.
+// TestRebuildIsAtomicOnMidReplayFailure keeps the prior read model intact when
+// a tenant lifecycle schema cannot be projected during a full rebuild.
 func TestRebuildIsAtomicOnMidReplayFailure(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)
@@ -43,20 +38,19 @@ func TestRebuildIsAtomicOnMidReplayFailure(t *testing.T) {
 		t.Fatalf("pre-rebuild owners = %d, want 2", got)
 	}
 
-	// Append a poison event AFTER the good ones: a known type (owner.created) carrying
-	// a schema version the projector does not understand, so ApplyTx rejects it
-	// (ErrUnknownSchemaVersion) partway through a full replay.
+	// Lifecycle history has its own fail-closed schema contract. Its refusal
+	// must roll back the entire rebuild transaction.
 	if _, err := log.Append(ctx, events.Event{
-		Type: projections.EventOwnerCreated, TenantID: tenantA,
-		SchemaVersion: 99, // unknown -> ApplyTx fails
-		Data:          ownerCreated("00000000-0000-0000-0000-0000000000a3", "poison"),
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		SchemaVersion: 99,
+		Data:          tenantRegistered("Updated tenant"),
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	// A rebuild must now fail (the poison event aborts the replay)...
+	// A rebuild must refuse the unsupported lifecycle schema.
 	if err := p.Rebuild(ctx, log); err == nil {
-		t.Fatal("Rebuild succeeded despite a poison event; expected a replay failure")
+		t.Fatal("Rebuild accepted an unsupported lifecycle schema")
 	}
 
 	// ...and because the rebuild is atomic, the read model must be UNCHANGED — still

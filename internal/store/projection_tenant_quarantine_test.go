@@ -64,6 +64,9 @@ func TestProjectionTenantQuarantineIsDurableTenantScopedAndFirstWriterWins(t *te
 	if err := st.RequireLiveTenantService(ctx, tenantB); err != nil {
 		t.Errorf("healthy tenant B refused: %v", err)
 	}
+	if err := st.RecordProjectionTenantQuarantine(ctx, tenantB, 4, "unknown_core_schema"); err != nil {
+		t.Fatalf("record core schema quarantine: %v", err)
+	}
 	if err := st.RecordProjectionTenantQuarantine(ctx, tenantB, uint64(math.MaxInt64)+1, "nul_text"); err == nil {
 		t.Error("sequence beyond PostgreSQL bigint accepted")
 	}

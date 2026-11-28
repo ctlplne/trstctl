@@ -62,21 +62,8 @@ func truncateReadModelAndCheckpoint(t *testing.T, s *store.Store) {
 	}
 }
 
-// TestSnapshotBootReplaysOnlyTheTail is the SPINE-007 / EXC-SCALE-01 acceptance: after
-// a snapshot is taken, a cold boot rehydrates the read model FROM THE SNAPSHOT and
-// replays ONLY the events after the offset the snapshot covers — not the whole log.
-//
-// It proves "only the tail is replayed" adversarially and deterministically (the same
-// technique the checkpoint test uses): a POISON event (a known type carrying an
-// unknown schema version, which the projector rejects) is planted BELOW the snapshot
-// offset. A from-zero replay would hit the poison and FAIL; the snapshot-bounded boot
-// resumes ABOVE the snapshot, never touches the poison, and lands the read model
-// exactly at snapshot-rows + the post-snapshot tail. It then proves the log is the
-// source of truth: deleting the snapshot and running a full Rebuild (which replays
-// from zero — minus the poison, removed for that leg) yields the SAME state.
-//
-// It FAILS on the pre-fix tree (no snapshot mechanism: boot did a full checkpoint
-// catch-up from 0 and would choke on the poison) and PASSES post-fix.
+// TestSnapshotBootReplaysOnlyTheTail confirms that restore loads snapshot rows,
+// applies only later events, and matches a full rebuild from retained history.
 func TestSnapshotBootReplaysOnlyTheTail(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)
@@ -112,8 +99,8 @@ func TestSnapshotBootReplaysOnlyTheTail(t *testing.T) {
 	}
 
 	// 3) Append a real tail event (a third owner) AFTER the snapshot. The strict
-	// "tail-only replay" proof (a poison event below the covered offset that a from-zero
-	// replay would choke on) is the dedicated TestSnapshotRestoreSkipsPoisonBelowOffset
+	// "tail-only replay" proof with unsupported lifecycle history is the dedicated
+	// TestSnapshotRestoreUsesCoveredOffset
 	// below; here we prove (a) the pre-snapshot rows come back from the SNAPSHOT BLOB
 	// even though the tail replay starts above them, and (b) the result equals a full
 	// rebuild from the log (log is truth).
@@ -165,11 +152,9 @@ func TestSnapshotBootReplaysOnlyTheTail(t *testing.T) {
 	}
 }
 
-// TestSnapshotRestoreSkipsPoisonBelowOffset is the strict "tail only" proof: a poison
-// event (unknown schema version) sits BELOW a snapshot's covered offset. A from-zero
-// replay would reject it; the snapshot boot resumes ABOVE it and succeeds. This pins
-// that the snapshot path replays ONLY seq > covered offset (SPINE-007).
-func TestSnapshotRestoreSkipsPoisonBelowOffset(t *testing.T) {
+// TestSnapshotRestoreUsesCoveredOffset confirms that restore starts after its
+// snapshot offset when earlier lifecycle history cannot be projected.
+func TestSnapshotRestoreUsesCoveredOffset(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)
 	ctx := context.Background()
@@ -182,43 +167,37 @@ func TestSnapshotRestoreSkipsPoisonBelowOffset(t *testing.T) {
 		t.Fatalf("catch-up: %v", err)
 	}
 
-	// Append a POISON event (unknown schema version), then take a snapshot whose offset
-	// is forced to the poison head — i.e. the snapshot "covers" up to and including the
-	// poison. (We capture the read model as-of now; the poison did not apply, but the
-	// snapshot offset advances past it the same way the checkpoint would on the live
-	// tail. Snapshot reads the current checkpoint, so we advance the checkpoint past the
-	// poison first, exactly as the catch-up test does, to model a watermark that already
-	// spans an unprocessable sequence.)
+	// Advance the checkpoint past an unsupported lifecycle event before taking
+	// the snapshot. Its offset then covers that retained history position.
 	mustAppend(t, log, events.Event{
-		Type: projections.EventOwnerCreated, TenantID: tenantA,
-		SchemaVersion: 99, // unknown -> a from-zero replay rejects this
-		Data:          ownerCreated("00000000-0000-0000-0000-00000000b002", "poison"),
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		SchemaVersion: 99,
+		Data:          tenantRegistered("Updated tenant"),
 	})
-	poisonHead, _ := log.LastSequence(ctx)
-	if err := s.AdvanceProjectionCheckpoint(ctx, poisonHead); err != nil {
-		t.Fatalf("advance past poison: %v", err)
+	coveredHead, _ := log.LastSequence(ctx)
+	if err := s.AdvanceProjectionCheckpoint(ctx, coveredHead); err != nil {
+		t.Fatalf("advance snapshot checkpoint: %v", err)
 	}
 	if _, err := p.Snapshot(ctx); err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
 
-	// A good tail event AFTER the poison.
+	// A supported owner event follows the snapshot offset.
 	mustAppend(t, log, events.Event{Type: projections.EventOwnerCreated, TenantID: tenantA, Data: ownerCreated("00000000-0000-0000-0000-00000000b003", "after")})
 
-	// Cold boot / DR wipe, then restore via snapshot: it must resume ABOVE the snapshot
-	// offset (past the poison) and succeed, NOT replay from zero and choke on the poison.
+	// Restore resumes after the covered offset and applies the owner tail.
 	truncateReadModelAndCheckpoint(t, s)
 	restored, err := p.RestoreFromSnapshot(ctx, log)
 	if err != nil {
-		t.Fatalf("RestoreFromSnapshot replayed below the snapshot offset and hit the poison: %v "+
+		t.Fatalf("RestoreFromSnapshot replayed below the snapshot offset: %v "+
 			"(SPINE-007: snapshot boot must replay only the tail after the covered offset)", err)
 	}
 	if !restored {
 		t.Fatal("RestoreFromSnapshot returned restored=false despite a snapshot covering offset > checkpoint")
 	}
-	// good (from snapshot) + after (tail) = 2; the poison was never applied.
+	// The snapshot owner and the tail owner are both visible.
 	if got := ownerCount(t, s, tenantA); got != 2 {
-		t.Fatalf("owners after snapshot restore = %d, want 2 (good + after; poison skipped)", got)
+		t.Fatalf("owners after snapshot restore = %d, want 2", got)
 	}
 }
 

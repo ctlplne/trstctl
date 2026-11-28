@@ -128,17 +128,8 @@ func TestBackupPreservesEventSchemaVersion(t *testing.T) {
 	assertJSONEqual(t, got2.Spec, spec2)
 }
 
-// TestReplayOldEventsNewProjector is the SCHEMA-001 acceptance: a stream of
-// version-1 events (the "old" payload shape) still projects and rebuilds
-// correctly under the current projector, AND an event of a *known* type carrying a
-// schema version the projector does not understand is rejected with a hard error
-// rather than silently decoded against the wrong struct.
-//
-// This is the failure the schema-version field exists to catch: when an existing
-// type's payload shape changes, the new events must declare a new version so a
-// replay/rebuild can tell them apart from the old ones. Without the gate, a
-// shape-changed payload would lenient-decode into the old struct and produce a
-// wrong read model with no error on the most load-bearing (DR/rebuild) path.
+// TestReplayOldEventsNewProjector keeps the version-1 read model reproducible
+// and confines a later unsupported owner schema to its tenant.
 func TestReplayOldEventsNewProjector(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)
@@ -181,19 +172,22 @@ func TestReplayOldEventsNewProjector(t *testing.T) {
 		t.Fatalf("rebuild produced %d owners, want 2 (rebuild must reproduce the v1 read model)", len(owners2))
 	}
 
-	// Now simulate the dangerous case: a deployment changed owner.created's payload
-	// shape and stamped it version 3, but this projector knows only v1 and v2.
-	// Appending and replaying such an event MUST fail (so the wrong shape is never
-	// applied), not silently mis-project.
+	// A later owner event with an unsupported version must leave its tenant
+	// unavailable without applying fields through the older owner projection.
 	if _, err := log.Append(ctx, events.Event{
 		Type: projections.EventOwnerCreated, TenantID: tenantA, SchemaVersion: 3,
 		Data: ownerCreatedPayload("33333333-cccc-4ccc-8ccc-333333333333", "shipping"),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err = p.Project(ctx, log)
-	if !errors.Is(err, projections.ErrUnknownSchemaVersion) {
-		t.Fatalf("projecting an owner.created v3 (unknown to this projector) err = %v, want ErrUnknownSchemaVersion", err)
+	if err := p.Project(ctx, log); err != nil {
+		t.Fatalf("projecting retained owners: %v", err)
+	}
+	if quarantined, err := s.ProjectionTenantQuarantined(ctx, tenantA); err != nil || !quarantined {
+		t.Fatalf("owner schema quarantine = %t, err = %v", quarantined, err)
+	}
+	if owners, err := s.ListOwners(ctx, tenantA); err != nil || len(owners) != 2 {
+		t.Fatalf("supported owner rows after replay = %d, err = %v", len(owners), err)
 	}
 }
 

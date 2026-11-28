@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -233,19 +231,7 @@ func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tena
 }
 
 func stagedCoreIngressEligible(event events.Event) bool {
-	if _, err := uuid.Parse(event.TenantID); err != nil {
-		return false
-	}
-	return !events.SealedBearingEvent(event) &&
-		projections.CoreEventTypeKnown(event.Type) &&
-		!events.RequiresExclusiveKeyStateAdmission(event.Type) &&
-		event.Type != audit.EventTypeArchived &&
-		event.Type != projections.EventTenantRegistered &&
-		event.Type != projections.EventTenantOffboarded &&
-		event.Type != projections.EventTenantEventProtectionRequested &&
-		event.Type != projections.EventTenantEventProtectionActivated &&
-		event.Type != projections.EventTenantEventProtectionHoldsCleared &&
-		event.Type != projections.EventTenantEventProtectionDestroyed
+	return projections.OrdinaryCoreEvent(event)
 }
 
 // Stage the core read model in the producer's tenant transaction, or own a

@@ -94,6 +94,16 @@ func (q *tenantPoisonQuarantine) skipWithReplayTx(ctx context.Context, e events.
 	}
 	textErr := events.ValidateEventText(e)
 	if textErr == nil {
+		if err := ValidateSchemaVersion(e); err != nil {
+			if !errors.Is(err, ErrUnknownSchemaVersion) || !OrdinaryCoreEvent(e) {
+				return false, err
+			}
+			if err := q.record(ctx, tx, e.TenantID, e.Sequence, "unknown_core_schema"); err != nil {
+				return false, err
+			}
+			q.known[e.TenantID] = true
+			return true, nil
+		}
 		if e.SchemaVersion == 1 && (e.Type == EventWindowsLocalAccountScanFailed ||
 			e.Type == EventServiceDependentScanFailed) &&
 			ValidateNativeAgentReceipt(e.Type, e.Data) != nil {
