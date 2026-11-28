@@ -11,9 +11,10 @@ import (
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
-func TestReplayKeepsIdentityConflictWithinItsTenant(t *testing.T) {
+func TestReplayPreservesHeldRoutingNameWithinTenant(t *testing.T) {
 	st := newStore(t)
 	log := openLog(t)
 	ctx := context.Background()
@@ -23,16 +24,16 @@ func TestReplayKeepsIdentityConflictWithinItsTenant(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	policyID := uuid.NewString()
-	for _, tenant := range []string{tenantA, tenantB} {
+	firstPolicyID, laterPolicyID := uuid.NewString(), uuid.NewString()
+	for _, id := range []string{firstPolicyID, laterPolicyID} {
 		data, err := json.Marshal(projections.NotificationRoutingPolicyUpserted{
-			ID: policyID, Name: "Tenant route", ScopeKind: "manual",
+			ID: id, Name: "Tenant route", ScopeKind: "manual",
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if _, err := log.Append(ctx, events.Event{Type: projections.EventNotificationRoutingPolicyUpserted,
-			TenantID: tenant, Data: data}); err != nil {
+			TenantID: tenantB, Data: data}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -47,10 +48,7 @@ func TestReplayKeepsIdentityConflictWithinItsTenant(t *testing.T) {
 		if mode == "catch-up" {
 			err = proj.ProjectCatchUp(ctx, log)
 		} else {
-			if _, err = st.SystemPool().Exec(ctx,
-				`DELETE FROM projection_tenant_quarantines WHERE tenant_id=$1`, tenantB); err == nil {
-				err = proj.Rebuild(ctx, log)
-			}
+			err = proj.Rebuild(ctx, log)
 		}
 		if err != nil {
 			t.Fatalf("%s: %v", mode, err)
@@ -58,8 +56,14 @@ func TestReplayKeepsIdentityConflictWithinItsTenant(t *testing.T) {
 		if count := ownerCount(t, st, tenantA); count != 1 {
 			t.Fatalf("%s: operating tenant owner count=%d", mode, count)
 		}
-		if quarantined, err := st.ProjectionTenantQuarantined(ctx, tenantB); err != nil || !quarantined {
-			t.Fatalf("%s: conflicting tenant quarantine=%t, err=%v", mode, quarantined, err)
+		if policy, err := st.GetNotificationRoutingPolicy(ctx, tenantB, firstPolicyID); err != nil || policy.Name != "Tenant route" {
+			t.Fatalf("%s: held policy=%+v, err=%v", mode, policy, err)
+		}
+		if _, err := st.GetNotificationRoutingPolicy(ctx, tenantB, laterPolicyID); !store.IsNotFound(err) {
+			t.Fatalf("%s: later policy was projected: %v", mode, err)
+		}
+		if quarantined, err := st.ProjectionTenantQuarantined(ctx, tenantB); err != nil || quarantined {
+			t.Fatalf("%s: tenant quarantine=%t, err=%v", mode, quarantined, err)
 		}
 		if checkpoint, err := st.ProjectionCheckpoint(ctx); err != nil || checkpoint != last.Sequence {
 			t.Fatalf("%s: checkpoint=%d, err=%v", mode, checkpoint, err)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -152,7 +153,11 @@ func TestLifecycleReconstructableFromLog(t *testing.T) {
 		orchestrator.StateIssued, orchestrator.StateDeployed, orchestrator.StateRevoked, orchestrator.StateRetired,
 	}
 	for _, to := range steps {
-		if err := orch.Transition(ctx, tenantA, idIdentity, to, "test"); err != nil {
+		reason := "test"
+		if to == orchestrator.StateRevoked {
+			reason = string(crypto.RevocationReasonUnspecified)
+		}
+		if err := orch.Transition(ctx, tenantA, idIdentity, to, reason); err != nil {
 			t.Fatalf("transition to %s: %v", to, err)
 		}
 	}
@@ -376,7 +381,11 @@ func TestHistoryReconstructableFromTransitionProjection(t *testing.T) {
 	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
 
 	for _, to := range []orchestrator.State{orchestrator.StateIssued, orchestrator.StateDeployed, orchestrator.StateRevoked, orchestrator.StateRetired} {
-		if err := orch.Transition(ctx, tenantA, idIdentity, to, "x"); err != nil {
+		reason := "x"
+		if to == orchestrator.StateRevoked {
+			reason = string(crypto.RevocationReasonUnspecified)
+		}
+		if err := orch.Transition(ctx, tenantA, idIdentity, to, reason); err != nil {
 			t.Fatalf("transition %s: %v", to, err)
 		}
 	}
