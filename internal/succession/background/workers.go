@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -314,6 +315,8 @@ type retirementWorker struct {
 	signer         server.SignerProvider
 	interval       time.Duration
 	validityWindow time.Duration
+	passMu         sync.Mutex
+	evidence       map[string]*retirementEvidenceCheckpoint
 }
 
 func (w *retirementWorker) Name() string { return "pcas.retirement" }
@@ -337,6 +340,8 @@ func (w *retirementWorker) Run(ctx context.Context) error {
 }
 
 func (w *retirementWorker) runOnce(ctx context.Context) error {
+	w.passMu.Lock()
+	defer w.passMu.Unlock()
 	if w.store == nil || w.repo == nil || w.log == nil || w.signer == nil {
 		return errors.New("pcas retirement worker: store, ledger, and signer are required")
 	}
@@ -349,7 +354,17 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 		return fmt.Errorf("pcas retirement worker: list tenants: %w", err)
 	}
 	var failures []error
+	if w.evidence == nil {
+		w.evidence = make(map[string]*retirementEvidenceCheckpoint)
+	}
+	retained := make(map[string]*retirementEvidenceCheckpoint, len(tenants))
 	for _, tenant := range tenants {
+		cut, err := observeRetirementEvidenceCut(ctx, w.log)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s: observe evidence: %w", tenant.TenantID, err))
+			retained[tenant.TenantID] = w.evidence[tenant.TenantID]
+			continue
+		}
 		// Include historical retired policies. Earlier builds could project
 		// "retired" after deleting a legacy unscoped handle while the real
 		// tenant-bound predecessor was still held by the signer. Recheck signer
@@ -357,22 +372,27 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 		policies, err := w.repo.ListRetirementPolicies(ctx, tenant.TenantID, false)
 		if err != nil {
 			failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s: list policies: %w", tenant.TenantID, err))
+			retained[tenant.TenantID] = w.evidence[tenant.TenantID]
 			continue
 		}
 		evaluatedAt := time.Now().UTC()
-		evidence, err := collectTenantRetirementEvidence(ctx, w.log, tenant.TenantID, policies, w.validityWindow, evaluatedAt)
+		checkpoint, err := collectTenantRetirementEvidenceSince(ctx, w.log, tenant.TenantID, policies,
+			w.validityWindow, evaluatedAt, cut, w.evidence[tenant.TenantID])
 		if err != nil {
 			failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s: %w", tenant.TenantID, err))
+			retained[tenant.TenantID] = w.evidence[tenant.TenantID]
 			continue
 		}
+		retained[tenant.TenantID] = checkpoint
 		for _, policy := range policies {
 			key := retirementEvidenceKey{policy.IdentityID, policy.PredecessorEpoch}
-			if err := w.reconcileRetirementPolicy(ctx, client, tenant.TenantID, policy, evidence[key], evaluatedAt); err != nil && !errors.Is(err, retirement.ErrQuorumNotMet) {
+			if err := w.reconcileRetirementPolicy(ctx, client, tenant.TenantID, policy, checkpoint.view[key], evaluatedAt); err != nil && !errors.Is(err, retirement.ErrQuorumNotMet) {
 				failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s identity %s epoch %d: %w",
 					tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch, err))
 			}
 		}
 	}
+	w.evidence = retained
 	if len(failures) == 1 {
 		return failures[0]
 	}

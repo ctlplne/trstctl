@@ -596,6 +596,10 @@ tenant, identity, epoch and its own roster name, then posts it to
 the signature under that policy's roster key before recording it; signatures
 larger than 16 KiB are refused. The retirement worker reads one tenant's evidence
 at a time and keeps at most one in-window acknowledgment per roster member.
+Each pass resumes from a tenant's last observed event sequence when the stream
+generation is unchanged. A policy update clears its earlier acknowledgments;
+relying parties must acknowledge the current roster again. A stream generation
+change rebuilds the bounded evidence view from the active history.
 An active policy or accepted acknowledgment alone does
 not prove retirement. Read `status: retired`, check signed retirement evidence,
 and independently confirm the predecessor signer handle is unusable.

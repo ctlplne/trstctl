@@ -3,6 +3,7 @@
 package background
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -25,6 +26,33 @@ type retirementPolicyEvidence struct {
 	roster  retirement.Roster
 	seen    map[string]bool
 	window  time.Duration
+	updated time.Time
+}
+
+type retirementEvidenceCut struct {
+	generation string
+	head       uint64
+}
+
+type retirementEvidenceCheckpoint struct {
+	cut      retirementEvidenceCut
+	policies map[retirementEvidenceKey]pcasstore.RetirementPolicy
+	view     map[retirementEvidenceKey]*retirementPolicyEvidence
+	scanned  int
+}
+
+func observeRetirementEvidenceCut(ctx context.Context, log *events.Log) (retirementEvidenceCut, error) {
+	var cut retirementEvidenceCut
+	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		var err error
+		cut.generation, err = log.ActiveGeneration(readCtx)
+		if err != nil {
+			return err
+		}
+		cut.head, err = log.LastSequence(readCtx)
+		return err
+	})
+	return cut, err
 }
 
 // collectTenantRetirementEvidence holds only policy-bound facts for one tenant.
@@ -32,10 +60,44 @@ type retirementPolicyEvidence struct {
 func collectTenantRetirementEvidence(ctx context.Context, log *events.Log, tenantID string,
 	policies []pcasstore.RetirementPolicy, defaultWindow time.Duration, evaluatedAt time.Time,
 ) (map[retirementEvidenceKey]*retirementPolicyEvidence, error) {
+	cut, err := observeRetirementEvidenceCut(ctx, log)
+	if err != nil {
+		return nil, err
+	}
+	checkpoint, err := collectTenantRetirementEvidenceSince(ctx, log, tenantID, policies, defaultWindow, evaluatedAt, cut, nil)
+	if err != nil {
+		return nil, err
+	}
+	return checkpoint.view, nil
+}
+
+func collectTenantRetirementEvidenceSince(ctx context.Context, log *events.Log, tenantID string,
+	policies []pcasstore.RetirementPolicy, defaultWindow time.Duration, evaluatedAt time.Time,
+	cut retirementEvidenceCut, previous *retirementEvidenceCheckpoint,
+) (*retirementEvidenceCheckpoint, error) {
 	view := make(map[retirementEvidenceKey]*retirementPolicyEvidence, len(policies))
+	stamps := make(map[retirementEvidenceKey]pcasstore.RetirementPolicy, len(policies))
+	from := uint64(1)
+	if previous != nil && previous.cut.generation == cut.generation && previous.cut.head <= cut.head {
+		from = previous.cut.head + 1
+	}
 	for _, policy := range policies {
 		key := retirementEvidenceKey{policy.IdentityID, policy.PredecessorEpoch}
-		entry := &retirementPolicyEvidence{seen: make(map[string]bool)}
+		stamps[key] = policy
+		entry := &retirementPolicyEvidence{seen: make(map[string]bool), updated: policy.UpdatedAt}
+		if from > 1 && previous.view[key] != nil {
+			old := previous.view[key]
+			entry.retired = old.retired
+			if sameRetirementPolicy(previous.policies[key], policy) {
+				for _, ack := range old.acks {
+					if !ack.RecordedAt.After(evaluatedAt) &&
+						(old.window <= 0 || !ack.RecordedAt.Before(evaluatedAt.Add(-old.window))) {
+						entry.acks = append(entry.acks, ack)
+						entry.seen[ack.RelyingParty] = true
+					}
+				}
+			}
+		}
 		if policy.Status == "active" {
 			roster, err := retirement.DecodeRoster(policy.RosterJSON)
 			if err == nil {
@@ -51,15 +113,21 @@ func collectTenantRetirementEvidence(ctx context.Context, log *events.Log, tenan
 		view[key] = entry
 	}
 	if len(view) == 0 {
-		return view, nil
+		return &retirementEvidenceCheckpoint{cut: cut, policies: stamps, view: view}, nil
 	}
+	scanned := 0
 	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		head, err := log.LastSequence(readCtx)
+		generation, err := log.ActiveGeneration(readCtx)
 		if err != nil {
 			return err
 		}
-		return log.ReplayTenantTypesThrough(readCtx, tenantID, 1, head,
+		if generation != cut.generation {
+			return fmt.Errorf("history generation changed during retirement evidence read")
+		}
+		return log.ReplayTenantTypesThrough(readCtx, tenantID, from, cut.head,
 			[]string{succession.TypeRPAck, succession.TypeRetirement}, func(event events.Event) error {
+				// Keep this count with the checkpoint so tests can verify the replay cut.
+				scanned++
 				payload, err := succession.Decode(event)
 				if err != nil {
 					return err
@@ -78,6 +146,7 @@ func collectTenantRetirementEvidence(ctx context.Context, log *events.Log, tenan
 					entry := view[retirementEvidenceKey{fact.IdentityID, fact.Epoch}]
 					if entry == nil || entry.roster == nil || entry.seen[fact.RelyingParty] ||
 						len(entry.roster[fact.RelyingParty]) == 0 || event.Time.After(evaluatedAt) ||
+						event.Time.Before(entry.updated) ||
 						(entry.window > 0 && event.Time.Before(evaluatedAt.Add(-entry.window))) {
 						return nil
 					}
@@ -97,5 +166,12 @@ func collectTenantRetirementEvidence(ctx context.Context, log *events.Log, tenan
 	if err != nil {
 		return nil, fmt.Errorf("pcas retirement worker: read tenant evidence: %w", err)
 	}
-	return view, nil
+	return &retirementEvidenceCheckpoint{cut: cut, policies: stamps, view: view, scanned: scanned}, nil
+}
+
+func sameRetirementPolicy(a, b pcasstore.RetirementPolicy) bool {
+	return a.IdentityID == b.IdentityID && a.PredecessorEpoch == b.PredecessorEpoch &&
+		a.Threshold == b.Threshold && a.ValidityWindowSeconds == b.ValidityWindowSeconds &&
+		a.PredecessorHandle == b.PredecessorHandle && a.Status == b.Status &&
+		a.UpdatedAt.Equal(b.UpdatedAt) && bytes.Equal(a.RosterJSON, b.RosterJSON)
 }
