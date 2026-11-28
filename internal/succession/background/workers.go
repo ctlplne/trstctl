@@ -344,10 +344,6 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 	if client == nil {
 		return errors.New("pcas retirement worker: signer is not available")
 	}
-	ledgerEvents, err := collectEvents(ctx, w.log)
-	if err != nil {
-		return err
-	}
 	tenants, err := w.store.ListTenants(ctx)
 	if err != nil {
 		return fmt.Errorf("pcas retirement worker: list tenants: %w", err)
@@ -363,8 +359,15 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 			failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s: list policies: %w", tenant.TenantID, err))
 			continue
 		}
+		evaluatedAt := time.Now().UTC()
+		evidence, err := collectTenantRetirementEvidence(ctx, w.log, tenant.TenantID, policies, w.validityWindow, evaluatedAt)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s: %w", tenant.TenantID, err))
+			continue
+		}
 		for _, policy := range policies {
-			if err := w.reconcileRetirementPolicy(ctx, client, tenant.TenantID, policy, ledgerEvents); err != nil && !errors.Is(err, retirement.ErrQuorumNotMet) {
+			key := retirementEvidenceKey{policy.IdentityID, policy.PredecessorEpoch}
+			if err := w.reconcileRetirementPolicy(ctx, client, tenant.TenantID, policy, evidence[key], evaluatedAt); err != nil && !errors.Is(err, retirement.ErrQuorumNotMet) {
 				failures = append(failures, fmt.Errorf("pcas retirement worker: tenant %s identity %s epoch %d: %w",
 					tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch, err))
 			}
@@ -377,9 +380,12 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 }
 
 func (w *retirementWorker) reconcileRetirementPolicy(ctx context.Context, client *signing.Client,
-	tenantID string, policy pcasstore.RetirementPolicy, ledgerEvents []events.Event,
+	tenantID string, policy pcasstore.RetirementPolicy, evidence *retirementPolicyEvidence, evaluatedAt time.Time,
 ) error {
-	retirementRecorded := alreadyRetired(ledgerEvents, tenantID, policy.IdentityID, policy.PredecessorEpoch)
+	if evidence == nil {
+		return errors.New("retirement policy evidence is unavailable")
+	}
+	retirementRecorded := evidence.retired
 	if policy.Status == "retired" && !retirementRecorded {
 		return errors.New("retired policy has no matching tenant-bound retirement event")
 	}
@@ -403,7 +409,7 @@ func (w *retirementWorker) reconcileRetirementPolicy(ctx context.Context, client
 	if policy.Status != "active" {
 		return fmt.Errorf("unknown policy status %q", policy.Status)
 	}
-	return w.evaluatePolicy(ctx, client, tenantID, policy, ledgerEvents)
+	return w.evaluatePolicy(ctx, client, tenantID, policy, evidence.acks, evaluatedAt)
 }
 
 // The signer is the source of truth for key custody. A successful delete alone
@@ -430,7 +436,9 @@ func ensureRetiredPredecessorAbsent(ctx context.Context, client *signing.Client,
 	return fmt.Errorf("signer still holds predecessor key after zeroization")
 }
 
-func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.Client, tenantID string, policy pcasstore.RetirementPolicy, ledgerEvents []events.Event) error {
+func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.Client, tenantID string, policy pcasstore.RetirementPolicy,
+	acks []retirement.SignedAck, evaluatedAt time.Time,
+) error {
 	roster, err := retirement.DecodeRoster(policy.RosterJSON)
 	if err != nil {
 		return err
@@ -465,22 +473,21 @@ func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.C
 	if err != nil {
 		return err
 	}
-	worker := retirement.NewWorker(ctrl)
-	_, err = worker.EvaluateCutover(ctx,
-		retirement.Target{TenantID: tenantID, IdentityID: policy.IdentityID, Epoch: policy.PredecessorEpoch},
-		retirement.Successor{
+	_, err = ctrl.Execute(ctx, retirement.CutoverRequest{
+		Target: retirement.Target{TenantID: tenantID, IdentityID: policy.IdentityID, Epoch: policy.PredecessorEpoch},
+		Acks:   acks,
+		Successor: retirement.Successor{
 			Epoch:        successorRec.Epoch,
 			Algorithm:    successorRec.SuccessorAlg,
 			Class:        succession.ClassPurePQ,
 			PublicKeyDER: successorRec.SuccessorPub,
 		},
-		successorRec.PredecessorAlg,
-		crypto.SHA256Sum(successorRec.Encoded),
-		ledgerEvents,
-		retirement.FuncPredecessor{
+		RetiredAlg:    successorRec.PredecessorAlg,
+		SuccessionRef: crypto.SHA256Sum(successorRec.Encoded),
+		Predecessor: retirement.FuncPredecessor{
 			ZeroizeFn: func(ctx context.Context, _ string) error { return client.ZeroizeKey(ctx, predecessorHandle) },
 		},
-		func(ctx context.Context) error {
+		PreRetire: func(ctx context.Context) error {
 			jobs, err := w.repo.ListRewrapJobs(ctx, tenantID, policy.IdentityID, policy.PredecessorEpoch)
 			if err != nil {
 				return err
@@ -509,8 +516,7 @@ func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.C
 			}
 			return nil
 		},
-		time.Now().UTC(),
-	)
+	}, evaluatedAt)
 	if err != nil {
 		return err
 	}
@@ -523,47 +529,6 @@ func retirementPredecessorHandle(tenantID string, policy pcasstore.RetirementPol
 		return "", fmt.Errorf("pcas retirement worker: predecessor handle is not bound to tenant identity epoch")
 	}
 	return bound, nil
-}
-
-func collectEvents(ctx context.Context, log *events.Log) ([]events.Event, error) {
-	var out []events.Event
-	if log == nil {
-		return out, nil
-	}
-	// The cutover consumes only signed RP acknowledgments and prior retirement
-	// facts. Pin one generation/head so the type-subject index cannot mix facts
-	// across a history rewrite while the worker evaluates a policy batch.
-	if err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		head, err := log.LastSequence(readCtx)
-		if err != nil {
-			return err
-		}
-		return log.ReplayTypesThrough(readCtx, 1, head,
-			[]string{succession.TypeRPAck, succession.TypeRetirement}, func(e events.Event) error {
-				out = append(out, e)
-				return nil
-			})
-	}); err != nil {
-		return nil, fmt.Errorf("pcas retirement worker: read indexed ledger evidence: %w", err)
-	}
-	return out, nil
-}
-
-func alreadyRetired(events []events.Event, tenantID, identityID string, epoch uint64) bool {
-	for _, e := range events {
-		if e.Type != succession.TypeRetirement || e.TenantID != tenantID {
-			continue
-		}
-		p, err := succession.Decode(e)
-		if err != nil {
-			continue
-		}
-		r, ok := p.(succession.RetirementV1)
-		if ok && r.TenantID == tenantID && r.IdentityID == identityID && r.Epoch == epoch {
-			return true
-		}
-	}
-	return false
 }
 
 func latestByIdentity(records []pcasstore.Record) []pcasstore.Record {

@@ -687,8 +687,16 @@ func TestService_RecordAck_LedgerCountable(t *testing.T) {
 	rpKey, _ := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
 	id := "spiffe://d/ackledger"
 
-	// The service stores whatever signature it is given; a real RP signs the
-	// canonical ack message so the recorded event is countable.
+	roster, err := json.Marshal([]map[string]any{{"relying_party": "rp1", "public_der": rpKey.Public().DER}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ConfigureRetirementPolicy(ctx, tenantA, succapi.RetirementPolicyRequest{
+		IdentityID: id, PredecessorEpoch: 1, Threshold: 1, Roster: roster,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// The active roster verifies the signed acknowledgment before it is recorded.
 	sig, err := retirement.SignAck(rpKey, tenantA, id, 1, "rp1")
 	if err != nil {
 		t.Fatal(err)
@@ -716,5 +724,60 @@ func TestService_RecordAck_LedgerCountable(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("recorded ack not found on the ledger as a well-formed RPAckV1")
+	}
+}
+
+func TestServiceRecordAckRequiresActivePolicyAndVerifiedRosterMember(t *testing.T) {
+	ctx := t.Context()
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	cs := openStorePCAS(t)
+	svc := succapi.NewService(cs, log, nil)
+	rpKey, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const identityID = "spiffe://qa.local/ack-admission"
+	sig, err := retirement.SignAck(rpKey, tenantA, identityID, 1, "rp1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := succapi.AckRequest{IdentityID: identityID, Epoch: 1, RelyingParty: "rp1", Signature: sig}
+	before, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RecordAck(ctx, tenantA, req); err == nil {
+		t.Fatal("ack without an active policy was recorded")
+	}
+	if after, err := log.LastSequence(ctx); err != nil || after != before {
+		t.Fatalf("source head after a rejected ack = %d, err=%v, want %d", after, err, before)
+	}
+	roster, err := json.Marshal([]map[string]any{{"relying_party": "rp1", "public_der": rpKey.Public().DER}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ConfigureRetirementPolicy(ctx, tenantA, succapi.RetirementPolicyRequest{
+		IdentityID: identityID, PredecessorEpoch: 1, Threshold: 1, Roster: roster,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, changed := range []succapi.AckRequest{
+		{IdentityID: identityID, Epoch: 1, RelyingParty: "other", Signature: sig},
+		{IdentityID: identityID, Epoch: 1, RelyingParty: "rp1", Signature: []byte("invalid")},
+		{IdentityID: identityID, Epoch: 1, RelyingParty: "rp1", Signature: make([]byte, 20<<10)},
+	} {
+		if _, err := svc.RecordAck(ctx, tenantA, changed); err == nil {
+			t.Fatalf("unverified roster acknowledgment was recorded: relying_party=%q signature_bytes=%d", changed.RelyingParty, len(changed.Signature))
+		}
+	}
+	if after, err := log.LastSequence(ctx); err != nil || after != before {
+		t.Fatalf("source head after invalid acknowledgments = %d, err=%v, want %d", after, err, before)
+	}
+	if _, err := svc.RecordAck(ctx, tenantA, req); err != nil {
+		t.Fatalf("verified roster acknowledgment: %v", err)
 	}
 }

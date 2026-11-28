@@ -4,11 +4,13 @@ package background
 
 import (
 	"encoding/json"
-	"reflect"
+	"fmt"
 	"testing"
+	"time"
 	"trstctl.com/trstctl/internal/eventstest"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/succession"
 	"trstctl.com/trstctl/internal/succession/retirement"
@@ -28,7 +30,7 @@ func TestRetirementWorkerUsesTenantBoundPredecessorForLegacyBlankPolicy(t *testi
 	}
 }
 
-func TestRetirementWorkerIndexedEvidenceAcrossColdRestart(t *testing.T) {
+func TestRetirementWorkerKeepsPolicyBoundedTenantEvidenceAcrossColdRestart(t *testing.T) {
 	ctx := t.Context()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
 	log, err := eventstest.OpenFixture(ctx, cfg)
@@ -52,33 +54,48 @@ func TestRetirementWorkerIndexedEvidenceAcrossColdRestart(t *testing.T) {
 		}
 		return ev
 	}
-	appendFact("tenant-a", succession.TypeSuccession, map[string]string{"noise": "before"})
-	first := appendFact("tenant-a", succession.TypeRPAck, succession.RPAckV1{
-		TenantID: "tenant-a", IdentityID: "identity-a", Epoch: 2, RelyingParty: "rp-a", AckSignature: []byte("signed-a")})
-	appendFact("tenant-b", succession.TypeFinding, map[string]string{"noise": "between"})
-	second := appendFact("tenant-b", succession.TypeRPAck, succession.RPAckV1{
-		TenantID: "tenant-b", IdentityID: "identity-b", Epoch: 3, RelyingParty: "rp-b", AckSignature: []byte("signed-b")})
-	third := appendFact("tenant-a", succession.TypeRetirement, succession.RetirementV1{
-		TenantID: "tenant-a", IdentityID: "identity-a", Epoch: 2})
+	rpKey, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roster, err := json.Marshal([]map[string]any{{"relying_party": "rp-a", "public_der": rpKey.Public().DER}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policies := []pcasstore.RetirementPolicy{
+		{IdentityID: "identity-a", PredecessorEpoch: 2, Status: "active", RosterJSON: roster},
+		{IdentityID: "identity-retired", PredecessorEpoch: 3, Status: "retired"},
+	}
+	sig, err := retirement.SignAck(rpKey, "tenant-a", "identity-a", 2, "rp-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendFact("tenant-a", succession.TypeRPAck, succession.RPAckV1{
+		TenantID: "tenant-a", IdentityID: "identity-a", Epoch: 2, RelyingParty: "rp-a", AckSignature: sig})
+	for i := range 40 {
+		appendFact("tenant-a", succession.TypeRPAck, succession.RPAckV1{
+			TenantID: "tenant-a", IdentityID: "identity-a", Epoch: 2,
+			RelyingParty: fmt.Sprintf("unlisted-%d", i), AckSignature: []byte("no"),
+		})
+		appendFact("tenant-a", succession.TypeRPAck, succession.RPAckV1{
+			TenantID: "tenant-a", IdentityID: "identity-a", Epoch: 2, RelyingParty: "rp-a", AckSignature: sig,
+		})
+	}
+	appendFact("tenant-b", succession.TypeRPAck, succession.RPAckV1{
+		TenantID: "tenant-b", IdentityID: "identity-a", Epoch: 2, RelyingParty: "rp-a", AckSignature: sig})
+	appendFact("tenant-a", succession.TypeRetirement, succession.RetirementV1{
+		TenantID: "tenant-a", IdentityID: "identity-retired", Epoch: 3})
 	check := func() {
 		t.Helper()
-		facts, err := collectEvents(ctx, log)
+		view, err := collectTenantRetirementEvidence(ctx, log, "tenant-a", policies, time.Hour, time.Now().Add(time.Second))
 		if err != nil {
 			t.Fatal(err)
 		}
-		var sequences []uint64
-		for _, fact := range facts {
-			sequences = append(sequences, fact.Sequence)
-		}
-		if !reflect.DeepEqual(sequences, []uint64{first.Sequence, second.Sequence, third.Sequence}) {
-			t.Fatalf("indexed retirement facts = %v", sequences)
-		}
-		acks, err := retirement.AcksFromEvents(facts)
-		if err != nil || len(acks) != 2 || acks[0].TenantID != "tenant-a" || acks[1].TenantID != "tenant-b" {
-			t.Fatalf("indexed relying-party acknowledgments = %+v, err=%v", acks, err)
-		}
-		if !alreadyRetired(facts, "tenant-a", "identity-a", 2) || alreadyRetired(facts, "tenant-b", "identity-a", 2) {
-			t.Fatal("retirement decision lost tenant or predecessor binding")
+		active := view[retirementEvidenceKey{"identity-a", 2}]
+		retired := view[retirementEvidenceKey{"identity-retired", 3}]
+		if len(view) != 2 || active == nil || len(active.acks) != 1 || active.acks[0].RelyingParty != "rp-a" ||
+			active.retired || retired == nil || !retired.retired || len(retired.acks) != 0 {
+			t.Fatalf("policy-bound evidence: active=%+v retired=%+v count=%d", active, retired, len(view))
 		}
 	}
 	check()

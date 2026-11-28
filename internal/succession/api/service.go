@@ -31,6 +31,7 @@ import (
 	pcasdelegation "trstctl.com/trstctl/internal/succession/delegation"
 	pcasissuer "trstctl.com/trstctl/internal/succession/issuer"
 	pcasrecovery "trstctl.com/trstctl/internal/succession/recovery"
+	"trstctl.com/trstctl/internal/succession/retirement"
 	pcasstaple "trstctl.com/trstctl/internal/succession/staple"
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
@@ -1417,6 +1418,28 @@ func (s *service) FetchChain(ctx context.Context, tenantID, identityID string) (
 // the PCAS-10 quorum can count it. The ledger stamps the recorded time (the quorum
 // validity-window anchor).
 func (s *service) RecordAck(ctx context.Context, tenantID string, req AckRequest) (AckResponse, error) {
+	const maxSignatureBytes = 16 << 10
+	if s.repo == nil || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(req.IdentityID) == "" ||
+		strings.TrimSpace(req.RelyingParty) == "" || len(req.Signature) == 0 ||
+		len(req.Signature) > maxSignatureBytes || req.Epoch >= math.MaxInt64 {
+		return AckResponse{}, errors.New("pcas api: acknowledgment requires a bounded signature and policy identity")
+	}
+	policy, found, err := s.repo.GetRetirementPolicy(ctx, tenantID, req.IdentityID, req.Epoch)
+	if err != nil {
+		return AckResponse{}, err
+	}
+	if !found || policy.Status != "active" {
+		return AckResponse{}, errors.New("pcas api: no active retirement policy for acknowledgment")
+	}
+	roster, err := retirement.DecodeRoster(policy.RosterJSON)
+	if err != nil {
+		return AckResponse{}, err
+	}
+	publicKey := roster[req.RelyingParty]
+	if len(publicKey) == 0 || crypto.VerifyMessage(publicKey,
+		retirement.AckMessage(tenantID, req.IdentityID, req.Epoch, req.RelyingParty), req.Signature) != nil {
+		return AckResponse{}, errors.New("pcas api: acknowledgment does not verify under the active roster")
+	}
 	ev, err := succession.Encode(succession.RPAckV1{
 		IdentityID:   req.IdentityID,
 		TenantID:     tenantID,

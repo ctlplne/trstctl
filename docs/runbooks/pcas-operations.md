@@ -592,7 +592,11 @@ size. Relying-party names must be unique and each `public_der` must be a valid
 SubjectPublicKeyInfo public key; invalid or impossible quorums return 400 before
 the policy is saved. Each relying party signs the domain-separated acknowledgment for the
 tenant, identity, epoch and its own roster name, then posts it to
-`POST /api/v1/pcas/acks`. An active policy or accepted acknowledgment alone does
+`POST /api/v1/pcas/acks`. The API requires the matching active policy and verifies
+the signature under that policy's roster key before recording it; signatures
+larger than 16 KiB are refused. The retirement worker reads one tenant's evidence
+at a time and keeps at most one in-window acknowledgment per roster member.
+An active policy or accepted acknowledgment alone does
 not prove retirement. Read `status: retired`, check signed retirement evidence,
 and independently confirm the predecessor signer handle is unusable.
 
