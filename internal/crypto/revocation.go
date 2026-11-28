@@ -92,6 +92,13 @@ func IsValidRevocationReason(reason string) bool {
 	return ok
 }
 
+// IsRevocationActionReason accepts reasons that a certificate revocation
+// publisher can apply. removeFromCRL names a CRL delta operation, not a new
+// revocation, so it cannot accompany a lifecycle revocation command.
+func IsRevocationActionReason(reason string) bool {
+	return reason != string(RevocationReasonRemoveFromCRL) && IsValidRevocationReason(reason)
+}
+
 // CRLReasonCode maps a named revocation reason to its RFC 5280 CRL reason code.
 // Unknown reasons map to unspecified for display-only callers; mutating code must
 // use IsValidRevocationReason or ValidateCRLReasonCode before emitting evidence.

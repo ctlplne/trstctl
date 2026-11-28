@@ -11374,7 +11374,6 @@
               "superseded",
               "cessationOfOperation",
               "certificateHold",
-              "removeFromCRL",
               "privilegeWithdrawn",
               "aaCompromise"
             ],

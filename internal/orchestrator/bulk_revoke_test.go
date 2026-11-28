@@ -51,6 +51,34 @@ func TestBulkRevokeAuthorizesWholeSelectionBeforeAnyMutation(t *testing.T) {
 	}
 }
 
+func TestIdentityRevocationReasonMatchesPublication(t *testing.T) {
+	st := newStore(t)
+	log := openLog(t)
+	orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
+	ctx := t.Context()
+	mustRegisterTenant(t, st, tenantA)
+	owner, err := orch.CreateOwner(ctx, tenantA, "team", "revocation-reason", "lab@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := issuedIdentity(t, ctx, st, orch, tenantA, owner.ID, "reason.example.test")
+	if err := orch.Transition(ctx, tenantA, identity.ID, orchestrator.StateRevoked, "removeFromCRL"); err == nil {
+		t.Fatal("identity state changed with a reason the publisher cannot apply")
+	}
+	if _, err := orch.BulkRevoke(ctx, tenantA, orchestrator.BulkRevokeRequest{
+		IDs: []string{identity.ID}, Reason: "removeFromCRL",
+	}); err == nil {
+		t.Fatal("bulk revocation accepted a reason the publisher cannot apply")
+	}
+	current, err := st.GetIdentity(ctx, tenantA, identity.ID)
+	if err != nil || current.Status != string(orchestrator.StateIssued) {
+		t.Fatalf("identity state = %q, error = %v; want issued", current.Status, err)
+	}
+	if n := countOutboxDestination(t, st, tenantA, "revocation.publish"); n != 0 {
+		t.Fatalf("refused action left %d publication intents", n)
+	}
+}
+
 func TestBulkRevokeMixedSetIsIdempotentAndTenantScoped(t *testing.T) {
 	st := newStore(t)
 	log := openLog(t)

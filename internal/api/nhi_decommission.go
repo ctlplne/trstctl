@@ -102,7 +102,7 @@ func (a *API) runNHIDecommission(ctx context.Context, tenantID string, principal
 	if revocationReason == "" {
 		revocationReason = string(crypto.RevocationReasonCessationOfOperation)
 	}
-	if !crypto.IsValidRevocationReason(revocationReason) {
+	if !crypto.IsRevocationActionReason(revocationReason) {
 		return nhiDecommissionResponse{}, errStatus(http.StatusBadRequest, "invalid revocation_reason: use an RFC 5280 reason such as cessationOfOperation or privilegeWithdrawn")
 	}
 	if len(req.Signals) == 0 {

@@ -11,7 +11,6 @@ export const revocationReasons = [
   "superseded",
   "cessationOfOperation",
   "certificateHold",
-  "removeFromCRL",
   "privilegeWithdrawn",
   "aaCompromise",
 ] as const satisfies readonly BulkRevokeRequest["reason"][];

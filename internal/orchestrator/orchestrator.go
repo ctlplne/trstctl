@@ -449,6 +449,15 @@ func (o *Orchestrator) FailRenewalAttempt(ctx context.Context, tenantID, identit
 }
 
 func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64, completedDestination string, options ...transitionOptions) error {
+	if to == StateRevoked {
+		reason = strings.TrimSpace(reason)
+		if reason == "" {
+			reason = string(crypto.RevocationReasonUnspecified)
+		}
+		if !crypto.IsRevocationActionReason(reason) {
+			return fmt.Errorf("orchestrator: invalid certificate revocation reason %q", reason)
+		}
+	}
 	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
 	if admissionErr != nil {
 		return admissionErr

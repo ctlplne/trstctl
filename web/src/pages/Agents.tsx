@@ -25,7 +25,6 @@ const certRevocationReasons = [
   "superseded",
   "cessationOfOperation",
   "certificateHold",
-  "removeFromCRL",
   "privilegeWithdrawn",
   "aaCompromise",
 ] as const;

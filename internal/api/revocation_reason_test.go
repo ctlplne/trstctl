@@ -33,3 +33,11 @@ func TestTransitionIdentityAllowsRFC5280RevocationReason(t *testing.T) {
 		t.Fatalf("non-revocation transition reason should remain free-form: %v", err)
 	}
 }
+
+func TestTransitionIdentityAcceptsOnlyPublicationReasons(t *testing.T) {
+	err := validateTransitionRequest(transitionRequest{To: "revoked", Reason: "removeFromCRL"})
+	var ae *apiError
+	if !errors.As(err, &ae) || ae.status != http.StatusBadRequest {
+		t.Fatalf("identity revocation reason = %v, want HTTP 400 before state change", err)
+	}
+}

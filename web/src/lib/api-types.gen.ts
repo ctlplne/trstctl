@@ -2289,7 +2289,7 @@ export interface BulkRevokeRequest {
   issuer_id?: string;
   kind?: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
   owner_id?: string;
-  reason: "unspecified" | "keyCompromise" | "caCompromise" | "affiliationChanged" | "superseded" | "cessationOfOperation" | "certificateHold" | "removeFromCRL" | "privilegeWithdrawn" | "aaCompromise";
+  reason: "unspecified" | "keyCompromise" | "caCompromise" | "affiliationChanged" | "superseded" | "cessationOfOperation" | "certificateHold" | "privilegeWithdrawn" | "aaCompromise";
   status?: "requested" | "issued" | "deployed" | "renewing" | "renewal_failed" | "revoked" | "retired";
 }
 

@@ -188,7 +188,7 @@ func (s *Server) RotateTSACertificate(ctx context.Context, tenantID, revokeReaso
 		return api.TSARotation{}, err
 	}
 	reason := crypto.RevocationReason(strings.TrimSpace(revokeReason))
-	if reason != "" && !crypto.IsValidRevocationReason(string(reason)) {
+	if reason != "" && !crypto.IsRevocationActionReason(string(reason)) {
 		return api.TSARotation{}, fmt.Errorf("%w: unknown revocation reason %q", api.ErrInvalidTSARequest, reason)
 	}
 	if s.signer == nil || s.signer.Client() == nil {
@@ -261,7 +261,7 @@ func (s *Server) RevokeTSACertificate(ctx context.Context, tenantID, serial, rev
 		return api.TSACertificate{}, err
 	}
 	reason := crypto.RevocationReason(strings.TrimSpace(revokeReason))
-	if !crypto.IsValidRevocationReason(string(reason)) {
+	if !crypto.IsRevocationActionReason(string(reason)) {
 		return api.TSACertificate{}, fmt.Errorf("%w: unknown revocation reason %q", api.ErrInvalidTSARequest, reason)
 	}
 	serial = strings.ToLower(strings.TrimSpace(serial))

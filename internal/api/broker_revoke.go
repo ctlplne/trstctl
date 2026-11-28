@@ -86,7 +86,7 @@ func (a *API) revokeBrokerAgentIdentity(w http.ResponseWriter, r *http.Request) 
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		reason := strings.TrimSpace(req.Reason)
-		if !crypto.IsValidRevocationReason(reason) {
+		if !crypto.IsRevocationActionReason(reason) {
 			return 0, nil, errStatus(http.StatusBadRequest, "a revocation reason is required: use an RFC 5280 reason such as keyCompromise or cessationOfOperation")
 		}
 		principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)

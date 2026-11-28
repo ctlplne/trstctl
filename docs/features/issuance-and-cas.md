@@ -925,7 +925,9 @@ To select actual inventory certificates rather than lifecycle identities, send
 Do not combine this field with `ids`, `identity_ids`, owner/issuer filters, kind,
 or status. The same authorization, policy and approval restrictions apply, even
 when no certificate matches. `removeFromCRL` is an unhold operation, not a valid
-reason for this exact-certificate revocation command.
+reason for any new identity or certificate revocation. The API and lifecycle
+orchestrator reject it before recording a terminal identity state or queuing
+publication; the console omits it from revocation choices.
 
 The exact path verifies the public certificate's signature against the served
 issuing CA and requires an existing tenant-scoped issuer record. It does not guess

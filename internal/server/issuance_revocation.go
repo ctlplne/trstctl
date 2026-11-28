@@ -44,14 +44,11 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 	if trigger.IdentityID == "" || trigger.To != string(orchestrator.StateRevoked) {
 		return errors.New("server: revocation intent has no exact identity")
 	}
-	reason := trigger.Reason
-	if reason == "" {
-		reason = "unspecified"
+	reason, err := publicationRevocationReason(trigger.Reason)
+	if err != nil {
+		return err
 	}
-	if !crypto.IsValidRevocationReason(reason) || reason == "removeFromCRL" {
-		return errors.New("server: invalid certificate revocation reason")
-	}
-	_, err := d.idem.Do(ctx, m.TenantID, "revoke:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+	_, err = d.idem.Do(ctx, m.TenantID, "revoke:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
 		certs, err := d.store.IdentityRevocationCertificates(ctx, m.TenantID, trigger.IdentityID, 101)
 		if err != nil {
 			return nil, err
@@ -146,6 +143,16 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 			trigger.IdentityID, trigger.IdempotencyKey, m.ID, m.Attempts)
 	}
 	return nil
+}
+
+func publicationRevocationReason(reason string) (string, error) {
+	if reason == "" || reason == string(crypto.RevocationReasonRemoveFromCRL) {
+		return string(crypto.RevocationReasonUnspecified), nil
+	}
+	if !crypto.IsRevocationActionReason(reason) {
+		return "", errors.New("server: invalid certificate revocation reason")
+	}
+	return reason, nil
 }
 
 // Resolve origin from retained issuance facts, not mutable inventory source or

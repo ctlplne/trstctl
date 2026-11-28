@@ -217,7 +217,7 @@ func canonicalizeTransitionRequest(req *transitionRequest) error {
 		req.Reason = string(crypto.RevocationReasonUnspecified)
 		return nil
 	}
-	if !crypto.IsValidRevocationReason(reason) {
+	if !crypto.IsRevocationActionReason(reason) {
 		return errStatus(http.StatusBadRequest, "invalid revocation reason: use an RFC 5280 reason such as keyCompromise or unspecified")
 	}
 	req.Reason = reason

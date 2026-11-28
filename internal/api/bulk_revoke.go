@@ -39,7 +39,7 @@ func (a *API) bulkRevoke(w http.ResponseWriter, r *http.Request) {
 		if reason == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "revocation reason is required")
 		}
-		if !crypto.IsValidRevocationReason(reason) {
+		if !crypto.IsRevocationActionReason(reason) {
 			return 0, nil, errStatus(http.StatusBadRequest, "invalid revocation reason: use an RFC 5280 reason such as keyCompromise or unspecified")
 		}
 		principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)

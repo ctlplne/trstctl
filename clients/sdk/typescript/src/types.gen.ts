@@ -15371,7 +15371,7 @@ export interface components {
             /** Format: uuid */
             owner_id?: string;
             /** @enum {string} */
-            reason: "unspecified" | "keyCompromise" | "caCompromise" | "affiliationChanged" | "superseded" | "cessationOfOperation" | "certificateHold" | "removeFromCRL" | "privilegeWithdrawn" | "aaCompromise";
+            reason: "unspecified" | "keyCompromise" | "caCompromise" | "affiliationChanged" | "superseded" | "cessationOfOperation" | "certificateHold" | "privilegeWithdrawn" | "aaCompromise";
             /** @enum {string} */
             status?: "requested" | "issued" | "deployed" | "renewing" | "renewal_failed" | "revoked" | "retired";
         };

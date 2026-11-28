@@ -1247,7 +1247,7 @@ func componentSchemas() map[string]*Schema {
 		"profile_refused":            {Type: "boolean", Description: "The certificate profile the mint would apply refuses this issuance for a reason that needs no key (its enrollment protocol or validity); execution refuses it before recording anything."},
 		"profile_refusal":            {Type: "string", Description: "The profile's own reason when profile_refused is true."},
 	}, "capability", "ready", "identity_id", "identity_name", "identity_kind", "owner_id", "from", "to", "expected_version", "event_type", "side_effect", "request_fingerprint", "required_permission", "prerequisites", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "verification_steps", "warnings", "guidance")
-	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "removeFromCRL", "privilegeWithdrawn", "aaCompromise"}
+	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "privilegeWithdrawn", "aaCompromise"}
 	// Q4: revoke one AI agent's broker identity in one call.
 	brokerAgentIdentityRevokeReq := object(map[string]*Schema{
 		"reason": {Type: "string", Description: "an RFC 5280 revocation reason such as keyCompromise or cessationOfOperation"},

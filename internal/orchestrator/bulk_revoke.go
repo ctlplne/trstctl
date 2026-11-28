@@ -68,7 +68,7 @@ func (o *Orchestrator) bulkRevoke(ctx context.Context, tenantID string, req Bulk
 	if reason == "" {
 		reason = string(crypto.RevocationReasonUnspecified)
 	}
-	if !crypto.IsValidRevocationReason(reason) {
+	if !crypto.IsRevocationActionReason(reason) {
 		return BulkRevokeResult{}, fmt.Errorf("orchestrator: invalid revocation reason %q", reason)
 	}
 	idents, result, err := o.resolveBulkRevokeIdentities(ctx, tenantID, req)
