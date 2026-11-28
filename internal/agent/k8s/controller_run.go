@@ -361,8 +361,12 @@ func (rt *controllerRuntime) postureReport() ControllerPostureReport {
 			}
 			return resources[i].Name < resources[j].Name
 		})
-		synced, installed, _ := inf.state()
+		synced, installed, lastErr := inf.state()
 		switch {
+		case optional && errors.Is(lastErr, errNotInstalled):
+			return PostureSection{Complete: true, Resources: resources}
+		case lastErr != nil:
+			return PostureSection{FailureCode: "reconcile_failed", Resources: resources}
 		case !synced || !rt.issuersSynced:
 			return PostureSection{FailureCode: "not_reconciled", Resources: resources}
 		case (!installed && !optional) || len(rt.failing[name]) > 0:

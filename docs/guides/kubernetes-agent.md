@@ -24,6 +24,14 @@ its CRDs the other paths run and the cert-manager posture is complete and
 empty. The DaemonSet's pods elect one controller through a
 `coordination.k8s.io` Lease; a pod that loses the lease stops its watches.
 
+The controller reduces list page size when a Kubernetes API response exceeds
+its 4 MiB read bound, then resumes the same collection snapshot. If even a
+one-object page cannot fit, that collection reports `reconcile_failed` and the
+agent log identifies `api_response_too_large` and the collection path. Check the
+agent log and reduce the oversized resource before relying on signing or bundle
+posture for that collection. The controller does not mark an incomplete list as
+synced.
+
 ## cert-manager external issuer
 
 Install the CRDs and create a trstctl `ClusterIssuer`:

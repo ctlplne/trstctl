@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -108,9 +109,10 @@ func (c *Client) watch(ctx context.Context, collectionPath, labelSelector, resou
 func (c *Client) list(ctx context.Context, collectionPath, labelSelector string) ([]map[string]any, string, error) {
 	var items []map[string]any
 	snapshot, next := "", ""
+	pageSize := listPageSize
 	for {
 		query := url.Values{}
-		query.Set("limit", fmt.Sprint(listPageSize))
+		query.Set("limit", fmt.Sprint(pageSize))
 		if next != "" {
 			query.Set("continue", next)
 		}
@@ -118,6 +120,13 @@ func (c *Client) list(ctx context.Context, collectionPath, labelSelector string)
 			query.Set("labelSelector", labelSelector)
 		}
 		st, body, err := c.request(ctx, http.MethodGet, collectionPath+"?"+query.Encode(), nil)
+		if errors.Is(err, errAPIBodyTooLarge) {
+			if pageSize == 1 {
+				return nil, "", fmt.Errorf("k8s: list %s: a single resource exceeds the API response limit: %w", collectionPath, err)
+			}
+			pageSize = max(1, pageSize/2)
+			continue
+		}
 		if err != nil {
 			return nil, "", err
 		}
@@ -297,6 +306,9 @@ func (i *informer) fail(err error) {
 	i.mu.Lock()
 	i.lastErr = err
 	i.mu.Unlock()
+	if errors.Is(err, errAPIBodyTooLarge) {
+		slog.Warn("k8s informer collection sync failed", "collection", i.path, "cause", "api_response_too_large")
+	}
 }
 
 // get returns a private copy of the cached object.

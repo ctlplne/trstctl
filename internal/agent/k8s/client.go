@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,8 @@ const (
 	maxReadAttempts = 5
 	maxRetryDelay   = 5 * time.Second
 )
+
+var errAPIBodyTooLarge = errors.New("k8s: API response exceeds body limit")
 
 // Client is a minimal authenticated client for the Kubernetes REST API.
 type Client struct {
@@ -153,10 +156,13 @@ func (c *Client) requestAs(ctx context.Context, method, path, contentType string
 		if err != nil {
 			return 0, nil, err
 		}
-		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxAPIBody))
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxAPIBody+1))
 		_ = resp.Body.Close()
 		if readErr != nil {
 			return resp.StatusCode, nil, readErr
+		}
+		if len(data) > maxAPIBody {
+			return resp.StatusCode, nil, errAPIBodyTooLarge
 		}
 		if attempt+1 >= attempts || (resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusServiceUnavailable) {
 			return resp.StatusCode, data, nil
