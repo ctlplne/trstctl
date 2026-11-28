@@ -161,6 +161,9 @@ while the IdP asserts operator leaves the session at operator. A later IdP
 group change to admin can activate an already-stored admin ceiling, so review
 both sources when changing access. The Provider API's `role` field has the same
 ceiling meaning.
+An access editor can change another operator's role or customer grants only
+within the editor's current permissions. The editor cannot change their own
+role or grants. A custom role editor can define only permissions they hold.
 The roster's **Identity source** identifies the operator's IdP or SCIM record.
 The detail drawer's **Grant source** identifies the authority entry point:
 `provider_api` means the Provider HTTP API, including calls made by the console.

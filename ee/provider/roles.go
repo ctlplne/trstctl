@@ -56,8 +56,8 @@ var ProviderPermissions = []PermissionDescription{
 	{PermTenantsLifecycle, "Suspend, resume or offboard a delegated customer."},
 	{PermQuotaWrite, "Set a delegated customer's quota."},
 	{PermBrandWrite, "Replace a delegated customer's brand."},
-	{PermOperatorsAdmin, "Read the workforce and grant, revoke or set another operator's delegations and role."},
-	{PermRolesAdmin, "Define or delete custom Provider roles."},
+	{PermOperatorsAdmin, "Read the workforce and edit another operator's delegations and role within your own permissions."},
+	{PermRolesAdmin, "Define custom Provider roles within your own permissions, or delete them."},
 	{PermIsolationDrill, "Run the customer isolation drill."},
 	{PermBreakGlassRequest, "Request time-bounded emergency customer access."},
 	{PermBreakGlassConsent, "Record a custodian decision on an emergency request."},
@@ -184,18 +184,18 @@ func (s *Service) definedRoles(ctx context.Context) (map[string]ProviderRole, er
 	return out, nil
 }
 
-// roleKnown reports whether a role may be stored on an operator: built in, or
-// currently defined.
-func (s *Service) roleKnown(ctx context.Context, role OperatorRole) (bool, error) {
+func (s *Service) assignableRolePermissions(ctx context.Context, role OperatorRole) ([]Permission, error) {
 	if builtInRole(role) {
-		return true, nil
+		return builtInPermissions(role), nil
 	}
 	defined, err := s.definedRoles(ctx)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	_, ok := defined[string(role)]
-	return ok, nil
+	if assignment, ok := defined[string(role)]; ok {
+		return assignment.Permissions, nil
+	}
+	return nil, fmt.Errorf("%w: %q is neither built in nor a defined custom role", ErrRoleUnknown, string(role))
 }
 
 // permissionsFor resolves what an authenticated operator may do right now:
@@ -237,20 +237,25 @@ func (s *Service) permissionsFor(ctx context.Context, actor Operator) (map[Permi
 // requirePermission is the one gate every Provider mutation passes: licence
 // mode, an authenticated MFA operator, and the named permission.
 func (s *Service) requirePermission(ctx context.Context, actor Operator, perm Permission) error {
+	_, err := s.mutationPermissions(ctx, actor, perm)
+	return err
+}
+
+func (s *Service) mutationPermissions(ctx context.Context, actor Operator, perm Permission) (map[Permission]bool, error) {
 	if err := s.requireMutationLicence(); err != nil {
-		return err
+		return nil, err
 	}
 	if err := s.requireOperator(actor); err != nil {
-		return err
+		return nil, err
 	}
 	perms, err := s.permissionsFor(ctx, actor)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !perms[perm] {
-		return ErrForbidden
+		return nil, ErrForbidden
 	}
-	return nil
+	return perms, nil
 }
 
 // ListRoles serves the catalog to anyone who may read the workforce.
@@ -276,7 +281,8 @@ func (s *Service) ListRoles(ctx context.Context, actor Operator) (RoleCatalog, e
 
 // UpsertRole defines or replaces a custom role as an immutable authority event.
 func (s *Service) UpsertRole(ctx context.Context, actor Operator, name string, def RoleDefinition) (ProviderRole, error) {
-	if err := s.requirePermission(ctx, actor, PermRolesAdmin); err != nil {
+	actorPerms, err := s.mutationPermissions(ctx, actor, PermRolesAdmin)
+	if err != nil {
 		return ProviderRole{}, err
 	}
 	name = strings.TrimSpace(name)
@@ -303,6 +309,11 @@ func (s *Service) UpsertRole(ctx context.Context, actor Operator, name string, d
 	}
 	if len(perms) == 0 {
 		return ProviderRole{}, fmt.Errorf("%w: a role needs at least one permission", ErrRoleInvalid)
+	}
+	for _, permission := range perms {
+		if !actorPerms[permission] {
+			return ProviderRole{}, ErrForbidden
+		}
 	}
 	if len(def.Description) > 512 {
 		return ProviderRole{}, fmt.Errorf("%w: description is longer than 512 characters", ErrRoleInvalid)

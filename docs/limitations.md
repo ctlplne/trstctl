@@ -491,8 +491,10 @@ never live in the API process. What you can do end to end against the running bi
   `breakglass:results`); `PUT`/`DELETE /provider/v1/roles/{name}` (operators
   holding `roles:admin`) define a role as a subset of that vocabulary or delete
   one nobody holds, each an immutable `provider.role.upserted`/`deleted`
-  authority event. Every Provider mutation now asks for its permission rather
-  than for the admin role; a custom role is assigned through the role route,
+  authority event. A role definition can contain only permissions the editor
+  currently holds; role and delegation assignments follow the same rule and
+  cannot target the editor. Every Provider mutation now asks for its permission
+  rather than for the admin role; a custom role is assigned through the role route,
   the access console, or a SCIM `roles` value, and its effective permissions
   are intersected with the ceiling the signed IdP role allows (`admin` or
   `operator`), so a custom role never grants what the IdP would not. SCIM

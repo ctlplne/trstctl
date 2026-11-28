@@ -342,9 +342,14 @@ When SCIM is enabled, OIDC and SAML re-read that projected operator row on
 first request after a leaver event; the leaver projection also revokes every
 standing customer grant for that operator.
 
-Provider administrators with current MFA use `GET /provider/v1/operators`,
+Operators holding `operators:admin` with current MFA use `GET /provider/v1/operators`,
 `GET /provider/v1/access/customers`, and the per-operator `/delegations`,
 `/revocations`, and `/role` mutation routes.
+An operator holding `operators:admin` can edit another operator, but cannot
+change their own role or delegations. The role they assign must contain only
+permissions they currently hold. A grant for provision, lifecycle, or
+break-glass work also requires the matching Provider permission. An operator
+holding `roles:admin` can define a custom role only with permissions they hold.
 The console shows the operator, SCIM source, role, exact customer/operation,
 grant source, expiry, last use, and retained revocation evidence. These routes
 return each grant episode with its immutable `grant_event_id`; regranting an

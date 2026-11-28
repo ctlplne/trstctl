@@ -395,6 +395,9 @@ func TestAUD58SAMLSessionRechecksSCIMLifecycleOnEveryRequest(t *testing.T) {
 		ID: "saml-op", ExternalID: "saml-subject", Email: "saml@example.test",
 		Role: OperatorAdmin, Active: true, Source: "scim:okta",
 	}
+	access.identities["saml-target"] = OperatorIdentity{
+		ID: "saml-target", Email: "target@example.test", Role: OperatorAdmin, Active: true, Source: "scim:okta",
+	}
 	samlAuth := NewSAMLAuthenticator(SAMLAuthenticatorConfig{
 		Provider: aud58SAMLProvider{assertion: samlsp.Assertion{
 			Subject: "saml-subject", Issuer: "https://idp.example.test",
@@ -452,7 +455,7 @@ func TestAUD58SAMLSessionRechecksSCIMLifecycleOnEveryRequest(t *testing.T) {
 		Clock: func() time.Time { return time.Now().UTC() },
 	})
 	roleRequest := func(withCSRF bool) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, "/provider/v1/operators/saml-op/role", strings.NewReader(`{"role":"operator"}`))
+		req := httptest.NewRequest(http.MethodPost, "/provider/v1/operators/saml-target/role", strings.NewReader(`{"role":"operator"}`))
 		req.AddCookie(session)
 		req.Header.Set("Idempotency-Key", "saml-role-change")
 		if withCSRF {

@@ -65,7 +65,8 @@ func (s *Service) GrantDelegations(
 	operations []Operation,
 	expiresAt time.Time,
 ) (OperatorAccess, error) {
-	if err := s.requirePermission(ctx, actor, PermOperatorsAdmin); err != nil {
+	actorPerms, err := s.mutationPermissions(ctx, actor, PermOperatorsAdmin)
+	if err != nil {
 		return OperatorAccess{}, err
 	}
 	if s.access == nil {
@@ -82,12 +83,21 @@ func (s *Service) GrantDelegations(
 	if !identity.Active {
 		return OperatorAccess{}, fmt.Errorf("%w: an inactive operator cannot receive authority", ErrForbidden)
 	}
+	if identity.ID == actor.ID {
+		return OperatorAccess{}, ErrForbidden
+	}
 	if _, err := s.store.Tenant(ctx, customerID); err != nil {
 		return OperatorAccess{}, err
 	}
 	operations, err = normalizeOperations(operations)
 	if err != nil {
 		return OperatorAccess{}, err
+	}
+	for _, operation := range operations {
+		permission, known := delegationGrantPermission(operation)
+		if !known || permission != "" && !actorPerms[permission] {
+			return OperatorAccess{}, ErrForbidden
+		}
 	}
 	now := s.clock().UTC()
 	if !expiresAt.IsZero() {
@@ -135,6 +145,9 @@ func (s *Service) RevokeDelegations(
 	if err != nil {
 		return OperatorAccess{}, err
 	}
+	if identity.ID == actor.ID {
+		return OperatorAccess{}, ErrForbidden
+	}
 	operations, err = normalizeOperations(operations)
 	if err != nil {
 		return OperatorAccess{}, err
@@ -162,18 +175,21 @@ func (s *Service) RevokeDelegations(
 // and this row on every request, so a console downgrade bites immediately and
 // a console promotion cannot exceed what the IdP asserted.
 func (s *Service) SetOperatorRole(ctx context.Context, actor Operator, operatorID string, role OperatorRole) (OperatorAccess, error) {
-	if err := s.requirePermission(ctx, actor, PermOperatorsAdmin); err != nil {
+	actorPerms, err := s.mutationPermissions(ctx, actor, PermOperatorsAdmin)
+	if err != nil {
 		return OperatorAccess{}, err
 	}
 	if s.access == nil {
 		return OperatorAccess{}, errors.New("provider: operator access store is not configured")
 	}
-	known, err := s.roleKnown(ctx, role)
+	rolePerms, err := s.assignableRolePermissions(ctx, role)
 	if err != nil {
 		return OperatorAccess{}, err
 	}
-	if !known {
-		return OperatorAccess{}, fmt.Errorf("%w: %q is neither built in nor a defined custom role", ErrRoleUnknown, string(role))
+	for _, permission := range rolePerms {
+		if !actorPerms[permission] {
+			return OperatorAccess{}, ErrForbidden
+		}
 	}
 	identity, err := s.access.ResolveOperator(ctx, strings.TrimSpace(operatorID))
 	if err != nil {
@@ -181,6 +197,9 @@ func (s *Service) SetOperatorRole(ctx context.Context, actor Operator, operatorI
 	}
 	if !identity.Active {
 		return OperatorAccess{}, fmt.Errorf("%w: an inactive operator has no assignable role", ErrForbidden)
+	}
+	if identity.ID == actor.ID {
+		return OperatorAccess{}, ErrForbidden
 	}
 	now := s.clock().UTC()
 	identity.Role, identity.UpdatedAt = role, now
@@ -193,6 +212,21 @@ func (s *Service) SetOperatorRole(ctx context.Context, actor Operator, operatorI
 		return OperatorAccess{}, err
 	}
 	return s.operatorAccess(ctx, identity.ID)
+}
+
+func delegationGrantPermission(operation Operation) (Permission, bool) {
+	switch operation {
+	case OpRead:
+		return "", true
+	case OpProvision:
+		return PermTenantsProvision, true
+	case OpSuspend, OpResume, OpOffboard:
+		return PermTenantsLifecycle, true
+	case OpBreakGlass:
+		return PermBreakGlassRequest, true
+	default:
+		return "", false
+	}
 }
 
 func (s *Service) operatorAccess(ctx context.Context, operatorID string) (OperatorAccess, error) {
