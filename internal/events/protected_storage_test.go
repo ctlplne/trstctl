@@ -159,6 +159,44 @@ func TestProtectedEarlyDuplicateDeliversCanonicalProofCR045(t *testing.T) {
 	}
 }
 
+func TestLegacyAppendKeepsRetainedEventIdentityAfterBrokerWindow(t *testing.T) {
+	log, _, admission := protectedStorageFixture(t,
+		WithHistoryRewriteContinuityVerifier(rewriteTestContinuityVerifier))
+	const tenantID = "d59b4292-1adc-4d43-a405-781f95b1779c"
+	delete(admission.active, tenantID)
+	input := Event{ID: "stable-legacy-identity", Type: protectedStorageTestType,
+		TenantID: tenantID, Data: []byte(`{"email":"deployment-ciphertext@example.invalid"}`)}
+	first, err := log.Append(t.Context(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(4 * log.duplicateWindow)
+	second, err := log.Append(t.Context(), input)
+	if err != nil || second.Sequence != first.Sequence {
+		t.Fatalf("second append = seq %d err %v; want canonical seq %d", second.Sequence, err, first.Sequence)
+	}
+	if head, err := log.LastSequence(t.Context()); err != nil || head != first.Sequence {
+		t.Fatalf("source head = %d err %v; want %d", head, err, first.Sequence)
+	}
+	changed := input
+	changed.Data = []byte(`{"email":"different@example.invalid"}`)
+	if _, err := log.Append(t.Context(), changed); !errors.Is(err, ErrConflictingEventIdentity) {
+		t.Fatalf("changed event identity error = %v", err)
+	}
+	changedCount, err := log.RewriteTenantData(t.Context(), tenantID,
+		func(_ string, _ int, data []byte) ([]byte, bool, error) {
+			return bytes.ReplaceAll(data, []byte("deployment-ciphertext"), []byte("tenant-domain-ciphertext")), true, nil
+		}, rewriteProofOptions(t)...)
+	if err != nil || changedCount != 1 {
+		t.Fatalf("rewrite = changed %d err %v; want one retained position", changedCount, err)
+	}
+	rewritten, found, err := log.EventAtSequence(t.Context(), first.Sequence)
+	if err != nil || !found || rewritten.ID != first.ID ||
+		!bytes.Contains(rewritten.Data, []byte("tenant-domain-ciphertext")) {
+		t.Fatalf("rewritten canonical event = found %t err %v event %+v", found, err, rewritten)
+	}
+}
+
 func TestProtectedAppendKeepsReadableViewsAndExactCiphertextSource(t *testing.T) {
 	log, _, _ := protectedStorageFixture(t)
 	input := Event{ID: "a233-exact-source", Type: protectedStorageTestType,

@@ -115,7 +115,7 @@ func (l *Log) appendWithEventProtection(ctx context.Context, e Event, explicitTi
 				if err != nil {
 					return err
 				}
-				if found && (decision.Mode != EventProtectionLegacy || canonical.Protection != nil) {
+				if found {
 					if normalizedTenantScope(canonical.TenantID) != normalizedTenantScope(e.TenantID) || canonical.Type != e.Type || canonical.SchemaVersion != e.SchemaVersion {
 						return ErrConflictingEventIdentity
 					}
